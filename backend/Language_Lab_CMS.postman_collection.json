@@ -1,0 +1,906 @@
+{
+	"info": {
+		"_postman_id": "009fb713-7d72-4751-872f-578d12345678",
+		"name": "Language Lab CMS",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.access) {",
+									"    pm.environment.set(\"access_token\", jsonData.access);",
+									"    pm.collectionVariables.set(\"access_token\", jsonData.access);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"admin\",\n    \"password\": \"password\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/accounts/login/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"accounts",
+								"login",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Grades",
+			"item": [
+				{
+					"name": "List Grades",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/grades/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"grades",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Grade",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"grade_name\": \"Grade 1\",\n    \"description\": \"First Grade Content\",\n    \"sort_order\": 1\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cms/grades/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"grades",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Grade Detail",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/grades/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"grades",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Grade",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"grade_name\": \"Grade 1 Updated\",\n    \"description\": \"Updated Description\",\n    \"sort_order\": 2\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cms/grades/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"grades",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Grade",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/grades/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"grades",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Learning Experiences",
+			"item": [
+				{
+					"name": "List Learning Experiences",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/learning-experiences/?grade=1&difficulty=MEDIUM&status=DRAFT",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"learning-experiences",
+								""
+							],
+							"query": [
+								{
+									"key": "grade",
+									"value": "1"
+								},
+								{
+									"key": "difficulty",
+									"value": "MEDIUM"
+								},
+								{
+									"key": "status",
+									"value": "DRAFT"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Learning Experience",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"grade\": 1,\n    \"title\": \"Beginner English Vocabulary\",\n    \"description\": \"Basic words and items for English beginners.\",\n    \"objective\": \"Learn 20 basic words.\",\n    \"estimated_duration\": 15,\n    \"difficulty\": \"EASY\",\n    \"status\": \"DRAFT\",\n    \"thumbnail\": \"https://example.com/images/vocab-thumb.png\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cms/learning-experiences/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"learning-experiences",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Learning Experience Detail",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/learning-experiences/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"learning-experiences",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Learning Experience",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"grade\": 1,\n    \"title\": \"Beginner English Vocabulary (Updated)\",\n    \"description\": \"Basic words and items for English beginners. (Updated Description)\",\n    \"objective\": \"Learn 20 basic words and simple items.\",\n    \"estimated_duration\": 20,\n    \"difficulty\": \"MEDIUM\",\n    \"status\": \"REVIEW\",\n    \"thumbnail\": \"https://example.com/images/vocab-thumb-v2.png\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cms/learning-experiences/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"learning-experiences",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Learning Experience",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/learning-experiences/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"learning-experiences",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Experience Steps",
+			"item": [
+				{
+					"name": "List Experience Steps",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/experience-steps/?experience=1&block_type=VIDEO",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"experience-steps",
+								""
+							],
+							"query": [
+								{
+									"key": "experience",
+									"value": "1"
+								},
+								{
+									"key": "block_type",
+									"value": "VIDEO"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Experience Step",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"experience\": 1,\n    \"block_type\": \"VIDEO\",\n    \"title\": \"Intro Video\",\n    \"content\": \"Watch this introductory video to start.\",\n    \"media_url\": \"https://example.com/videos/intro.mp4\",\n    \"display_order\": 1,\n    \"settings\": {\n        \"autoplay\": true,\n        \"controls\": true\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cms/experience-steps/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"experience-steps",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Experience Step Detail",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/experience-steps/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"experience-steps",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Experience Step",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"experience\": 1,\n    \"block_type\": \"STORY\",\n    \"title\": \"Intro Story\",\n    \"content\": \"Once upon a time in a school...\",\n    \"media_url\": \"https://example.com/images/story-banner.png\",\n    \"display_order\": 1,\n    \"settings\": {\n        \"font_size\": 16\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cms/experience-steps/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"experience-steps",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Experience Step",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/experience-steps/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"experience-steps",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Assessments",
+			"item": [
+				{
+					"name": "List Assessments",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/assessments/?experience=1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"assessments",
+								""
+							],
+							"query": [
+								{
+									"key": "experience",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Assessment",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"experience\": 1,\n    \"title\": \"Vocabulary Quiz 1\",\n    \"instructions\": \"Answer all questions carefully.\",\n    \"passing_marks\": 10,\n    \"total_marks\": 20,\n    \"display_order\": 1\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cms/assessments/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"assessments",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Assessment Detail",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/assessments/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"assessments",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Assessment",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"experience\": 1,\n    \"title\": \"Vocabulary Quiz 1 (Updated)\",\n    \"instructions\": \"Please read the instructions carefully before answering.\",\n    \"passing_marks\": 12,\n    \"total_marks\": 20,\n    \"display_order\": 1\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cms/assessments/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"assessments",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Assessment",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/assessments/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"assessments",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Questions",
+			"item": [
+				{
+					"name": "List Questions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/questions/?assessment=1&question_type=MCQ",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"questions",
+								""
+							],
+							"query": [
+								{
+									"key": "assessment",
+									"value": "1"
+								},
+								{
+									"key": "question_type",
+									"value": "MCQ"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Question",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"assessment\": 1,\n    \"question_type\": \"MCQ\",\n    \"question_text\": \"What does 'apple' mean?\",\n    \"marks\": 5,\n    \"display_order\": 1\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cms/questions/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"questions",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Question Detail",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/questions/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"questions",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Question",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"assessment\": 1,\n    \"question_type\": \"TRUE_FALSE\",\n    \"question_text\": \"Is an apple a fruit?\",\n    \"marks\": 5,\n    \"display_order\": 1\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cms/questions/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"questions",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Question",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/questions/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"questions",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Options",
+			"item": [
+				{
+					"name": "List Options",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/options/?question=1&is_correct=true",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"options",
+								""
+							],
+							"query": [
+								{
+									"key": "question",
+									"value": "1"
+								},
+								{
+									"key": "is_correct",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Option",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"question\": 1,\n    \"option_text\": \"Fruit\",\n    \"is_correct\": true,\n    \"display_order\": 1\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cms/options/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"options",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Option Detail",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/options/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"options",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Option",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"question\": 1,\n    \"option_text\": \"Vegetable\",\n    \"is_correct\": false,\n    \"display_order\": 1\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cms/options/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"options",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Option",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cms/options/1/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cms",
+								"options",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://127.0.0.1:8000",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
