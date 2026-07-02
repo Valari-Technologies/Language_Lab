@@ -3,24 +3,16 @@ from django.contrib.auth.models import AbstractUser
 
 
 class User(AbstractUser):
-
-    ROLE_CHOICES = (
-        ("SUPER_ADMIN", "Super Admin"),
-        ("SCHOOL_ADMIN", "School Admin"),
-        ("TEACHER", "Teacher"),
-        ("STUDENT", "Student"),
-    )
+    class Role(models.TextChoices):
+        SUPER_ADMIN = "SUPER_ADMIN", "Super Admin"
+        SCHOOL_ADMIN = "SCHOOL_ADMIN", "School Admin"
+        TEACHER = "TEACHER", "Teacher"
+        STUDENT = "STUDENT", "Student"
 
     role = models.CharField(
         max_length=20,
-        choices=ROLE_CHOICES,
-        default="STUDENT"
-    )
-
-    phone_number = models.CharField(
-        max_length=15,
-        blank=True,
-        null=True
+        choices=Role.choices,
+        default=Role.STUDENT
     )
 
     full_name = models.CharField(
@@ -32,5 +24,9 @@ class User(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        verbose_name = "User"
+        verbose_name_plural = "Users"
+
     def __str__(self):
-        return self.username
+        return self.username
