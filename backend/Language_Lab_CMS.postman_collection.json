@@ -580,7 +580,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"experience\": 1,\n    \"title\": \"Vocabulary Quiz 1\",\n    \"instructions\": \"Answer all questions carefully.\",\n    \"passing_marks\": 10,\n    \"total_marks\": 20,\n    \"display_order\": 1\n}",
+							"raw": "{\n    \"experience\": 1,\n    \"title\": \"Vocabulary Quiz 1\",\n    \"instructions\": \"Answer all questions carefully.\",\n    \"mastery\": 10,\n    \"total_marks\": 20,\n    \"display_order\": 1\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -630,7 +630,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"experience\": 1,\n    \"title\": \"Vocabulary Quiz 1 (Updated)\",\n    \"instructions\": \"Please read the instructions carefully before answering.\",\n    \"passing_marks\": 12,\n    \"total_marks\": 20,\n    \"display_order\": 1\n}",
+							"raw": "{\n    \"experience\": 1,\n    \"title\": \"Vocabulary Quiz 1 (Updated)\",\n    \"instructions\": \"Please read the instructions carefully before answering.\",\n    \"mastery\": 12,\n    \"total_marks\": 20,\n    \"display_order\": 1\n}",
 							"options": {
 								"raw": {
 									"language": "json"

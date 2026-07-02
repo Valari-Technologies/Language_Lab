@@ -2,14 +2,9 @@ from rest_framework import serializers
 from .models import Grade, LearningExperience, ExperienceStep, Assessment, Question, Option
 
 
-# =============================================================================
-# Option Serializers
-# =============================================================================
 
 class OptionSerializer(serializers.ModelSerializer):
-    """
-    Standard serializer for Option model (used for both read and write operations).
-    """
+  
     class Meta:
         model = Option
         fields = [
@@ -24,14 +19,9 @@ class OptionSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
-# =============================================================================
-# Question Serializers
-# =============================================================================
 
 class QuestionSerializer(serializers.ModelSerializer):
-    """
-    Flat serializer for Question model (used for write operations: create/update).
-    """
+  
     class Meta:
         model = Question
         fields = [
@@ -48,9 +38,7 @@ class QuestionSerializer(serializers.ModelSerializer):
 
 
 class QuestionDetailSerializer(serializers.ModelSerializer):
-    """
-    Nested serializer for Question model (used for read operations: list/retrieve).
-    """
+    
     options = OptionSerializer(many=True, read_only=True)
 
     class Meta:
@@ -69,14 +57,9 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
-# =============================================================================
-# Assessment Serializers
-# =============================================================================
 
 class AssessmentSerializer(serializers.ModelSerializer):
-    """
-    Flat serializer for Assessment model (used for write operations: create/update).
-    """
+  
     class Meta:
         model = Assessment
         fields = [
@@ -84,7 +67,7 @@ class AssessmentSerializer(serializers.ModelSerializer):
             "experience",
             "title",
             "instructions",
-            "passing_marks",
+            "mastery",
             "total_marks",
             "display_order",
             "created_at",
@@ -94,9 +77,7 @@ class AssessmentSerializer(serializers.ModelSerializer):
 
 
 class AssessmentDetailSerializer(serializers.ModelSerializer):
-    """
-    Nested serializer for Assessment model (used for read operations: list/retrieve).
-    """
+    
     questions = QuestionDetailSerializer(many=True, read_only=True)
 
     class Meta:
@@ -106,7 +87,7 @@ class AssessmentDetailSerializer(serializers.ModelSerializer):
             "experience",
             "title",
             "instructions",
-            "passing_marks",
+            "mastery",
             "total_marks",
             "display_order",
             "questions",
@@ -116,14 +97,10 @@ class AssessmentDetailSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
-# =============================================================================
-# ExperienceStep Serializers
-# =============================================================================
+
 
 class ExperienceStepSerializer(serializers.ModelSerializer):
-    """
-    Serializer for ExperienceStep model (used for both read and write operations).
-    """
+  
     class Meta:
         model = ExperienceStep
         fields = [
@@ -141,14 +118,10 @@ class ExperienceStepSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
-# =============================================================================
-# LearningExperience Serializers
-# =============================================================================
+
 
 class LearningExperienceSerializer(serializers.ModelSerializer):
-    """
-    Flat serializer for LearningExperience model (used for write operations: create/update).
-    """
+    
     class Meta:
         model = LearningExperience
         fields = [
@@ -168,9 +141,7 @@ class LearningExperienceSerializer(serializers.ModelSerializer):
 
 
 class LearningExperienceDetailSerializer(serializers.ModelSerializer):
-    """
-    Nested serializer for LearningExperience model (used for read operations: list/retrieve).
-    """
+
     steps = ExperienceStepSerializer(many=True, read_only=True)
     assessments = AssessmentDetailSerializer(many=True, read_only=True)
 
@@ -194,14 +165,10 @@ class LearningExperienceDetailSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
-# =============================================================================
-# Grade Serializers
-# =============================================================================
+
 
 class GradeSerializer(serializers.ModelSerializer):
-    """
-    Flat serializer for Grade model (used for write operations: create/update).
-    """
+ 
     class Meta:
         model = Grade
         fields = [
@@ -216,9 +183,7 @@ class GradeSerializer(serializers.ModelSerializer):
 
 
 class GradeDetailSerializer(serializers.ModelSerializer):
-    """
-    Nested serializer for Grade model (used for read operations: list/retrieve).
-    """
+    
     learning_experiences = LearningExperienceSerializer(many=True, read_only=True)
 
     class Meta:

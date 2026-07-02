@@ -3,9 +3,7 @@ from django.utils.translation import gettext_lazy as _
 
 
 class Grade(models.Model):
-    """
-    Represents a specific grade or educational proficiency level (e.g., Grade 1, Beginner A1).
-    """
+   
     grade_name = models.CharField(
         max_length=50,
         unique=True,
@@ -41,9 +39,7 @@ class Grade(models.Model):
 
 
 class LearningExperience(models.Model):
-    """
-    Represents a modular unit of learning, mapping to a specific Grade.
-    """
+    
     class Difficulty(models.TextChoices):
         EASY = "EASY", _("Easy")
         MEDIUM = "MEDIUM", _("Medium")
@@ -123,9 +119,7 @@ class LearningExperience(models.Model):
 
 
 class ExperienceStep(models.Model):
-    """
-    Represents an individual step or component within a LearningExperience.
-    """
+    
     class BlockType(models.TextChoices):
         VIDEO = "VIDEO", _("Video")
         STORY = "STORY", _("Story")
@@ -203,9 +197,7 @@ class ExperienceStep(models.Model):
 
 
 class Assessment(models.Model):
-    """
-    Represents an evaluation linked to a LearningExperience.
-    """
+    
     experience = models.ForeignKey(
         LearningExperience,
         on_delete=models.CASCADE,
@@ -224,10 +216,10 @@ class Assessment(models.Model):
         verbose_name=_("Instructions"),
         help_text=_("Instructions or guidelines for students before starting.")
     )
-    passing_marks = models.IntegerField(
+    mastery = models.IntegerField(
         blank=True,
         null=True,
-        verbose_name=_("Passing Marks"),
+        verbose_name=_("Mastery"),
         help_text=_("Minimum marks required to pass the assessment.")
     )
     total_marks = models.IntegerField(
@@ -263,9 +255,7 @@ class Assessment(models.Model):
 
 
 class Question(models.Model):
-    """
-    Represents a question within a given Assessment.
-    """
+ 
     class QuestionType(models.TextChoices):
         MCQ = "MCQ", _("Multiple Choice Question")
         TRUE_FALSE = "TRUE_FALSE", _("True or False")
@@ -323,9 +313,7 @@ class Question(models.Model):
 
 
 class Option(models.Model):
-    """
-    Represents a choice option for a specific Question.
-    """
+   
     question = models.ForeignKey(
         Question,
         on_delete=models.CASCADE,

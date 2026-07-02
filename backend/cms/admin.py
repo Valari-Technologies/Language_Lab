@@ -3,11 +3,6 @@ from django.utils.translation import gettext_lazy as _
 from .models import Grade, LearningExperience, ExperienceStep, Assessment, Question, Option
 
 
-# -----------------------------------------------------------------------------
-# Custom Django Admin Model Ordering
-# -----------------------------------------------------------------------------
-
-# Keep reference to the original get_app_list method
 original_get_app_list = admin.AdminSite.get_app_list
 
 
@@ -35,13 +30,10 @@ def get_app_list(self, request, app_label=None):
     return app_list
 
 
-# Monkey-patch the AdminSite to apply custom ordering dynamically
+
 admin.AdminSite.get_app_list = get_app_list
 
 
-# -----------------------------------------------------------------------------
-# Inlines Configuration
-# -----------------------------------------------------------------------------
 
 class ExperienceStepInline(admin.TabularInline):
     model = ExperienceStep
@@ -55,7 +47,7 @@ class AssessmentInline(admin.TabularInline):
     model = Assessment
     extra = 1
     sortable_field_name = "display_order"
-    fields = ("title", "instructions", "passing_marks", "total_marks", "display_order")
+    fields = ("title", "instructions", "mastery", "total_marks", "display_order")
     classes = ("collapse",)
 
 
@@ -73,10 +65,6 @@ class OptionInline(admin.TabularInline):
     sortable_field_name = "display_order"
     fields = ("option_text", "is_correct", "display_order")
 
-
-# -----------------------------------------------------------------------------
-# ModelAdmin Registrations
-# -----------------------------------------------------------------------------
 
 @admin.register(Grade)
 class GradeAdmin(admin.ModelAdmin):
@@ -137,7 +125,7 @@ class AssessmentAdmin(admin.ModelAdmin):
     list_display = (
         "title",
         "experience",
-        "passing_marks",
+        "mastery",
         "total_marks",
         "display_order",
         "created_at",

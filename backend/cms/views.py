@@ -20,10 +20,7 @@ from .serializers import (
 
 
 class IsSuperAdmin(BasePermission):
-    """
-    Custom permission to only allow access to SUPER_ADMIN users.
-    Ensures safe attribute checking in case request.user doesn't have a role attribute.
-    """
+ 
     def has_permission(self, request, view):
         return bool(
             request.user and
@@ -33,18 +30,13 @@ class IsSuperAdmin(BasePermission):
 
 
 class CMSBaseViewSet(viewsets.ModelViewSet):
-    """
-    Base viewset for CMS APIs to share common authentication, permissions,
-    and filter backends, with standardized success messages for creation, updates, and deletion.
-    """
+  
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, IsSuperAdmin]
     filter_backends = [SearchFilter, OrderingFilter]
 
     def get_model_name(self):
-        """
-        Dynamically fetch the verbose name of the model associated with the ViewSet.
-        """
+       
         model = getattr(self, "model", None)
         if not model:
             queryset = getattr(self, "queryset", None)
@@ -96,9 +88,7 @@ class CMSBaseViewSet(viewsets.ModelViewSet):
 
 
 class GradeViewSet(CMSBaseViewSet):
-    """
-    ViewSet for managing educational grades/levels.
-    """
+  
     queryset = Grade.objects.all()
     search_fields = ["grade_name", "description"]
     ordering_fields = ["sort_order", "grade_name", "created_at"]
@@ -112,11 +102,7 @@ class GradeViewSet(CMSBaseViewSet):
 
 
 class LearningExperienceViewSet(CMSBaseViewSet):
-    """
-    ViewSet for managing learning experiences.
-
-    Provides query param filtering for grade, difficulty, and status.
-    """
+ 
     search_fields = ["title", "description", "objective"]
     ordering_fields = ["estimated_duration", "created_at", "title"]
     ordering = ["grade", "-created_at"]
@@ -143,10 +129,7 @@ class LearningExperienceViewSet(CMSBaseViewSet):
 
 
 class ExperienceStepViewSet(CMSBaseViewSet):
-    """
-    ViewSet for managing individual content blocks (steps) within a learning experience.
-    Provides query param filtering for experience and block_type.
-    """
+   
     serializer_class = ExperienceStepSerializer
     search_fields = ["title", "content"]
     ordering_fields = ["display_order", "created_at"]
@@ -166,12 +149,9 @@ class ExperienceStepViewSet(CMSBaseViewSet):
 
 
 class AssessmentViewSet(CMSBaseViewSet):
-    """
-    ViewSet for managing learning assessments.
-    Provides query param filtering for experience.
-    """
+    
     search_fields = ["title", "instructions"]
-    ordering_fields = ["display_order", "total_marks", "passing_marks", "created_at"]
+    ordering_fields = ["display_order", "total_marks", "mastery", "created_at"]
     ordering = ["display_order"]
 
     def get_queryset(self):
@@ -190,10 +170,7 @@ class AssessmentViewSet(CMSBaseViewSet):
 
 
 class QuestionViewSet(CMSBaseViewSet):
-    """
-    ViewSet for managing assessment questions.
-    Provides query param filtering for assessment and question_type.
-    """
+    
     search_fields = ["question_text"]
     ordering_fields = ["display_order", "marks", "created_at"]
     ordering = ["display_order"]
@@ -217,10 +194,7 @@ class QuestionViewSet(CMSBaseViewSet):
 
 
 class OptionViewSet(CMSBaseViewSet):
-    """
-    ViewSet for managing question choices/options.
-    Provides query param filtering for question and is_correct.
-    """
+    
     serializer_class = OptionSerializer
     search_fields = ["option_text"]
     ordering_fields = ["display_order", "created_at"]
