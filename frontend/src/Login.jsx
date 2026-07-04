@@ -1,51 +1,84 @@
 import React, { useState } from 'react';
-import { 
-  FiMail, 
-  FiLock, 
-  FiEye, 
-  FiEyeOff, 
-  FiShield, 
-  FiLayers, 
-  FiBarChart2, 
+import {
+  FiUser,
+  FiLock,
+  FiEye,
+  FiEyeOff,
+  FiShield,
+  FiLayers,
+  FiBarChart2,
   FiClock
 } from 'react-icons/fi';
 import './Login.css';
 import loginpageimg from './assets/lOGIN.jpeg';
+import icon from './assets/icon.png';
 
-const Login = () => {
+const Login = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('SUPER_ADMIN');
   const [rememberMe, setRememberMe] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log({ email, password, rememberMe });
+    setError('');
+    setLoading(true);
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/admin/login/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password, role }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        localStorage.setItem('access_token', data.access);
+        localStorage.setItem('refresh_token', data.refresh);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        if (onLoginSuccess) {
+          onLoginSuccess(data.user);
+        }
+      } else {
+        setError(data.message || 'Invalid username or password.');
+      }
+    } catch (err) {
+      setError('Connection to backend failed. Please make sure the server is running.');
+      console.error('Login error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="login-container">
-      
+
       {/* LEFT SIDE: Content Panel */}
       <div className="left-panel">
         {/* Brand Header */}
         <div className="brand-header">
           <div className="brand-icon-box">
-            <svg className="svg-icon" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM3.82 9L12 4.54 20.18 9 12 13.46 3.82 9zM12 15.56l-6-3.27V15c0 1.66 2.69 3 6 3s6-1.34 6-3v-2.71l-6 3.27z"/>
-            </svg>
+            <div className="svg-icon" >
+              <img src={icon} alt='icon' className='brand-icon' />
+            </div>
           </div>
           <div className="brand-text">
             <h1 className="brand-title">English Language Lab</h1>
           </div>
-        
+
         </div>
 
         {/* Hero Content */}
         <div className="hero-content">
           <h2 className="hero-heading">
             Learning Begins <br />
-            with <span className="highlight-text">Experience.</span>
+            with <span style={{ color: '#fbbf24' }}>Experience.</span>
           </h2>
           <p className="hero-description">
             Welcome to the Content Management System. Manage grades, learning experiences, assessments and more  all in one place.
@@ -85,32 +118,50 @@ const Login = () => {
           <div className="form-header">
             <div className="avatar-outer">
               <div className="avatar-inner">
-                <svg className="svg-icon" fill="currentColor" viewBox="0 0 24 24">
-                  {/* <path d="M2 22h20v-2H2v2zm1-3h18V8l-4 4-5-7-5 7-4-4v11z"/> */}
-                  <path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM3.82 9L12 4.54 20.18 9 12 13.46 3.82 9zM12 15.56l-6-3.27V15c0 1.66 2.69 3 6 3s6-1.34 6-3v-2.71l-6 3.27z"/>
-                </svg>
+                <img src={icon} alt="Logo" className="brand-icon" />
               </div>
             </div>
-            {/* <span className="badge-role">Super Admin Login</span> */}
             <h2 className="welcome-title">Welcome Back!</h2>
             <p className="welcome-subtitle">Sign in to access the English Language Lab CMS</p>
           </div>
 
+          {error && <div className="error-message-box">{error}</div>}
+
           <form onSubmit={handleSubmit} className="auth-form">
-            {/* Email Input */}
+            {/* Username Input */}
             <div className="input-group">
-              <label className="input-label" htmlFor="email">Email Address</label>
+              <label className="input-label" htmlFor="username">Username</label>
               <div className="input-relative">
-                <FiMail className="input-icon-left" />
+                <FiUser className="input-icon-left" />
                 <input
-                  id="email"
-                  type="email"
+                  id="username"
+                  type="text"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   className="form-input"
-                  placeholder="Enter your email address"
+                  placeholder="Enter your username"
+                  disabled={loading}
                 />
+              </div>
+            </div>
+
+            {/* Role Selection Dropdown */}
+            <div className="input-group">
+              <label className="input-label" htmlFor="role">Role</label>
+              <div className="input-relative">
+                <FiLayers className="input-icon-left" />
+                <select
+                  id="role"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="form-input select-dropdown"
+                  disabled={loading}
+                >
+                  <option value="SUPER_ADMIN">👑 Super Admin</option>
+                  <option value="INSTITUTE_ADMIN">🏫 Institute Admin</option>
+                  <option value="TEACHER">👨‍🏫 Teacher</option>
+                </select>
               </div>
             </div>
 
@@ -127,11 +178,13 @@ const Login = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   className="form-input"
                   placeholder="Enter your password"
+                  disabled={loading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="password-toggle-btn"
+                  disabled={loading}
                 >
                   {showPassword ? <FiEyeOff /> : <FiEye />}
                 </button>
@@ -144,8 +197,9 @@ const Login = () => {
                 <input
                   type="checkbox"
                   checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.checked)}
+                  onChange={(e) => setRememberMe(e.target.checked)}
                   className="form-checkbox"
+                  disabled={loading}
                 />
                 <span className="checkbox-text">Remember me</span>
               </label>
@@ -153,9 +207,9 @@ const Login = () => {
             </div>
 
             {/* Submit Button */}
-            <button type="submit" className="submit-btn">
+            <button type="submit" className="submit-btn" disabled={loading}>
               <FiLock className="btn-icon" />
-              <span>Sign In to Dashboard</span>
+              <span>{loading ? 'Signing In...' : 'Sign In to Dashboard'}</span>
             </button>
           </form>
 
@@ -167,8 +221,6 @@ const Login = () => {
             </span>
           </div>
 
-          {/* Restricted Notice Box */}
-          
         </div>
 
         {/* Footer Text */}
