@@ -1,18 +1,31 @@
-
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
 
-
+User = get_user_model()
 
 class LoginSerializer(serializers.Serializer):
-    username = serializers.CharField()
-    password = serializers.CharField(write_only=True)
+    """
+    Serializer for handling user login credentials.
+    """
+    username = serializers.CharField(required=True)
+    password = serializers.CharField(write_only=True, required=True)
+    role = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
 
-class CommonLoginSerializer(serializers.Serializer):
-    username = serializers.CharField()
-    password = serializers.CharField(write_only=True)
-    role = serializers.ChoiceField(choices=[
-        ("SCHOOL_ADMIN", "School Admin"),
-        ("TEACHER", "Teacher"),
-        ("STUDENT", "Student"),
-    ])
+class RegisterSerializer(serializers.ModelSerializer):
+    """
+    Serializer for registering users with specific roles.
+    Only authorized roles can be selected, and the password is securely hashed.
+    """
+    password = serializers.CharField(write_only=True, required=True, min_length=6)
+    role = serializers.ChoiceField(choices=User.Role.choices, default=User.Role.STUDENT)
+
+    class Meta:
+        model = User
+        fields = ("id", "username", "email", "password", "role", "full_name")
+
+    def create(self, validated_data):
+        password = validated_data.pop("password")
+        # create_user automatically handles username, email, full_name, role, and hashes the password
+        user = User.objects.create_user(password=password, **validated_data)
+        return user

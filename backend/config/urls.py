@@ -16,14 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from accounts.views import LoginAPIView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path("api/accounts/login/", LoginAPIView.as_view(), name="login"),
-    path("api/auth/", include("accounts.urls")),
+    path("api/", include("accounts.urls")),
     path("api/cms/", include("cms.urls")),
     
 ]
-
-

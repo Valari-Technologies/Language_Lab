@@ -5,6 +5,10 @@ from .models import User
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
+    """
+    Admin panel configuration for Custom User Model.
+    Includes the custom role and full_name fields in lists and forms.
+    """
     list_display = (
         "username",
         "email",
@@ -26,4 +30,12 @@ class CustomUserAdmin(UserAdmin):
 
     ordering = (
         "username",
+    )
+
+    fieldsets = UserAdmin.fieldsets + (
+        ("Custom Role Fields", {"fields": ("role", "full_name")}),
+    )
+
+    add_fieldsets = UserAdmin.add_fieldsets + (
+        ("Custom Role Fields", {"fields": ("role", "full_name")}),
     )

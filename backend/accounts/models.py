@@ -5,7 +5,7 @@ from django.contrib.auth.models import AbstractUser
 class User(AbstractUser):
     class Role(models.TextChoices):
         SUPER_ADMIN = "SUPER_ADMIN", "Super Admin"
-        SCHOOL_ADMIN = "SCHOOL_ADMIN", "School Admin"
+        INSTITUTE_ADMIN = "INSTITUTE_ADMIN", "Institute Admin"
         TEACHER = "TEACHER", "Teacher"
         STUDENT = "STUDENT", "Student"
 
@@ -29,4 +29,4 @@ class User(AbstractUser):
         verbose_name_plural = "Users"
 
     def __str__(self):
-        return self.username
+        return self.username
