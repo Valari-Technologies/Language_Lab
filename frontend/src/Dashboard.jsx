@@ -19,7 +19,8 @@ import {
   FiFileText,
   FiCornerDownRight,
   FiMenu,
-  FiX
+  FiX,
+  FiUser
 } from 'react-icons/fi';
 import './Dashboard.css';
 
@@ -53,15 +54,22 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   const [grades, setGrades] = useState([]);
   const [experiences, setExperiences] = useState([]);
   const [steps, setSteps] = useState([]);
-  const [assessments, setAssessments] = useState([]);
-  const [questions, setQuestions] = useState([]);
-  const [optionsList, setOptionsList] = useState([]);
+  const [schools, setSchools] = useState([]);
+  const [publishContents, setPublishContents] = useState([]);
+  const [dashboardStats, setDashboardStats] = useState({ total_schools: 0, total_school_admins: 0, total_publish_contents: 0, total_grades: 0 });
+  const [previewScenario, setPreviewScenario] = useState(null);
+  const [profileForm, setProfileForm] = useState({ username: user?.username || '', email: user?.email || '', full_name: user?.full_name || '', password: '' });
+  const [schoolForm, setSchoolForm] = useState({
+    school_name: '', address: '', phone: '', email: '', logo: '', is_active: true
+  });
+  const [publishForm, setPublishForm] = useState({
+    release_name: '', grade: '', total_scenarios: 0, status: 'DRAFT', export_file: '', checksum: ''
+  });
+
 
   // Filter overrides for nested navigation
   const [selectedGradeFilter, setSelectedGradeFilter] = useState('');
   const [selectedExperienceFilter, setSelectedExperienceFilter] = useState('');
-  const [selectedAssessmentFilter, setSelectedAssessmentFilter] = useState('');
-  const [selectedQuestionFilter, setSelectedQuestionFilter] = useState('');
 
   // Loading & error feedback
   const [loading, setLoading] = useState(false);
@@ -81,17 +89,52 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   const [stepForm, setStepForm] = useState({
     experience: '', block_type: 'VIDEO', title: '', content: '', media_url: '', display_order: 1, settings: '{}'
   });
-  const [assessmentForm, setAssessmentForm] = useState({
-    experience: '', title: '', instructions: '', mastery: 10, total_marks: 20, display_order: 1
-  });
-  const [questionForm, setQuestionForm] = useState({
-    assessment: '', question_type: 'MCQ', question_text: '', marks: 5, display_order: 1
-  });
-  const [optionForm, setOptionForm] = useState({
-    question: '', option_text: '', is_correct: false, display_order: 1
-  });
 
   // Fetch all helper loaders
+    const loadSchools = async () => {
+    try {
+      const res = await apiFetch('/api/schools/');
+      if (res.ok) {
+        const data = await res.json();
+        setSchools(data.results || data);
+      }
+    } catch (e) { console.error('Failed to load schools', e); }
+  };
+
+  const loadPublishContents = async () => {
+    try {
+      const res = await apiFetch('/api/cms/publish-contents/');
+      if (res.ok) {
+        const data = await res.json();
+        setPublishContents(data.results || data);
+      }
+    } catch (e) { console.error('Failed to load publish contents', e); }
+  };
+
+  const loadDashboardStats = async () => {
+    try {
+      const res = await apiFetch('/api/cms/dashboard-stats/');
+      if (res.ok) {
+        const data = await res.json();
+        setDashboardStats(data);
+      }
+    } catch (e) { console.error('Failed to load dashboard stats', e); }
+  };
+
+  const handlePreviewScenario = async (scenario) => {
+    try {
+      const res = await apiFetch(`/api/cms/scenario-builders/?experience=${scenario.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPreviewScenario({ ...scenario, steps: data.results || data });
+      } else {
+        setPreviewScenario({ ...scenario, steps: [] });
+      }
+    } catch (e) {
+      setPreviewScenario({ ...scenario, steps: [] });
+    }
+  };
+
   const loadGrades = async () => {
     try {
       const res = await apiFetch('/api/cms/grades/');
@@ -122,47 +165,20 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
     } catch (e) { console.error('Failed to load steps', e); }
   };
 
-  const loadAssessments = async () => {
-    try {
-      const res = await apiFetch('/api/cms/assessments/');
-      if (res.ok) {
-        const data = await res.json();
-        setAssessments(data.results || data);
-      }
-    } catch (e) { console.error('Failed to load assessments', e); }
-  };
 
-  const loadQuestions = async () => {
-    try {
-      const res = await apiFetch('/api/cms/questions/');
-      if (res.ok) {
-        const data = await res.json();
-        setQuestions(data.results || data);
-      }
-    } catch (e) { console.error('Failed to load questions', e); }
-  };
 
-  const loadOptions = async () => {
-    try {
-      const res = await apiFetch('/api/cms/options/');
-      if (res.ok) {
-        const data = await res.json();
-        setOptionsList(data.results || data);
-      }
-    } catch (e) { console.error('Failed to load options', e); }
-  };
 
   const loadAllData = async () => {
     setLoading(true);
     setErrorMsg('');
     try {
       await Promise.all([
+        loadSchools(),
+        loadPublishContents(),
+        loadDashboardStats(),
         loadGrades(),
         loadExperiences(),
         loadSteps(),
-        loadAssessments(),
-        loadQuestions(),
-        loadOptions()
       ]);
     } catch (e) {
       setErrorMsg('Failed to load data from backend server.');
@@ -235,52 +251,9 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         display_order: steps.filter(s => s.experience?.id === selectedExperienceFilter).length + 1,
         settings: '{}'
       });
-    } else if (tab === 'assessments') {
-      setAssessmentForm(entity ? {
-        experience: entity.experience?.id || entity.experience || '',
-        title: entity.title || '',
-        instructions: entity.instructions || '',
-        mastery: entity.mastery || 10,
-        total_marks: entity.total_marks || 20,
-        display_order: entity.display_order || 1
-      } : {
-        experience: selectedExperienceFilter || (experiences[0]?.id || ''),
-        title: '',
-        instructions: '',
-        mastery: 10,
-        total_marks: 20,
-        display_order: assessments.filter(a => a.experience?.id === selectedExperienceFilter).length + 1
-      });
-    } else if (tab === 'questions') {
-      setQuestionForm(entity ? {
-        assessment: entity.assessment?.id || entity.assessment || '',
-        question_type: entity.question_type || 'MCQ',
-        question_text: entity.question_text || '',
-        marks: entity.marks || 5,
-        display_order: entity.display_order || 1
-      } : {
-        assessment: selectedAssessmentFilter || (assessments[0]?.id || ''),
-        question_type: 'MCQ',
-        question_text: '',
-        marks: 5,
-        display_order: questions.filter(q => q.assessment?.id === selectedAssessmentFilter).length + 1
-      });
-    } else if (tab === 'options') {
-      setOptionForm(entity ? {
-        question: entity.question?.id || entity.question || '',
-        option_text: entity.option_text || '',
-        is_correct: entity.is_correct || false,
-        display_order: entity.display_order || 1
-      } : {
-        question: selectedQuestionFilter || (questions[0]?.id || ''),
-        option_text: '',
-        is_correct: false,
-        display_order: optionsList.filter(o => o.question?.id === selectedQuestionFilter).length + 1
-      });
     }
   };
 
-  // Add / Edit Button Clicks
   const handleOpenAdd = () => {
     setModalType('add');
     setEditingId(null);
@@ -290,7 +263,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
 
   const handleOpenEdit = (entity) => {
     setModalType('edit');
-    setEditingId(entity.id);
+    setEditingId(entity.id || entity.school_id || entity.publish_id);
     initForm(activeTab, entity);
     setShowModal(true);
   };
@@ -307,7 +280,15 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
     }
 
     try {
-      if (activeTab === 'grades') {
+            if (activeTab === 'schools') {
+        body = { ...schoolForm };
+      } else if (activeTab === 'publish-contents') {
+        body = { 
+          ...publishForm, 
+          grade: parseInt(publishForm.grade), 
+          total_scenarios: parseInt(publishForm.total_scenarios) 
+        };
+      } else if (activeTab === 'grades') {
         body = { ...gradeForm };
       } else if (activeTab === 'experiences') {
         body = { ...experienceForm, grade: parseInt(experienceForm.grade) };
@@ -324,27 +305,6 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
           experience: parseInt(stepForm.experience),
           settings: settingsJson 
         };
-      } else if (activeTab === 'assessments') {
-        body = { 
-          ...assessmentForm, 
-          experience: parseInt(assessmentForm.experience),
-          mastery: parseInt(assessmentForm.mastery),
-          total_marks: parseInt(assessmentForm.total_marks),
-          display_order: parseInt(assessmentForm.display_order)
-        };
-      } else if (activeTab === 'questions') {
-        body = { 
-          ...questionForm, 
-          assessment: parseInt(questionForm.assessment),
-          marks: parseInt(questionForm.marks),
-          display_order: parseInt(questionForm.display_order)
-        };
-      } else if (activeTab === 'options') {
-        body = { 
-          ...optionForm, 
-          question: parseInt(optionForm.question),
-          display_order: parseInt(optionForm.display_order)
-        };
       }
 
       const method = modalType === 'add' ? 'POST' : 'PUT';
@@ -358,12 +318,13 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         showFeedback(resData.message || 'Operation successful', null);
         setShowModal(false);
         // Refresh data lists
-        if (activeTab === 'grades') await loadGrades();
+        if (activeTab === 'schools') { await loadSchools(); await loadDashboardStats(); }
+        else if (activeTab === 'publish-contents') { await loadPublishContents(); await loadDashboardStats(); }
+        else if (activeTab === 'schools') { await loadSchools(); await loadDashboardStats(); }
+        else if (activeTab === 'publish-contents') { await loadPublishContents(); await loadDashboardStats(); }
+        else if (activeTab === 'grades') await loadGrades();
         else if (activeTab === 'experiences') await loadExperiences();
         else if (activeTab === 'steps') await loadSteps();
-        else if (activeTab === 'assessments') await loadAssessments();
-        else if (activeTab === 'questions') await loadQuestions();
-        else if (activeTab === 'options') await loadOptions();
       } else {
         const errorDetail = typeof resData === 'object' ? JSON.stringify(resData) : resData;
         setErrorMsg(`Error: ${errorDetail}`);
@@ -385,12 +346,13 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
       const resData = await res.json();
       if (res.ok) {
         showFeedback(resData.message || 'Deleted successfully', null);
-        if (activeTab === 'grades') await loadGrades();
+        if (activeTab === 'schools') { await loadSchools(); await loadDashboardStats(); }
+        else if (activeTab === 'publish-contents') { await loadPublishContents(); await loadDashboardStats(); }
+        else if (activeTab === 'schools') { await loadSchools(); await loadDashboardStats(); }
+        else if (activeTab === 'publish-contents') { await loadPublishContents(); await loadDashboardStats(); }
+        else if (activeTab === 'grades') await loadGrades();
         else if (activeTab === 'experiences') await loadExperiences();
         else if (activeTab === 'steps') await loadSteps();
-        else if (activeTab === 'assessments') await loadAssessments();
-        else if (activeTab === 'questions') await loadQuestions();
-        else if (activeTab === 'options') await loadOptions();
       } else {
         setErrorMsg(resData.message || 'Failed to delete record.');
       }
@@ -403,10 +365,12 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   // Stats generators
   const getStats = () => {
     return {
+      schools: schools.length,
+      schools: schools.length,
       grades: grades.length,
       experiences: experiences.length,
       steps: steps.length,
-      assessments: assessments.length
+      publish_contents: publishContents.length
     };
   };
   const stats = getStats();
@@ -451,6 +415,22 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         </div>
 
         <nav className="sidebar-nav">
+                    <button 
+            className={`nav-link ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => { onTabChange('dashboard'); setSearchQuery(''); setIsSidebarOpen(false); }}
+          >
+            <FiShield className="nav-icon" />
+            <span>Dashboard</span>
+          </button>
+          <button 
+            className={`nav-link ${activeTab === 'schools' ? 'active' : ''}`}
+            onClick={() => { onTabChange('schools'); setSearchQuery(''); setIsSidebarOpen(false); }}
+          >
+            <FiGrid className="nav-icon" />
+            <span>Schools</span>
+            <span className="nav-count">{stats.schools}</span>
+          </button>
+
           <button 
             className={`nav-link ${activeTab === 'grades' ? 'active' : ''}`}
             onClick={() => { onTabChange('grades'); setSearchQuery(''); setIsSidebarOpen(false); }}
@@ -478,30 +458,25 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
             <span className="nav-count">{stats.steps}</span>
           </button>
 
+
+
           <button 
-            className={`nav-link ${activeTab === 'assessments' ? 'active' : ''}`}
-            onClick={() => { onTabChange('assessments'); setSearchQuery(''); setIsSidebarOpen(false); }}
+            className={`nav-link ${activeTab === 'publish-contents' ? 'active' : ''}`}
+            onClick={() => { onTabChange('publish-contents'); setSearchQuery(''); setIsSidebarOpen(false); }}
           >
             <FiFileText className="nav-icon" />
-            <span>Assessments</span>
-            <span className="nav-count">{stats.assessments}</span>
+            <span>Publish Content</span>
+            <span className="nav-count">{stats.publish_contents}</span>
           </button>
 
           <button 
-            className={`nav-link ${activeTab === 'questions' ? 'active' : ''}`}
-            onClick={() => { onTabChange('questions'); setSearchQuery(''); setIsSidebarOpen(false); }}
+            className={`nav-link ${activeTab === 'profile' ? 'active' : ''}`}
+            onClick={() => { onTabChange('profile'); setSearchQuery(''); setIsSidebarOpen(false); }}
           >
-            <FiHelpCircle className="nav-icon" />
-            <span>Questions</span>
+            <FiUser className="nav-icon" />
+            <span>Profile Settings</span>
           </button>
 
-          <button 
-            className={`nav-link ${activeTab === 'options' ? 'active' : ''}`}
-            onClick={() => { onTabChange('options'); setSearchQuery(''); setIsSidebarOpen(false); }}
-          >
-            <FiCheckCircle className="nav-icon" />
-            <span>Options</span>
-          </button>
         </nav>
 
         {/* User Card */}
@@ -524,12 +499,12 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         <header className="content-header">
           <div className="header-info">
             <h1 className="page-title">
+              {activeTab === 'dashboard' && 'Super Admin Overview'}
+              {activeTab === 'schools' && 'Manage Schools'}
+              {activeTab === 'publish-contents' && 'Publish History'}
               {activeTab === 'grades' && 'Manage Grades'}
-              {activeTab === 'experiences' && 'Learning Experiences'}
+              {activeTab === 'experiences' && 'Scenarios'}
               {activeTab === 'steps' && 'Experience Steps Content'}
-              {activeTab === 'assessments' && 'Assessments & Quizzes'}
-              {activeTab === 'questions' && 'Assessment Questions'}
-              {activeTab === 'options' && 'Question Options'}
             </h1>
             <p className="page-subtitle">Configure English Learning Content and structures dynamically</p>
           </div>
@@ -572,7 +547,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
             )}
 
             {/* Experience Filter */}
-            {(activeTab === 'steps' || activeTab === 'assessments') && (
+            {activeTab === 'steps' && (
               <div className="filter-group">
                 <span className="filter-label">Experience:</span>
                 <select 
@@ -588,41 +563,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
               </div>
             )}
 
-            {/* Assessment Filter */}
-            {activeTab === 'questions' && (
-              <div className="filter-group">
-                <span className="filter-label">Assessment:</span>
-                <select 
-                  value={selectedAssessmentFilter} 
-                  onChange={(e) => setSelectedAssessmentFilter(e.target.value)}
-                  className="filter-select"
-                >
-                  <option value="">All Assessments</option>
-                  {assessments.map(a => (
-                    <option key={a.id} value={a.id}>{a.title}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Question Filter */}
-            {activeTab === 'options' && (
-              <div className="filter-group">
-                <span className="filter-label">Question:</span>
-                <select 
-                  value={selectedQuestionFilter} 
-                  onChange={(e) => setSelectedQuestionFilter(e.target.value)}
-                  className="filter-select"
-                >
-                  <option value="">All Questions</option>
-                  {questions.map(q => (
-                    <option key={q.id} value={q.id}>{q.question_text?.slice(0, 50)}...</option>
-                  ))}
-                </select>
-              </div>
-            )}
           </div>
-
           <button onClick={handleOpenAdd} className="btn-add">
             <FiPlus />
             <span>Add New {activeTab.charAt(0).toUpperCase() + activeTab.slice(1, -1)}</span>
@@ -638,6 +579,171 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
             </div>
           ) : (
             <div className="data-table-wrapper">
+                            {/* DASHBOARD OVERVIEW TAB */}
+              {activeTab === 'dashboard' && (
+                <div className="dashboard-wrapper">
+                  <div className="stats-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '30px' }}>
+                    <div className="stats-card" style={{ padding: '20px', background: '#fff', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+                      <h4 style={{ margin: 0, fontSize: '14px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>Total Schools</h4>
+                      <p style={{ margin: '10px 0 0 0', fontSize: '28px', fontWeight: 600, color: '#0f172a' }}>{dashboardStats.total_schools}</p>
+                    </div>
+                    <div className="stats-card" style={{ padding: '20px', background: '#fff', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+                      <h4 style={{ margin: 0, fontSize: '14px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>School Admins</h4>
+                      <p style={{ margin: '10px 0 0 0', fontSize: '28px', fontWeight: 600, color: '#0f172a' }}>{dashboardStats.total_school_admins}</p>
+                    </div>
+                    <div className="stats-card" style={{ padding: '20px', background: '#fff', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+                      <h4 style={{ margin: 0, fontSize: '14px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>Publish Contents</h4>
+                      <p style={{ margin: '10px 0 0 0', fontSize: '28px', fontWeight: 600, color: '#0f172a' }}>{dashboardStats.total_publish_contents}</p>
+                    </div>
+                    <div className="stats-card" style={{ padding: '20px', background: '#fff', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+                      <h4 style={{ margin: 0, fontSize: '14px', color: '#64748b', fontWeight: 500, textTransform: 'uppercase' }}>Total Grades</h4>
+                      <p style={{ margin: '10px 0 0 0', fontSize: '28px', fontWeight: 600, color: '#0f172a' }}>{dashboardStats.total_grades}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="recent-scenarios-card">
+                    <h3 style={{ margin: 0, color: '#1e293b', fontWeight: 600 }}>Welcome to Language Lab Admin Panel</h3>
+                    <p style={{ marginTop: '10px', color: '#64748b' }}>Use the sidebar navigation to manage schools, grades, scenarios, scenario builders, and release publish packages.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* PROFILE SETTINGS TAB */}
+              {activeTab === 'profile' && (
+                <div className="dashboard-wrapper">
+                  <div className="recent-scenarios-card">
+                    <h3 style={{ margin: 0, color: '#1e293b', fontWeight: 600 }}>Profile Settings</h3>
+                    <p style={{marginTop:'10px', color:'#64748b'}}>View and update your account details.</p>
+                    
+                    <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      try {
+                        const res = await apiFetch('/api/users/profile/', {
+                           method: 'PUT',
+                           headers: { 'Content-Type': 'application/json' },
+                           body: JSON.stringify(profileForm)
+                        });
+                        if(res.ok) {
+                           alert('Profile updated successfully!');
+                        } else {
+                           alert('Failed to update profile.');
+                        }
+                      } catch(e) {
+                        alert('Error connecting to backend.');
+                      }
+                    }}>
+                      <div style={{marginTop: '20px', padding: '20px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0'}}>
+                        <div style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
+                          <div className="form-group">
+                            <label>Username</label>
+                            <input type="text" value={profileForm?.username || ''} disabled style={{background:'#e2e8f0', cursor:'not-allowed'}} />
+                            <small>Username cannot be changed.</small>
+                          </div>
+                          <div className="form-group">
+                            <label>Full Name</label>
+                            <input type="text" value={profileForm?.full_name || ''} onChange={e => setProfileForm({...profileForm, full_name: e.target.value})} />
+                          </div>
+                          <div className="form-group">
+                            <label>Email</label>
+                            <input type="email" value={profileForm?.email || ''} onChange={e => setProfileForm({...profileForm, email: e.target.value})} />
+                          </div>
+                          <div className="form-group">
+                            <label>New Password (Optional)</label>
+                            <input type="password" placeholder="Leave blank to keep current password" value={profileForm?.password || ''} onChange={e => setProfileForm({...profileForm, password: e.target.value})} />
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{marginTop:'20px'}}>
+                        <button type="submit" className="btn-primary" style={{padding:'0.75rem 1.5rem'}}>Update Profile</button>
+                      </div>
+                    </form>
+
+                  </div>
+                </div>
+              )}
+
+              {/* SCHOOLS TAB */}
+              {activeTab === 'schools' && (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>School Name</th>
+                      <th>Email</th>
+                      <th>Phone</th>
+                      <th>Status</th>
+                      <th>Manage</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {schools
+                      .filter(s => s.school_name?.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map(s => (
+                        <tr key={s.school_id || s.id}>
+                          <td className="bold-text">{s.school_name}</td>
+                          <td>{s.email}</td>
+                          <td>{s.phone}</td>
+                          <td>
+                            <span className={`badge-pill status ${s.is_active ? 'published' : 'draft'}`}>
+                              {s.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="actions-cell">
+                            <button onClick={() => handleOpenEdit(s)} className="action-btn edit" title="Edit"><FiEdit2 /></button>
+                            <button onClick={() => handleDelete(s.school_id || s.id)} className="action-btn delete" title="Delete"><FiTrash2 /></button>
+                          </td>
+                        </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {/* PUBLISH CONTENT TAB */}
+              {activeTab === 'publish-contents' && (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Release Name</th>
+                      <th>Grade</th>
+                      <th>Total Scenarios</th>
+                      <th>Status</th>
+                      <th>Checksum</th>
+                      <th>Package</th>
+                      <th>Manage</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {publishContents
+                      .filter(p => p.release_name?.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map(p => (
+                        <tr key={p.publish_id || p.id}>
+                          <td className="bold-text">{p.release_name}</td>
+                          <td>{p.grade_name || p.grade}</td>
+                          <td>{p.total_scenarios}</td>
+                          <td>
+                            <span className={`badge-pill status ${p.status?.toLowerCase()}`}>
+                              {p.status}
+                            </span>
+                          </td>
+                          <td className="dim-text">{p.checksum || 'N/A'}</td>
+                          <td>
+                            {p.export_file ? (
+                              <a href={p.export_file} target="_blank" rel="noopener noreferrer" className="btn-link" style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <FiFileText /> Download
+                              </a>
+                            ) : (
+                              <span className="dim-text">No package</span>
+                            )}
+                          </td>
+                          <td className="actions-cell">
+                            <button onClick={() => handleOpenEdit(p)} className="action-btn edit" title="Edit"><FiEdit2 /></button>
+                            <button onClick={() => handleDelete(p.publish_id || p.id)} className="action-btn delete" title="Delete"><FiTrash2 /></button>
+                          </td>
+                        </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
               {/* GRADES TAB */}
               {activeTab === 'grades' && (
                 <table className="data-table">
@@ -726,13 +832,13 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                             </button>
                             <span className="divider">|</span>
                             <button 
-                              onClick={() => { setSelectedExperienceFilter(ex.id); setActiveTab('assessments'); }}
                               className="btn-link"
                             >
                               Assessments
                             </button>
                           </td>
                           <td className="actions-cell">
+                            <button onClick={() => handlePreviewScenario(ex)} className="action-btn preview" title="Preview" style={{ background: '#3b82f6', color: '#fff' }}><FiBookOpen /></button>
                             <button onClick={() => handleOpenEdit(ex)} className="action-btn edit" title="Edit"><FiEdit2 /></button>
                             <button onClick={() => handleDelete(ex.id)} className="action-btn delete" title="Delete"><FiTrash2 /></button>
                           </td>
@@ -747,10 +853,10 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Step</th>
-                      <th>Experience</th>
+                      <th>Order</th>
+                      <th>Scenario</th>
                       <th>Block Type</th>
-                      <th>Step Title</th>
+                      <th>Scenario Builder Title</th>
                       <th>Content Preview</th>
                       <th className="actions-cell">Actions</th>
                     </tr>
@@ -780,137 +886,48 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                 </table>
               )}
 
-              {/* ASSESSMENTS TAB */}
-              {activeTab === 'assessments' && (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Order</th>
-                      <th>Experience</th>
-                      <th>Title</th>
-                      <th>Mastery / Total</th>
-                      <th>Manage</th>
-                      <th className="actions-cell">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {assessments
-                      .filter(a => !selectedExperienceFilter || a.experience?.id === parseInt(selectedExperienceFilter) || a.experience === parseInt(selectedExperienceFilter))
-                      .filter(a => a.title?.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .map(a => (
-                        <tr key={a.id}>
-                          <td className="bold-text">#{a.display_order}</td>
-                          <td className="dim-text">{a.experience_detail?.title || `Exp ID: ${a.experience}`}</td>
-                          <td className="highlight-text">{a.title}</td>
-                          <td>
-                            <span className="marks-badge">
-                              {a.mastery} / {a.total_marks} Marks
-                            </span>
-                          </td>
-                          <td>
-                            <button 
-                              onClick={() => { setSelectedAssessmentFilter(a.id); setActiveTab('questions'); }}
-                              className="btn-link"
-                            >
-                              <FiCornerDownRight /> Questions
-                            </button>
-                          </td>
-                          <td className="actions-cell">
-                            <button onClick={() => handleOpenEdit(a)} className="action-btn edit" title="Edit"><FiEdit2 /></button>
-                            <button onClick={() => handleDelete(a.id)} className="action-btn delete" title="Delete"><FiTrash2 /></button>
-                          </td>
-                        </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              {/* QUESTIONS TAB */}
-              {activeTab === 'questions' && (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Order</th>
-                      <th>Assessment</th>
-                      <th>Type</th>
-                      <th>Question Text</th>
-                      <th>Marks</th>
-                      <th>Options</th>
-                      <th className="actions-cell">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {questions
-                      .filter(q => !selectedAssessmentFilter || q.assessment?.id === parseInt(selectedAssessmentFilter) || q.assessment === parseInt(selectedAssessmentFilter))
-                      .filter(q => q.question_text?.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .map(q => (
-                        <tr key={q.id}>
-                          <td className="bold-text">#{q.display_order}</td>
-                          <td className="dim-text">{q.assessment_detail?.title || `Assess ID: ${q.assessment}`}</td>
-                          <td>
-                            <span className="badge-pill type">{q.question_type}</span>
-                          </td>
-                          <td className="highlight-text">{q.question_text}</td>
-                          <td className="bold-text">{q.marks}</td>
-                          <td>
-                            <button 
-                              onClick={() => { setSelectedQuestionFilter(q.id); setActiveTab('options'); }}
-                              className="btn-link"
-                            >
-                              <FiCornerDownRight /> Options
-                            </button>
-                          </td>
-                          <td className="actions-cell">
-                            <button onClick={() => handleOpenEdit(q)} className="action-btn edit" title="Edit"><FiEdit2 /></button>
-                            <button onClick={() => handleDelete(q.id)} className="action-btn delete" title="Delete"><FiTrash2 /></button>
-                          </td>
-                        </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              {/* OPTIONS TAB */}
-              {activeTab === 'options' && (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Order</th>
-                      <th>Question</th>
-                      <th>Option Value</th>
-                      <th>Correct Answer?</th>
-                      <th className="actions-cell">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {optionsList
-                      .filter(o => !selectedQuestionFilter || o.question?.id === parseInt(selectedQuestionFilter) || o.question === parseInt(selectedQuestionFilter))
-                      .filter(o => o.option_text?.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .map(o => (
-                        <tr key={o.id}>
-                          <td className="bold-text">#{o.display_order}</td>
-                          <td className="dim-text question-col">{o.question_detail?.question_text || `Q ID: ${o.question}`}</td>
-                          <td className="highlight-text">{o.option_text}</td>
-                          <td>
-                            {o.is_correct ? (
-                              <span className="answer-badge correct"><FiCheckCircle /> Correct</span>
-                            ) : (
-                              <span className="answer-badge incorrect"><FiXCircle /> Incorrect</span>
-                            )}
-                          </td>
-                          <td className="actions-cell">
-                            <button onClick={() => handleOpenEdit(o)} className="action-btn edit" title="Edit"><FiEdit2 /></button>
-                            <button onClick={() => handleDelete(o.id)} className="action-btn delete" title="Delete"><FiTrash2 /></button>
-                          </td>
-                        </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
             </div>
           )}
         </div>
       </main>
+
+            {/* SCENARIO PREVIEW MODAL */}
+      {previewScenario && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-card" style={{ maxWidth: '800px', width: '90%' }}>
+            <header className="modal-header">
+              <h3>Preview Scenario: {previewScenario.title}</h3>
+              <button onClick={() => setPreviewScenario(null)} className="close-modal-btn"><FiXCircle /></button>
+            </header>
+            <div style={{ padding: '20px', overflowY: 'auto', maxHeight: '70vh' }}>
+              <p><strong>Grade:</strong> {previewScenario.grade_detail?.grade_name || `Grade ID: ${previewScenario.grade}`}</p>
+              <p><strong>Objective:</strong> {previewScenario.objective || 'No objective specified'}</p>
+              <p><strong>Description:</strong> {previewScenario.description || 'No description specified'}</p>
+              <p><strong>Estimated Duration:</strong> {previewScenario.estimated_duration} mins</p>
+              <p><strong>Difficulty:</strong> {previewScenario.difficulty}</p>
+              <p><strong>Status:</strong> {previewScenario.status}</p>
+              
+              <h4 style={{ marginTop: '20px', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>Scenario Steps</h4>
+              {previewScenario.steps && previewScenario.steps.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '10px' }}>
+                  {previewScenario.steps.map((s, idx) => (
+                    <div key={s.id || idx} style={{ padding: '15px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                      <h5 style={{ margin: 0 }}>Step #{s.display_order}: {s.title} ({s.block_type})</h5>
+                      {s.content && <p style={{ margin: '10px 0 0 0', whiteSpace: 'pre-wrap', color: '#475569' }}>{s.content}</p>}
+                      {s.media_url && <a href={s.media_url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '10px', fontSize: '14px', color: '#3b82f6' }}>View Media Link</a>}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ marginTop: '10px', color: '#64748b' }}>No scenario builder steps found for this scenario.</p>
+              )}
+            </div>
+            <footer className="modal-actions">
+              <button onClick={() => setPreviewScenario(null)} className="btn-secondary">Close Preview</button>
+            </footer>
+          </div>
+        </div>
+      )}
 
       {/* DYNAMIC FORM MODAL OVERLAY */}
       {showModal && (
@@ -922,6 +939,79 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
             </header>
             
             <form onSubmit={handleFormSubmit} className="modal-form">
+                            {/* SCHOOLS FORM FIELDS */}
+              {activeTab === 'schools' && (
+                <>
+                  <div className="form-group">
+                    <label>School Name *</label>
+                    <input type="text" required value={schoolForm.school_name} onChange={e => setSchoolForm({ ...schoolForm, school_name: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label>Address *</label>
+                    <input type="text" required value={schoolForm.address} onChange={e => setSchoolForm({ ...schoolForm, address: e.target.value })} />
+                  </div>
+                  <div className="form-row-2">
+                    <div className="form-group">
+                      <label>Phone *</label>
+                      <input type="text" required value={schoolForm.phone} onChange={e => setSchoolForm({ ...schoolForm, phone: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label>Email *</label>
+                      <input type="email" required value={schoolForm.email} onChange={e => setSchoolForm({ ...schoolForm, email: e.target.value })} />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Logo URL</label>
+                    <input type="text" value={schoolForm.logo} onChange={e => setSchoolForm({ ...schoolForm, logo: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                    <input type="checkbox" checked={schoolForm.is_active} onChange={e => setSchoolForm({ ...schoolForm, is_active: e.target.checked })} id="is_active_school"/>
+                    <label htmlFor="is_active_school" style={{marginBottom:0}}>Is Active</label>
+                  </div>
+                </>
+              )}
+
+              {/* PUBLISH CONTENT FORM FIELDS */}
+              {activeTab === 'publish-contents' && (
+                <>
+                  <div className="form-group">
+                    <label>Release Name *</label>
+                    <input type="text" required value={publishForm.release_name} onChange={e => setPublishForm({ ...publishForm, release_name: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label>Grade *</label>
+                    <select required value={publishForm.grade} onChange={e => setPublishForm({ ...publishForm, grade: e.target.value })}>
+                      <option value="">Select Grade</option>
+                      {grades.map(g => (
+                        <option key={g.id} value={g.id}>{g.grade_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-row-2">
+                    <div className="form-group">
+                      <label>Total Scenarios *</label>
+                      <input type="number" required value={publishForm.total_scenarios} onChange={e => setPublishForm({ ...publishForm, total_scenarios: parseInt(e.target.value) || 0 })} />
+                    </div>
+                    <div className="form-group">
+                      <label>Status *</label>
+                      <select value={publishForm.status} onChange={e => setPublishForm({ ...publishForm, status: e.target.value })}>
+                        <option value="DRAFT">Draft</option>
+                        <option value="PUBLISHED">Published</option>
+                        <option value="ARCHIVED">Archived</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Export File URL</label>
+                    <input type="text" value={publishForm.export_file} onChange={e => setPublishForm({ ...publishForm, export_file: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label>Checksum</label>
+                    <input type="text" value={publishForm.checksum} onChange={e => setPublishForm({ ...publishForm, checksum: e.target.value })} />
+                  </div>
+                </>
+              )}
+
               {/* GRADES FORM FIELDS */}
               {activeTab === 'grades' && (
                 <>
@@ -1047,13 +1137,13 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
               {activeTab === 'steps' && (
                 <>
                   <div className="form-group">
-                    <label>Learning Experience *</label>
+                    <label>Scenario *</label>
                     <select 
                       required 
                       value={stepForm.experience}
                       onChange={e => setStepForm({ ...stepForm, experience: e.target.value })}
                     >
-                      <option value="">Select Experience</option>
+                      <option value="">Select Scenario</option>
                       {experiences.map(ex => (
                         <option key={ex.id} value={ex.id}>{ex.title}</option>
                       ))}
@@ -1122,182 +1212,6 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                       placeholder='{ "autoplay": true }'
                       className="monospace-textarea"
                     />
-                  </div>
-                </>
-              )}
-
-              {/* ASSESSMENTS FORM FIELDS */}
-              {activeTab === 'assessments' && (
-                <>
-                  <div className="form-group">
-                    <label>Learning Experience *</label>
-                    <select 
-                      required 
-                      value={assessmentForm.experience}
-                      onChange={e => setAssessmentForm({ ...assessmentForm, experience: e.target.value })}
-                    >
-                      <option value="">Select Experience</option>
-                      {experiences.map(ex => (
-                        <option key={ex.id} value={ex.id}>{ex.title}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Assessment Title *</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={assessmentForm.title} 
-                      onChange={e => setAssessmentForm({ ...assessmentForm, title: e.target.value })}
-                      placeholder="e.g. Vocabulary Quiz 1"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Instructions</label>
-                    <textarea 
-                      value={assessmentForm.instructions} 
-                      onChange={e => setAssessmentForm({ ...assessmentForm, instructions: e.target.value })}
-                      placeholder="Instructions for taking the test"
-                    />
-                  </div>
-                  <div className="form-row-3">
-                    <div className="form-group">
-                      <label>Mastery Score *</label>
-                      <input 
-                        type="number" 
-                        required 
-                        value={assessmentForm.mastery} 
-                        onChange={e => setAssessmentForm({ ...assessmentForm, mastery: parseInt(e.target.value) || 0 })}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Total Marks *</label>
-                      <input 
-                        type="number" 
-                        required 
-                        value={assessmentForm.total_marks} 
-                        onChange={e => setAssessmentForm({ ...assessmentForm, total_marks: parseInt(e.target.value) || 0 })}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Display Order *</label>
-                      <input 
-                        type="number" 
-                        required 
-                        value={assessmentForm.display_order} 
-                        onChange={e => setAssessmentForm({ ...assessmentForm, display_order: parseInt(e.target.value) || 0 })}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* QUESTIONS FORM FIELDS */}
-              {activeTab === 'questions' && (
-                <>
-                  <div className="form-group">
-                    <label>Assessment *</label>
-                    <select 
-                      required 
-                      value={questionForm.assessment}
-                      onChange={e => setQuestionForm({ ...questionForm, assessment: e.target.value })}
-                    >
-                      <option value="">Select Assessment</option>
-                      {assessments.map(a => (
-                        <option key={a.id} value={a.id}>{a.title}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-row-2">
-                    <div className="form-group">
-                      <label>Question Type *</label>
-                      <select 
-                        value={questionForm.question_type} 
-                        onChange={e => setQuestionForm({ ...questionForm, question_type: e.target.value })}
-                      >
-                        <option value="MCQ">Multiple Choice</option>
-                        <option value="TRUE_FALSE">True / False</option>
-                        <option value="MATCH">Match Columns</option>
-                        <option value="FILL_BLANK">Fill in the Blank</option>
-                        <option value="SHORT_ANSWER">Short Answer</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Display Order *</label>
-                      <input 
-                        type="number" 
-                        required 
-                        value={questionForm.display_order} 
-                        onChange={e => setQuestionForm({ ...questionForm, display_order: parseInt(e.target.value) || 0 })}
-                      />
-                    </div>
-                  </div>
-                  <div className="form-group">
-                    <label>Question Prompt / Text *</label>
-                    <textarea 
-                      required
-                      value={questionForm.question_text} 
-                      onChange={e => setQuestionForm({ ...questionForm, question_text: e.target.value })}
-                      placeholder="e.g. What is the antonym of 'huge'?"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Marks *</label>
-                    <input 
-                      type="number" 
-                      required 
-                      value={questionForm.marks} 
-                      onChange={e => setQuestionForm({ ...questionForm, marks: parseInt(e.target.value) || 0 })}
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* OPTIONS FORM FIELDS */}
-              {activeTab === 'options' && (
-                <>
-                  <div className="form-group">
-                    <label>Question *</label>
-                    <select 
-                      required 
-                      value={optionForm.question}
-                      onChange={e => setOptionForm({ ...optionForm, question: e.target.value })}
-                    >
-                      <option value="">Select Question</option>
-                      {questions.map(q => (
-                        <option key={q.id} value={q.id}>{q.question_text?.slice(0, 70)}...</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Option Text *</label>
-                    <textarea 
-                      required
-                      value={optionForm.option_text} 
-                      onChange={e => setOptionForm({ ...optionForm, option_text: e.target.value })}
-                      placeholder="e.g. Tiny"
-                    />
-                  </div>
-                  <div className="form-row-2">
-                    <div className="form-group checkbox-form-group">
-                      <label className="checkbox-modal-label">
-                        <input 
-                          type="checkbox" 
-                          checked={optionForm.is_correct} 
-                          onChange={e => setOptionForm({ ...optionForm, is_correct: e.target.checked })}
-                        />
-                        <span>Is Correct Answer?</span>
-                      </label>
-                    </div>
-                    <div className="form-group">
-                      <label>Display Order *</label>
-                      <input 
-                        type="number" 
-                        required 
-                        value={optionForm.display_order} 
-                        onChange={e => setOptionForm({ ...optionForm, display_order: parseInt(e.target.value) || 0 })}
-                      />
-                    </div>
                   </div>
                 </>
               )}

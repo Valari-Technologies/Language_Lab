@@ -17,7 +17,6 @@ const Login = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('SUPER_ADMIN');
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,12 +27,12 @@ const Login = ({ onLoginSuccess }) => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/admin/login/', {
+      const response = await fetch('http://127.0.0.1:8000/api/auth/login/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password, role }),
+        body: JSON.stringify({ username, password }),
       });
 
       const data = await response.json();
@@ -81,7 +80,7 @@ const Login = ({ onLoginSuccess }) => {
             with <span style={{ color: '#fbbf24' }}>Experience.</span>
           </h2>
           <p className="hero-description">
-            Welcome to the Content Management System. Manage grades, learning experiences, assessments and more  all in one place.
+            Welcome to the Content Management System. Manage grades, scenarios, and more  all in one place.
           </p>
 
           {/* Mockup Area */}
@@ -146,24 +145,7 @@ const Login = ({ onLoginSuccess }) => {
               </div>
             </div>
 
-            {/* Role Selection Dropdown */}
-            <div className="input-group">
-              <label className="input-label" htmlFor="role">Role</label>
-              <div className="input-relative">
-                <FiLayers className="input-icon-left" />
-                <select
-                  id="role"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="form-input select-dropdown"
-                  disabled={loading}
-                >
-                  <option value="SUPER_ADMIN">👑 Super Admin</option>
-                  <option value="INSTITUTE_ADMIN">🏫 Institute Admin</option>
-                  <option value="TEACHER">👨‍🏫 Teacher</option>
-                </select>
-              </div>
-            </div>
+
 
             {/* Password Input */}
             <div className="input-group">
