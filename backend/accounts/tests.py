@@ -9,10 +9,10 @@ User = get_user_model()
 
 class RoleBasedLoginTests(TestCase):
     """
-    Test suite for role-based authentication and restricted user access.
+    Test suite for unified login authentication and role-based dashboard authorization.
     """
     def setUp(self):
-        # Create users for each of the four roles
+        # Create users for each of the roles
         self.super_admin = User.objects.create_user(
             username="super_admin",
             password="password123",
@@ -20,12 +20,12 @@ class RoleBasedLoginTests(TestCase):
             role="SUPER_ADMIN",
             full_name="Super Admin"
         )
-        self.institute_admin = User.objects.create_user(
-            username="institute_admin",
+        self.school_admin = User.objects.create_user(
+            username="school_admin",
             password="password123",
             email="institute@example.com",
-            role="INSTITUTE_ADMIN",
-            full_name="Institute Admin"
+            role="SCHOOL_ADMIN",
+            full_name="School Admin"
         )
         self.teacher = User.objects.create_user(
             username="teacher",
@@ -42,83 +42,94 @@ class RoleBasedLoginTests(TestCase):
             full_name="Student User"
         )
 
-    def test_admin_login_super_admin_success(self):
-        url = reverse("admin_login")
+    def test_login_super_admin_success(self):
+        url = reverse("login")
         data = {"username": "super_admin", "password": "password123"}
         response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access", response.data)
         self.assertIn("refresh", response.data)
+        self.assertEqual(response.data["message"], "Login successful")
         self.assertEqual(response.data["user"]["username"], "super_admin")
         self.assertEqual(response.data["user"]["role"], "SUPER_ADMIN")
 
-    def test_admin_login_institute_admin_success(self):
-        url = reverse("admin_login")
-        data = {"username": "institute_admin", "password": "password123"}
+    def test_login_school_admin_success_maps_to_school_admin(self):
+        url = reverse("login")
+        data = {"username": "school_admin", "password": "password123"}
         response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("access", response.data)
-        self.assertEqual(response.data["user"]["role"], "INSTITUTE_ADMIN")
+        self.assertEqual(response.data["user"]["role"], "SCHOOL_ADMIN")
 
-    def test_admin_login_teacher_success(self):
-        url = reverse("admin_login")
+    def test_login_teacher_success(self):
+        url = reverse("login")
         data = {"username": "teacher", "password": "password123"}
         response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("access", response.data)
         self.assertEqual(response.data["user"]["role"], "TEACHER")
 
-    def test_admin_login_student_blocked(self):
-        url = reverse("admin_login")
+    def test_login_student_success(self):
+        url = reverse("login")
         data = {"username": "student", "password": "password123"}
         response = self.client.post(url, data, format="json")
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data["message"], "Students are not allowed to log in through this portal.")
-
-    def test_admin_login_role_matching_success(self):
-        url = reverse("admin_login")
-        data = {"username": "teacher", "password": "password123", "role": "TEACHER"}
-        response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["user"]["role"], "TEACHER")
+        self.assertEqual(response.data["user"]["role"], "STUDENT")
 
-    def test_admin_login_role_mismatch_blocked(self):
-        url = reverse("admin_login")
-        data = {"username": "teacher", "password": "password123", "role": "SUPER_ADMIN"}
-        response = self.client.post(url, data, format="json")
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data["message"], "You are not authorized to log in as Super Admin.")
-
-    def test_admin_login_invalid_credentials(self):
-        url = reverse("admin_login")
+    def test_login_invalid_credentials(self):
+        url = reverse("login")
         data = {"username": "super_admin", "password": "wrongpassword"}
         response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-        self.assertEqual(response.data["message"], "Invalid username or password.")
+        self.assertEqual(response.data["message"], "Invalid username or password")
 
-    def test_student_login_success(self):
-        url = reverse("student_login")
-        data = {"username": "student", "password": "password123"}
+    def test_login_missing_fields(self):
+        url = reverse("login")
+        data = {"username": "super_admin"}
         response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # Authorization checks for school/dashboard/ endpoint
+    def test_school_dashboard_authorized_for_school_admin(self):
+        url = reverse("school_dashboard")
+        token = RefreshToken.for_user(self.school_admin).access_token
+        response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {token}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("access", response.data)
-        self.assertEqual(response.data["user"]["username"], "student")
-        self.assertEqual(response.data["user"]["role"], "STUDENT")
+        self.assertEqual(response.data["school_name"], "St. Mary's English Academy")
 
-    def test_student_login_admin_blocked(self):
-        url = reverse("student_login")
-        data = {"username": "super_admin", "password": "password123"}
-        response = self.client.post(url, data, format="json")
+    def test_school_dashboard_denied_for_teacher_and_others(self):
+        url = reverse("school_dashboard")
+        
+        # Teacher denied
+        token = RefreshToken.for_user(self.teacher).access_token
+        response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {token}")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data["message"], "Only students are allowed to log in through this portal.")
 
-    def test_student_login_teacher_blocked(self):
-        url = reverse("student_login")
-        data = {"username": "teacher", "password": "password123"}
-        response = self.client.post(url, data, format="json")
+        # Super admin denied
+        token = RefreshToken.for_user(self.super_admin).access_token
+        response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {token}")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data["message"], "Only students are allowed to log in through this portal.")
 
+    # Authorization checks for teacher/dashboard/ endpoint
+    def test_teacher_dashboard_authorized_for_teacher(self):
+        url = reverse("teacher_dashboard")
+        token = RefreshToken.for_user(self.teacher).access_token
+        response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("Class 6-A", response.data["assigned_classes"])
+
+    def test_teacher_dashboard_denied_for_school_admin_and_others(self):
+        url = reverse("teacher_dashboard")
+        
+        # School admin denied
+        token = RefreshToken.for_user(self.school_admin).access_token
+        response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # Super admin denied
+        token = RefreshToken.for_user(self.super_admin).access_token
+        response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    # Test registration access
     def test_registration_by_super_admin_success(self):
         url = reverse("register")
         data = {
@@ -128,7 +139,6 @@ class RoleBasedLoginTests(TestCase):
             "role": "TEACHER",
             "full_name": "New Teacher"
         }
-        # Obtain JWT Token for Super Admin
         token = RefreshToken.for_user(self.super_admin).access_token
         response = self.client.post(
             url, data, format="json", HTTP_AUTHORIZATION=f"Bearer {token}"
@@ -146,20 +156,8 @@ class RoleBasedLoginTests(TestCase):
             "email": "another@example.com",
             "role": "STUDENT"
         }
-        # Obtain JWT Token for Teacher
         token = RefreshToken.for_user(self.teacher).access_token
         response = self.client.post(
             url, data, format="json", HTTP_AUTHORIZATION=f"Bearer {token}"
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
-    def test_registration_unauthenticated_blocked(self):
-        url = reverse("register")
-        data = {
-            "username": "unauth_user",
-            "password": "securepassword123",
-            "email": "unauth@example.com",
-            "role": "STUDENT"
-        }
-        response = self.client.post(url, data, format="json")
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

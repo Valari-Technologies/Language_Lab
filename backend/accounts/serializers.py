@@ -9,7 +9,6 @@ class LoginSerializer(serializers.Serializer):
     """
     username = serializers.CharField(required=True)
     password = serializers.CharField(write_only=True, required=True)
-    role = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
 
 class RegisterSerializer(serializers.ModelSerializer):

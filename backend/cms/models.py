@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from django.conf import settings
 
 
 class Grade(models.Model):
@@ -38,7 +39,7 @@ class Grade(models.Model):
         return self.grade_name
 
 
-class LearningExperience(models.Model):
+class Scenario(models.Model):
     
     class Difficulty(models.TextChoices):
         EASY = "EASY", _("Easy")
@@ -54,7 +55,7 @@ class LearningExperience(models.Model):
     grade = models.ForeignKey(
         Grade,
         on_delete=models.CASCADE,
-        related_name="learning_experiences",
+        related_name="scenarios",
         verbose_name=_("Grade"),
         help_text=_("The grade/level this learning experience belongs to.")
     )
@@ -110,15 +111,15 @@ class LearningExperience(models.Model):
     )
 
     class Meta:
-        verbose_name = _("Learning Experience")
-        verbose_name_plural = _("Learning Experiences")
+        verbose_name = _("Scenario")
+        verbose_name_plural = _("Scenarios")
         ordering = ["grade", "-created_at"]
 
     def __str__(self):
         return f"{self.title} ({self.grade.grade_name})"
 
 
-class ExperienceStep(models.Model):
+class ScenarioBuilder(models.Model):
     
     class BlockType(models.TextChoices):
         VIDEO = "VIDEO", _("Video")
@@ -131,10 +132,10 @@ class ExperienceStep(models.Model):
         MCQ = "MCQ", _("Multiple Choice Question")
         SUMMARY = "SUMMARY", _("Summary")
 
-    experience = models.ForeignKey(
-        LearningExperience,
+    scenario = models.ForeignKey(
+        Scenario,
         on_delete=models.CASCADE,
-        related_name="steps",
+        related_name="scenario_builders",
         verbose_name=_("Learning Experience"),
         help_text=_("The learning experience this step belongs to.")
     )
@@ -182,53 +183,75 @@ class ExperienceStep(models.Model):
     )
 
     class Meta:
-        verbose_name = _("Experience Step")
-        verbose_name_plural = _("Experience Steps")
+        verbose_name = _("Scenario Builder")
+        verbose_name_plural = _("Scenario Builders")
         ordering = ["display_order"]
         constraints = [
             models.UniqueConstraint(
-                fields=["experience", "display_order"],
-                name="unique_step_display_order_per_experience"
+                fields=["scenario", "display_order"],
+                name="unique_step_display_order_per_scenario"
             )
         ]
 
     def __str__(self):
-        return f"{self.experience.title} - Step {self.display_order}: {self.title}"
+        return f"{self.scenario.title} - Step {self.display_order}: {self.title}"
 
 
-class Assessment(models.Model):
-    
-    experience = models.ForeignKey(
-        LearningExperience,
+class PublishContent(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", _("Draft")
+        PUBLISHED = "PUBLISHED", _("Published")
+        ARCHIVED = "ARCHIVED", _("Archived")
+
+    publish_id = models.AutoField(primary_key=True, verbose_name=_("Publish ID"))
+    release_name = models.CharField(
+        max_length=100,
+        verbose_name=_("Release Name"),
+        help_text=_("e.g., 'Grade 6 - July Release'")
+    )
+    grade = models.ForeignKey(
+        Grade,
         on_delete=models.CASCADE,
-        related_name="assessments",
-        verbose_name=_("Learning Experience"),
-        help_text=_("The learning experience this assessment evaluates.")
+        related_name="publish_contents",
+        verbose_name=_("Grade"),
+        db_column="grade_id"
     )
-    title = models.CharField(
-        max_length=200,
-        verbose_name=_("Title"),
-        help_text=_("Title of the assessment.")
+    total_scenarios = models.IntegerField(
+        verbose_name=_("Total Scenarios"),
+        help_text=_("Number of scenarios included")
     )
-    instructions = models.TextField(
-        blank=True,
+    published_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="published_contents",
+        verbose_name=_("Published By"),
+        db_column="published_by"
+    )
+    published_at = models.DateTimeField(
+        verbose_name=_("Published At"),
+        help_text=_("Publish date and time"),
         null=True,
-        verbose_name=_("Instructions"),
-        help_text=_("Instructions or guidelines for students before starting.")
+        blank=True
     )
-    mastery = models.IntegerField(
-        blank=True,
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT,
+        verbose_name=_("Status")
+    )
+    export_file = models.CharField(
+        max_length=255,
+        verbose_name=_("Export File"),
+        help_text=_("Path to generated export package (ZIP/JSON)"),
         null=True,
-        verbose_name=_("Mastery"),
-        help_text=_("Minimum marks required to pass the assessment.")
+        blank=True
     )
-    total_marks = models.IntegerField(
-        verbose_name=_("Total Marks"),
-        help_text=_("Total achievable marks for the assessment.")
-    )
-    display_order = models.IntegerField(
-        verbose_name=_("Display Order"),
-        help_text=_("Sequence in which this assessment is listed.")
+    checksum = models.CharField(
+        max_length=64,
+        verbose_name=_("Checksum"),
+        help_text=_("Integrity verification hash"),
+        null=True,
+        blank=True
     )
     created_at = models.DateTimeField(
         auto_now_add=True,
@@ -240,119 +263,63 @@ class Assessment(models.Model):
     )
 
     class Meta:
-        verbose_name = _("Assessment")
-        verbose_name_plural = _("Assessments")
-        ordering = ["display_order"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["experience", "display_order"],
-                name="unique_assessment_display_order_per_experience"
-            )
-        ]
+        verbose_name = _("Publish Content")
+        verbose_name_plural = _("Publish Contents")
+        ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.title} (Exp: {self.experience.title})"
+        return f"{self.release_name} - {self.status}"
 
 
-class Question(models.Model):
- 
-    class QuestionType(models.TextChoices):
-        MCQ = "MCQ", _("Multiple Choice Question")
-        TRUE_FALSE = "TRUE_FALSE", _("True or False")
-        MATCH = "MATCH", _("Match Column")
-        FILL_BLANK = "FILL_BLANK", _("Fill in the Blank")
-        SHORT_ANSWER = "SHORT_ANSWER", _("Short Answer")
+class School(models.Model):
+    school_id = models.AutoField(primary_key=True)
+    school_name = models.CharField(max_length=150)
+    address = models.CharField(max_length=255)
+    phone = models.CharField(max_length=20)
+    email = models.CharField(max_length=100)
+    logo = models.CharField(max_length=255, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    assessment = models.ForeignKey(
-        Assessment,
-        on_delete=models.CASCADE,
-        related_name="questions",
-        verbose_name=_("Assessment"),
-        help_text=_("The assessment this question belongs to.")
-    )
-    question_type = models.CharField(
-        max_length=30,
-        choices=QuestionType.choices,
-        verbose_name=_("Question Type"),
-        help_text=_("The type/format of the question.")
-    )
-    question_text = models.TextField(
-        verbose_name=_("Question Text"),
-        help_text=_("The text/prompt of the question itself.")
-    )
-    marks = models.IntegerField(
-        verbose_name=_("Marks"),
-        help_text=_("Marks allocated for answering this question correctly.")
-    )
-    display_order = models.IntegerField(
-        verbose_name=_("Display Order"),
-        help_text=_("Sequence of the question within the assessment.")
-    )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name=_("Created At")
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        verbose_name=_("Updated At")
-    )
+    def __str__(self):
+        return self.school_name
+
+
+class Teacher(models.Model):
+    teacher_id = models.AutoField(primary_key=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    school = models.ForeignKey(School, on_delete=models.CASCADE)
+    qualification = models.CharField(max_length=150, null=True, blank=True)
+    experience_years = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.school.school_name}"
+
+
+class Class(models.Model):
+    class_id = models.AutoField(primary_key=True)
+    school = models.ForeignKey(School, on_delete=models.CASCADE)
+    class_name = models.CharField(max_length=100)
+    grade = models.ForeignKey("Grade", on_delete=models.CASCADE)
+    academic_year = models.CharField(max_length=20)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.class_name} ({self.academic_year})"
+
+
+class TeacherClass(models.Model):
+    teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE)
+    class_obj = models.ForeignKey(Class, on_delete=models.CASCADE)
+
 
     class Meta:
-        verbose_name = _("Question")
-        verbose_name_plural = _("Questions")
-        ordering = ["display_order"]
         constraints = [
-            models.UniqueConstraint(
-                fields=["assessment", "display_order"],
-                name="unique_question_display_order_per_assessment"
-            )
+            models.UniqueConstraint(fields=["teacher", "class_obj"], name="unique_teacher_class")
         ]
 
-    def __str__(self):
-        return f"Q{self.display_order} ({self.question_type}) - {self.assessment.title}"
-
-
-class Option(models.Model):
-   
-    question = models.ForeignKey(
-        Question,
-        on_delete=models.CASCADE,
-        related_name="options",
-        verbose_name=_("Question"),
-        help_text=_("The question this option belongs to.")
-    )
-    option_text = models.TextField(
-        verbose_name=_("Option Text"),
-        help_text=_("The text content of the option.")
-    )
-    is_correct = models.BooleanField(
-        default=False,
-        verbose_name=_("Is Correct"),
-        help_text=_("Designates whether this is the correct answer.")
-    )
-    display_order = models.IntegerField(
-        verbose_name=_("Display Order"),
-        help_text=_("Sequence of the option relative to other options in the question.")
-    )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name=_("Created At")
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        verbose_name=_("Updated At")
-    )
-
-    class Meta:
-        verbose_name = _("Option")
-        verbose_name_plural = _("Options")
-        ordering = ["display_order"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["question", "display_order"],
-                name="unique_option_display_order_per_question"
-            )
-        ]
-
-    def __str__(self):
-        return f"{self.option_text[:50]} ({'Correct' if self.is_correct else 'Incorrect'})"

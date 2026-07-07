@@ -5,7 +5,7 @@ from django.contrib.auth.models import AbstractUser
 class User(AbstractUser):
     class Role(models.TextChoices):
         SUPER_ADMIN = "SUPER_ADMIN", "Super Admin"
-        INSTITUTE_ADMIN = "INSTITUTE_ADMIN", "Institute Admin"
+        SCHOOL_ADMIN = "SCHOOL_ADMIN", "School Admin"
         TEACHER = "TEACHER", "Teacher"
         STUDENT = "STUDENT", "Student"
 

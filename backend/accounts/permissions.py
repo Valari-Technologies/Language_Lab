@@ -14,13 +14,13 @@ class IsSuperAdmin(BasePermission):
 
 class IsInstituteAdmin(BasePermission):
     """
-    Permission class that grants access only to users with role 'INSTITUTE_ADMIN'.
+    Permission class that grants access only to users with role 'SCHOOL_ADMIN'.
     """
     def has_permission(self, request, view):
         return bool(
             request.user and
             request.user.is_authenticated and
-            getattr(request.user, "role", None) == "INSTITUTE_ADMIN"
+            getattr(request.user, "role", None) == "SCHOOL_ADMIN"
         )
 
 class IsTeacher(BasePermission):
@@ -47,12 +47,12 @@ class IsStudent(BasePermission):
 
 class IsAdminRole(BasePermission):
     """
-    Permission class that grants access to either 'SUPER_ADMIN' or 'INSTITUTE_ADMIN' users,
+    Permission class that grants access to either 'SUPER_ADMIN' or 'SCHOOL_ADMIN' users,
     or django superusers.
     """
     def has_permission(self, request, view):
         return bool(
             request.user and
             request.user.is_authenticated and
-            (getattr(request.user, "role", None) in ["SUPER_ADMIN", "INSTITUTE_ADMIN"] or request.user.is_superuser)
+            (getattr(request.user, "role", None) in ["SUPER_ADMIN", "SCHOOL_ADMIN"] or request.user.is_superuser)
         )

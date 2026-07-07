@@ -1,11 +1,14 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
-from .views import AdminLoginAPIView, StudentLoginAPIView, RegisterAPIView
+from .views import LoginAPIView, RegisterAPIView, SchoolDashboardAPIView, TeacherDashboardAPIView
 
 urlpatterns = [
-    # Login Portals
-    path("admin/login/", AdminLoginAPIView.as_view(), name="admin_login"),
-    path("student/login/", StudentLoginAPIView.as_view(), name="student_login"),
+    # Unified Login Endpoint
+    path("auth/login/", LoginAPIView.as_view(), name="login"),
+
+    # Protected Role Dashboards
+    path("school/dashboard/", SchoolDashboardAPIView.as_view(), name="school_dashboard"),
+    path("teacher/dashboard/", TeacherDashboardAPIView.as_view(), name="teacher_dashboard"),
 
     # Authentication & JWT Actions
     path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
