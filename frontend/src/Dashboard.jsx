@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
   FiShield, 
-  FiLayers, 
-  FiBarChart2, 
   FiClock,
   FiPlus,
   FiEdit2,
@@ -10,12 +8,9 @@ import {
   FiSearch,
   FiLogOut,
   FiGrid,
-  FiCheckCircle,
   FiXCircle,
-  FiArrowLeft,
   FiBookOpen,
   FiList,
-  FiHelpCircle,
   FiFileText,
   FiCornerDownRight,
   FiMenu,
@@ -23,28 +18,7 @@ import {
   FiUser
 } from 'react-icons/fi';
 import './Dashboard.css';
-
-const apiFetch = async (endpoint, options = {}) => {
-  const token = localStorage.getItem('access_token');
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    ...options.headers,
-  };
-
-  const response = await fetch(`http://127.0.0.1:8000${endpoint}`, {
-    ...options,
-    headers,
-  });
-
-  if (response.status === 401) {
-    localStorage.clear();
-    window.location.reload();
-    throw new Error('Session expired');
-  }
-
-  return response;
-};
+import { apiFetch } from './api';
 
 const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,13 +26,15 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   
   // Data lists
   const [grades, setGrades] = useState([]);
-  const [experiences, setExperiences] = useState([]);
-  const [steps, setSteps] = useState([]);
+  const [scenarios, setScenarios] = useState([]);
+  const [scenarioBuilders, setScenarioBuilders] = useState([]);
   const [schools, setSchools] = useState([]);
   const [publishContents, setPublishContents] = useState([]);
+  const [schoolAdmins, setSchoolAdmins] = useState([]);
+  const [teachers, setTeachers] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({ total_schools: 0, total_school_admins: 0, total_publish_contents: 0, total_grades: 0 });
   const [previewScenario, setPreviewScenario] = useState(null);
-  const [profileForm, setProfileForm] = useState({ username: user?.username || '', email: user?.email || '', full_name: user?.full_name || '', password: '' });
+  const [profileForm, setProfileForm] = useState({ username: user?.username || '', email: user?.email || '', full_name: user?.full_name || '', current_password: '', password: '' });
   const [schoolForm, setSchoolForm] = useState({
     school_name: '', address: '', phone: '', email: '', logo: '', is_active: true
   });
@@ -69,7 +45,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
 
   // Filter overrides for nested navigation
   const [selectedGradeFilter, setSelectedGradeFilter] = useState('');
-  const [selectedExperienceFilter, setSelectedExperienceFilter] = useState('');
+  const [selectedScenarioFilter, setSelectedScenarioFilter] = useState('');
 
   // Loading & error feedback
   const [loading, setLoading] = useState(false);
@@ -83,17 +59,23 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
 
   // Form states
   const [gradeForm, setGradeForm] = useState({ grade_name: '', description: '', sort_order: 1 });
-  const [experienceForm, setExperienceForm] = useState({
+  const [scenarioForm, setScenarioForm] = useState({
     grade: '', title: '', description: '', objective: '', estimated_duration: 15, difficulty: 'MEDIUM', status: 'DRAFT', thumbnail: ''
   });
-  const [stepForm, setStepForm] = useState({
-    experience: '', block_type: 'VIDEO', title: '', content: '', media_url: '', display_order: 1, settings: '{}'
+  const [scenarioBuilderForm, setScenarioBuilderForm] = useState({
+    scenario: '', block_type: 'VIDEO', title: '', content: '', media_url: '', display_order: 1, settings: '{}'
+  });
+  const [schoolAdminForm, setSchoolAdminForm] = useState({
+    username: '', email: '', full_name: '', is_active: true, school: '', password: ''
+  });
+  const [teacherForm, setTeacherForm] = useState({
+    full_name: '', email: '', is_active: true, school: '', qualification: '', experience_years: 0
   });
 
   // Fetch all helper loaders
-    const loadSchools = async () => {
+  const loadSchools = async () => {
     try {
-      const res = await apiFetch('/api/schools/');
+      const res = await apiFetch('/api/cms/schools/');
       if (res.ok) {
         const data = await res.json();
         setSchools(data.results || data);
@@ -123,7 +105,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
 
   const handlePreviewScenario = async (scenario) => {
     try {
-      const res = await apiFetch(`/api/cms/scenario-builders/?experience=${scenario.id}`);
+      const res = await apiFetch(`/api/cms/scenario-builders/?scenario=${scenario.id}`);
       if (res.ok) {
         const data = await res.json();
         setPreviewScenario({ ...scenario, steps: data.results || data });
@@ -131,6 +113,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         setPreviewScenario({ ...scenario, steps: [] });
       }
     } catch (e) {
+      console.error('Failed to load scenario steps', e);
       setPreviewScenario({ ...scenario, steps: [] });
     }
   };
@@ -145,28 +128,45 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
     } catch (e) { console.error('Failed to load grades', e); }
   };
 
-  const loadExperiences = async () => {
+  const loadScenarios = async () => {
     try {
-      const res = await apiFetch('/api/cms/learning-experiences/');
+      const res = await apiFetch('/api/cms/scenarios/');
       if (res.ok) {
         const data = await res.json();
-        setExperiences(data.results || data);
+        setScenarios(data.results || data);
       }
-    } catch (e) { console.error('Failed to load experiences', e); }
+    } catch (e) { console.error('Failed to load scenarios', e); }
   };
 
-  const loadSteps = async () => {
+  const loadScenarioBuilders = async () => {
     try {
-      const res = await apiFetch('/api/cms/experience-steps/');
+      const res = await apiFetch('/api/cms/scenario-builders/');
       if (res.ok) {
         const data = await res.json();
-        setSteps(data.results || data);
+        setScenarioBuilders(data.results || data);
       }
-    } catch (e) { console.error('Failed to load steps', e); }
+    } catch (e) { console.error('Failed to load scenario builders', e); }
   };
 
+  const loadSchoolAdmins = async () => {
+    try {
+      const res = await apiFetch('/api/cms/school-admins/');
+      if (res.ok) {
+        const data = await res.json();
+        setSchoolAdmins(data.results || data);
+      }
+    } catch (e) { console.error('Failed to load school admins', e); }
+  };
 
-
+  const loadTeachers = async () => {
+    try {
+      const res = await apiFetch('/api/cms/teachers/');
+      if (res.ok) {
+        const data = await res.json();
+        setTeachers(data.results || data);
+      }
+    } catch (e) { console.error('Failed to load teachers', e); }
+  };
 
   const loadAllData = async () => {
     setLoading(true);
@@ -177,10 +177,13 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         loadPublishContents(),
         loadDashboardStats(),
         loadGrades(),
-        loadExperiences(),
-        loadSteps(),
+        loadScenarios(),
+        loadScenarioBuilders(),
+        loadSchoolAdmins(),
+        loadTeachers(),
       ]);
     } catch (e) {
+      console.error('Failed to load data from backend server.', e);
       setErrorMsg('Failed to load data from backend server.');
     } finally {
       setLoading(false);
@@ -207,14 +210,32 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   // Clean form values
   const initForm = (tab, entity = null) => {
     setErrorMsg('');
-    if (tab === 'grades') {
+    if (tab === 'schools') {
+      setSchoolForm(entity ? {
+        school_name: entity.school_name || '',
+        address: entity.address || '',
+        phone: entity.phone || '',
+        email: entity.email || '',
+        logo: entity.logo || '',
+        is_active: entity.is_active !== undefined ? entity.is_active : true
+      } : { school_name: '', address: '', phone: '', email: '', logo: '', is_active: true });
+    } else if (tab === 'publish-contents') {
+      setPublishForm(entity ? {
+        release_name: entity.release_name || '',
+        grade: entity.grade || '',
+        total_scenarios: entity.total_scenarios || 0,
+        status: entity.status || 'DRAFT',
+        export_file: entity.export_file || '',
+        checksum: entity.checksum || ''
+      } : { release_name: '', grade: '', total_scenarios: 0, status: 'DRAFT', export_file: '', checksum: '' });
+    } else if (tab === 'grades') {
       setGradeForm(entity ? {
         grade_name: entity.grade_name || '',
         description: entity.description || '',
         sort_order: entity.sort_order || 1
       } : { grade_name: '', description: '', sort_order: grades.length + 1 });
-    } else if (tab === 'experiences') {
-      setExperienceForm(entity ? {
+    } else if (tab === 'scenarios') {
+      setScenarioForm(entity ? {
         grade: entity.grade?.id || entity.grade || '',
         title: entity.title || '',
         description: entity.description || '',
@@ -233,9 +254,9 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         status: 'DRAFT',
         thumbnail: ''
       });
-    } else if (tab === 'steps') {
-      setStepForm(entity ? {
-        experience: entity.experience?.id || entity.experience || '',
+    } else if (tab === 'scenario-builders') {
+      setScenarioBuilderForm(entity ? {
+        scenario: entity.scenario?.id || entity.scenario || '',
         block_type: entity.block_type || 'VIDEO',
         title: entity.title || '',
         content: entity.content || '',
@@ -243,16 +264,39 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         display_order: entity.display_order || 1,
         settings: JSON.stringify(entity.settings || {}, null, 2)
       } : {
-        experience: selectedExperienceFilter || (experiences[0]?.id || ''),
+        scenario: selectedScenarioFilter || (scenarios[0]?.id || ''),
         block_type: 'VIDEO',
         title: '',
         content: '',
         media_url: '',
-        display_order: steps.filter(s => s.experience?.id === selectedExperienceFilter).length + 1,
+        display_order: scenarioBuilders.filter(s => s.scenario?.id === parseInt(selectedScenarioFilter) || s.scenario === parseInt(selectedScenarioFilter)).length + 1,
         settings: '{}'
       });
+    } else if (tab === 'school-admins') {
+      setSchoolAdminForm(entity ? {
+        username: entity.username || '',
+        email: entity.email || '',
+        full_name: entity.full_name || '',
+        is_active: entity.is_active !== undefined ? entity.is_active : true,
+        school: entity.school_id || entity.school || (schools[0]?.school_id || ''),
+        password: ''
+      } : {
+        username: '', email: '', full_name: '', is_active: true,
+        school: schools[0]?.school_id || '', password: ''
+      });
+    } else if (tab === 'teachers') {
+      setTeacherForm(entity ? {
+        username: entity.username || '',
+        full_name: entity.full_name || '',
+        email: entity.email || '',
+        is_active: entity.is_active !== undefined ? entity.is_active : true,
+        school: entity.school || '',
+        qualification: entity.qualification || '',
+        experience_years: entity.experience_years || 0
+      } : { username: '', full_name: '', email: '', is_active: true, school: '', qualification: '', experience_years: 0, password: '' });
     }
   };
+
 
   const handleOpenAdd = () => {
     setModalType('add');
@@ -263,7 +307,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
 
   const handleOpenEdit = (entity) => {
     setModalType('edit');
-    setEditingId(entity.id || entity.school_id || entity.publish_id);
+    setEditingId(entity.id || entity.school_id || entity.publish_id || entity.teacher_id);
     initForm(activeTab, entity);
     setShowModal(true);
   };
@@ -273,14 +317,14 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
     e.preventDefault();
     setErrorMsg('');
     let body = {};
-    let url = `/api/cms/${activeTab === 'experiences' ? 'learning-experiences' : activeTab === 'steps' ? 'experience-steps' : activeTab}/`;
+    let url = `/api/cms/${activeTab}/`;
     
     if (modalType === 'edit') {
       url += `${editingId}/`;
     }
 
     try {
-            if (activeTab === 'schools') {
+      if (activeTab === 'schools') {
         body = { ...schoolForm };
       } else if (activeTab === 'publish-contents') {
         body = { 
@@ -290,20 +334,34 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         };
       } else if (activeTab === 'grades') {
         body = { ...gradeForm };
-      } else if (activeTab === 'experiences') {
-        body = { ...experienceForm, grade: parseInt(experienceForm.grade) };
-      } else if (activeTab === 'steps') {
+      } else if (activeTab === 'scenarios') {
+        body = { ...scenarioForm, grade: parseInt(scenarioForm.grade) };
+      } else if (activeTab === 'scenario-builders') {
         let settingsJson = {};
         try {
-          settingsJson = JSON.parse(stepForm.settings || '{}');
-        } catch (err) {
+          settingsJson = JSON.parse(scenarioBuilderForm.settings || '{}');
+        } catch {
           setErrorMsg('Settings must be valid JSON object.');
           return;
         }
         body = { 
-          ...stepForm, 
-          experience: parseInt(stepForm.experience),
+          ...scenarioBuilderForm, 
+          scenario: parseInt(scenarioBuilderForm.scenario),
           settings: settingsJson 
+        };
+      } else if (activeTab === 'school-admins') {
+        body = {
+          ...schoolAdminForm,
+          school: parseInt(schoolAdminForm.school, 10),
+        };
+        if (modalType === 'edit') {
+          delete body.password;
+        }
+      } else if (activeTab === 'teachers') {
+        body = { 
+          ...teacherForm,
+          school: parseInt(teacherForm.school),
+          experience_years: parseInt(teacherForm.experience_years) || 0
         };
       }
 
@@ -320,11 +378,11 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         // Refresh data lists
         if (activeTab === 'schools') { await loadSchools(); await loadDashboardStats(); }
         else if (activeTab === 'publish-contents') { await loadPublishContents(); await loadDashboardStats(); }
-        else if (activeTab === 'schools') { await loadSchools(); await loadDashboardStats(); }
-        else if (activeTab === 'publish-contents') { await loadPublishContents(); await loadDashboardStats(); }
         else if (activeTab === 'grades') await loadGrades();
-        else if (activeTab === 'experiences') await loadExperiences();
-        else if (activeTab === 'steps') await loadSteps();
+        else if (activeTab === 'scenarios') await loadScenarios();
+        else if (activeTab === 'scenario-builders') await loadScenarioBuilders();
+        else if (activeTab === 'school-admins') await loadSchoolAdmins();
+        else if (activeTab === 'teachers') await loadTeachers();
       } else {
         const errorDetail = typeof resData === 'object' ? JSON.stringify(resData) : resData;
         setErrorMsg(`Error: ${errorDetail}`);
@@ -339,7 +397,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   const handleDelete = async (id) => {
     if (!window.confirm(`Are you sure you want to delete this ${activeTab.slice(0, -1)}?`)) return;
     setErrorMsg('');
-    const url = `/api/cms/${activeTab === 'experiences' ? 'learning-experiences' : activeTab === 'steps' ? 'experience-steps' : activeTab}/${id}/`;
+    const url = `/api/cms/${activeTab}/${id}/`;
     
     try {
       const res = await apiFetch(url, { method: 'DELETE' });
@@ -348,11 +406,11 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         showFeedback(resData.message || 'Deleted successfully', null);
         if (activeTab === 'schools') { await loadSchools(); await loadDashboardStats(); }
         else if (activeTab === 'publish-contents') { await loadPublishContents(); await loadDashboardStats(); }
-        else if (activeTab === 'schools') { await loadSchools(); await loadDashboardStats(); }
-        else if (activeTab === 'publish-contents') { await loadPublishContents(); await loadDashboardStats(); }
         else if (activeTab === 'grades') await loadGrades();
-        else if (activeTab === 'experiences') await loadExperiences();
-        else if (activeTab === 'steps') await loadSteps();
+        else if (activeTab === 'scenarios') await loadScenarios();
+        else if (activeTab === 'scenario-builders') await loadScenarioBuilders();
+        else if (activeTab === 'school-admins') await loadSchoolAdmins();
+        else if (activeTab === 'teachers') await loadTeachers();
       } else {
         setErrorMsg(resData.message || 'Failed to delete record.');
       }
@@ -366,11 +424,12 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   const getStats = () => {
     return {
       schools: schools.length,
-      schools: schools.length,
       grades: grades.length,
-      experiences: experiences.length,
-      steps: steps.length,
-      publish_contents: publishContents.length
+      scenarios: scenarios.length,
+      scenarioBuilders: scenarioBuilders.length,
+      publish_contents: publishContents.length,
+      schoolAdmins: schoolAdmins.length,
+      teachers: teachers.length
     };
   };
   const stats = getStats();
@@ -441,21 +500,21 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
           </button>
 
           <button 
-            className={`nav-link ${activeTab === 'experiences' ? 'active' : ''}`}
-            onClick={() => { onTabChange('experiences'); setSearchQuery(''); setIsSidebarOpen(false); }}
+            className={`nav-link ${activeTab === 'scenarios' ? 'active' : ''}`}
+            onClick={() => { onTabChange('scenarios'); setSearchQuery(''); setIsSidebarOpen(false); }}
           >
             <FiBookOpen className="nav-icon" />
-            <span>Learning Exp.</span>
-            <span className="nav-count">{stats.experiences}</span>
+            <span>Scenarios</span>
+            <span className="nav-count">{stats.scenarios}</span>
           </button>
 
           <button 
-            className={`nav-link ${activeTab === 'steps' ? 'active' : ''}`}
-            onClick={() => { onTabChange('steps'); setSearchQuery(''); setIsSidebarOpen(false); }}
+            className={`nav-link ${activeTab === 'scenario-builders' ? 'active' : ''}`}
+            onClick={() => { onTabChange('scenario-builders'); setSearchQuery(''); setIsSidebarOpen(false); }}
           >
             <FiList className="nav-icon" />
-            <span>Exp. Steps</span>
-            <span className="nav-count">{stats.steps}</span>
+            <span>Scenario Builders</span>
+            <span className="nav-count">{stats.scenarioBuilders}</span>
           </button>
 
 
@@ -467,6 +526,24 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
             <FiFileText className="nav-icon" />
             <span>Publish Content</span>
             <span className="nav-count">{stats.publish_contents}</span>
+          </button>
+
+          <button 
+            className={`nav-link ${activeTab === 'school-admins' ? 'active' : ''}`}
+            onClick={() => { onTabChange('school-admins'); setSearchQuery(''); setIsSidebarOpen(false); }}
+          >
+            <FiUser className="nav-icon" />
+            <span>School Admins</span>
+            <span className="nav-count">{stats.schoolAdmins}</span>
+          </button>
+
+          <button 
+            className={`nav-link ${activeTab === 'teachers' ? 'active' : ''}`}
+            onClick={() => { onTabChange('teachers'); setSearchQuery(''); setIsSidebarOpen(false); }}
+          >
+            <FiUser className="nav-icon" />
+            <span>Teachers</span>
+            <span className="nav-count">{stats.teachers}</span>
           </button>
 
           <button 
@@ -503,8 +580,11 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
               {activeTab === 'schools' && 'Manage Schools'}
               {activeTab === 'publish-contents' && 'Publish History'}
               {activeTab === 'grades' && 'Manage Grades'}
-              {activeTab === 'experiences' && 'Scenarios'}
-              {activeTab === 'steps' && 'Experience Steps Content'}
+              {activeTab === 'scenarios' && 'Scenarios'}
+              {activeTab === 'scenario-builders' && 'Scenario Builders Content'}
+              {activeTab === 'school-admins' && 'Manage School Admins'}
+              {activeTab === 'teachers' && 'Manage Teachers'}
+              {activeTab === 'profile' && 'Profile Settings'}
             </h1>
             <p className="page-subtitle">Configure English Learning Content and structures dynamically</p>
           </div>
@@ -527,10 +607,11 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         {errorMsg && <div className="alert alert-danger">{errorMsg}</div>}
 
         {/* Nested Nav Badges / Filters */}
+        {!['dashboard', 'profile'].includes(activeTab) && (
         <div className="filters-row">
           <div className="filter-tags">
             {/* Grade Filter */}
-            {activeTab === 'experiences' && (
+            {activeTab === 'scenarios' && (
               <div className="filter-group">
                 <span className="filter-label">Grade:</span>
                 <select 
@@ -546,17 +627,17 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
               </div>
             )}
 
-            {/* Experience Filter */}
-            {activeTab === 'steps' && (
+            {/* Scenario Filter */}
+            {activeTab === 'scenario-builders' && (
               <div className="filter-group">
-                <span className="filter-label">Experience:</span>
+                <span className="filter-label">Scenario:</span>
                 <select 
-                  value={selectedExperienceFilter} 
-                  onChange={(e) => setSelectedExperienceFilter(e.target.value)}
+                  value={selectedScenarioFilter} 
+                  onChange={(e) => setSelectedScenarioFilter(e.target.value)}
                   className="filter-select"
                 >
-                  <option value="">All Experiences</option>
-                  {experiences.map(ex => (
+                  <option value="">All Scenarios</option>
+                  {scenarios.map(ex => (
                     <option key={ex.id} value={ex.id}>{ex.title}</option>
                   ))}
                 </select>
@@ -569,18 +650,20 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
             <span>Add New {activeTab.charAt(0).toUpperCase() + activeTab.slice(1, -1)}</span>
           </button>
         </div>
+        )}
 
         {/* Data Container Panel */}
-        <div className="table-card">
-          {loading ? (
+        {loading ? (
+          <div className="table-card">
             <div className="loading-state">
               <div className="spinner"></div>
               <p>Fetching resources from the REST server...</p>
             </div>
-          ) : (
-            <div className="data-table-wrapper">
-                            {/* DASHBOARD OVERVIEW TAB */}
-              {activeTab === 'dashboard' && (
+          </div>
+        ) : (
+          <>
+            {/* DASHBOARD OVERVIEW TAB */}
+            {activeTab === 'dashboard' && (
                 <div className="dashboard-wrapper">
                   <div className="stats-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '30px' }}>
                     <div className="stats-card" style={{ padding: '20px', background: '#fff', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
@@ -601,7 +684,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                     </div>
                   </div>
                   
-                  <div className="recent-scenarios-card">
+                  <div className="recent-scenarios-card" style={{ padding: '30px', background: '#fff', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
                     <h3 style={{ margin: 0, color: '#1e293b', fontWeight: 600 }}>Welcome to Language Lab Admin Panel</h3>
                     <p style={{ marginTop: '10px', color: '#64748b' }}>Use the sidebar navigation to manage schools, grades, scenarios, scenario builders, and release publish packages.</p>
                   </div>
@@ -610,61 +693,87 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
 
               {/* PROFILE SETTINGS TAB */}
               {activeTab === 'profile' && (
-                <div className="dashboard-wrapper">
-                  <div className="recent-scenarios-card">
+                <div className="profile-wrapper" style={{ maxWidth: '600px', width: '100%', margin: '0 auto' }}>
+                  <div className="profile-card" style={{ padding: '30px', background: '#fff', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
                     <h3 style={{ margin: 0, color: '#1e293b', fontWeight: 600 }}>Profile Settings</h3>
-                    <p style={{marginTop:'10px', color:'#64748b'}}>View and update your account details.</p>
+                    <p style={{marginTop:'10px', color:'#64748b', marginBottom: '20px'}}>View and update your account details.</p>
                     
                     <form onSubmit={async (e) => {
                       e.preventDefault();
+                      setErrorMsg('');
+
+                      if (profileForm.password && !profileForm.current_password) {
+                        setErrorMsg('Enter your current password to set a new one.');
+                        return;
+                      }
+
                       try {
                         const res = await apiFetch('/api/users/profile/', {
                            method: 'PUT',
-                           headers: { 'Content-Type': 'application/json' },
-                           body: JSON.stringify(profileForm)
+                           body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email })
                         });
-                        if(res.ok) {
-                           alert('Profile updated successfully!');
-                        } else {
-                           alert('Failed to update profile.');
+                        const resData = await res.json();
+                        if (!res.ok) {
+                          setErrorMsg(typeof resData === 'object' ? JSON.stringify(resData) : 'Failed to update profile.');
+                          return;
                         }
-                      } catch(e) {
-                        alert('Error connecting to backend.');
+
+                        if (profileForm.password) {
+                          const pwRes = await apiFetch('/api/users/change-password/', {
+                            method: 'POST',
+                            body: JSON.stringify({ old_password: profileForm.current_password, new_password: profileForm.password })
+                          });
+                          const pwData = await pwRes.json();
+                          if (!pwRes.ok) {
+                            setErrorMsg(typeof pwData === 'object' ? JSON.stringify(pwData) : 'Profile saved, but password change failed.');
+                            return;
+                          }
+                        }
+
+                        setProfileForm({ ...profileForm, current_password: '', password: '' });
+                        showFeedback('Profile updated successfully', null);
+                      } catch {
+                        setErrorMsg('Error connecting to backend.');
                       }
                     }}>
-                      <div style={{marginTop: '20px', padding: '20px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0'}}>
-                        <div style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
-                          <div className="form-group">
-                            <label>Username</label>
-                            <input type="text" value={profileForm?.username || ''} disabled style={{background:'#e2e8f0', cursor:'not-allowed'}} />
-                            <small>Username cannot be changed.</small>
-                          </div>
-                          <div className="form-group">
-                            <label>Full Name</label>
-                            <input type="text" value={profileForm?.full_name || ''} onChange={e => setProfileForm({...profileForm, full_name: e.target.value})} />
-                          </div>
-                          <div className="form-group">
-                            <label>Email</label>
-                            <input type="email" value={profileForm?.email || ''} onChange={e => setProfileForm({...profileForm, email: e.target.value})} />
-                          </div>
-                          <div className="form-group">
-                            <label>New Password (Optional)</label>
-                            <input type="password" placeholder="Leave blank to keep current password" value={profileForm?.password || ''} onChange={e => setProfileForm({...profileForm, password: e.target.value})} />
-                          </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                        <div className="form-group">
+                          <label>Username</label>
+                          <input type="text" value={profileForm?.username || ''} disabled className="disabled-input" />
+                          <small style={{ color: '#64748b', marginTop: '2px' }}>Username cannot be changed.</small>
+                        </div>
+                        <div className="form-group">
+                          <label>Full Name</label>
+                          <input type="text" value={profileForm?.full_name || ''} onChange={e => setProfileForm({...profileForm, full_name: e.target.value})} />
+                        </div>
+                        <div className="form-group">
+                          <label>Email</label>
+                          <input type="email" value={profileForm?.email || ''} onChange={e => setProfileForm({...profileForm, email: e.target.value})} />
+                        </div>
+                        <div className="form-group">
+                          <label>Current Password</label>
+                          <input type="password" placeholder="Required only to set a new password" value={profileForm?.current_password || ''} onChange={e => setProfileForm({...profileForm, current_password: e.target.value})} />
+                        </div>
+                        <div className="form-group">
+                          <label>New Password (Optional)</label>
+                          <input type="password" placeholder="Leave blank to keep current password" value={profileForm?.password || ''} onChange={e => setProfileForm({...profileForm, password: e.target.value})} />
                         </div>
                       </div>
-                      <div style={{marginTop:'20px'}}>
-                        <button type="submit" className="btn-primary" style={{padding:'0.75rem 1.5rem'}}>Update Profile</button>
+                      <div style={{marginTop:'25px'}}>
+                        <button type="submit" className="btn-primary" style={{padding:'0.75rem 1.5rem', width: '100%'}}>Update Profile</button>
                       </div>
                     </form>
-
                   </div>
                 </div>
               )}
 
-              {/* SCHOOLS TAB */}
-              {activeTab === 'schools' && (
-                <table className="data-table">
+              {/* Data Container Panel for CRUD */}
+              {!['dashboard', 'profile'].includes(activeTab) && (
+                <div className="table-card">
+                  <div className="data-table-wrapper">
+                    {/* SCHOOLS TAB */}
+                    {activeTab === 'schools' && (
+                      <table className="data-table">
                   <thead>
                     <tr>
                       <th>School Name</th>
@@ -766,10 +875,10 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                           <td>{g.description || <span className="dim-text">No description</span>}</td>
                           <td>
                             <button 
-                              onClick={() => { setSelectedGradeFilter(g.id); setActiveTab('experiences'); }}
+                              onClick={() => { setSelectedGradeFilter(g.id); onTabChange('scenarios'); }}
                               className="btn-link"
                             >
-                              <FiCornerDownRight /> Experiences
+                              <FiCornerDownRight /> Scenarios
                             </button>
                           </td>
                           <td className="actions-cell">
@@ -782,8 +891,8 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                 </table>
               )}
 
-              {/* EXPERIENCES TAB */}
-              {activeTab === 'experiences' && (
+              {/* SCENARIOS TAB */}
+              {activeTab === 'scenarios' && (
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -797,7 +906,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {experiences
+                    {scenarios
                       .filter(ex => !selectedGradeFilter || ex.grade?.id === parseInt(selectedGradeFilter) || ex.grade === parseInt(selectedGradeFilter))
                       .filter(ex => ex.title?.toLowerCase().includes(searchQuery.toLowerCase()))
                       .map(ex => (
@@ -825,10 +934,10 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                           </td>
                           <td className="navigation-shortcuts">
                             <button 
-                              onClick={() => { setSelectedExperienceFilter(ex.id); setActiveTab('steps'); }}
+                              onClick={() => { setSelectedScenarioFilter(ex.id); onTabChange('scenario-builders'); }}
                               className="btn-link"
                             >
-                              Steps
+                              Scenario Builders
                             </button>
                             <span className="divider">|</span>
                             <button 
@@ -848,8 +957,8 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                 </table>
               )}
 
-              {/* STEPS TAB */}
-              {activeTab === 'steps' && (
+              {/* SCENARIO BUILDERS TAB */}
+              {activeTab === 'scenario-builders' && (
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -862,13 +971,13 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {steps
-                      .filter(s => !selectedExperienceFilter || s.experience?.id === parseInt(selectedExperienceFilter) || s.experience === parseInt(selectedExperienceFilter))
+                    {scenarioBuilders
+                      .filter(s => !selectedScenarioFilter || s.scenario?.id === parseInt(selectedScenarioFilter) || s.scenario === parseInt(selectedScenarioFilter))
                       .filter(s => s.title?.toLowerCase().includes(searchQuery.toLowerCase()))
                       .map(s => (
                         <tr key={s.id}>
                           <td className="bold-text">#{s.display_order}</td>
-                          <td className="dim-text">{s.experience_detail?.title || `Exp ID: ${s.experience}`}</td>
+                          <td className="dim-text">{s.scenario_detail?.title || s.experience_detail?.title || `Scenario ID: ${s.scenario}`}</td>
                           <td>
                             <span className={`badge-pill block-type ${s.block_type?.toLowerCase()}`}>
                               {s.block_type}
@@ -886,10 +995,92 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                 </table>
               )}
 
+              {/* SCHOOL ADMINS TAB */}
+              {activeTab === 'school-admins' && (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Username</th>
+                      <th>Full Name</th>
+                      <th>Email</th>
+                      <th>Status</th>
+                      <th className="actions-cell">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {schoolAdmins
+                      .filter(sa => sa.username?.toLowerCase().includes(searchQuery.toLowerCase()) || sa.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || sa.email?.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map(sa => (
+                        <tr key={sa.id}>
+                          <td className="bold-text">{sa.username}</td>
+                          <td className="highlight-text">{sa.full_name || <span className="dim-text">N/A</span>}</td>
+                          <td>{sa.email || <span className="dim-text">N/A</span>}</td>
+                          <td>
+                            <span className={`badge-pill status ${sa.is_active ? 'published' : 'draft'}`}>
+                              {sa.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="actions-cell">
+                            <button onClick={() => handleOpenEdit(sa)} className="action-btn edit" title="Edit"><FiEdit2 /></button>
+                            <button onClick={() => handleDelete(sa.id)} className="action-btn delete" title="Delete"><FiTrash2 /></button>
+                          </td>
+                        </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {/* TEACHERS TAB */}
+              {activeTab === 'teachers' && (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Username</th>
+                      <th>Full Name</th>
+                      <th>Email</th>
+                      <th>School</th>
+                      <th>Qualification</th>
+                      <th>Experience</th>
+                      <th>Status</th>
+                      <th className="actions-cell">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {teachers
+                      .filter(t => t.username?.toLowerCase().includes(searchQuery.toLowerCase()) || t.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || t.email?.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map(t => (
+                        <tr key={t.teacher_id}>
+                          <td className="bold-text">{t.username}</td>
+                          <td className="highlight-text">{t.full_name || <span className="dim-text">N/A</span>}</td>
+                          <td>{t.email || <span className="dim-text">N/A</span>}</td>
+                          <td>
+                            <span className="badge-pill grade">
+                              {t.school_name || `School ID: ${t.school}`}
+                            </span>
+                          </td>
+                          <td>{t.qualification || <span className="dim-text">N/A</span>}</td>
+                          <td>{t.experience_years} years</td>
+                          <td>
+                            <span className={`badge-pill status ${t.is_active ? 'published' : 'draft'}`}>
+                              {t.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="actions-cell">
+                            <button onClick={() => handleOpenEdit(t)} className="action-btn edit" title="Edit"><FiEdit2 /></button>
+                            <button onClick={() => handleDelete(t.teacher_id)} className="action-btn delete" title="Delete"><FiTrash2 /></button>
+                          </td>
+                        </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
             </div>
-          )}
-        </div>
-      </main>
+          </div>
+        )}
+      </>
+    )}
+  </main>
 
             {/* SCENARIO PREVIEW MODAL */}
       {previewScenario && (
@@ -1045,15 +1236,15 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                 </>
               )}
 
-              {/* EXPERIENCES FORM FIELDS */}
-              {activeTab === 'experiences' && (
+              {/* SCENARIOS FORM FIELDS */}
+              {activeTab === 'scenarios' && (
                 <>
                   <div className="form-group">
                     <label>Grade Level *</label>
                     <select 
                       required 
-                      value={experienceForm.grade}
-                      onChange={e => setExperienceForm({ ...experienceForm, grade: e.target.value })}
+                      value={scenarioForm.grade}
+                      onChange={e => setScenarioForm({ ...scenarioForm, grade: e.target.value })}
                     >
                       <option value="">Select Grade</option>
                       {grades.map(g => (
@@ -1066,24 +1257,24 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                     <input 
                       type="text" 
                       required 
-                      value={experienceForm.title} 
-                      onChange={e => setExperienceForm({ ...experienceForm, title: e.target.value })}
+                      value={scenarioForm.title} 
+                      onChange={e => setScenarioForm({ ...scenarioForm, title: e.target.value })}
                       placeholder="e.g. Beginner Vocabulary"
                     />
                   </div>
                   <div className="form-group">
                     <label>Description</label>
                     <textarea 
-                      value={experienceForm.description} 
-                      onChange={e => setExperienceForm({ ...experienceForm, description: e.target.value })}
+                      value={scenarioForm.description} 
+                      onChange={e => setScenarioForm({ ...scenarioForm, description: e.target.value })}
                       placeholder="Enter description"
                     />
                   </div>
                   <div className="form-group">
                     <label>Objective</label>
                     <textarea 
-                      value={experienceForm.objective} 
-                      onChange={e => setExperienceForm({ ...experienceForm, objective: e.target.value })}
+                      value={scenarioForm.objective} 
+                      onChange={e => setScenarioForm({ ...scenarioForm, objective: e.target.value })}
                       placeholder="Pedagogical objectives"
                     />
                   </div>
@@ -1093,15 +1284,15 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                       <input 
                         type="number" 
                         required 
-                        value={experienceForm.estimated_duration} 
-                        onChange={e => setExperienceForm({ ...experienceForm, estimated_duration: parseInt(e.target.value) || 0 })}
+                        value={scenarioForm.estimated_duration} 
+                        onChange={e => setScenarioForm({ ...scenarioForm, estimated_duration: parseInt(e.target.value) || 0 })}
                       />
                     </div>
                     <div className="form-group">
                       <label>Difficulty *</label>
                       <select 
-                        value={experienceForm.difficulty} 
-                        onChange={e => setExperienceForm({ ...experienceForm, difficulty: e.target.value })}
+                        value={scenarioForm.difficulty} 
+                        onChange={e => setScenarioForm({ ...scenarioForm, difficulty: e.target.value })}
                       >
                         <option value="EASY">Easy</option>
                         <option value="MEDIUM">Medium</option>
@@ -1112,8 +1303,8 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                   <div className="form-group">
                     <label>Lifecycle Status *</label>
                     <select 
-                      value={experienceForm.status} 
-                      onChange={e => setExperienceForm({ ...experienceForm, status: e.target.value })}
+                      value={scenarioForm.status} 
+                      onChange={e => setScenarioForm({ ...scenarioForm, status: e.target.value })}
                     >
                       <option value="DRAFT">Draft</option>
                       <option value="REVIEW">Review</option>
@@ -1125,26 +1316,26 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                     <label>Thumbnail Cover URL</label>
                     <input 
                       type="url" 
-                      value={experienceForm.thumbnail} 
-                      onChange={e => setExperienceForm({ ...experienceForm, thumbnail: e.target.value })}
+                      value={scenarioForm.thumbnail} 
+                      onChange={e => setScenarioForm({ ...scenarioForm, thumbnail: e.target.value })}
                       placeholder="https://example.com/cover.png"
                     />
                   </div>
                 </>
               )}
 
-              {/* STEPS FORM FIELDS */}
-              {activeTab === 'steps' && (
+              {/* SCENARIO BUILDERS FORM FIELDS */}
+              {activeTab === 'scenario-builders' && (
                 <>
                   <div className="form-group">
                     <label>Scenario *</label>
                     <select 
                       required 
-                      value={stepForm.experience}
-                      onChange={e => setStepForm({ ...stepForm, experience: e.target.value })}
+                      value={scenarioBuilderForm.scenario}
+                      onChange={e => setScenarioBuilderForm({ ...scenarioBuilderForm, scenario: e.target.value })}
                     >
                       <option value="">Select Scenario</option>
-                      {experiences.map(ex => (
+                      {scenarios.map(ex => (
                         <option key={ex.id} value={ex.id}>{ex.title}</option>
                       ))}
                     </select>
@@ -1153,8 +1344,8 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                     <div className="form-group">
                       <label>Block Type *</label>
                       <select 
-                        value={stepForm.block_type} 
-                        onChange={e => setStepForm({ ...stepForm, block_type: e.target.value })}
+                        value={scenarioBuilderForm.block_type} 
+                        onChange={e => setScenarioBuilderForm({ ...scenarioBuilderForm, block_type: e.target.value })}
                       >
                         <option value="VIDEO">Video</option>
                         <option value="STORY">Story</option>
@@ -1172,8 +1363,8 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                       <input 
                         type="number" 
                         required 
-                        value={stepForm.display_order} 
-                        onChange={e => setStepForm({ ...stepForm, display_order: parseInt(e.target.value) || 0 })}
+                        value={scenarioBuilderForm.display_order} 
+                        onChange={e => setScenarioBuilderForm({ ...scenarioBuilderForm, display_order: parseInt(e.target.value) || 0 })}
                       />
                     </div>
                   </div>
@@ -1182,16 +1373,16 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                     <input 
                       type="text" 
                       required 
-                      value={stepForm.title} 
-                      onChange={e => setStepForm({ ...stepForm, title: e.target.value })}
+                      value={scenarioBuilderForm.title} 
+                      onChange={e => setScenarioBuilderForm({ ...scenarioBuilderForm, title: e.target.value })}
                       placeholder="e.g. Introduce vocabulary"
                     />
                   </div>
                   <div className="form-group">
                     <label>Body Content</label>
                     <textarea 
-                      value={stepForm.content} 
-                      onChange={e => setStepForm({ ...stepForm, content: e.target.value })}
+                      value={scenarioBuilderForm.content} 
+                      onChange={e => setScenarioBuilderForm({ ...scenarioBuilderForm, content: e.target.value })}
                       placeholder="Enter body content or text story"
                     />
                   </div>
@@ -1199,19 +1390,171 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                     <label>Media File URL</label>
                     <input 
                       type="url" 
-                      value={stepForm.media_url} 
-                      onChange={e => setStepForm({ ...stepForm, media_url: e.target.value })}
+                      value={scenarioBuilderForm.media_url} 
+                      onChange={e => setScenarioBuilderForm({ ...scenarioBuilderForm, media_url: e.target.value })}
                       placeholder="https://example.com/video.mp4"
                     />
                   </div>
                   <div className="form-group">
                     <label>Configuration Settings (JSON) *</label>
                     <textarea 
-                      value={stepForm.settings} 
-                      onChange={e => setStepForm({ ...stepForm, settings: e.target.value })}
+                      value={scenarioBuilderForm.settings} 
+                      onChange={e => setScenarioBuilderForm({ ...scenarioBuilderForm, settings: e.target.value })}
                       placeholder='{ "autoplay": true }'
                       className="monospace-textarea"
                     />
+                  </div>
+                </>
+              )}
+
+              {/* SCHOOL ADMINS FORM FIELDS */}
+              {activeTab === 'school-admins' && (
+                <>
+                  <div className="form-group">
+                    <label>Username *</label>
+                    <input 
+                      type="text" 
+                      required
+                      disabled={modalType === 'edit'} 
+                      value={schoolAdminForm.username} 
+                      onChange={e => setSchoolAdminForm({ ...schoolAdminForm, username: e.target.value })}
+                      placeholder="e.g. schooladmin123"
+                      className={modalType === 'edit' ? "disabled-input" : ""}
+                    />
+                  </div>
+                  {modalType === 'add' && (
+                    <div className="form-group">
+                      <label>Password *</label>
+                      <input 
+                        type="password" 
+                        required 
+                        value={schoolAdminForm.password || ''} 
+                        onChange={e => setSchoolAdminForm({ ...schoolAdminForm, password: e.target.value })}
+                        placeholder="Enter password"
+                      />
+                    </div>
+                  )}
+                  <div className="form-group">
+                    <label>Full Name *</label>
+                    <input 
+                      type="text" 
+                      required 
+                      value={schoolAdminForm.full_name} 
+                      onChange={e => setSchoolAdminForm({ ...schoolAdminForm, full_name: e.target.value })}
+                      placeholder="e.g. John Doe"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Email *</label>
+                    <input 
+                      type="email" 
+                      required 
+                      value={schoolAdminForm.email} 
+                      onChange={e => setSchoolAdminForm({ ...schoolAdminForm, email: e.target.value })}
+                      placeholder="e.g. admin@school.edu"
+                    />
+                  </div>
+                  <div className="form-group checkbox-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
+                    <input 
+                      type="checkbox" 
+                      id="school_admin_is_active"
+                      checked={schoolAdminForm.is_active} 
+                      onChange={e => setSchoolAdminForm({ ...schoolAdminForm, is_active: e.target.checked })}
+                    />
+                    <label htmlFor="school_admin_is_active" style={{ margin: 0 }}>Active User Account</label>
+                  </div>
+                </>
+              )}
+
+              {/* TEACHERS FORM FIELDS */}
+              {activeTab === 'teachers' && (
+                <>
+                  <div className="form-group">
+                    <label>Username *</label>
+                    <input 
+                      type="text" 
+                      required
+                      disabled={modalType === 'edit'} 
+                      value={teacherForm.username || ''} 
+                      onChange={e => setTeacherForm({ ...teacherForm, username: e.target.value })}
+                      placeholder="e.g. teacher123"
+                      className={modalType === 'edit' ? "disabled-input" : ""}
+                    />
+                  </div>
+                  {modalType === 'add' && (
+                    <div className="form-group">
+                      <label>Password *</label>
+                      <input 
+                        type="password" 
+                        required 
+                        value={teacherForm.password || ''} 
+                        onChange={e => setTeacherForm({ ...teacherForm, password: e.target.value })}
+                        placeholder="Enter password"
+                      />
+                    </div>
+                  )}
+                  <div className="form-group">
+                    <label>Full Name *</label>
+                    <input 
+                      type="text" 
+                      required 
+                      value={teacherForm.full_name} 
+                      onChange={e => setTeacherForm({ ...teacherForm, full_name: e.target.value })}
+                      placeholder="e.g. Sarah Connor"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Email *</label>
+                    <input 
+                      type="email" 
+                      required 
+                      value={teacherForm.email} 
+                      onChange={e => setTeacherForm({ ...teacherForm, email: e.target.value })}
+                      placeholder="e.g. sarah@school.edu"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>School *</label>
+                    <select 
+                      required 
+                      value={teacherForm.school}
+                      onChange={e => setTeacherForm({ ...teacherForm, school: e.target.value })}
+                    >
+                      <option value="">Select School</option>
+                      {schools.map(s => (
+                        <option key={s.school_id} value={s.school_id}>{s.school_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-row-2">
+                    <div className="form-group">
+                      <label>Qualification *</label>
+                      <input 
+                        type="text" 
+                        required 
+                        value={teacherForm.qualification} 
+                        onChange={e => setTeacherForm({ ...teacherForm, qualification: e.target.value })}
+                        placeholder="e.g. B.Ed in English"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Years of Experience *</label>
+                      <input 
+                        type="number" 
+                        required 
+                        value={teacherForm.experience_years} 
+                        onChange={e => setTeacherForm({ ...teacherForm, experience_years: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                  <div className="form-group checkbox-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
+                    <input 
+                      type="checkbox" 
+                      id="teacher_is_active"
+                      checked={teacherForm.is_active} 
+                      onChange={e => setTeacherForm({ ...teacherForm, is_active: e.target.checked })}
+                    />
+                    <label htmlFor="teacher_is_active" style={{ margin: 0 }}>Active User Account</label>
                   </div>
                 </>
               )}

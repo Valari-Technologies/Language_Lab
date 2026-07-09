@@ -4,8 +4,9 @@ import Login from './Login.jsx'
 import Dashboard from './Dashboard.jsx'
 import SchoolDashboard from './SchoolDashboard.jsx'
 import TeacherDashboard from './TeacherDashboard.jsx'
+import { logoutSession } from './api'
 
-const App = () => {
+export const App = () => {
   const [user, setUser] = useState(null);
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
 
@@ -52,7 +53,7 @@ const App = () => {
     const handlePopState = () => {
       setCurrentPath(window.location.pathname);
     };
-    const handlePageShow = (event) => {
+    const handlePageShow = () => {
       const token = localStorage.getItem('access_token');
       const storedUser = localStorage.getItem('user');
       if (!token || !storedUser) {

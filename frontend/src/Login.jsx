@@ -12,6 +12,7 @@ import {
 import './Login.css';
 import loginpageimg from './assets/lOGIN.jpeg';
 import icon from './assets/icon.png';
+import { API_BASE_URL } from './config';
 
 const Login = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
@@ -27,7 +28,7 @@ const Login = ({ onLoginSuccess }) => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/auth/login/', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -25,18 +25,13 @@ body {
    ========================================================================== */
 .left-panel {
   display: flex;
-
   flex-direction: column;
   justify-content: space-between;
   width: 50%;
   background: linear-gradient(135deg, #120e3d 0%, #1e1b4b 100%);
-  /* color: #ffffff; */
   padding: 15px 56px 20px 32px;
   position: relative;
   overflow: hidden;
-
-
-
 }
 
 @media (max-width: 1024px) {

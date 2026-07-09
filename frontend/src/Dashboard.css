@@ -50,6 +50,9 @@ body {
   flex-direction: column;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
 }
 
 .sidebar-brand {
@@ -95,6 +98,11 @@ body {
   gap: 0.35rem;
   flex: 1;
   overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+}
+.sidebar-nav::-webkit-scrollbar { 
+  display: none;  /* Safari and Chrome */
 }
 
 .nav-link {
@@ -750,6 +758,8 @@ body {
 .form-group input[type="text"],
 .form-group input[type="number"],
 .form-group input[type="url"],
+.form-group input[type="email"],
+.form-group input[type="password"],
 .form-group textarea,
 .form-group select {
   padding: 0.65rem 0.85rem;
@@ -761,6 +771,13 @@ body {
   color: var(--text-main);
   font-family: inherit;
   transition: all 0.2s;
+  width: 100%;
+}
+
+.disabled-input {
+  background-color: #e2e8f0 !important;
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .form-group input:focus,
