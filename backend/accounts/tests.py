@@ -4,6 +4,9 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from super_admin.models import Grade, School, SchoolAdminProfile
+from school_admin.models import Class, Teacher, TeacherClass
+
 User = get_user_model()
 
 
@@ -41,6 +44,21 @@ class RoleBasedLoginTests(TestCase):
             role="STUDENT",
             full_name="Student User"
         )
+
+        # Link school_admin/teacher to a real school so their dashboards resolve.
+        self.school = School.objects.create(
+            school_name="Test Dashboard School",
+            address="1 Test St",
+            phone="555-0100",
+            email="dashboard-school@example.com",
+        )
+        SchoolAdminProfile.objects.create(user=self.school_admin, school=self.school)
+        self.teacher_profile = Teacher.objects.create(user=self.teacher, school=self.school)
+        self.grade = Grade.objects.create(grade_name="Test Grade", sort_order=1)
+        self.class_obj = Class.objects.create(
+            school=self.school, class_name="Class 6-A", grade=self.grade, academic_year="2026",
+        )
+        TeacherClass.objects.create(teacher=self.teacher_profile, class_obj=self.class_obj)
 
     def test_login_super_admin_success(self):
         url = reverse("login")
@@ -93,7 +111,9 @@ class RoleBasedLoginTests(TestCase):
         token = RefreshToken.for_user(self.school_admin).access_token
         response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {token}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["school_name"], "St. Mary's English Academy")
+        self.assertEqual(response.data["school_name"], self.school.school_name)
+        self.assertEqual(response.data["total_teachers"], 1)
+        self.assertEqual(response.data["active_classes"], 1)
 
     def test_school_dashboard_denied_for_teacher_and_others(self):
         url = reverse("school_dashboard")
@@ -115,6 +135,8 @@ class RoleBasedLoginTests(TestCase):
         response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {token}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("Class 6-A", response.data["assigned_classes"])
+        self.assertEqual(response.data["grading_queue_count"], 0)
+        self.assertEqual(response.data["student_rankings"], [])
 
     def test_teacher_dashboard_denied_for_school_admin_and_others(self):
         url = reverse("teacher_dashboard")

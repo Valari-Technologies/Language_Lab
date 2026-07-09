@@ -1,4 +1,5 @@
-from .models import School, SchoolAdminProfile, Teacher
+from super_admin.models import School, SchoolAdminProfile
+from school_admin.models import Teacher
 
 
 def get_user_school(user):

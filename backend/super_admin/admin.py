@@ -8,24 +8,24 @@ original_get_app_list = admin.AdminSite.get_app_list
 
 def get_app_list(self, request, app_label=None):
     """
-    Override get_app_list to sort the models in the 'cms' app
+    Override get_app_list to sort the models in the 'super_admin' app
     according to the logical hierarchical flow:
     Grade -> Scenario -> Scenario Builder -> Assessment -> Question -> Option
     """
     app_list = original_get_app_list(self, request, app_label)
-    
+
     cms_model_order = {
         "Grade": 1,
         "Scenario": 2,
         "ScenarioBuilder": 3,
-        
+
         "PublishContent": 7,
     }
-    
+
     for app in app_list:
-        if app.get("app_label") == "cms":
+        if app.get("app_label") == "super_admin":
             app["models"].sort(key=lambda x: cms_model_order.get(x.get("object_name"), 99))
-            
+
     return app_list
 
 
@@ -38,8 +38,8 @@ original_index = admin.AdminSite.index
 
 def custom_index(self, request, extra_context=None):
     from accounts.models import User
-    from cms.models import Grade, PublishContent
-    
+    from super_admin.models import Grade, PublishContent
+
     extra_context = extra_context or {}
     extra_context.update({
         'dashboard_stats': {
@@ -134,4 +134,3 @@ class PublishContentAdmin(admin.ModelAdmin):
     search_fields = ("release_name", "checksum", "export_file")
     ordering = ("-created_at",)
     readonly_fields = ("created_at", "updated_at")
-

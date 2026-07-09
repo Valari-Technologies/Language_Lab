@@ -7,7 +7,9 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.exceptions import ValidationError
 
-from cms.scoping import get_user_school_id
+from core.scoping import get_user_school, get_user_school_id
+from school_admin.models import Class, Teacher, TeacherClass
+from teacher.models import Student
 from .serializers import (
     LoginSerializer,
     RegisterSerializer,
@@ -110,21 +112,23 @@ class SchoolDashboardAPIView(APIView):
     permission_classes = [IsAuthenticated, IsInstituteAdmin]
 
     def get(self, request):
+        school = get_user_school(request.user)
+        if school is None:
+            return Response(
+                {"message": "Your account is not linked to a school."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         data = {
-            "school_name": "St. Mary's English Academy",
-            "total_teachers": 18,
-            "total_students": 340,
-            "active_classes": 12,
-            "monthly_engagement_rate": "84%",
-            "recent_activities": [
-                {"id": 1, "activity": "Teacher Sarah added Beginner Vocabulary lesson", "time": "2 hours ago"},
-                {"id": 2, "activity": "Assessment 'Weekly Spelling test' completed by 24 students", "time": "4 hours ago"},
-                {"id": 3, "activity": "New grade curriculum approved by Admin", "time": "1 day ago"}
-            ],
-            "announcements": [
-                {"id": 1, "title": "System maintenance scheduled", "date": "July 10, 2026"},
-                {"id": 2, "title": "Term exam structures update", "date": "July 12, 2026"}
-            ]
+            "school_name": school.school_name,
+            "total_teachers": Teacher.objects.filter(school=school).count(),
+            "total_students": Student.objects.filter(school=school).count(),
+            "active_classes": Class.objects.filter(school=school, is_active=True).count(),
+            # No engagement-metric, activity-log, or announcement models exist yet in
+            # this codebase -- returning empty/null instead of inventing fake numbers.
+            "monthly_engagement_rate": None,
+            "recent_activities": [],
+            "announcements": [],
         }
         return Response(data, status=status.HTTP_200_OK)
 
@@ -137,19 +141,30 @@ class TeacherDashboardAPIView(APIView):
     permission_classes = [IsAuthenticated, IsTeacher]
 
     def get(self, request):
+        teacher = Teacher.objects.filter(user=request.user).select_related("school").first()
+        if teacher is None:
+            return Response(
+                {"message": "Your account is not linked to a teacher profile."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        assigned_classes = list(
+            TeacherClass.objects.filter(teacher=teacher)
+            .select_related("class_obj")
+            .values_list("class_obj__class_name", flat=True)
+        )
+
         data = {
-            "assigned_classes": ["Class 6-A", "Class 6-B", "Class 7-C"],
-            "active_scenarios": 5,
-            "grading_queue_count": 8,
-            "upcoming_lessons": [
-                {"id": 1, "class": "Class 6-A", "topic": "Adverbs and Adjectives", "time": "09:00 AM"},
-                {"id": 2, "class": "Class 7-C", "topic": "Story Reading & Quiz", "time": "11:30 AM"}
-            ],
-            "student_rankings": [
-                {"name": "Alice Johnson", "score": "98%", "progress": "Excellent"},
-                {"name": "Bob Smith", "score": "92%", "progress": "Improving"},
-                {"name": "Charlie Brown", "score": "88%", "progress": "Steady"}
-            ]
+            "assigned_classes": assigned_classes,
+            # No Teacher<->Scenario assignment relationship exists in the schema yet.
+            "active_scenarios": 0,
+            # No Submission/grading model exists in this codebase yet -- returning an
+            # empty/zero value instead of inventing fake numbers.
+            "grading_queue_count": 0,
+            # No lesson-scheduling model exists yet.
+            "upcoming_lessons": [],
+            # No score/ranking model exists yet.
+            "student_rankings": [],
         }
         return Response(data, status=status.HTTP_200_OK)
 
