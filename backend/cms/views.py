@@ -1,40 +1,55 @@
+from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, BasePermission
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.views import APIView
 
-from .models import Grade, Scenario, ScenarioBuilder, PublishContent
+from accounts.permissions import IsSuperAdmin
+from .permissions import IsSuperAdminOrReadOnlyStaff, IsSuperAdminOrSchoolAdminWrite
+from .scoping import filter_queryset_by_school, get_user_school
+from .models import (
+    Class,
+    Grade,
+    PublishContent,
+    Scenario,
+    ScenarioBuilder,
+    School,
+    SchoolAdminProfile,
+    Student,
+    Teacher,
+    TeacherClass,
+)
 from .serializers import (
-    GradeSerializer,
+    ClassSerializer,
     GradeDetailSerializer,
-    ScenarioSerializer,
-    ScenarioDetailSerializer,
-    ScenarioBuilderSerializer,
-    PublishContentSerializer,
+    GradeSerializer,
     PublishContentDetailSerializer,
+    PublishContentSerializer,
+    ScenarioBuilderSerializer,
+    ScenarioDetailSerializer,
+    ScenarioSerializer,
+    SchoolAdminSerializer,
+    SchoolSerializer,
+    StudentSerializer,
+    TeacherClassSerializer,
+    TeacherSerializer,
 )
 
-
-class IsSuperAdmin(BasePermission):
- 
-    def has_permission(self, request, view):
-        return bool(
-            request.user and
-            request.user.is_authenticated and
-            (getattr(request.user, "role", None) == "SUPER_ADMIN" or request.user.is_superuser)
-        )
+User = get_user_model()
 
 
 class CMSBaseViewSet(viewsets.ModelViewSet):
-  
-    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, IsSuperAdmin]
     filter_backends = [SearchFilter, OrderingFilter]
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
     def get_model_name(self):
-       
         model = getattr(self, "model", None)
         if not model:
             queryset = getattr(self, "queryset", None)
@@ -59,13 +74,13 @@ class CMSBaseViewSet(viewsets.ModelViewSet):
         )
 
     def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
+        partial = kwargs.pop("partial", False)
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
 
-        if getattr(instance, '_prefetched_objects_cache', None):
+        if getattr(instance, "_prefetched_objects_cache", None):
             instance._prefetched_objects_cache = {}
 
         return Response(
@@ -86,7 +101,7 @@ class CMSBaseViewSet(viewsets.ModelViewSet):
 
 
 class GradeViewSet(CMSBaseViewSet):
-  
+    permission_classes = [IsAuthenticated, IsSuperAdminOrReadOnlyStaff]
     queryset = Grade.objects.all()
     search_fields = ["grade_name", "description"]
     ordering_fields = ["sort_order", "grade_name", "created_at"]
@@ -98,9 +113,7 @@ class GradeViewSet(CMSBaseViewSet):
         return GradeSerializer
 
 
-
 class ScenarioViewSet(CMSBaseViewSet):
- 
     search_fields = ["title", "description", "objective"]
     ordering_fields = ["estimated_duration", "created_at", "title"]
     ordering = ["grade", "-created_at"]
@@ -109,14 +122,14 @@ class ScenarioViewSet(CMSBaseViewSet):
         queryset = Scenario.objects.all()
         grade = self.request.query_params.get("grade")
         difficulty = self.request.query_params.get("difficulty")
-        status = self.request.query_params.get("status")
+        scenario_status = self.request.query_params.get("status")
 
         if grade:
             queryset = queryset.filter(grade_id=grade)
         if difficulty:
             queryset = queryset.filter(difficulty=difficulty)
-        if status:
-            queryset = queryset.filter(status=status)
+        if scenario_status:
+            queryset = queryset.filter(status=scenario_status)
 
         return queryset
 
@@ -127,7 +140,6 @@ class ScenarioViewSet(CMSBaseViewSet):
 
 
 class ScenarioBuilderViewSet(CMSBaseViewSet):
-   
     serializer_class = ScenarioBuilderSerializer
     search_fields = ["title", "content"]
     ordering_fields = ["display_order", "created_at"]
@@ -135,11 +147,11 @@ class ScenarioBuilderViewSet(CMSBaseViewSet):
 
     def get_queryset(self):
         queryset = ScenarioBuilder.objects.all()
-        experience = self.request.query_params.get("experience")
+        scenario = self.request.query_params.get("scenario")
         block_type = self.request.query_params.get("block_type")
 
-        if experience:
-            queryset = queryset.filter(experience_id=experience)
+        if scenario:
+            queryset = queryset.filter(scenario_id=scenario)
         if block_type:
             queryset = queryset.filter(block_type=block_type)
 
@@ -158,19 +170,13 @@ class PublishContentViewSet(CMSBaseViewSet):
         return PublishContentSerializer
 
     def perform_create(self, serializer):
-        from django.utils import timezone
         serializer.save(published_by=self.request.user, published_at=timezone.now())
 
 
-
 class DashboardStatsAPIView(APIView):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
 
     def get(self, request):
-        from django.contrib.auth import get_user_model
-        from .models import School, PublishContent
-        User = get_user_model()
         return Response({
             "total_schools": School.objects.count(),
             "total_school_admins": User.objects.filter(role="SCHOOL_ADMIN").count(),
@@ -186,60 +192,89 @@ class DashboardStatsAPIView(APIView):
                     "grade": s.grade.grade_name if s.grade else "N/A",
                     "status": s.status,
                     "updated_at": s.updated_at.strftime("%b %d, %Y")
-                } for s in Scenario.objects.order_by('-updated_at')[:3]
+                } for s in Scenario.objects.order_by("-updated_at")[:3]
             ]
         }, status=status.HTTP_200_OK)
 
 
-
-from django.contrib.auth import get_user_model
-from rest_framework import serializers
-from accounts.permissions import IsAdminRole
-from .models import School, Teacher, Class, TeacherClass
-from .serializers import SchoolSerializer, TeacherSerializer, ClassSerializer, TeacherClassSerializer
-
-User = get_user_model()
-
-class StudentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ['id', 'username', 'email', 'full_name', 'role', 'is_active', 'password']
-        extra_kwargs = {'password': {'write_only': True, 'required': False}}
-    
-    def create(self, validated_data):
-        validated_data['role'] = User.Role.STUDENT
-        password = validated_data.pop('password', None)
-        user = User(**validated_data)
-        if password:
-            user.set_password(password)
-        user.save()
-        return user
-
 class SchoolViewSet(CMSBaseViewSet):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAuthenticated, IsSuperAdminOrReadOnlyStaff]
     queryset = School.objects.all()
     serializer_class = SchoolSerializer
     search_fields = ["school_name"]
 
+    def get_queryset(self):
+        return filter_queryset_by_school(School.objects.all(), self.request.user)
+
+
 class TeacherViewSet(CMSBaseViewSet):
-    permission_classes = [IsAuthenticated, IsAdminRole]
-    queryset = Teacher.objects.all()
+    permission_classes = [IsAuthenticated, IsSuperAdminOrSchoolAdminWrite]
+    queryset = Teacher.objects.select_related("user", "school").all()
     serializer_class = TeacherSerializer
     search_fields = ["user__username", "qualification"]
 
+    def get_queryset(self):
+        return filter_queryset_by_school(
+            Teacher.objects.select_related("user", "school").all(),
+            self.request.user,
+        )
+
+
 class ClassViewSet(CMSBaseViewSet):
-    permission_classes = [IsAuthenticated, IsAdminRole]
-    queryset = Class.objects.all()
+    permission_classes = [IsAuthenticated, IsSuperAdminOrSchoolAdminWrite]
+    queryset = Class.objects.select_related("school", "grade").all()
     serializer_class = ClassSerializer
     search_fields = ["class_name"]
 
+    def get_queryset(self):
+        return filter_queryset_by_school(
+            Class.objects.select_related("school", "grade").all(),
+            self.request.user,
+        )
+
+
 class TeacherClassViewSet(CMSBaseViewSet):
-    permission_classes = [IsAuthenticated, IsAdminRole]
-    queryset = TeacherClass.objects.all()
+    permission_classes = [IsAuthenticated, IsSuperAdminOrSchoolAdminWrite]
+    queryset = TeacherClass.objects.select_related("teacher", "class_obj").all()
     serializer_class = TeacherClassSerializer
 
+    def get_queryset(self):
+        school = get_user_school(self.request.user)
+        queryset = TeacherClass.objects.select_related("teacher", "class_obj").all()
+        if school is None:
+            if self.request.user.role == "SUPER_ADMIN" or self.request.user.is_superuser:
+                return queryset
+            return queryset.none()
+        return queryset.filter(class_obj__school=school)
+
+
 class StudentViewSet(CMSBaseViewSet):
-    permission_classes = [IsAuthenticated, IsAdminRole]
-    queryset = User.objects.filter(role="STUDENT")
+    permission_classes = [IsAuthenticated, IsSuperAdminOrSchoolAdminWrite]
+    queryset = Student.objects.select_related("user", "school").all()
     serializer_class = StudentSerializer
+    search_fields = ["user__username", "user__email", "user__full_name"]
+
+    def get_queryset(self):
+        return filter_queryset_by_school(
+            Student.objects.select_related("user", "school").all(),
+            self.request.user,
+        )
+
+    def perform_destroy(self, instance):
+        user = instance.user
+        super().perform_destroy(instance)
+        if user:
+            user.delete()
+
+
+class SchoolAdminViewSet(CMSBaseViewSet):
+    queryset = User.objects.filter(role="SCHOOL_ADMIN").select_related("school_admin_profile__school")
+    serializer_class = SchoolAdminSerializer
     search_fields = ["username", "email", "full_name"]
+
+    def get_queryset(self):
+        return User.objects.filter(role="SCHOOL_ADMIN").select_related("school_admin_profile__school")
+
+    def perform_destroy(self, instance):
+        SchoolAdminProfile.objects.filter(user=instance).delete()
+        super().perform_destroy(instance)

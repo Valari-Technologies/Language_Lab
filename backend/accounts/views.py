@@ -5,10 +5,18 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.exceptions import ValidationError
 
-from .serializers import LoginSerializer, RegisterSerializer
+from cms.scoping import get_user_school_id
+from .serializers import (
+    LoginSerializer,
+    RegisterSerializer,
+    ProfileSerializer,
+    ChangePasswordSerializer,
+)
 from .permissions import IsSuperAdmin, IsInstituteAdmin, IsTeacher
+
+CMS_LOGIN_ROLES = {"SUPER_ADMIN", "SCHOOL_ADMIN", "TEACHER"}
 
 
 class LoginAPIView(APIView):
@@ -30,7 +38,6 @@ class LoginAPIView(APIView):
         username = serializer.validated_data["username"]
         password = serializer.validated_data["password"]
 
-        # Authenticate user credentials
         user = authenticate(username=username, password=password)
 
         if user is None:
@@ -39,29 +46,60 @@ class LoginAPIView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
-        # Generate access and refresh JWT tokens
+        if not user.is_active:
+            return Response(
+                {"message": "This account has been deactivated."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if user.role not in CMS_LOGIN_ROLES and not user.is_superuser:
+            return Response(
+                {"message": "Access denied. This portal is for administrators and teachers only."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         refresh = RefreshToken.for_user(user)
 
-        # Map SCHOOL_ADMIN to SCHOOL_ADMIN for the API response
-        role_payload = user.role
-        if role_payload == "SCHOOL_ADMIN":
-            role_payload = "SCHOOL_ADMIN"
+        user_payload = {
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.full_name,
+            "email": user.email,
+            "role": user.role,
+            "school_id": get_user_school_id(user),
+        }
 
         return Response(
             {
                 "message": "Login successful",
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
-                "user": {
-                    "id": user.id,
-                    "username": user.username,
-                    "full_name": user.full_name,
-                    "email": user.email,
-                    "role": role_payload
-                }
+                "user": user_payload,
             },
             status=status.HTTP_200_OK
         )
+
+
+class LogoutAPIView(APIView):
+    """
+    POST /api/auth/logout/
+    Blacklist the provided refresh token.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        refresh_token = request.data.get("refresh")
+        if not refresh_token:
+            return Response(
+                {"message": "Refresh token is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        except Exception as exc:
+            raise ValidationError({"refresh": "Invalid or expired refresh token."}) from exc
+        return Response({"message": "Logged out successfully"}, status=status.HTTP_200_OK)
 
 
 class SchoolDashboardAPIView(APIView):
@@ -69,7 +107,6 @@ class SchoolDashboardAPIView(APIView):
     GET /api/school/dashboard/
     Protected endpoint for School Admin Dashboard data.
     """
-    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, IsInstituteAdmin]
 
     def get(self, request):
@@ -97,13 +134,12 @@ class TeacherDashboardAPIView(APIView):
     GET /api/teacher/dashboard/
     Protected endpoint for Teacher Dashboard data.
     """
-    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated, IsTeacher]
 
     def get(self, request):
         data = {
             "assigned_classes": ["Class 6-A", "Class 6-B", "Class 7-C"],
-            "active_learning_experiences": 5,
+            "active_scenarios": 5,
             "grading_queue_count": 8,
             "upcoming_lessons": [
                 {"id": 1, "class": "Class 6-A", "topic": "Adverbs and Adjectives", "time": "09:00 AM"},
@@ -132,10 +168,6 @@ class RegisterAPIView(CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
-        role_payload = user.role
-        if role_payload == "SCHOOL_ADMIN":
-            role_payload = "SCHOOL_ADMIN"
-
         return Response(
             {
                 "message": "User registered successfully.",
@@ -143,9 +175,50 @@ class RegisterAPIView(CreateAPIView):
                     "id": user.id,
                     "username": user.username,
                     "email": user.email,
-                    "role": role_payload,
+                    "role": user.role,
                     "full_name": user.full_name
                 }
             },
             status=status.HTTP_201_CREATED
         )
+
+
+class ProfileAPIView(APIView):
+    """
+    GET /api/users/profile/   -> the logged-in user's own profile
+    PUT/PATCH /api/users/profile/ -> update full_name / email (username and role are read-only)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = ProfileSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        return self._update(request)
+
+    def patch(self, request):
+        return self._update(request)
+
+    def _update(self, request):
+        serializer = ProfileSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(
+            {"message": "Profile updated successfully", "user": serializer.data},
+            status=status.HTTP_200_OK
+        )
+
+
+class ChangePasswordAPIView(APIView):
+    """
+    POST /api/users/change-password/
+    Requires the logged-in user's current password before setting a new one.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"message": "Password updated successfully"}, status=status.HTTP_200_OK)

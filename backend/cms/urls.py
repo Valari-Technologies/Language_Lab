@@ -12,6 +12,7 @@ from .views import (
     ClassViewSet,
     TeacherClassViewSet,
     StudentViewSet,
+    SchoolAdminViewSet,
 )
 
 
@@ -27,6 +28,7 @@ router.register(r"teachers", TeacherViewSet, basename="teacher")
 router.register(r"classes", ClassViewSet, basename="class")
 router.register(r"teacher-classes", TeacherClassViewSet, basename="teacher-class")
 router.register(r"students", StudentViewSet, basename="student")
+router.register(r"school-admins", SchoolAdminViewSet, basename="school-admin")
 
 
 urlpatterns = [

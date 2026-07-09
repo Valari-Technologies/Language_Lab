@@ -5,10 +5,7 @@ from .models import User
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    """
-    Admin panel configuration for Custom User Model.
-    Includes the custom role and full_name fields in lists and forms.
-    """
+
     list_display = (
         "username",
         "email",

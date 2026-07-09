@@ -161,3 +161,89 @@ class RoleBasedLoginTests(TestCase):
             url, data, format="json", HTTP_AUTHORIZATION=f"Bearer {token}"
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ProfileAndPasswordTests(TestCase):
+    """
+    Test suite for the logged-in user's own profile view/update and password change.
+    """
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="profile_user",
+            password="OriginalPass123",
+            email="original@example.com",
+            role="TEACHER",
+            full_name="Original Name"
+        )
+        self.token = RefreshToken.for_user(self.user).access_token
+
+    def test_get_profile_requires_authentication(self):
+        url = reverse("user-profile")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_get_profile_returns_current_user(self):
+        url = reverse("user-profile")
+        response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {self.token}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["username"], "profile_user")
+        self.assertEqual(response.data["email"], "original@example.com")
+        self.assertEqual(response.data["full_name"], "Original Name")
+
+    def test_update_profile_full_name_and_email(self):
+        url = reverse("user-profile")
+        data = {"full_name": "Updated Name", "email": "updated@example.com"}
+        response = self.client.put(
+            url, data, content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {self.token}"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.full_name, "Updated Name")
+        self.assertEqual(self.user.email, "updated@example.com")
+
+    def test_update_profile_cannot_change_username_or_role(self):
+        url = reverse("user-profile")
+        data = {"username": "hijacked_username", "role": "SUPER_ADMIN"}
+        response = self.client.put(
+            url, data, content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {self.token}"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, "profile_user")
+        self.assertEqual(self.user.role, "TEACHER")
+
+    def test_change_password_success(self):
+        url = reverse("change-password")
+        data = {"old_password": "OriginalPass123", "new_password": "BrandNewPass456"}
+        response = self.client.post(
+            url, data, content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {self.token}"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("BrandNewPass456"))
+
+    def test_change_password_wrong_old_password_rejected(self):
+        url = reverse("change-password")
+        data = {"old_password": "WrongPassword", "new_password": "BrandNewPass456"}
+        response = self.client.post(
+            url, data, content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {self.token}"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("OriginalPass123"))
+
+    def test_change_password_weak_new_password_rejected(self):
+        url = reverse("change-password")
+        data = {"old_password": "OriginalPass123", "new_password": "12345"}
+        response = self.client.post(
+            url, data, content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {self.token}"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("OriginalPass123"))
+
+    def test_change_password_requires_authentication(self):
+        url = reverse("change-password")
+        data = {"old_password": "OriginalPass123", "new_password": "BrandNewPass456"}
+        response = self.client.post(url, data, content_type="application/json")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

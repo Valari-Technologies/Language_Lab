@@ -57,28 +57,28 @@ class Scenario(models.Model):
         on_delete=models.CASCADE,
         related_name="scenarios",
         verbose_name=_("Grade"),
-        help_text=_("The grade/level this learning experience belongs to.")
+        help_text=_("The grade/level this scenario belongs to.")
     )
     title = models.CharField(
         max_length=200,
         verbose_name=_("Title"),
-        help_text=_("The title of the learning experience.")
+        help_text=_("The title of the scenario.")
     )
     description = models.TextField(
         blank=True,
         null=True,
         verbose_name=_("Description"),
-        help_text=_("Detailed information about the learning experience.")
+        help_text=_("Detailed information about the scenario.")
     )
     objective = models.TextField(
         blank=True,
         null=True,
         verbose_name=_("Objective"),
-        help_text=_("Pedagogical goals of this learning experience.")
+        help_text=_("Pedagogical goals of this scenario.")
     )
     estimated_duration = models.IntegerField(
         verbose_name=_("Estimated Duration"),
-        help_text=_("Estimated time to complete the experience (in minutes).")
+        help_text=_("Estimated time to complete the scenario (in minutes).")
     )
     difficulty = models.CharField(
         max_length=20,
@@ -92,7 +92,7 @@ class Scenario(models.Model):
         choices=Status.choices,
         default=Status.DRAFT,
         verbose_name=_("Status"),
-        help_text=_("Lifecycle state of the learning experience.")
+        help_text=_("Lifecycle state of the scenario.")
     )
     thumbnail = models.URLField(
         blank=True,
@@ -136,8 +136,8 @@ class ScenarioBuilder(models.Model):
         Scenario,
         on_delete=models.CASCADE,
         related_name="scenario_builders",
-        verbose_name=_("Learning Experience"),
-        help_text=_("The learning experience this step belongs to.")
+        verbose_name=_("Scenario"),
+        help_text=_("The scenario this step belongs to.")
     )
     block_type = models.CharField(
         max_length=30,
@@ -165,7 +165,7 @@ class ScenarioBuilder(models.Model):
     )
     display_order = models.IntegerField(
         verbose_name=_("Display Order"),
-        help_text=_("Sequence in which this step is displayed within the experience.")
+        help_text=_("Sequence in which this step is displayed within the scenario.")
     )
     settings = models.JSONField(
         blank=True,
@@ -286,12 +286,38 @@ class School(models.Model):
         return self.school_name
 
 
+class SchoolAdminProfile(models.Model):
+    profile_id = models.AutoField(primary_key=True)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="school_admin_profile",
+    )
+    school = models.ForeignKey(School, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.school.school_name}"
+
+
 class Teacher(models.Model):
     teacher_id = models.AutoField(primary_key=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     school = models.ForeignKey(School, on_delete=models.CASCADE)
     qualification = models.CharField(max_length=150, null=True, blank=True)
     experience_years = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.school.school_name}"
+
+
+class Student(models.Model):
+    student_id = models.AutoField(primary_key=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    school = models.ForeignKey(School, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
