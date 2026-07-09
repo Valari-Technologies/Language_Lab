@@ -913,7 +913,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                         <tr key={ex.id}>
                           <td className="badge-cell">
                             <span className="badge-pill grade">
-                              {ex.grade_detail?.grade_name || ex.grade_name || `Grade ID: ${ex.grade}`}
+                              {ex.grade_name || `Grade ID: ${ex.grade}`}
                             </span>
                           </td>
                           <td className="bold-text">{ex.title}</td>
@@ -977,7 +977,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                       .map(s => (
                         <tr key={s.id}>
                           <td className="bold-text">#{s.display_order}</td>
-                          <td className="dim-text">{s.scenario_detail?.title || s.experience_detail?.title || `Scenario ID: ${s.scenario}`}</td>
+                          <td className="dim-text">{s.scenario_title || `Scenario ID: ${s.scenario}`}</td>
                           <td>
                             <span className={`badge-pill block-type ${s.block_type?.toLowerCase()}`}>
                               {s.block_type}
