@@ -101,7 +101,7 @@ class SchoolViewSet(CMSBaseViewSet):
     search_fields = ["school_name"]
 
     def get_queryset(self):
-        return filter_queryset_by_school(School.objects.all(), self.request.user)
+        return filter_queryset_by_school(School.objects.all(), self.request.user, school_field="school_id")
 
 
 class PublishContentViewSet(CMSBaseViewSet):

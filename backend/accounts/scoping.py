@@ -32,4 +32,6 @@ def filter_queryset_by_school(queryset, user, school_field="school"):
         if user.role == "SUPER_ADMIN" or user.is_superuser:
             return queryset
         return queryset.none()
+    if school_field in ["school_id", "pk"]:
+        return queryset.filter(**{school_field: school.school_id})
     return queryset.filter(**{school_field: school})
