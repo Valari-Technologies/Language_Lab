@@ -1,5 +1,4 @@
-from super_admin.models import School, SchoolAdminProfile
-from school_admin.models import Teacher
+from django.apps import apps
 
 
 def get_user_school(user):
@@ -8,12 +7,17 @@ def get_user_school(user):
         return None
     if user.role == "SUPER_ADMIN" or user.is_superuser:
         return None
+    
     if user.role == "SCHOOL_ADMIN":
+        SchoolAdminProfile = apps.get_model('super_admin', 'SchoolAdminProfile')
         profile = SchoolAdminProfile.objects.filter(user=user).select_related("school").first()
         return profile.school if profile else None
+        
     if user.role == "TEACHER":
+        Teacher = apps.get_model('school_admin', 'Teacher')
         teacher = Teacher.objects.filter(user=user).select_related("school").first()
         return teacher.school if teacher else None
+        
     return None
 
 

@@ -1,6 +1,5 @@
 from django.contrib import admin
-from django.utils.translation import gettext_lazy as _
-from .models import Grade, Scenario, ScenarioBuilder, PublishContent
+from .models import Grade, PublishContent
 
 
 original_get_app_list = admin.AdminSite.get_app_list
@@ -9,16 +8,12 @@ original_get_app_list = admin.AdminSite.get_app_list
 def get_app_list(self, request, app_label=None):
     """
     Override get_app_list to sort the models in the 'super_admin' app
-    according to the logical hierarchical flow:
-    Grade -> Scenario -> Scenario Builder -> Assessment -> Question -> Option
+    according to the logical hierarchical flow: Grade -> Publish Content.
     """
     app_list = original_get_app_list(self, request, app_label)
 
     cms_model_order = {
         "Grade": 1,
-        "Scenario": 2,
-        "ScenarioBuilder": 3,
-
         "PublishContent": 7,
     }
 
@@ -55,65 +50,11 @@ def custom_index(self, request, extra_context=None):
 admin.AdminSite.index = custom_index
 
 
-class ScenarioBuilderInline(admin.TabularInline):
-    model = ScenarioBuilder
-    extra = 1
-    sortable_field_name = "display_order"
-    fields = ("block_type", "title", "content", "media_url", "display_order", "settings")
-    classes = ("collapse",)
-
-
 @admin.register(Grade)
 class GradeAdmin(admin.ModelAdmin):
     list_display = ("grade_name", "sort_order", "created_at", "updated_at")
     search_fields = ("grade_name", "description")
     ordering = ("sort_order", "grade_name")
-    readonly_fields = ("created_at", "updated_at")
-
-
-@admin.register(Scenario)
-class ScenarioAdmin(admin.ModelAdmin):
-    list_display = (
-        "title",
-        "grade",
-        "difficulty",
-        "status",
-        "estimated_duration",
-        "created_at",
-        "updated_at",
-    )
-    list_filter = ("grade", "difficulty", "status")
-    search_fields = ("title", "description", "objective")
-    ordering = ("grade", "-created_at")
-    readonly_fields = ("created_at", "updated_at")
-    inlines = [ScenarioBuilderInline]
-    fieldsets = (
-        (None, {
-            "fields": ("grade", "title", "description", "objective")
-        }),
-        (_("Details"), {
-            "fields": ("estimated_duration", "difficulty", "status", "thumbnail")
-        }),
-        (_("Timestamps"), {
-            "fields": ("created_at", "updated_at"),
-            "classes": ("collapse",)
-        }),
-    )
-
-
-@admin.register(ScenarioBuilder)
-class ScenarioBuilderAdmin(admin.ModelAdmin):
-    list_display = (
-        "title",
-        "scenario",
-        "block_type",
-        "display_order",
-        "created_at",
-        "updated_at",
-    )
-    list_filter = ("block_type", "scenario__grade", "scenario")
-    search_fields = ("title", "content", "scenario__title")
-    ordering = ("scenario", "display_order")
     readonly_fields = ("created_at", "updated_at")
 
 

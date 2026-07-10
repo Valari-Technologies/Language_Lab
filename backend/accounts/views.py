@@ -7,7 +7,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.exceptions import ValidationError
 
-from core.scoping import get_user_school, get_user_school_id
+from accounts.scoping import get_user_school, get_user_school_id
 from school_admin.models import Class, Teacher, TeacherClass
 from teacher.models import Student
 from .serializers import (

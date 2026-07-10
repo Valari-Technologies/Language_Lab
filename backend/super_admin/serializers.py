@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from .models import Grade, PublishContent, Scenario, ScenarioBuilder, School, SchoolAdminProfile
+from .models import Grade, PublishContent, School, SchoolAdminProfile
 
 User = get_user_model()
 
@@ -21,38 +21,6 @@ class GradeDetailSerializer(serializers.ModelSerializer):
 class SchoolSerializer(serializers.ModelSerializer):
     class Meta:
         model = School
-        fields = '__all__'
-
-
-class ScenarioSerializer(serializers.ModelSerializer):
-    grade_name = serializers.CharField(source='grade.grade_name', read_only=True)
-
-    class Meta:
-        model = Scenario
-        fields = '__all__'
-
-
-class ScenarioDetailSerializer(serializers.ModelSerializer):
-    grade_name = serializers.CharField(source='grade.grade_name', read_only=True)
-
-    class Meta:
-        model = Scenario
-        fields = '__all__'
-
-
-class ScenarioBuilderSerializer(serializers.ModelSerializer):
-    scenario_title = serializers.CharField(source='scenario.title', read_only=True)
-
-    class Meta:
-        model = ScenarioBuilder
-        fields = '__all__'
-
-
-class ScenarioBuilderDetailSerializer(serializers.ModelSerializer):
-    scenario_title = serializers.CharField(source='scenario.title', read_only=True)
-
-    class Meta:
-        model = ScenarioBuilder
         fields = '__all__'
 
 

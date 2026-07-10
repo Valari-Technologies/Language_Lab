@@ -1,7 +1,7 @@
 from rest_framework.permissions import IsAuthenticated
 
 from accounts.permissions import IsSuperAdminOrSchoolAdminWrite
-from core.scoping import filter_queryset_by_school
+from accounts.scoping import filter_queryset_by_school
 from super_admin.views import CMSBaseViewSet
 from .models import Student
 from .serializers import StudentSerializer

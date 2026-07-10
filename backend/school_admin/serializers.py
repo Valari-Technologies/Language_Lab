@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from core.scoping import get_user_school
+from accounts.scoping import get_user_school
 from .models import Class, Teacher, TeacherClass
 
 User = get_user_model()
