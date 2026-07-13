@@ -33,20 +33,20 @@
 - "Learning Experience" -> "Scenario"
 - "Experience Steps" -> "Scenario Builder"
 - Keep consistent everywhere except already-committed historical migrations.
-- Naming Collision Resolution: The Content Studio subsystem is implemented in the `content_studio` app, with its own `Scenario` model (mapping to `content_studio_scenario` DB table), separate from the school-facing `content.Scenario` model.
+- The obsolete school-facing `content.Scenario` has been removed. The Content Studio's `Scenario` model (`content_studio`) is now the sole scenario model in the system.
 
 ## 5. FRONTEND <-> BACKEND CONTRACT
 - All API calls must use `frontend/src/config.js` (`API_BASE_URL`). Never hardcode localhost/127.0.0.1 elsewhere.
-- Canonical routes: `/api/cms/scenarios/` and `/api/cms/scenario-builders/`. Old learning-experiences / experience-steps routes must never reappear.
-- Content Studio routes are under `/api/v1/` prefix (e.g. `/api/v1/content/scenarios/`, `/api/v1/content/media/`, `/api/v1/dashboard/`). These endpoints map to the `content_studio` app and require `CONTENT_CREATOR` or `SUPER_ADMIN` authorization. They are read-only (GET) in Phase 1.
-- Confirm a route exists in `content_studio/urls.py`, `content/urls.py`, or `accounts/urls.py` before wiring a frontend call.
+- Canonical routes: All scenario authoring and publishing endpoints reside in `content_studio` under `/api/v1/` (e.g. `/api/v1/content/scenarios/`, `/api/v1/content/media/`, `/api/v1/dashboard/`).
+- The obsolete `/api/cms/scenarios/`, `/api/cms/scenario-builders/`, and `/api/cms/publish-contents/` endpoints have been removed.
+- Confirm a route exists in `content_studio/urls.py` or `accounts/urls.py` before wiring a frontend call.
 
 ## 6. CURRENT STATE / KNOWN ISSUES
-- **What Works:** Authentication (JWT, role-based), full CRUD for Super Admin (schools, grades, scenarios, scenario builders, publish content, school admins), School Admin CRUD for teachers/classes/students scoped to their own school, Teacher read-only access scoped to their own school, profile updates + password change, School Admin and Teacher dashboards backed by real scoped DB queries (teacher/student/class counts, assigned classes). Cross-school data isolation verified end-to-end (School Admin/Teacher cannot list, fetch-by-id, or write another school's records).
+- **What Works:** Authentication (JWT, role-based), full CRUD for Super Admin (schools, grades, school admins), School Admin CRUD for teachers/classes/students scoped to their own school, Teacher read-only access scoped to their own school, profile updates + password change, School Admin and Teacher dashboards backed by real scoped DB queries (teacher/student/class counts, assigned classes). Cross-school data isolation verified end-to-end (School Admin/Teacher cannot list, fetch-by-id, or write another school's records). Content Studio is namespaced with read-only GET APIs under `/api/v1/`.
 - **Not Built (Leave clean empty states, DO NOT fake with mock data):**
   - Reports
   - Media upload
-  - Real Publish pipeline (PublishContent is metadata-only — no actual export/file generation)
+  - Real Publish pipeline (Publish pipeline is metadata-only — no actual export/file generation)
   - Grading/submissions (no Submission or Score model exists yet — Teacher dashboard's `grading_queue_count`/`student_rankings` are honest empty/zero placeholders, not fake data)
   - Dashboard analytics without a backing model yet (engagement rate, activity feed, announcements, upcoming lessons, teacher's active-scenario count) — also honest empty/zero placeholders
 

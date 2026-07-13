@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from .models import Grade, PublishContent, School, SchoolAdminProfile
+from .models import Grade, School, SchoolAdminProfile
 
 User = get_user_model()
 
@@ -22,49 +22,6 @@ class SchoolSerializer(serializers.ModelSerializer):
     class Meta:
         model = School
         fields = '__all__'
-
-
-class PublishContentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PublishContent
-        fields = [
-            "publish_id",
-            "release_name",
-            "grade",
-            "total_scenarios",
-            "published_by",
-            "published_at",
-            "status",
-            "export_file",
-            "checksum",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["publish_id", "published_by", "created_at", "updated_at"]
-
-
-class PublishContentDetailSerializer(serializers.ModelSerializer):
-    grade_name = serializers.CharField(source="grade.grade_name", read_only=True)
-    published_by_username = serializers.CharField(source="published_by.username", read_only=True)
-
-    class Meta:
-        model = PublishContent
-        fields = [
-            "publish_id",
-            "release_name",
-            "grade",
-            "grade_name",
-            "total_scenarios",
-            "published_by",
-            "published_by_username",
-            "published_at",
-            "status",
-            "export_file",
-            "checksum",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["publish_id", "created_at", "updated_at"]
 
 
 class SchoolAdminSerializer(serializers.ModelSerializer):

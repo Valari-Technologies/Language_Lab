@@ -7,14 +7,11 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.views import APIView
 
 from accounts.permissions import IsSuperAdmin, IsSuperAdminOrReadOnlyStaff
-from content.models import Scenario
 from accounts.scoping import filter_queryset_by_school
-from .models import Grade, PublishContent, School, SchoolAdminProfile
+from .models import Grade, School, SchoolAdminProfile
 from .serializers import (
     GradeDetailSerializer,
     GradeSerializer,
-    PublishContentDetailSerializer,
-    PublishContentSerializer,
     SchoolAdminSerializer,
     SchoolSerializer,
 )
@@ -104,22 +101,6 @@ class SchoolViewSet(CMSBaseViewSet):
         return filter_queryset_by_school(School.objects.all(), self.request.user, school_field="school_id")
 
 
-class PublishContentViewSet(CMSBaseViewSet):
-    permission_classes = [IsAuthenticated, IsSuperAdmin]
-    queryset = PublishContent.objects.all()
-    search_fields = ["release_name", "checksum", "export_file"]
-    ordering_fields = ["created_at", "release_name", "published_at"]
-    ordering = ["-created_at"]
-
-    def get_serializer_class(self):
-        if self.action in ["list", "retrieve"]:
-            return PublishContentDetailSerializer
-        return PublishContentSerializer
-
-    def perform_create(self, serializer):
-        serializer.save(published_by=self.request.user, published_at=timezone.now())
-
-
 class DashboardStatsAPIView(APIView):
     permission_classes = [IsAuthenticated, IsSuperAdmin]
 
@@ -127,20 +108,12 @@ class DashboardStatsAPIView(APIView):
         return Response({
             "total_schools": School.objects.count(),
             "total_school_admins": User.objects.filter(role="SCHOOL_ADMIN").count(),
-            "total_publish_contents": PublishContent.objects.count(),
+            "total_publish_contents": 0,
             "total_grades": Grade.objects.count(),
-            "total_scenarios": Scenario.objects.count(),
-            "draft_scenarios": Scenario.objects.filter(status=Scenario.Status.DRAFT).count(),
-            "published_scenarios": Scenario.objects.filter(status=Scenario.Status.PUBLISHED).count(),
-            "recent_scenarios": [
-                {
-                    "id": s.id,
-                    "title": s.title,
-                    "grade": s.grade.grade_name if s.grade else "N/A",
-                    "status": s.status,
-                    "updated_at": s.updated_at.strftime("%b %d, %Y")
-                } for s in Scenario.objects.order_by("-updated_at")[:3]
-            ]
+            "total_scenarios": 0,
+            "draft_scenarios": 0,
+            "published_scenarios": 0,
+            "recent_scenarios": []
         }, status=status.HTTP_200_OK)
 
 

@@ -47,7 +47,6 @@ INSTALLED_APPS = [
     'super_admin',
     'school_admin',
     'teacher',
-    'content',
     'content_studio',
 ]
 

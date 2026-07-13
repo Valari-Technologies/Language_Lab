@@ -23,6 +23,5 @@ urlpatterns = [
     path("api/cms/", include("super_admin.urls")),
     path("api/cms/", include("school_admin.urls")),
     path("api/cms/", include("teacher.urls")),
-    path("api/cms/", include("content.urls")),
     path("api/v1/", include("content_studio.urls")),
 ]
