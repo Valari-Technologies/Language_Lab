@@ -8,6 +8,7 @@ class User(AbstractUser):
         SCHOOL_ADMIN = "SCHOOL_ADMIN", "School Admin"
         TEACHER = "TEACHER", "Teacher"
         STUDENT = "STUDENT", "Student"
+        CONTENT_CREATOR = "CONTENT_CREATOR", "Content Creator"
 
     role = models.CharField(
         max_length=20,

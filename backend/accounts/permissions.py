@@ -104,3 +104,29 @@ class IsSuperAdminOrSchoolAdminWrite(BasePermission):
         if request.method in SAFE_METHODS and user.role == "TEACHER":
             return True
         return False
+
+
+class IsContentCreator(BasePermission):
+    """
+    Permission class that grants access only to users with role 'CONTENT_CREATOR'.
+    """
+    def has_permission(self, request, view):
+        return bool(
+            request.user and
+            request.user.is_authenticated and
+            getattr(request.user, "role", None) == "CONTENT_CREATOR"
+        )
+
+
+class IsContentCreatorOrSuperAdmin(BasePermission):
+    """
+    Permission class that grants access to 'CONTENT_CREATOR' or 'SUPER_ADMIN' users,
+    or django superusers.
+    """
+    def has_permission(self, request, view):
+        return bool(
+            request.user and
+            request.user.is_authenticated and
+            (getattr(request.user, "role", None) in ["CONTENT_CREATOR", "SUPER_ADMIN"] or request.user.is_superuser)
+        )
+

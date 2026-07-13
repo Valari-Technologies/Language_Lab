@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'school_admin',
     'teacher',
     'content',
+    'content_studio',
 ]
 
 MIDDLEWARE = [

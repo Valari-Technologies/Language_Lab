@@ -9,6 +9,8 @@ __pycache__/
 
 # Django
 db.sqlite3
+temp_db.sqlite3
+temp_sqlite_settings.py
 media/
 
 # Node.js / Next.js

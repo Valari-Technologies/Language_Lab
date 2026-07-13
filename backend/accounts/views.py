@@ -18,7 +18,7 @@ from .serializers import (
 )
 from .permissions import IsSuperAdmin, IsInstituteAdmin, IsTeacher
 
-CMS_LOGIN_ROLES = {"SUPER_ADMIN", "SCHOOL_ADMIN", "TEACHER"}
+CMS_LOGIN_ROLES = {"SUPER_ADMIN", "SCHOOL_ADMIN", "TEACHER", "CONTENT_CREATOR"}
 
 
 class LoginAPIView(APIView):
