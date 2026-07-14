@@ -69,6 +69,12 @@ class Scenario(models.Model):
         blank=True,
         verbose_name=_("Tags")
     )
+    is_deleted = models.BooleanField(
+        default=False,
+        null=True,
+        blank=True,
+        verbose_name=_("Is Deleted")
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -321,6 +327,18 @@ class Media(models.Model):
         blank=True,
         verbose_name=_("Tags")
     )
+    original_filename = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name=_("Original Filename")
+    )
+    stored_filename = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name=_("Stored Filename")
+    )
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -331,6 +349,11 @@ class Media(models.Model):
     upload_date = models.DateTimeField(
         auto_now_add=True,
         verbose_name=_("Upload Date")
+    )
+    uploaded_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=_("Uploaded At")
     )
 
     class Meta:
@@ -369,6 +392,20 @@ class ValidationReport(models.Model):
     errors = models.IntegerField(
         default=0,
         verbose_name=_("Errors Count")
+    )
+    status = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name=_("Status")
+    )
+    validated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="validation_reports",
+        verbose_name=_("Validated By")
     )
     validated_at = models.DateTimeField(
         auto_now=True,
@@ -463,6 +500,21 @@ class PublishVersion(models.Model):
     published_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=_("Published At")
+    )
+    # Phase 7: added for real packaging
+    file_path = models.CharField(
+        max_length=512,
+        blank=True,
+        null=True,
+        verbose_name=_("Package File Path"),
+        help_text=_("Absolute path to the .elab file on disk.")
+    )
+    checksum = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        verbose_name=_("SHA-256 Checksum"),
+        help_text=_("SHA-256 hash of the .elab file.")
     )
 
     class Meta:

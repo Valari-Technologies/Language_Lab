@@ -50,6 +50,20 @@ class ScreenSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+        read_only_fields = ["display_order"]
+
+    def validate_activity(self, value):
+        if value.scenario.is_deleted:
+            raise serializers.ValidationError("Cannot create or update a screen for a soft-deleted scenario.")
+        return value
+
+    def validate_content(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Content must be a valid JSON object/dictionary.")
+        return value
+
+    def validate(self, attrs):
+        return validate_strict_fields(self, attrs)
 
 
 class ActivitySerializer(serializers.ModelSerializer):
@@ -72,6 +86,15 @@ class ActivitySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+        read_only_fields = ["display_order"]
+
+    def validate_scenario(self, value):
+        if value.is_deleted:
+            raise serializers.ValidationError("Cannot create or update an activity for a soft-deleted scenario.")
+        return value
+
+    def validate(self, attrs):
+        return validate_strict_fields(self, attrs)
 
 
 class ActivityDetailSerializer(serializers.ModelSerializer):
@@ -96,6 +119,41 @@ class ActivityDetailSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+        read_only_fields = ["display_order"]
+
+    def validate_scenario(self, value):
+        if value.is_deleted:
+            raise serializers.ValidationError("Cannot create or update an activity for a soft-deleted scenario.")
+        return value
+
+    def validate(self, attrs):
+        return validate_strict_fields(self, attrs)
+
+
+def validate_strict_fields(serializer, attrs):
+    # Writable fields are fields on the serializer that are NOT read_only
+    writable_fields = {
+        field_name for field_name, field_obj in serializer.fields.items()
+        if not field_obj.read_only
+    }
+    
+    initial_keys = set(serializer.initial_data.keys())
+    
+    errors = {}
+    if "created_by" in initial_keys:
+        errors["created_by"] = "Setting created_by is not allowed."
+        
+    extra_keys = initial_keys - writable_fields
+    if "created_by" in extra_keys:
+        extra_keys.remove("created_by")
+        
+    for key in extra_keys:
+        errors[key] = "This field is not allowed or is read-only."
+        
+    if errors:
+        raise serializers.ValidationError(errors)
+        
+    return attrs
 
 
 class ScenarioSerializer(serializers.ModelSerializer):
@@ -121,11 +179,16 @@ class ScenarioSerializer(serializers.ModelSerializer):
             "status",
             "status_display",
             "tags",
+            "is_deleted",
             "created_by",
             "created_by_name",
             "created_at",
             "updated_at",
         ]
+        read_only_fields = ["created_by", "is_deleted"]
+
+    def validate(self, attrs):
+        return validate_strict_fields(self, attrs)
 
 
 class ScenarioDetailSerializer(serializers.ModelSerializer):
@@ -153,6 +216,7 @@ class ScenarioDetailSerializer(serializers.ModelSerializer):
             "status",
             "status_display",
             "tags",
+            "is_deleted",
             "learning_outcomes",
             "activities",
             "created_by",
@@ -160,6 +224,10 @@ class ScenarioDetailSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+        read_only_fields = ["created_by", "is_deleted"]
+
+    def validate(self, attrs):
+        return validate_strict_fields(self, attrs)
 
 
 class MediaSerializer(serializers.ModelSerializer):
@@ -178,10 +246,41 @@ class MediaSerializer(serializers.ModelSerializer):
             "file_size",
             "folder",
             "tags",
+            "original_filename",
+            "stored_filename",
             "uploaded_by",
             "uploaded_by_name",
             "upload_date",
+            "uploaded_at",
         ]
+        read_only_fields = [
+            "file",
+            "url",
+            "media_type",
+            "file_size",
+            "original_filename",
+            "stored_filename",
+            "uploaded_by",
+            "uploaded_at",
+        ]
+
+    def validate(self, attrs):
+        return validate_strict_fields(self, attrs)
+
+
+class MediaUploadSerializer(serializers.Serializer):
+    file = serializers.FileField(write_only=True, required=True)
+    name = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    folder = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+    tags = serializers.JSONField(required=False, default=list)
+
+    def validate_tags(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Tags must be a JSON array (list).")
+        return value
+
+    def validate(self, attrs):
+        return validate_strict_fields(self, attrs)
 
 
 class MediaUsageSerializer(serializers.Serializer):
@@ -195,6 +294,7 @@ class MediaUsageSerializer(serializers.Serializer):
 
 class ValidationReportSerializer(serializers.ModelSerializer):
     scenario_title = serializers.CharField(source="scenario.title", read_only=True)
+    validated_by_name = serializers.CharField(source="validated_by.full_name", default="", read_only=True)
 
     class Meta:
         model = ValidationReport
@@ -214,10 +314,25 @@ class PublishVersionSerializer(serializers.ModelSerializer):
             "release_notes",
             "package_size",
             "download_url",
+            "file_path",
+            "checksum",
             "published_by",
             "published_by_name",
             "published_at",
         ]
+
+
+class PublishResponseSerializer(serializers.Serializer):
+    """Shape returned on a successful POST /publish/{scenarioId}/."""
+    package_id = serializers.IntegerField()
+    version_id = serializers.IntegerField()
+    version = serializers.CharField()
+    build_number = serializers.IntegerField()
+    size = serializers.IntegerField()
+    checksum = serializers.CharField()
+    elab_filename = serializers.CharField()
+    download_url = serializers.CharField()
+    published_at = serializers.DateTimeField()
 
 
 class PublishedPackageSerializer(serializers.ModelSerializer):

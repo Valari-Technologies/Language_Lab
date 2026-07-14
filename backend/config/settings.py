@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'school_admin',
     'teacher',
     'content_studio',
+    'drf_spectacular',
 ]
 
 MIDDLEWARE = [
@@ -140,6 +141,14 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Language Lab CMS API",
+    "DESCRIPTION": "API documentation for the Content Studio and Admin dashboards",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
 }
 
 SIMPLE_JWT = {
@@ -154,3 +163,12 @@ CORS_ALLOWED_ORIGINS = config(
     "CORS_ALLOWED_ORIGINS",
     default="http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174",
 ).split(",")
+
+
+# Media files (Uploaded files)
+MEDIA_URL = config("MEDIA_URL", default="/media/")
+MEDIA_ROOT = config("MEDIA_ROOT", default=str(BASE_DIR / "media"))
+
+# Published .elab packages (Phase 7)
+# Override via PACKAGES_ROOT env var to point at an external volume in production.
+PACKAGES_ROOT = config("PACKAGES_ROOT", default=str(BASE_DIR / "media" / "packages"))
