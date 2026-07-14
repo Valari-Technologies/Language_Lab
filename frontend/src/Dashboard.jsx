@@ -554,6 +554,13 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
             <span>Profile Settings</span>
           </button>
 
+          <button 
+            className="nav-link"
+            onClick={() => { window.location.pathname = '/content-studio'; }}
+          >
+            <FiBookOpen className="nav-icon" />
+            <span>Content Studio</span>
+          </button>
         </nav>
 
         {/* User Card */}

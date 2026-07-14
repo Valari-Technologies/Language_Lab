@@ -4,6 +4,7 @@ import Login from './Login.jsx'
 import Dashboard from './Dashboard.jsx'
 import SchoolDashboard from './SchoolDashboard.jsx'
 import TeacherDashboard from './TeacherDashboard.jsx'
+import ContentStudio from './ContentStudio.jsx'
 import { logoutSession } from './api'
 
 export const App = () => {
@@ -21,9 +22,14 @@ export const App = () => {
       // Role-based route correction
       const path = window.location.pathname;
       if (parsedUser.role === 'SUPER_ADMIN') {
-        if (!path.startsWith('/dashboard')) {
+        if (!path.startsWith('/dashboard') && !path.startsWith('/content-studio')) {
           window.history.replaceState({}, '', '/dashboard/grades');
           setCurrentPath('/dashboard/grades');
+        }
+      } else if (parsedUser.role === 'CONTENT_CREATOR') {
+        if (!path.startsWith('/content-studio')) {
+          window.history.replaceState({}, '', '/content-studio');
+          setCurrentPath('/content-studio');
         }
       } else if (parsedUser.role === 'SCHOOL_ADMIN') {
         if (!path.startsWith('/school-dashboard')) {
@@ -78,6 +84,8 @@ export const App = () => {
     let dest = '/login';
     if (loggedInUser.role === 'SUPER_ADMIN') {
       dest = '/dashboard/grades';
+    } else if (loggedInUser.role === 'CONTENT_CREATOR') {
+      dest = '/content-studio';
     } else if (loggedInUser.role === 'SCHOOL_ADMIN') {
       dest = '/school-dashboard';
     } else if (loggedInUser.role === 'TEACHER') {
@@ -107,12 +115,18 @@ export const App = () => {
     }
 
     if (user) {
-      const allowedPrefix = 
-        user.role === 'SUPER_ADMIN' ? '/dashboard' : 
-        user.role === 'SCHOOL_ADMIN' ? '/school-dashboard' : 
-        user.role === 'TEACHER' ? '/teacher-dashboard' : '/not-found';
-      
-      if (!currentPath.startsWith(allowedPrefix)) {
+      let isAllowed = false;
+      if (user.role === 'SUPER_ADMIN') {
+        isAllowed = currentPath.startsWith('/dashboard') || currentPath.startsWith('/content-studio');
+      } else if (user.role === 'CONTENT_CREATOR') {
+        isAllowed = currentPath.startsWith('/content-studio');
+      } else if (user.role === 'SCHOOL_ADMIN') {
+        isAllowed = currentPath.startsWith('/school-dashboard');
+      } else if (user.role === 'TEACHER') {
+        isAllowed = currentPath.startsWith('/teacher-dashboard');
+      }
+
+      if (!isAllowed) {
         handleLogout();
       }
     } else {
@@ -144,6 +158,14 @@ export const App = () => {
               onLogout={handleLogout}
               activeTab={activeTab}
               onTabChange={handleTabChange}
+            />
+          )}
+          {(user.role === 'CONTENT_CREATOR' || user.role === 'SUPER_ADMIN') && currentPath.startsWith('/content-studio') && (
+            <ContentStudio
+              user={user}
+              onLogout={handleLogout}
+              currentPath={currentPath}
+              setCurrentPath={setCurrentPath}
             />
           )}
           {user.role === 'SCHOOL_ADMIN' && currentPath.startsWith('/school-dashboard') && (
