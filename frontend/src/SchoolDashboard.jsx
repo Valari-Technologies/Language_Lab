@@ -49,6 +49,21 @@ const SchoolDashboard = ({ user, onLogout }) => {
   const [schools, setSchools] = useState([]);
   const [grades, setGrades] = useState([]);
 
+  // Reports state
+  const [overviewReport, setOverviewReport] = useState(null);
+  const [scenariosReport, setScenariosReport] = useState([]);
+  const [classesReport, setClassesReport] = useState([]);
+  const [studentsReport, setStudentsReport] = useState([]);
+
+  // Detail modal states
+  const [selectedScenarioDetail, setSelectedScenarioDetail] = useState(null);
+  const [selectedClassDetail, setSelectedClassDetail] = useState(null);
+  const [selectedStudentDetail, setSelectedStudentDetail] = useState(null);
+
+  const [showScenarioDetailModal, setShowScenarioDetailModal] = useState(false);
+  const [showClassDetailModal, setShowClassDetailModal] = useState(false);
+  const [showStudentDetailModal, setShowStudentDetailModal] = useState(false);
+
   // Form states
   const [teacherForm, setTeacherForm] = useState({
     username: '', password: '', email: '', full_name: '', is_active: true, school: '', qualification: '', experience_years: 0
@@ -136,6 +151,80 @@ const SchoolDashboard = ({ user, onLogout }) => {
     }
   };
 
+  const loadReportsData = async () => {
+    try {
+      const [overRes, scenRes, classRes, studRes] = await Promise.all([
+        apiFetch('/api/v1/reports/overview/'),
+        apiFetch('/api/v1/reports/scenarios/'),
+        apiFetch('/api/v1/reports/classes/'),
+        apiFetch('/api/v1/reports/students/')
+      ]);
+      if (overRes.ok) setOverviewReport(await overRes.json());
+      if (scenRes.ok) setScenariosReport(await scenRes.json());
+      if (classRes.ok) setClassesReport(await classRes.json());
+      if (studRes.ok) setStudentsReport(await studRes.json());
+    } catch (e) {
+      console.error('Failed to load reports data', e);
+    }
+  };
+
+  const handleFetchScenarioDetail = async (scenario_ref) => {
+    try {
+      const res = await apiFetch(`/api/v1/reports/scenarios/${scenario_ref}/`);
+      if (res.ok) {
+        setSelectedScenarioDetail(await res.json());
+        setShowScenarioDetailModal(true);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleFetchClassDetail = async (class_id) => {
+    try {
+      const res = await apiFetch(`/api/v1/reports/classes/${class_id}/`);
+      if (res.ok) {
+        setSelectedClassDetail(await res.json());
+        setShowClassDetailModal(true);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleFetchStudentDetail = async (student_id) => {
+    try {
+      const res = await apiFetch(`/api/v1/reports/students/${student_id}/`);
+      if (res.ok) {
+        setSelectedStudentDetail(await res.json());
+        setShowStudentDetailModal(true);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleExportCSV = async (type) => {
+    try {
+      const res = await apiFetch(`/api/v1/reports/export/?type=${type}`);
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `report_${type}_export.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } else {
+        alert('Failed to export CSV.');
+      }
+    } catch (e) {
+      console.error('Error exporting CSV', e);
+    }
+  };
+
   const loadAllData = async () => {
     setLoading(true);
     setErrorMsg('');
@@ -146,7 +235,8 @@ const SchoolDashboard = ({ user, onLogout }) => {
         loadGrades(),
         loadTeachers(),
         loadStudents(),
-        loadClasses()
+        loadClasses(),
+        loadReportsData()
       ]);
     } catch (e) {
       setErrorMsg('Error loading dashboard data.');
@@ -860,146 +950,188 @@ const SchoolDashboard = ({ user, onLogout }) => {
         {/* Tab Content: Reports Dashboard */}
         {activeSubTab === 'reports' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            {/* Row 1: Metrics Overview */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
-              <div style={{ backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ padding: '1rem', backgroundColor: '#e0f2fe', color: '#0284c7', borderRadius: '12px' }}>
-                  <FiAward style={{ fontSize: '1.5rem' }} />
-                </div>
-                <div>
-                  <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Average Assessment Score</span>
-                  <h3 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0f172a', marginTop: '0.25rem' }}>84.8%</h3>
-                </div>
+            {(!overviewReport || overviewReport.total_attempts === 0) ? (
+              <div style={{ textAlign: 'center', padding: '4rem 2rem', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <FiFileText style={{ fontSize: '3.5rem', color: '#cbd5e1', marginBottom: '1.25rem' }} />
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>No assessment data synced yet</h3>
+                <p style={{ color: '#64748b', marginTop: '0.5rem', fontSize: '0.875rem' }}>Data will appear here once the Electron LMS runs its monthly sync sequence.</p>
               </div>
-
-              <div style={{ backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ padding: '1rem', backgroundColor: '#dcfce7', color: '#16a34a', borderRadius: '12px' }}>
-                  <FiTrendingUp style={{ fontSize: '1.5rem' }} />
-                </div>
-                <div>
-                  <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Student Passing Rate</span>
-                  <h3 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0f172a', marginTop: '0.25rem' }}>92.5%</h3>
-                </div>
-              </div>
-
-              <div style={{ backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ padding: '1rem', backgroundColor: '#f3e8ff', color: '#7c3aed', borderRadius: '12px' }}>
-                  <FiFileText style={{ fontSize: '1.5rem' }} />
-                </div>
-                <div>
-                  <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Scenarios Completed</span>
-                  <h3 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0f172a', marginTop: '0.25rem' }}>148</h3>
-                </div>
-              </div>
-            </div>
-
-            {/* Row 2: Performance breakdown & Class progress */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem' }}>
-              {/* Overall Student Assessment Scores */}
-              <div style={{ backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.5rem' }}>Overall Student Assessment Marks</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                      <span style={{ fontWeight: 600 }}>Speaking & Pronunciation</span>
-                      <span style={{ color: '#10b981', fontWeight: 700 }}>88%</span>
+            ) : (
+              <>
+                {/* Row 1: Metrics Overview Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
+                  <div style={{ backgroundColor: '#ffffff', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ padding: '0.75rem', backgroundColor: '#e0f2fe', color: '#0284c7', borderRadius: '10px' }}>
+                      <FiUsers style={{ fontSize: '1.25rem' }} />
                     </div>
-                    <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '99px', overflow: 'hidden' }}>
-                      <div style={{ width: '88%', height: '100%', backgroundColor: '#10b981' }} />
+                    <div>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Students Attempted</span>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginTop: '0.15rem' }}>{overviewReport.total_students}</h3>
                     </div>
                   </div>
 
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                      <span style={{ fontWeight: 600 }}>Vocabulary & Expressions</span>
-                      <span style={{ color: '#3b82f6', fontWeight: 700 }}>82%</span>
+                  <div style={{ backgroundColor: '#ffffff', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ padding: '0.75rem', backgroundColor: '#fef3c7', color: '#d97706', borderRadius: '10px' }}>
+                      <FiActivity style={{ fontSize: '1.25rem' }} />
                     </div>
-                    <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '99px', overflow: 'hidden' }}>
-                      <div style={{ width: '82%', height: '100%', backgroundColor: '#3b82f6' }} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                      <span style={{ fontWeight: 600 }}>Reading & Comprehension</span>
-                      <span style={{ color: '#8b5cf6', fontWeight: 700 }}>91%</span>
-                    </div>
-                    <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '99px', overflow: 'hidden' }}>
-                      <div style={{ width: '91%', height: '100%', backgroundColor: '#8b5cf6' }} />
+                    <div>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Total Attempts</span>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginTop: '0.15rem' }}>{overviewReport.total_attempts}</h3>
                     </div>
                   </div>
 
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                      <span style={{ fontWeight: 600 }}>Writing & Grammar</span>
-                      <span style={{ color: '#f59e0b', fontWeight: 700 }}>78%</span>
+                  <div style={{ backgroundColor: '#ffffff', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ padding: '0.75rem', backgroundColor: '#dcfce7', color: '#16a34a', borderRadius: '10px' }}>
+                      <FiCheckCircle style={{ fontSize: '1.25rem' }} />
                     </div>
-                    <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '99px', overflow: 'hidden' }}>
-                      <div style={{ width: '78%', height: '100%', backgroundColor: '#f59e0b' }} />
+                    <div>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Completed (Rate)</span>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginTop: '0.15rem' }}>
+                        {overviewReport.total_completed} <span style={{ fontSize: '0.85rem', fontWeight: 500, color: '#16a34a' }}>({overviewReport.completion_rate}%)</span>
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div style={{ backgroundColor: '#ffffff', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ padding: '0.75rem', backgroundColor: '#f3e8ff', color: '#7c3aed', borderRadius: '10px' }}>
+                      <FiAward style={{ fontSize: '1.25rem' }} />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Average Score</span>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginTop: '0.15rem' }}>{overviewReport.average_score}%</h3>
+                    </div>
+                  </div>
+
+                  <div style={{ backgroundColor: '#ffffff', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ padding: '0.75rem', backgroundColor: '#e0f2fe', color: '#0284c7', borderRadius: '10px' }}>
+                      <FiTrendingUp style={{ fontSize: '1.25rem' }} />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>{'Pass Rate (>=60%)'}</span>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginTop: '0.15rem' }}>{overviewReport.pass_rate}%</h3>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Class Performance evaluations */}
-              <div style={{ backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '1rem' }}>Top Students (Evaluations)</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>Sarah Connor</span>
-                    <span style={{ color: '#10b981', fontWeight: 700, fontSize: '0.875rem' }}>98% (A+)</span>
+                {/* Section 1: Scenarios Report Table */}
+                <div style={{ backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>Scenario Performance Analysis</h3>
+                    <button onClick={() => handleExportCSV('scenarios')} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', backgroundColor: '#e2e8f0', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#334155' }}>
+                      Export CSV
+                    </button>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>John Smith</span>
-                    <span style={{ color: '#10b981', fontWeight: 700, fontSize: '0.875rem' }}>95% (A)</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>Emma Stone</span>
-                    <span style={{ color: '#10b981', fontWeight: 700, fontSize: '0.875rem' }}>92% (A)</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>James Watson</span>
-                    <span style={{ color: '#3b82f6', fontWeight: 700, fontSize: '0.875rem' }}>89% (B+)</span>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b' }}>
+                          <th style={{ padding: '0.75rem 1rem' }}>Scenario Title</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Scenario ID (Ref)</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Total Attempts</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Completed</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Avg Score</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Pass Rate</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Highest / Lowest</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Avg Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {scenariosReport.map((s, idx) => (
+                          <tr key={idx} onClick={() => handleFetchScenarioDetail(s.scenario_ref)} style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }} className="hover-row">
+                            <td style={{ padding: '1rem', fontWeight: 600, color: '#1e293b' }}>{s.scenario_title}</td>
+                            <td style={{ padding: '1rem', color: '#64748b' }}>{s.scenario_ref}</td>
+                            <td style={{ padding: '1rem' }}>{s.total_attempts}</td>
+                            <td style={{ padding: '1rem' }}>{s.completed}</td>
+                            <td style={{ padding: '1rem', fontWeight: 700, color: '#7c3aed' }}>{s.average_score}%</td>
+                            <td style={{ padding: '1rem' }}>{s.pass_rate}%</td>
+                            <td style={{ padding: '1rem' }}>{s.highest_score}% / {s.lowest_score}%</td>
+                            <td style={{ padding: '1rem' }}>{Math.round(s.average_time_seconds / 60)}m {s.average_time_seconds % 60}s</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Row 3: Teacher Activity Report */}
-            <div style={{ backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.25rem' }}>Faculty Activity & Workload Metrics</h3>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b' }}>
-                      <th style={{ padding: '0.75rem 1rem' }}>Teacher Name</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Experience</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Qualification</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Assigned Status</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Activity Level</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {teachers.map((t, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '1rem', fontWeight: 600 }}>{t.full_name || t.username}</td>
-                        <td style={{ padding: '1rem' }}>{t.experience_years} years</td>
-                        <td style={{ padding: '1rem' }}>{t.qualification || 'N/A'}</td>
-                        <td style={{ padding: '1rem' }}>{t.is_active ? 'Active Instructor' : 'On Leave'}</td>
-                        <td style={{ padding: '1rem' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{ width: '80px', height: '6px', backgroundColor: '#e2e8f0', borderRadius: '99px', overflow: 'hidden' }}>
-                              <div style={{ width: `${Math.min(100, (t.experience_years || 2) * 15)}%`, height: '100%', backgroundColor: '#8b5cf6' }} />
-                            </div>
-                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{Math.min(100, (t.experience_years || 2) * 15)}%</span>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                {/* Section 2: Classes Performance Table */}
+                <div style={{ backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>Class Performance Analysis</h3>
+                    <button onClick={() => handleExportCSV('classes')} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', backgroundColor: '#e2e8f0', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#334155' }}>
+                      Export CSV
+                    </button>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b' }}>
+                          <th style={{ padding: '0.75rem 1rem' }}>Class Name</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Students Attempted</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Completed Attempts</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Average Score</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Pass Rate</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Top Student</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Weakest Student</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {classesReport.map((c, idx) => (
+                          <tr key={idx} onClick={() => handleFetchClassDetail(c.class_id)} style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }} className="hover-row">
+                            <td style={{ padding: '1rem', fontWeight: 600, color: '#1e293b' }}>{c.class_name}</td>
+                            <td style={{ padding: '1rem' }}>{c.total_students}</td>
+                            <td style={{ padding: '1rem' }}>{c.completed}</td>
+                            <td style={{ padding: '1rem', fontWeight: 700, color: '#10b981' }}>{c.average_score}%</td>
+                            <td style={{ padding: '1rem' }}>{c.pass_rate}%</td>
+                            <td style={{ padding: '1rem', color: '#047857', fontWeight: 600 }}>{c.top_student}</td>
+                            <td style={{ padding: '1rem', color: '#b91c1c' }}>{c.weakest_student}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Section 3: Students Performance Table */}
+                <div style={{ backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>Student Performance Analysis</h3>
+                    <button onClick={() => handleExportCSV('students')} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', backgroundColor: '#e2e8f0', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#334155' }}>
+                      Export CSV
+                    </button>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b' }}>
+                          <th style={{ padding: '0.75rem 1rem' }}>Student Name</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Class</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Total Attempts</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Completed</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Average Score</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Best Scenario</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Worst Scenario</th>
+                          <th style={{ padding: '0.75rem 1rem' }}>Last Attempt Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {studentsReport.map((st, idx) => (
+                          <tr key={idx} onClick={() => handleFetchStudentDetail(st.student_id)} style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }} className="hover-row">
+                            <td style={{ padding: '1rem', fontWeight: 600, color: '#1e293b' }}>{st.student_name}</td>
+                            <td style={{ padding: '1rem' }}>{st.class_name}</td>
+                            <td style={{ padding: '1rem' }}>{st.total_attempts}</td>
+                            <td style={{ padding: '1rem' }}>{st.completed}</td>
+                            <td style={{ padding: '1rem', fontWeight: 700, color: '#3b82f6' }}>{st.average_score}%</td>
+                            <td style={{ padding: '1rem', color: '#047857' }}>{st.best_scenario}</td>
+                            <td style={{ padding: '1rem', color: '#b91c1c' }}>{st.worst_scenario}</td>
+                            <td style={{ padding: '1rem' }}>{st.last_attempt_date ? new Date(st.last_attempt_date).toLocaleDateString() : 'N/A'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -1329,6 +1461,162 @@ const SchoolDashboard = ({ user, onLogout }) => {
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Scenario Detail Modal */}
+      {showScenarioDetailModal && selectedScenarioDetail && (
+        <div className="modal-backdrop" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', zIndex: 1000, padding: '1rem' }}>
+          <div className="modal-container" style={{ backgroundColor: '#ffffff', borderRadius: '12px', padding: '2rem', width: '100%', maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                Scenario Detail: {selectedScenarioDetail.scenario_title}
+              </h3>
+              <button onClick={() => setShowScenarioDetailModal(false)} style={{ border: 'none', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1.25rem', color: '#64748b' }}>
+                <FiX />
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', fontSize: '0.85rem' }}>
+              <div><strong>Attempts:</strong> {selectedScenarioDetail.total_attempts}</div>
+              <div><strong>Completed:</strong> {selectedScenarioDetail.completed}</div>
+              <div><strong>Avg Score:</strong> {selectedScenarioDetail.average_score}%</div>
+              <div><strong>Pass Rate:</strong> {selectedScenarioDetail.pass_rate}%</div>
+              <div><strong>High/Low:</strong> {selectedScenarioDetail.highest_score}% / {selectedScenarioDetail.lowest_score}%</div>
+            </div>
+            <h4 style={{ marginBottom: '0.75rem', fontWeight: 700, fontSize: '0.9rem' }}>Attempts History</h4>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b' }}>
+                    <th style={{ padding: '0.5rem' }}>Student</th>
+                    <th style={{ padding: '0.5rem' }}>Class</th>
+                    <th style={{ padding: '0.5rem' }}>Percentage</th>
+                    <th style={{ padding: '0.5rem' }}>Status</th>
+                    <th style={{ padding: '0.5rem' }}>Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedScenarioDetail.attempts.map((att, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '0.5rem', fontWeight: 600 }}>{att.student_name}</td>
+                      <td style={{ padding: '0.5rem' }}>{att.class_name}</td>
+                      <td style={{ padding: '0.5rem', fontWeight: 700 }}>{att.percentage !== null ? att.percentage + '%' : 'N/A'}</td>
+                      <td style={{ padding: '0.5rem' }}>{att.status}</td>
+                      <td style={{ padding: '0.5rem' }}>{att.time_spent_seconds ? Math.round(att.time_spent_seconds / 60) + 'm' : 'N/A'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+              <button onClick={() => setShowScenarioDetailModal(false)} style={{ padding: '0.625rem 1.25rem', border: '1px solid #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', cursor: 'pointer', fontWeight: 600 }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Class Detail Modal */}
+      {showClassDetailModal && selectedClassDetail && (
+        <div className="modal-backdrop" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', zIndex: 1000, padding: '1rem' }}>
+          <div className="modal-container" style={{ backgroundColor: '#ffffff', borderRadius: '12px', padding: '2rem', width: '100%', maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                Class Detail: {selectedClassDetail.class_name}
+              </h3>
+              <button onClick={() => setShowClassDetailModal(false)} style={{ border: 'none', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1.25rem', color: '#64748b' }}>
+                <FiX />
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', fontSize: '0.85rem' }}>
+              <div><strong>Students:</strong> {selectedClassDetail.total_students}</div>
+              <div><strong>Completed:</strong> {selectedClassDetail.completed}</div>
+              <div><strong>Avg Score:</strong> {selectedClassDetail.average_score}%</div>
+              <div><strong>Pass Rate:</strong> {selectedClassDetail.pass_rate}%</div>
+            </div>
+            <h4 style={{ marginBottom: '0.75rem', fontWeight: 700, fontSize: '0.9rem' }}>Students Performance</h4>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b' }}>
+                    <th style={{ padding: '0.5rem' }}>Student</th>
+                    <th style={{ padding: '0.5rem' }}>Total Attempts</th>
+                    <th style={{ padding: '0.5rem' }}>Completed</th>
+                    <th style={{ padding: '0.5rem' }}>Avg Score</th>
+                    <th style={{ padding: '0.5rem' }}>Last Attempt Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedClassDetail.students.map((st, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '0.5rem', fontWeight: 600 }}>{st.student_name}</td>
+                      <td style={{ padding: '0.5rem' }}>{st.total_attempts}</td>
+                      <td style={{ padding: '0.5rem' }}>{st.completed}</td>
+                      <td style={{ padding: '0.5rem', fontWeight: 700, color: '#10b981' }}>{st.average_score}%</td>
+                      <td style={{ padding: '0.5rem' }}>{st.last_attempt_date ? new Date(st.last_attempt_date).toLocaleDateString() : 'N/A'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+              <button onClick={() => setShowClassDetailModal(false)} style={{ padding: '0.625rem 1.25rem', border: '1px solid #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', cursor: 'pointer', fontWeight: 600 }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Student Detail Modal */}
+      {showStudentDetailModal && selectedStudentDetail && (
+        <div className="modal-backdrop" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', zIndex: 1000, padding: '1rem' }}>
+          <div className="modal-container" style={{ backgroundColor: '#ffffff', borderRadius: '12px', padding: '2rem', width: '100%', maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                Student Detail: {selectedStudentDetail.student_name}
+              </h3>
+              <button onClick={() => setShowStudentDetailModal(false)} style={{ border: 'none', backgroundColor: 'transparent', cursor: 'pointer', fontSize: '1.25rem', color: '#64748b' }}>
+                <FiX />
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', fontSize: '0.85rem' }}>
+              <div><strong>Total Attempts:</strong> {selectedStudentDetail.total_attempts}</div>
+              <div><strong>Completed:</strong> {selectedStudentDetail.completed}</div>
+              <div><strong>Avg Score:</strong> {selectedStudentDetail.average_score}%</div>
+            </div>
+            <h4 style={{ marginBottom: '0.75rem', fontWeight: 700, fontSize: '0.9rem' }}>Attempt History</h4>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #f1f5f9', color: '#64748b' }}>
+                    <th style={{ padding: '0.5rem' }}>Scenario</th>
+                    <th style={{ padding: '0.5rem' }}>Class</th>
+                    <th style={{ padding: '0.5rem' }}>Percentage</th>
+                    <th style={{ padding: '0.5rem' }}>Status</th>
+                    <th style={{ padding: '0.5rem' }}>Started At</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedStudentDetail.attempts.map((att, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '0.5rem', fontWeight: 600 }}>{att.scenario_title}</td>
+                      <td style={{ padding: '0.5rem' }}>{att.class_name}</td>
+                      <td style={{ padding: '0.5rem', fontWeight: 700, color: '#3b82f6' }}>{att.percentage !== null ? att.percentage + '%' : 'N/A'}</td>
+                      <td style={{ padding: '0.5rem' }}>{att.status}</td>
+                      <td style={{ padding: '0.5rem' }}>{new Date(att.started_at).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+              <button onClick={() => setShowStudentDetailModal(false)} style={{ padding: '0.625rem 1.25rem', border: '1px solid #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', cursor: 'pointer', fontWeight: 600 }}>
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -89,8 +89,8 @@ class RoleBasedLoginTests(TestCase):
         url = reverse("login")
         data = {"username": "student", "password": "password123"}
         response = self.client.post(url, data, format="json")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["user"]["role"], "STUDENT")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["message"], "Access denied. This portal is for administrators and teachers only.")
 
     def test_login_invalid_credentials(self):
         url = reverse("login")
@@ -399,7 +399,8 @@ class CMSSchoolAdminAndTeacherTests(TestCase):
             "password": "newpassword123",
             "email": "newadmin@school.edu",
             "full_name": "New School Admin",
-            "is_active": True
+            "is_active": True,
+            "school": self.school.school_id
         }
         response = self.client.post(
             url, data, content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {self.token}"

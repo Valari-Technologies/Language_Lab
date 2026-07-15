@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'school_admin',
     'teacher',
     'content_studio',
+    'assessments',
     'drf_spectacular',
 ]
 
