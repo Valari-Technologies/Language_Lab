@@ -20,9 +20,11 @@ class ScenarioAssignmentSyncSerializer(serializers.Serializer):
 
 class StudentAttemptSyncSerializer(serializers.Serializer):
     lms_attempt_id = serializers.CharField(max_length=255)
-    scenario_ref = serializers.CharField(max_length=255)
-    student_username = serializers.CharField(max_length=150)
-    started_at = serializers.DateTimeField()
+    scenario_ref = serializers.CharField(max_length=255, required=False, allow_null=True)
+    student_username = serializers.CharField(max_length=150, required=False, allow_null=True)
+    student = serializers.IntegerField(required=False, allow_null=True)
+    assignment = serializers.IntegerField(required=False, allow_null=True)
+    started_at = serializers.DateTimeField(required=False, allow_null=True)
     completed_at = serializers.DateTimeField(required=False, allow_null=True)
     status = serializers.ChoiceField(choices=StudentAttempt.STATUS_CHOICES, default="STARTED")
     total_score = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)

@@ -36,7 +36,9 @@ class SyncAssignmentsAPIView(APIView):
     def post(self, request):
         # Note: Production should use API keys or service tokens instead of user JWT.
         payload = request.data
-        if not isinstance(payload, list):
+        if isinstance(payload, dict) and "assignments" in payload:
+            payload = payload["assignments"]
+        elif not isinstance(payload, list):
             payload = [payload]
         
         user_school = get_user_school(request.user)
@@ -112,7 +114,9 @@ class SyncAttemptsAPIView(APIView):
     def post(self, request):
         # Note: Production should use API keys or service tokens instead of user JWT.
         payload = request.data
-        if not isinstance(payload, list):
+        if isinstance(payload, dict) and "attempts" in payload:
+            payload = payload["attempts"]
+        elif not isinstance(payload, list):
             payload = [payload]
         
         user_school = get_user_school(request.user)
@@ -142,27 +146,48 @@ class SyncAttemptsAPIView(APIView):
 
             # Resolve student user and check school scoping
             student_username = data.get("student_username")
-            student_user = User.objects.filter(username=student_username, role="STUDENT").first()
+            student_id = data.get("student")
+            student_user = None
+            if student_id:
+                student_user = User.objects.filter(id=student_id, role="STUDENT").first()
+            elif student_username:
+                student_user = User.objects.filter(username=student_username, role="STUDENT").first()
+
             if not student_user:
                 failed_count += 1
-                errors.append({"row": index, "errors": f"Student '{student_username}' does not exist."})
+                errors.append({"row": index, "errors": f"Student '{student_id or student_username}' does not exist."})
                 continue
 
+            student_name = student_user.username
             if not Student.objects.filter(user=student_user, school=target_school).exists():
                 failed_count += 1
-                errors.append({"row": index, "errors": f"Student '{student_username}' does not belong to school {target_school.school_id}"})
+                errors.append({"row": index, "errors": f"Student '{student_name}' does not belong to school {target_school.school_id}"})
                 continue
 
             # Find or create ScenarioAssignment
             scenario_ref = data.get("scenario_ref")
-            assignment = ScenarioAssignment.objects.filter(school=target_school, scenario_ref=scenario_ref).first()
+            assignment_id = data.get("assignment")
+            assignment = None
+            if assignment_id:
+                assignment = ScenarioAssignment.objects.filter(id=assignment_id, school=target_school).first()
+            elif scenario_ref:
+                assignment = ScenarioAssignment.objects.filter(school=target_school, scenario_ref=scenario_ref).first()
+
             if not assignment:
-                assignment = ScenarioAssignment.objects.create(
-                    school=target_school,
-                    scenario_ref=scenario_ref,
-                    scenario_title=scenario_ref,
-                    assigned_at=data["started_at"]
-                )
+                if scenario_ref:
+                    started_at_val = data.get("started_at") or timezone.now()
+                    assignment = ScenarioAssignment.objects.create(
+                        school=target_school,
+                        scenario_ref=scenario_ref,
+                        scenario_title=scenario_ref,
+                        assigned_at=started_at_val
+                    )
+                else:
+                    failed_count += 1
+                    errors.append({"row": index, "errors": "Assignment or scenario_ref is required."})
+                    continue
+
+            started_at_val = data.get("started_at") or timezone.now()
 
             try:
                 attempt, created = StudentAttempt.objects.update_or_create(
@@ -171,7 +196,7 @@ class SyncAttemptsAPIView(APIView):
                         "assignment": assignment,
                         "student": student_user,
                         "school": target_school,
-                        "started_at": data["started_at"],
+                        "started_at": started_at_val,
                         "completed_at": data.get("completed_at"),
                         "status": data.get("status", "STARTED"),
                         "total_score": data.get("total_score"),
@@ -203,7 +228,9 @@ class SyncResponsesAPIView(APIView):
     def post(self, request):
         # Note: Production should use API keys or service tokens instead of user JWT.
         payload = request.data
-        if not isinstance(payload, list):
+        if isinstance(payload, dict) and "responses" in payload:
+            payload = payload["responses"]
+        elif not isinstance(payload, list):
             payload = [payload]
         
         created_count = 0
