@@ -6,7 +6,7 @@ from rest_framework.parsers import MultiPartParser
 from django.db import transaction
 from django.contrib.auth import get_user_model
 
-from accounts.permissions import IsSuperAdminOrSchoolAdminWrite
+from accounts.permissions import IsSuperAdminOrSchoolAdminWrite, IsInstituteAdmin
 from accounts.scoping import filter_queryset_by_school, get_user_school
 from super_admin.views import CMSBaseViewSet
 from super_admin.models import School, Grade
@@ -17,7 +17,7 @@ import openpyxl
 
 
 class TeacherViewSet(CMSBaseViewSet):
-    permission_classes = [IsAuthenticated, IsSuperAdminOrSchoolAdminWrite]
+    permission_classes = [IsAuthenticated, IsInstituteAdmin]
     queryset = Teacher.objects.select_related("user", "school").all()
     serializer_class = TeacherSerializer
     search_fields = ["user__username", "qualification"]

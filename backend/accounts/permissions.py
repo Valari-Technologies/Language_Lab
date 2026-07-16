@@ -120,13 +120,13 @@ class IsContentCreator(BasePermission):
 
 class IsContentCreatorOrSuperAdmin(BasePermission):
     """
-    Permission class that grants access to 'CONTENT_CREATOR' or 'SUPER_ADMIN' users,
+    Permission class that grants access to 'CONTENT_CREATOR' users,
     or django superusers.
     """
     def has_permission(self, request, view):
         return bool(
             request.user and
             request.user.is_authenticated and
-            (getattr(request.user, "role", None) in ["CONTENT_CREATOR", "SUPER_ADMIN"] or request.user.is_superuser)
+            (getattr(request.user, "role", None) in ["CONTENT_CREATOR"] or request.user.is_superuser)
         )
 

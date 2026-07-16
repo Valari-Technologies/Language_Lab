@@ -102,3 +102,14 @@ class TeacherReportSerializer(serializers.Serializer):
     average_class_score = serializers.FloatField()
     best_class = serializers.CharField()
     weakest_class = serializers.CharField()
+
+
+class StudentCompletionReportSerializer(serializers.Serializer):
+    student_id = serializers.IntegerField(source="id")
+    student_name = serializers.SerializerMethodField()
+    total_assigned_scenarios = serializers.IntegerField()
+    completed_scenarios_count = serializers.IntegerField()
+
+    def get_student_name(self, obj):
+        return obj.full_name or obj.username
+

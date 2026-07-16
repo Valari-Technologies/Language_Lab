@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
-from accounts.permissions import IsAdminRole
+from accounts.permissions import IsAdminRole, IsTeacherOrAdmin
 from accounts.scoping import filter_queryset_by_school, get_user_school
 from super_admin.models import School, Grade
 from school_admin.models import Class, Teacher, TeacherClass
@@ -23,7 +23,8 @@ from .serializers import (
     ScenarioReportSerializer,
     ClassReportSerializer,
     StudentReportSerializer,
-    TeacherReportSerializer
+    TeacherReportSerializer,
+    StudentCompletionReportSerializer
 )
 
 User = get_user_model()
@@ -286,12 +287,20 @@ class SyncResponsesAPIView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+def filter_attempts_for_user(queryset, user):
+    queryset = filter_queryset_by_school(queryset, user)
+    if user.role == "TEACHER":
+        teacher_classes = Class.objects.filter(teacherclass__teacher__user=user)
+        queryset = queryset.filter(assignment__class_obj__in=teacher_classes)
+    return queryset
+
+
 class ReportsOverviewAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
     serializer_class = OverviewReportSerializer
 
     def get(self, request):
-        attempts = filter_queryset_by_school(StudentAttempt.objects.all(), request.user)
+        attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user)
         
         total_students = attempts.values("student").distinct().count()
         total_attempts = attempts.count()
@@ -321,11 +330,11 @@ class ReportsOverviewAPIView(APIView):
 
 
 class ReportsScenariosAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
     serializer_class = ScenarioReportSerializer
 
     def get(self, request):
-        attempts = filter_queryset_by_school(StudentAttempt.objects.all(), request.user)
+        attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user)
         
         scenario_refs = attempts.values_list("assignment__scenario_ref", flat=True).distinct()
         
@@ -365,11 +374,11 @@ class ReportsScenariosAPIView(APIView):
 
 
 class ReportsScenarioDetailAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
     serializer_class = ScenarioReportSerializer
 
     def get(self, request, scenario_ref):
-        attempts = filter_queryset_by_school(StudentAttempt.objects.all(), request.user).filter(assignment__scenario_ref=scenario_ref)
+        attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user).filter(assignment__scenario_ref=scenario_ref)
         if not attempts.exists():
             return Response({"message": "Scenario report not found or no attempts."}, status=status.HTTP_404_NOT_FOUND)
         
@@ -418,17 +427,19 @@ class ReportsScenarioDetailAPIView(APIView):
 
 
 class ReportsClassesAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
     serializer_class = ClassReportSerializer
 
     def get(self, request):
         school = get_user_school(request.user)
-        if school:
+        if request.user.role == "TEACHER":
+            classes = Class.objects.filter(teacherclass__teacher__user=request.user)
+        elif school:
             classes = Class.objects.filter(school=school)
         else:
             classes = Class.objects.all()
         
-        attempts = filter_queryset_by_school(StudentAttempt.objects.all(), request.user)
+        attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user)
         
         results = []
         for c in classes:
@@ -469,12 +480,14 @@ class ReportsClassesAPIView(APIView):
 
 
 class ReportsClassDetailAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
     serializer_class = ClassReportSerializer
 
     def get(self, request, class_id):
         school = get_user_school(request.user)
-        if school:
+        if request.user.role == "TEACHER":
+            c = Class.objects.filter(teacherclass__teacher__user=request.user, class_id=class_id).first()
+        elif school:
             c = Class.objects.filter(school=school, class_id=class_id).first()
         else:
             c = Class.objects.filter(class_id=class_id).first()
@@ -482,7 +495,7 @@ class ReportsClassDetailAPIView(APIView):
         if not c:
             return Response({"message": "Class not found or access denied."}, status=status.HTTP_404_NOT_FOUND)
         
-        attempts = filter_queryset_by_school(StudentAttempt.objects.all(), request.user).filter(assignment__class_obj=c)
+        attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user).filter(assignment__class_obj=c)
         total_students = attempts.values("student").distinct().count()
         completed = attempts.filter(status="COMPLETED").count()
         
@@ -524,11 +537,11 @@ class ReportsClassDetailAPIView(APIView):
 
 
 class ReportsStudentsAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
     serializer_class = StudentReportSerializer
 
     def get(self, request):
-        attempts = filter_queryset_by_school(StudentAttempt.objects.all(), request.user)
+        attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user)
         
         student_ids = attempts.values_list("student", flat=True).distinct()
         
@@ -572,7 +585,7 @@ class ReportsStudentsAPIView(APIView):
 
 
 class ReportsStudentDetailAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
     serializer_class = StudentReportSerializer
 
     def get(self, request, student_id):
@@ -581,7 +594,11 @@ class ReportsStudentDetailAPIView(APIView):
             return Response({"message": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
         
         school = get_user_school(request.user)
-        if school and not Student.objects.filter(user=student_user, school=school).exists():
+        if request.user.role == "TEACHER":
+            teacher_classes = Class.objects.filter(teacherclass__teacher__user=request.user)
+            if not StudentAttempt.objects.filter(student=student_user, assignment__class_obj__in=teacher_classes).exists():
+                return Response({"message": "Access denied to student reports."}, status=status.HTTP_403_FORBIDDEN)
+        elif school and not Student.objects.filter(user=student_user, school=school).exists():
             return Response({"message": "Access denied to student reports."}, status=status.HTTP_403_FORBIDDEN)
             
         attempts = StudentAttempt.objects.filter(student=student_user)
@@ -665,7 +682,7 @@ class ReportsTeachersAPIView(APIView):
 
 
 class ReportsExportAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
 
     def get(self, request):
         export_type = request.query_params.get("type", "scenarios")
@@ -723,3 +740,45 @@ class ReportsExportAPIView(APIView):
             return Response({"message": "Invalid export type."}, status=status.HTTP_400_BAD_REQUEST)
             
         return response
+
+
+class ReportsStudentCompletionAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
+    serializer_class = StudentCompletionReportSerializer
+
+    def get(self, request):
+        user = request.user
+        school = get_user_school(user)
+        if not school:
+            return Response({"message": "School context not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Base student users in this school
+        student_users = User.objects.filter(role="STUDENT", student__school=school)
+
+        if user.role == "TEACHER":
+            # For TEACHER: only pull data for students belonging to their assigned classes.
+            # 1. Get the classes assigned to this teacher
+            teacher_classes = Class.objects.filter(teacherclass__teacher__user=user)
+            # 2. Get students who have attempts in those classes
+            student_ids = StudentAttempt.objects.filter(
+                assignment__class_obj__in=teacher_classes
+            ).values_list("student_id", flat=True).distinct()
+            # 3. Filter student users
+            student_users = student_users.filter(id__in=student_ids)
+
+        # Annotate
+        queryset = student_users.annotate(
+            total_assigned_scenarios=models.Count("assignments", distinct=True),
+            completed_scenarios_count=models.Count(
+                "assignments__attempts",
+                filter=(
+                    models.Q(assignments__attempts__status="completed") |
+                    models.Q(assignments__attempts__status="COMPLETED")
+                ) & models.Q(assignments__attempts__student=models.F("id")),
+                distinct=True
+            )
+        )
+
+        serializer = StudentCompletionReportSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+

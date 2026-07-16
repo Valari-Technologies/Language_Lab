@@ -11,7 +11,8 @@ from .views import (
     ReportsStudentsAPIView,
     ReportsStudentDetailAPIView,
     ReportsTeachersAPIView,
-    ReportsExportAPIView
+    ReportsExportAPIView,
+    ReportsStudentCompletionAPIView
 )
 
 urlpatterns = [
@@ -30,4 +31,5 @@ urlpatterns = [
     path("reports/students/<int:student_id>/", ReportsStudentDetailAPIView.as_view(), name="reports_student_detail"),
     path("reports/teachers/", ReportsTeachersAPIView.as_view(), name="reports_teachers"),
     path("reports/export/", ReportsExportAPIView.as_view(), name="reports_export"),
+    path("reports/student-completion/", ReportsStudentCompletionAPIView.as_view(), name="reports_student_completion"),
 ]

@@ -7,6 +7,7 @@ from django.utils import timezone
 from datetime import timedelta
 import csv
 import io
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from super_admin.models import School, Grade, SchoolAdminProfile
 from school_admin.models import Class, Teacher, TeacherClass
@@ -263,3 +264,91 @@ class AssessmentsTests(TestCase):
         self.assertGreater(len(rows), 1)
         self.assertEqual(rows[0][0], "Student ID")
         self.assertEqual(rows[1][1], "Student A Name")
+
+    def test_reports_student_completion_permissions(self):
+        url = reverse("reports_student_completion")
+        
+        # 1. Anonymous user -> 401
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        
+        # 2. Student user -> 403
+        token_student_a = str(RefreshToken.for_user(self.student_user_a).access_token)
+        response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {token_student_a}")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        
+        # 3. Teacher user -> 200
+        token_teacher_a = self.get_token("teacher_a")
+        response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {token_teacher_a}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # 4. School Admin -> 200
+        response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {self.token_a}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_reports_student_completion_metrics_and_scoping(self):
+        url = reverse("reports_student_completion")
+        
+        # Clear existing assignments & attempts to make test calculations predictable
+        ScenarioAssignment.objects.all().delete()
+        StudentAttempt.objects.all().delete()
+        
+        # Create assignments under School A
+        assignment_a1 = ScenarioAssignment.objects.create(
+            school=self.school_a,
+            scenario_ref="scen_a1",
+            scenario_title="Scenario A1",
+            class_obj=self.class_a,
+            assigned_at=timezone.now()
+        )
+        assignment_a2 = ScenarioAssignment.objects.create(
+            school=self.school_a,
+            scenario_ref="scen_a2",
+            scenario_title="Scenario A2",
+            class_obj=self.class_a,
+            assigned_at=timezone.now()
+        )
+        
+        # Student A (School A) attempts and completes one scenario
+        StudentAttempt.objects.create(
+            assignment=assignment_a1,
+            student=self.student_user_a,
+            school=self.school_a,
+            started_at=timezone.now(),
+            completed_at=timezone.now() + timedelta(minutes=5),
+            status="COMPLETED",
+            lms_attempt_id="attempt_a1"
+        )
+        # Student A starts but does not complete another attempt
+        StudentAttempt.objects.create(
+            assignment=assignment_a2,
+            student=self.student_user_a,
+            school=self.school_a,
+            started_at=timezone.now(),
+            status="STARTED",
+            lms_attempt_id="attempt_a2"
+        )
+
+        # School Admin A checks reports
+        response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {self.token_a}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Should see student_a with correct metrics
+        student_data = [item for item in response.data if item["student_id"] == self.student_user_a.id][0]
+        self.assertEqual(student_data["total_assigned_scenarios"], 2)
+        self.assertEqual(student_data["completed_scenarios_count"], 1)
+
+        # Teacher A checks reports (teacher is assigned to class_a, which includes class_a attempts)
+        token_teacher_a = self.get_token("teacher_a")
+        response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {token_teacher_a}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        student_data_teacher = [item for item in response.data if item["student_id"] == self.student_user_a.id][0]
+        self.assertEqual(student_data_teacher["total_assigned_scenarios"], 2)
+        self.assertEqual(student_data_teacher["completed_scenarios_count"], 1)
+        
+        # School Admin B checks reports (should NOT see School A's student metrics due to isolation)
+        response_b = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {self.token_b}")
+        self.assertEqual(response_b.status_code, status.HTTP_200_OK)
+        # student_a should not be in the response data for School B
+        student_ids_b = [item["student_id"] for item in response_b.data]
+        self.assertNotIn(self.student_user_a.id, student_ids_b)
+

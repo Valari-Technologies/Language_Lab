@@ -113,11 +113,16 @@ class ContentStudioAPITests(APITestCase):
             self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, f"Failed for {user.username}")
 
     def test_content_creator_and_super_admin_allowed(self):
-        """Content Creator and Super Admin roles should receive 200 OK."""
-        for user in [self.content_creator, self.super_admin]:
-            self.client.force_authenticate(user=user)
-            response = self.client.get(reverse("scenario-list"))
-            self.assertEqual(response.status_code, status.HTTP_200_OK, f"Failed for {user.username}")
+        """Content Creator role should receive 200 OK."""
+        self.client.force_authenticate(user=self.content_creator)
+        response = self.client.get(reverse("scenario-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_super_admin_forbidden_in_content_studio(self):
+        """Super Admin role should receive 403 FORBIDDEN in Content Studio."""
+        self.client.force_authenticate(user=self.super_admin)
+        response = self.client.get(reverse("scenario-list"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_experiences_list_filtering(self):
         """Verify list endpoint filtering by grade, status, and search."""

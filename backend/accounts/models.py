@@ -24,6 +24,11 @@ class User(AbstractUser):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    assignments = models.ManyToManyField(
+        "assessments.ScenarioAssignment",
+        through="assessments.StudentAttempt",
+        related_name="students"
+    )
 
     class Meta:
         verbose_name = "User"
