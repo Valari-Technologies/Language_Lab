@@ -1,157 +1,224 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  FiShield, FiUsers, FiBookOpen, FiActivity, FiLogOut, FiGrid, 
-  FiClock, FiMenu, FiX,
-  FiEdit2, FiTrash2, FiSearch, FiLock, FiUser,
-  FiBarChart2, FiPlus
+import {
+  FiGrid, FiUsers, FiBookOpen, FiBarChart2, FiUser,
+  FiSettings, FiHelpCircle, FiLogOut, FiSearch,
+  FiPlus, FiEdit2, FiTrash2, FiX, FiMenu,
+  FiChevronDown, FiCalendar, FiBell, FiFilter,
+  FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
+  FiActivity, FiTrendingUp, FiClock, FiAward,
+  FiChevronLeft, FiChevronRight, FiLock
 } from 'react-icons/fi';
-import './Dashboard.css';
+import './SchoolDashboard.css';
 import { apiFetch } from './api';
 
+/* ─── Static chart data (same as SchoolDashboard reference) ─── */
+const CHART_MONTHS = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
+const CHART_LINES = [
+  { label: 'Weekly',    color: '#6366f1', points: [40, 55, 45, 70, 60, 80] },
+  { label: 'Monthly',   color: '#22c55e', points: [30, 40, 55, 45, 65, 55] },
+  { label: 'Ability',   color: '#f97316', points: [55, 35, 60, 50, 40, 70] },
+  { label: 'Authority', color: '#a78bfa', points: [25, 45, 35, 60, 50, 45] },
+];
+const RECENT_ACTIVITY = [
+  { id: 1, name: 'John Doe',      color: '#6366f1', desc: 'Completed lesson on "Tenses"',  time: '10:32 AM' },
+  { id: 2, name: 'Sarah Smith',   color: '#22c55e', desc: 'Submitted vocabulary test',      time: '10:18 AM' },
+  { id: 3, name: 'Michael Brown', color: '#f97316', desc: 'Completed a speaking exercise',  time: 'Yesterday' },
+  { id: 4, name: 'Jessica White', color: '#a78bfa', desc: 'Reviewed grammar assignment',    time: '2 hours ago' },
+];
+
+/* ─── SVG Donut Chart ─── */
+const DonutChart = ({ pct = 68 }) => {
+  const R = 46, CX = 60, CY = 60;
+  const circ = 2 * Math.PI * R;
+  const filled = (pct / 100) * circ;
+  return (
+    <svg viewBox="0 0 120 120" width="130" height="130" className="sd-donut-svg">
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#e8edf5" strokeWidth="12"/>
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#6366f1" strokeWidth="12"
+        strokeDasharray={`${filled} ${circ}`} strokeLinecap="round"
+        transform={`rotate(-90 ${CX} ${CY})`}
+        style={{ transition: 'stroke-dasharray 0.8s ease' }}
+      />
+      <text x={CX} y={CY - 5} textAnchor="middle" dominantBaseline="middle"
+        style={{ fontSize: 14, fontWeight: 700, fill: '#0f172a', fontFamily: 'Outfit,Inter,sans-serif' }}>
+        {pct}%
+      </text>
+      <text x={CX} y={CY + 12} textAnchor="middle" dominantBaseline="middle"
+        style={{ fontSize: 8, fill: '#6b7280', fontFamily: 'Outfit,Inter,sans-serif' }}>
+        Completed
+      </text>
+    </svg>
+  );
+};
+
+/* ─── SVG Line Chart ─── */
+const LineChart = ({ lines = CHART_LINES }) => {
+  const W = 400, H = 120;
+  const PAD = { top: 10, right: 8, bottom: 10, left: 8 };
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
+  const pts = 6;
+  const toX = (i) => PAD.left + (i / (pts - 1)) * chartW;
+  const toY = (v) => PAD.top + chartH - (v / 100) * chartH;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="140" preserveAspectRatio="none" className="sd-chart-svg">
+      {[25, 50, 75].map(v => (
+        <line key={v} x1={PAD.left} y1={toY(v)} x2={W - PAD.right} y2={toY(v)} stroke="#f3f4f6" strokeWidth="1"/>
+      ))}
+      {lines.map(line => {
+        const d = line.points.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(i)},${toY(v)}`).join(' ');
+        return (
+          <g key={line.label}>
+            <path d={d} fill="none" stroke={line.color} strokeWidth="2.2"
+              strokeLinejoin="round" strokeLinecap="round"/>
+            {line.points.map((v, i) => (
+              <circle key={i} cx={toX(i)} cy={toY(v)} r="3" fill={line.color}/>
+            ))}
+          </g>
+        );
+      })}
+    </svg>
+  );
+};
+
+/* ─── Pagination ─── */
+const Pagination = ({ total, perPage = 4, page, onPage }) => {
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  const items = pages <= 5 ? Array.from({ length: pages }, (_, i) => i + 1) : [1, 2, 3, '...', pages];
+  const from = total === 0 ? 0 : (page - 1) * perPage + 1;
+  const to = Math.min(page * perPage, total);
+  return (
+    <div className="sd-pagination-bar">
+      <span className="sd-pagination-info">
+        Showing {from} to {to} of {total} {total === 1 ? 'record' : 'records'}
+      </span>
+      <div className="sd-pagination-pages">
+        <button className="sd-page-btn arrow" disabled={page === 1} onClick={() => onPage(page - 1)}>
+          <FiChevronLeft/>
+        </button>
+        {items.map((it, i) =>
+          it === '...'
+            ? <span key={i} className="sd-page-btn ellipsis">…</span>
+            : <button key={it} className={`sd-page-btn${page === it ? ' active' : ''}`} onClick={() => onPage(it)}>{it}</button>
+        )}
+        <button className="sd-page-btn arrow" disabled={page === pages} onClick={() => onPage(page + 1)}>
+          <FiChevronRight/>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════
+   TEACHER DASHBOARD COMPONENT
+   ═══════════════════════════════════════════ */
 const TeacherDashboard = ({ user, onLogout }) => {
-  // Navigation
-  const [activeSubTab, setActiveSubTab] = useState('overview'); // overview, classes, students, reports, profile
+  /* ── Navigation ── */
+  const [activeSubTab, setActiveSubTab] = useState('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // UI state
-  const [loading, setLoading] = useState(true);
+  /* ── UI ── */
+  const [loading, setLoading]             = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [errorMsg, setErrorMsg]           = useState('');
+  const [successMsg, setSuccessMsg]       = useState('');
+  const [searchQuery, setSearchQuery]     = useState('');
 
-  // Modals state
-  const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState('add'); // add, edit
-  const [editingId, setEditingId] = useState(null);
+  /* ── Pagination ── */
+  const [studentPage,  setStudentPage]  = useState(1);
+  const [classPage,    setClassPage]    = useState(1);
+  const PER_PAGE = 4;
 
-  // Data lists
-  const [data, setData] = useState(null); // overview data
+  /* ── Modals ── */
+  const [showModal,   setShowModal]   = useState(false);
+  const [modalType,   setModalType]   = useState('add');
+  const [editingId,   setEditingId]   = useState(null);
+  const [showPwModal, setShowPwModal] = useState(false);
+
+  /* ── Data ── */
+  const [data,     setData]     = useState(null);
   const [students, setStudents] = useState([]);
-  const [classes, setClasses] = useState([]);
-  const [schools, setSchools] = useState([]);
-  const [grades, setGrades] = useState([]);
+  const [classes,  setClasses]  = useState([]);
+  const [schools,  setSchools]  = useState([]);
+  const [grades,   setGrades]   = useState([]);
 
-  // Form states
+  /* ── Forms ── */
   const [studentForm, setStudentForm] = useState({
     username: '', password: '', email: '', full_name: '', is_active: true
   });
   const [classForm, setClassForm] = useState({
-    class_name: '', school: '', grade: '', academic_year: new Date().getFullYear().toString(), is_active: true
+    class_name: '', school: '', grade: '',
+    academic_year: new Date().getFullYear().toString(), is_active: true
   });
   const [profileForm, setProfileForm] = useState({
-    username: user?.username || '', email: user?.email || '', full_name: user?.full_name || '', current_password: '', password: ''
+    username: user?.username || '', email: user?.email || '',
+    full_name: user?.full_name || '', current_password: '', password: ''
   });
 
-  // Loaders
+  /* ══════════════════
+     DATA LOADERS (unchanged from original)
+     ══════════════════ */
   const loadDashboardData = async () => {
     try {
       const res = await apiFetch('/api/teacher/dashboard/');
-      if (res.ok) {
-        const result = await res.json();
-        setData(result);
-      }
-    } catch (e) {
-      console.error('Failed to load dashboard data.', e);
-    }
+      if (res.ok) setData(await res.json());
+    } catch (e) { console.error('Failed to load teacher dashboard data.', e); }
   };
 
   const loadSchools = async () => {
     try {
       const res = await apiFetch('/api/cms/schools/');
-      if (res.ok) {
-        const d = await res.json();
-        setSchools(d.results || d);
-      }
-    } catch (e) {
-      console.error('Failed to load schools.', e);
-    }
+      if (res.ok) { const d = await res.json(); setSchools(d.results || d); }
+    } catch (e) { console.error('Failed to load schools.', e); }
   };
 
   const loadGrades = async () => {
     try {
       const res = await apiFetch('/api/cms/grades/');
-      if (res.ok) {
-        const d = await res.json();
-        setGrades(d.results || d);
-      }
-    } catch (e) {
-      console.error('Failed to load grades.', e);
-    }
+      if (res.ok) { const d = await res.json(); setGrades(d.results || d); }
+    } catch (e) { console.error('Failed to load grades.', e); }
   };
 
   const loadStudents = async () => {
     try {
       const res = await apiFetch('/api/cms/students/');
-      if (res.ok) {
-        const d = await res.json();
-        setStudents(d.results || d);
-      }
-    } catch (e) {
-      console.error('Failed to load students.', e);
-    }
+      if (res.ok) { const d = await res.json(); setStudents(d.results || d); }
+    } catch (e) { console.error('Failed to load students.', e); }
   };
 
   const loadClasses = async () => {
     try {
       const res = await apiFetch('/api/cms/classes/');
-      if (res.ok) {
-        const d = await res.json();
-        setClasses(d.results || d);
-      }
-    } catch (e) {
-      console.error('Failed to load classes.', e);
-    }
+      if (res.ok) { const d = await res.json(); setClasses(d.results || d); }
+    } catch (e) { console.error('Failed to load classes.', e); }
   };
 
   const loadAllData = async () => {
     setLoading(true);
     setErrorMsg('');
     try {
-      await Promise.all([
-        loadDashboardData(),
-        loadSchools(),
-        loadGrades(),
-        loadStudents(),
-        loadClasses()
-      ]);
-    } catch (e) {
-      setErrorMsg('Error loading dashboard data.');
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+      await Promise.all([loadDashboardData(), loadSchools(), loadGrades(), loadStudents(), loadClasses()]);
+    } catch (e) { setErrorMsg('Error loading dashboard data.'); console.error(e); }
+    finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    loadAllData();
-  }, []);
+  useEffect(() => { loadAllData(); }, []);
 
-  // Alert Feedback
+  /* ── Feedback ── */
   const showFeedback = (success, error) => {
-    if (success) {
-      setSuccessMsg(success);
-      setTimeout(() => setSuccessMsg(''), 4000);
-    }
-    if (error) {
-      setErrorMsg(error);
-      setTimeout(() => setErrorMsg(''), 4000);
-    }
+    if (success) { setSuccessMsg(success); setTimeout(() => setSuccessMsg(''), 4000); }
+    if (error)   { setErrorMsg(error);   setTimeout(() => setErrorMsg(''),   4000); }
   };
 
-  // Form Setup
+  /* ── Form init ── */
   const initForm = (tab, entity = null) => {
     setErrorMsg('');
     if (tab === 'students') {
       setStudentForm(entity ? {
-        username: entity.username || '',
-        password: '',
-        email: entity.email || '',
-        full_name: entity.full_name || '',
+        username: entity.username || '', password: '',
+        email: entity.email || '', full_name: entity.full_name || '',
         is_active: entity.is_active !== undefined ? entity.is_active : true
-      } : {
-        username: '', password: '', email: '', full_name: '', is_active: true
-      });
+      } : { username: '', password: '', email: '', full_name: '', is_active: true });
     } else if (tab === 'classes') {
       setClassForm(entity ? {
         class_name: entity.class_name || '',
@@ -160,40 +227,24 @@ const TeacherDashboard = ({ user, onLogout }) => {
         academic_year: entity.academic_year || new Date().getFullYear().toString(),
         is_active: entity.is_active !== undefined ? entity.is_active : true
       } : {
-        class_name: '', school: schools[0]?.school_id || '', grade: grades[0]?.id || '', academic_year: new Date().getFullYear().toString(), is_active: true
+        class_name: '', school: schools[0]?.school_id || '',
+        grade: grades[0]?.id || '', academic_year: new Date().getFullYear().toString(), is_active: true
       });
     }
   };
 
-  const openAddModal = () => {
-    initForm(activeSubTab);
-    setModalType('add');
-    setEditingId(null);
-    setShowModal(true);
-  };
+  const openAddModal = () => { initForm(activeSubTab); setModalType('add'); setEditingId(null); setShowModal(true); };
+  const openEditModal = (entity) => { initForm(activeSubTab, entity); setModalType('edit'); setEditingId(entity.id); setShowModal(true); };
+  const closeModal = () => { setShowModal(false); setErrorMsg(''); };
 
-  const openEditModal = (entity) => {
-    initForm(activeSubTab, entity);
-    setModalType('edit');
-    setEditingId(entity.id);
-    setShowModal(true);
-  };
-
-  const closeModal = () => {
-    setShowModal(false);
-    setErrorMsg('');
-  };
-
-  // Generic Submit
+  /* ── CRUD Submit ── */
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     setActionLoading(true);
     setErrorMsg('');
-
     let endpoint = '';
-    let method = modalType === 'add' ? 'POST' : 'PUT';
+    const method = modalType === 'add' ? 'POST' : 'PUT';
     let payload = {};
-
     if (activeSubTab === 'students') {
       endpoint = modalType === 'add' ? '/api/cms/students/' : `/api/cms/students/${editingId}/`;
       payload = { ...studentForm, role: 'STUDENT' };
@@ -202,12 +253,8 @@ const TeacherDashboard = ({ user, onLogout }) => {
       endpoint = modalType === 'add' ? '/api/cms/classes/' : `/api/cms/classes/${editingId}/`;
       payload = { ...classForm };
     }
-
     try {
-      const res = await apiFetch(endpoint, {
-        method,
-        body: JSON.stringify(payload)
-      });
+      const res = await apiFetch(endpoint, { method, body: JSON.stringify(payload) });
       if (res.ok) {
         showFeedback(`${activeSubTab.slice(0, -1)} ${modalType === 'add' ? 'added' : 'updated'} successfully!`, null);
         closeModal();
@@ -217,34 +264,24 @@ const TeacherDashboard = ({ user, onLogout }) => {
         const errorData = await res.json();
         setErrorMsg(errorData.message || 'Action failed. Please check inputs.');
       }
-    } catch {
-      setErrorMsg('Network error occurred.');
-    } finally {
-      setActionLoading(false);
-    }
+    } catch { setErrorMsg('Network error occurred.'); }
+    finally { setActionLoading(false); }
   };
 
-  // Delete Item
+  /* ── Delete ── */
   const handleDelete = async (id, type) => {
     if (!window.confirm(`Are you sure you want to delete this ${type}?`)) return;
-    
-    let endpoint = `/api/cms/${type}s/${id}/`;
-    
     try {
-      const res = await apiFetch(endpoint, { method: 'DELETE' });
+      const res = await apiFetch(`/api/cms/${type}s/${id}/`, { method: 'DELETE' });
       if (res.ok) {
         showFeedback(`${type} deleted successfully!`, null);
         if (type === 'student') loadStudents();
         else if (type === 'class') loadClasses();
-      } else {
-        showFeedback(null, 'Delete failed.');
-      }
-    } catch {
-      showFeedback(null, 'Network error.');
-    }
+      } else { showFeedback(null, 'Delete failed.'); }
+    } catch { showFeedback(null, 'Network error.'); }
   };
 
-  // Update Profile
+  /* ── Profile update ── */
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setActionLoading(true);
@@ -253,564 +290,744 @@ const TeacherDashboard = ({ user, onLogout }) => {
         method: 'PUT',
         body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email })
       });
-      if (res.ok) {
-        showFeedback('Profile updated successfully!', null);
-      } else {
-        showFeedback(null, 'Failed to update profile.');
-      }
-    } catch {
-      showFeedback(null, 'Network error.');
-    } finally {
-      setActionLoading(false);
-    }
+      if (res.ok) showFeedback('Profile updated successfully!', null);
+      else showFeedback(null, 'Failed to update profile.');
+    } catch { showFeedback(null, 'Network error.'); }
+    finally { setActionLoading(false); }
   };
 
-  // Change Password
-  const handlePasswordChange = async (e) => {
-    e.preventDefault();
-    setActionLoading(true);
-    try {
-      const res = await apiFetch('/api/users/change-password/', {
-        method: 'POST',
-        body: JSON.stringify({ old_password: profileForm.current_password, new_password: profileForm.password })
-      });
-      if (res.ok) {
-        showFeedback('Password changed successfully!', null);
-        setProfileForm({ ...profileForm, current_password: '', password: '' });
-      } else {
-        const errorData = await res.json();
-        showFeedback(null, errorData.error || 'Password change failed.');
-      }
-    } catch {
-      showFeedback(null, 'Network error.');
-    } finally {
-      setActionLoading(false);
-    }
+  /* ── Filter helpers ── */
+  const filterList = (list) => {
+    if (!searchQuery) return list;
+    const q = searchQuery.toLowerCase();
+    return list.filter(item =>
+      (item.full_name || '').toLowerCase().includes(q) ||
+      (item.username || '').toLowerCase().includes(q) ||
+      (item.class_name || '').toLowerCase().includes(q) ||
+      (item.email || '').toLowerCase().includes(q)
+    );
   };
+  const paginate = (list, page) => list.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  // Filter lists
-  const filteredStudents = students.filter(s => 
-    (s.full_name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (s.username || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
-  
-  const filteredClasses = classes.filter(c => 
-    (c.class_name || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  /* ── Nav helper ── */
+  const goTo = (tab) => { setActiveSubTab(tab); setSearchQuery(''); setIsSidebarOpen(false); setStudentPage(1); setClassPage(1); };
 
+  /* ── Stat values ── */
+  const statClasses  = data?.assigned_classes?.length || classes.length;
+  const statStudents = students.length;
+  const statScenarios = data?.active_scenarios || 0;
+  const statLessons  = data?.upcoming_lessons?.length || 0;
+
+  /* ── Loading screen ── */
   if (loading) {
     return (
-      <div className="login-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#4f46e5' }}>
-        <h2>Loading Teacher Portal...</h2>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh',
+        background:'linear-gradient(135deg,#0b1437 0%,#1a2c7a 100%)', flexDirection:'column', gap:'1rem' }}>
+        <div style={{ width:48, height:48, borderRadius:'50%', border:'4px solid rgba(99,102,241,0.3)',
+          borderTopColor:'#6366f1', animation:'spin 0.8s linear infinite' }}/>
+        <p style={{ color:'rgba(255,255,255,0.6)', fontSize:'0.9rem', fontFamily:'Outfit,sans-serif' }}>
+          Loading Teacher Portal...
+        </p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
+  /* ══════════════════════════════════════
+     RENDER
+     ══════════════════════════════════════ */
   return (
-    <div className="dashboard-layout">
-      {/* Mobile Header */}
-      <header className="mobile-header">
-        <button className="hamburger-btn" onClick={() => setIsSidebarOpen(true)} aria-label="Open menu">
-          <FiMenu />
-        </button>
-        <div className="mobile-brand">
-          <div className="brand-logo-small">
-            <FiShield />
-          </div>
-          <span className="brand-name-small">Teacher Portal</span>
-        </div>
-        <div className="mobile-user-avatar">
-          {user.username ? user.username.slice(0, 2).toUpperCase() : 'TE'}
-        </div>
+    <div className="sd-layout">
+
+      {/* ── Mobile top bar ── */}
+      <header className="sd-mobile-header">
+        <button className="sd-hamburger" onClick={() => setIsSidebarOpen(true)} aria-label="Open menu"><FiMenu/></button>
+        <span className="sd-mobile-brand">LinguaLab</span>
+        <div style={{ width: 34 }}/>
       </header>
 
-      {/* Sidebar Backdrop */}
-      {isSidebarOpen && (
-        <div className="sidebar-backdrop" onClick={() => setIsSidebarOpen(false)}></div>
-      )}
+      {/* ── Sidebar backdrop (mobile) ── */}
+      <div className={`sd-sidebar-backdrop${isSidebarOpen ? ' open' : ''}`} onClick={() => setIsSidebarOpen(false)}/>
 
-      {/* Sidebar Panel */}
-      <aside className={`sidebar ${isSidebarOpen ? 'sidebar-open' : ''}`}>
-        <div className="sidebar-brand">
-          <div className="brand-logo" style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)', boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)' }}>
-            <FiShield />
-          </div>
-          <div>
-            <h3 className="brand-name">Language Lab</h3>
-            <span className="brand-badge" style={{ backgroundColor: '#8b5cf6' }}>Teacher Portal</span>
-          </div>
-          <button className="sidebar-close-btn" onClick={() => setIsSidebarOpen(false)} aria-label="Close menu">
-            <FiX />
-          </button>
+      {/* ═════════════════
+          SIDEBAR
+          ═════════════════ */}
+      <aside className={`sd-sidebar${isSidebarOpen ? ' open' : ''}`}>
+        {/* Brand */}
+        <div className="sd-brand">
+          <div className="sd-brand-name">LinguaLab</div>
+          <div className="sd-brand-sub">Teacher Portal</div>
         </div>
 
-        <nav className="sidebar-nav">
-          <button 
-            className={`nav-link ${activeSubTab === 'overview' ? 'active' : ''}`}
-            onClick={() => { setActiveSubTab('overview'); setIsSidebarOpen(false); }}
-          >
-            <FiGrid className="nav-icon" />
-            <span>Overview</span>
+        {/* Nav */}
+        <nav className="sd-nav">
+          <button className={`sd-nav-item${activeSubTab === 'overview'  ? ' active' : ''}`} onClick={() => goTo('overview')}>
+            <FiGrid/><span>Dashboard</span>
           </button>
-          
-          <button 
-            className={`nav-link ${activeSubTab === 'students' ? 'active' : ''}`}
-            onClick={() => { setActiveSubTab('students'); setIsSidebarOpen(false); }}
-          >
-            <FiUsers className="nav-icon" />
-            <span>Students</span>
+          <button className={`sd-nav-item${activeSubTab === 'students'  ? ' active' : ''}`} onClick={() => goTo('students')}>
+            <FiUsers/><span>Students</span>
           </button>
-
-          <button 
-            className={`nav-link ${activeSubTab === 'classes' ? 'active' : ''}`}
-            onClick={() => { setActiveSubTab('classes'); setIsSidebarOpen(false); }}
-          >
-            <FiBookOpen className="nav-icon" />
-            <span>Classes</span>
+          <button className={`sd-nav-item${activeSubTab === 'classes'   ? ' active' : ''}`} onClick={() => goTo('classes')}>
+            <FiBookOpen/><span>Classes</span>
           </button>
-
-          <button 
-            className={`nav-link ${activeSubTab === 'reports' ? 'active' : ''}`}
-            onClick={() => { setActiveSubTab('reports'); setIsSidebarOpen(false); }}
-          >
-            <FiBarChart2 className="nav-icon" />
-            <span>Reports</span>
+          <button className={`sd-nav-item${activeSubTab === 'reports'   ? ' active' : ''}`} onClick={() => goTo('reports')}>
+            <FiBarChart2/><span>Reports</span>
           </button>
-
-          <div className="nav-divider"></div>
-          
-          <button 
-            className={`nav-link ${activeSubTab === 'profile' ? 'active' : ''}`}
-            onClick={() => { setActiveSubTab('profile'); setIsSidebarOpen(false); }}
-          >
-            <FiUser className="nav-icon" />
-            <span>Profile Setting</span>
+          <button className={`sd-nav-item${activeSubTab === 'profile'   ? ' active' : ''}`} onClick={() => goTo('profile')}>
+            <FiUser/><span>Profile Settings</span>
           </button>
         </nav>
 
-        {/* User Card */}
-        <div className="sidebar-user">
-          <div className="user-avatar" style={{ backgroundColor: '#8b5cf6' }}>
-            {user.username ? user.username.slice(0, 2).toUpperCase() : 'TE'}
+        {/* Footer links */}
+        <div className="sd-footer">
+          <button className="sd-footer-link danger" onClick={onLogout}><FiLogOut/><span>Logout</span></button>
+        </div>
+
+        {/* User card */}
+        <div className="sd-user-card">
+          <div className="sd-user-avatar">
+            {(user?.username || 'TE').slice(0, 2).toUpperCase()}
           </div>
-          <div className="user-meta">
-            <div className="user-name">{user.full_name || user.username}</div>
-            <div className="user-role">Teacher</div>
+          <div className="sd-user-meta">
+            <div className="sd-user-name">{profileForm.full_name || user?.username || 'Teacher'}</div>
+            <div className="sd-user-role">Teacher</div>
           </div>
-          <button onClick={onLogout} className="logout-btn" title="Sign Out">
-            <FiLogOut />
-          </button>
+          <FiChevronDown className="sd-user-chevron"/>
         </div>
       </aside>
 
-      {/* Main Panel */}
-      <main className="main-content">
-        <header className="content-header">
-          <div className="header-info">
-            <h1 className="page-title">
-              {activeSubTab === 'overview' && 'Teacher Dashboard'}
-              {activeSubTab === 'students' && 'Manage Students'}
-              {activeSubTab === 'classes' && 'Manage Classes'}
-              {activeSubTab === 'reports' && 'Student Performance Reports'}
-              {activeSubTab === 'profile' && 'Profile Settings'}
-            </h1>
-            <p className="page-subtitle">
-              {activeSubTab === 'overview' && 'Monitor class performance, review upcoming lessons, and grade students.'}
-              {activeSubTab === 'students' && 'View and manage student profiles and access.'}
-              {activeSubTab === 'classes' && 'Configure and manage language classes.'}
-              {activeSubTab === 'reports' && 'Monitor evaluation metrics and student progression.'}
-              {activeSubTab === 'profile' && 'Update your personal information and security credentials.'}
-            </p>
+      {/* ═════════════════
+          MAIN
+          ═════════════════ */}
+      <main className="sd-main">
+
+        {/* ── Top Bar ── */}
+        <div className="sd-topbar">
+          <div className="sd-search">
+            <FiSearch/>
+            <input
+              type="text"
+              placeholder="Search anything..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
           </div>
-          
-          {['students', 'classes'].includes(activeSubTab) && (
-            <div className="header-actions">
-              <div className="search-bar">
-                <FiSearch className="search-icon" />
-                <input 
-                  type="text" 
-                  placeholder={`Search ${activeSubTab}...`} 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-              <button className="primary-btn" onClick={openAddModal}>
-                <FiPlus /> Add {activeSubTab.slice(0, -1)}
-              </button>
+          {activeSubTab === 'overview' ? (
+            <div className="sd-topbar-right">
+              <button className="sd-year-badge"><FiCalendar/>2024 · 2025<FiChevronDown/></button>
+              <button className="sd-icon-btn"><FiSettings/></button>
+              <button className="sd-icon-btn"><FiBell/></button>
+            </div>
+          ) : (
+            <div className="sd-topbar-right">
+              <button className="sd-notif-btn"><FiBell/>Notification</button>
+              <button className="sd-notif-btn"><FiHelpCircle/>Support</button>
             </div>
           )}
-        </header>
+        </div>
 
-        {errorMsg && <div className="alert alert-danger">{errorMsg}</div>}
-        {successMsg && <div className="alert alert-success">{successMsg}</div>}
+        {/* ── Page Content ── */}
+        <div className={`sd-content${activeSubTab === 'overview' ? ' sd-content--dashboard' : ''}`}>
 
-        {/* --- OVERVIEW TAB --- */}
-        {activeSubTab === 'overview' && data && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' }}>
-              <div className="stats-card" style={{ padding: '1.5rem', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b' }}>Assigned Classes</span>
-                  <FiUsers style={{ color: '#8b5cf6', fontSize: '1.25rem' }} />
-                </div>
-                <h2 style={{ fontSize: '2rem', fontWeight: 700, color: '#0f172a' }}>{data.assigned_classes?.length || 0}</h2>
-                <p style={{ fontSize: '0.75rem', color: '#8b5cf6', marginTop: '0.25rem' }}>{(data.assigned_classes || []).join(', ') || 'None'}</p>
+          {/* Alerts */}
+          {successMsg && <div className="sd-alert sd-alert-success"><FiCheckCircle/>{successMsg}</div>}
+          {errorMsg   && <div className="sd-alert sd-alert-error"><FiX/>{errorMsg}</div>}
+
+          {/* ══════════ OVERVIEW / DASHBOARD ══════════ */}
+          {activeSubTab === 'overview' && (
+            <>
+              <div className="sd-page-header">
+                <h1 className="sd-page-title">Teacher Dashboard</h1>
+                <p className="sd-page-sub">Monitor class performance, review schedules, and track student progress.</p>
               </div>
 
-              <div className="stats-card" style={{ padding: '1.5rem', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748b' }}>Scenarios</span>
-                  <FiBookOpen style={{ color: '#3b82f6', fontSize: '1.25rem' }} />
-                </div>
-                <h2 style={{ fontSize: '2rem', fontWeight: 700, color: '#0f172a' }}>{data.active_scenarios || 0}</h2>
-                <p style={{ fontSize: '0.75rem', color: '#3b82f6', marginTop: '0.25rem' }}>Assigned lessons in lab</p>
+              {/* Stat cards */}
+              <div className="sd-stat-row">
+                {[
+                  { label: 'Assigned Classes',  value: statClasses,   color: '#22c55e', bg: '#dcfce7', icon: <FiBookOpen/>,   trend: '+2%'  },
+                  { label: 'Total Students',    value: statStudents,  color: '#3b82f6', bg: '#dbeafe', icon: <FiUsers/>,      trend: '+12%' },
+                  { label: 'Active Scenarios',  value: statScenarios, color: '#a855f7', bg: '#f3e8ff', icon: <FiFileText/>,   trend: '+5%'  },
+                  { label: "Today's Lessons",   value: statLessons,   color: '#f97316', bg: '#ffedd5', icon: <FiClock/>,      trend: '0%'   },
+                  { label: 'Avg Student Score', value: '—',           color: '#06b6d4', bg: '#cffafe', icon: <FiAward/>,      trend: '—'    },
+                  { label: 'Completion Rate',   value: '—',           color: '#10b981', bg: '#d1fae5', icon: <FiTrendingUp/>, trend: '—'    },
+                ].map((s, i) => (
+                  <div className="sd-stat-card" key={i}>
+                    <div className="sd-stat-icon-row">
+                      <div className="sd-stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
+                    </div>
+                    <div className="sd-stat-value">{s.value}</div>
+                    <div className="sd-stat-label">{s.label}</div>
+                    <span className="sd-stat-trend">{s.trend}</span>
+                  </div>
+                ))}
               </div>
-            </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem' }}>
-              <div style={{ backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <FiClock style={{ color: '#8b5cf6' }} /> Today's Lab Schedule
-                </h3>
+              {/* Course Completion donut */}
+              <div className="sd-card">
+                <div className="sd-card-header">
+                  <div>
+                    <div className="sd-card-title">Course Completion</div>
+                    <div className="sd-card-sub">Class Progress</div>
+                  </div>
+                  <span className="sd-card-meta">This Month</span>
+                </div>
+                <div className="sd-completion-grid">
+                  <div className="sd-donut-wrap">
+                    <DonutChart pct={68}/>
+                  </div>
+                  <div className="sd-legend">
+                    {[
+                      { label: 'Completed',   color: '#6366f1', pct: '68%' },
+                      { label: 'In Progress', color: '#22c55e', pct: '22%' },
+                      { label: 'Not Started', color: '#cbd5e1', pct: '10%' },
+                    ].map(l => (
+                      <div className="sd-legend-row" key={l.label}>
+                        <div className="sd-legend-dot-label">
+                          <div className="sd-legend-dot" style={{ background: l.color }}/>
+                          {l.label}
+                        </div>
+                        <span className="sd-legend-pct">{l.pct}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom two-col grid */}
+              <div className="sd-bottom-grid">
+                {/* Student Performance Chart */}
+                <div className="sd-card">
+                  <div className="sd-card-header">
+                    <div>
+                      <div className="sd-card-title">Student Performance</div>
+                      <div className="sd-card-sub">Active Students</div>
+                    </div>
+                    <span className="sd-card-meta">This Month</span>
+                  </div>
+                  <div className="sd-chart-legend">
+                    {CHART_LINES.map(l => (
+                      <div className="sd-chart-legend-item" key={l.label}>
+                        <div className="sd-chart-legend-dot" style={{ background: l.color }}/>
+                        {l.label}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="sd-chart-wrap">
+                    <LineChart lines={CHART_LINES}/>
+                  </div>
+                  <div className="sd-x-labels">
+                    {CHART_MONTHS.map(m => <span className="sd-x-label" key={m}>{m}</span>)}
+                  </div>
+                </div>
+
+                {/* Recent Student Activity */}
+                <div className="sd-card">
+                  <div className="sd-card-header">
+                    <div className="sd-card-title">Student Activity</div>
+                    <button className="sd-view-all" onClick={() => goTo('students')}>View All</button>
+                  </div>
+                  <div className="sd-activity-list">
+                    {(data?.student_rankings?.length
+                      ? data.student_rankings.slice(0, 4).map((rank, i) => ({
+                          id: i,
+                          name: rank.name,
+                          color: RECENT_ACTIVITY[i % RECENT_ACTIVITY.length].color,
+                          desc: `Score: ${rank.score} — ${rank.progress || 'Progress tracked'}`,
+                          time: `#${i + 1}`
+                        }))
+                      : RECENT_ACTIVITY
+                    ).map(act => (
+                      <div className="sd-activity-item" key={act.id}>
+                        <div className="sd-activity-avatar" style={{ background: act.color }}>
+                          {act.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="sd-activity-body">
+                          <div className="sd-activity-name">{act.name}</div>
+                          <div className="sd-activity-desc">{act.desc}</div>
+                        </div>
+                        <div className="sd-activity-time">{act.time}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Today's Schedule card */}
+              {(data?.upcoming_lessons?.length > 0) && (
+                <div className="sd-card">
+                  <div className="sd-card-header">
+                    <div>
+                      <div className="sd-card-title">Today's Lab Schedule</div>
+                      <div className="sd-card-sub">Upcoming lessons</div>
+                    </div>
+                  </div>
+                  <div className="sd-activity-list">
+                    {data.upcoming_lessons.map((lesson, i) => (
+                      <div className="sd-activity-item" key={lesson.id || i}>
+                        <div className="sd-activity-avatar" style={{ background: '#6366f1' }}>
+                          <FiClock style={{ fontSize:'0.85rem' }}/>
+                        </div>
+                        <div className="sd-activity-body">
+                          <div className="sd-activity-name">{lesson.class}</div>
+                          <div className="sd-activity-desc">Topic: {lesson.topic}</div>
+                        </div>
+                        <div className="sd-activity-time" style={{ color:'#6366f1', fontWeight:600 }}>{lesson.time}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ══════════ STUDENTS TAB ══════════ */}
+          {activeSubTab === 'students' && (
+            <>
+              <div className="sd-page-header">
+                <h1 className="sd-page-title">Manage Students</h1>
+              </div>
+              <div className="sd-card" style={{ padding: '1.25rem 1.5rem' }}>
+                <div className="sd-table-toolbar">
+                  <div className="sd-table-search">
+                    <FiSearch/>
+                    <input
+                      type="text"
+                      placeholder="Search students..."
+                      value={searchQuery}
+                      onChange={e => { setSearchQuery(e.target.value); setStudentPage(1); }}
+                    />
+                  </div>
+                  <div className="sd-table-actions">
+                    <button className="sd-btn-filter"><FiFilter/>Filters</button>
+                    <button className="sd-btn-primary" onClick={openAddModal}><FiPlus/>Add Student</button>
+                  </div>
+                </div>
+                <div className="sd-table-wrap">
+                  <table className="sd-table">
+                    <thead>
+                      <tr>
+                        <th>Full Name</th>
+                        <th>Username</th>
+                        <th>Email Address</th>
+                        <th>Status</th>
+                        <th style={{ textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginate(filterList(students), studentPage).map((s, i) => (
+                        <tr key={s.id || i}>
+                          <td>
+                            <span className="sd-name-cell-primary">{s.full_name || 'N/A'}</span>
+                            <span className="sd-name-cell-email">{s.email || ''}</span>
+                          </td>
+                          <td>{s.username}</td>
+                          <td>{s.email || <span style={{ color:'#9ca3af', fontStyle:'italic' }}>Not provided</span>}</td>
+                          <td>
+                            <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                              {s.is_active ? 'Active' : 'Disabled'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="sd-action-cell">
+                              <button className="sd-icon-action edit"   onClick={() => openEditModal(s)} title="Edit"><FiEdit2/></button>
+                              <button className="sd-icon-action delete" onClick={() => handleDelete(s.id, 'student')} title="Delete"><FiTrash2/></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {filterList(students).length === 0 && (
+                        <tr><td colSpan="5" className="sd-empty-state">No students found.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <Pagination total={filterList(students).length} perPage={PER_PAGE} page={studentPage} onPage={setStudentPage}/>
+              </div>
+            </>
+          )}
+
+          {/* ══════════ CLASSES TAB ══════════ */}
+          {activeSubTab === 'classes' && (
+            <>
+              <div className="sd-page-header">
+                <h1 className="sd-page-title">Manage Classes</h1>
+              </div>
+              <div className="sd-card" style={{ padding: '1.25rem 1.5rem' }}>
+                <div className="sd-table-toolbar">
+                  <div className="sd-table-search">
+                    <FiSearch/>
+                    <input
+                      type="text"
+                      placeholder="Search classes..."
+                      value={searchQuery}
+                      onChange={e => { setSearchQuery(e.target.value); setClassPage(1); }}
+                    />
+                  </div>
+                  <div className="sd-table-actions">
+                    <button className="sd-btn-filter"><FiFilter/>Filters</button>
+                    <button className="sd-btn-primary" onClick={openAddModal}><FiPlus/>Add Class</button>
+                  </div>
+                </div>
+                <div className="sd-table-wrap">
+                  <table className="sd-table">
+                    <thead>
+                      <tr>
+                        <th>Class Name</th>
+                        <th>Grade Level</th>
+                        <th>School</th>
+                        <th>Academic Year</th>
+                        <th>Status</th>
+                        <th style={{ textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginate(filterList(classes), classPage).map((c, i) => (
+                        <tr key={c.id || i}>
+                          <td>
+                            <span className="sd-name-cell-primary">{c.class_name}</span>
+                          </td>
+                          <td>{grades.find(g => g.id === c.grade)?.grade_name || c.grade || 'N/A'}</td>
+                          <td>{schools.find(s => s.school_id === c.school)?.school_name || c.school || 'N/A'}</td>
+                          <td>{c.academic_year}</td>
+                          <td>
+                            <span className={`sd-badge ${c.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                              {c.is_active ? 'Active' : 'Disabled'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="sd-action-cell">
+                              <button className="sd-icon-action edit"   onClick={() => openEditModal(c)} title="Edit"><FiEdit2/></button>
+                              <button className="sd-icon-action delete" onClick={() => handleDelete(c.id, 'class')} title="Delete"><FiTrash2/></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {filterList(classes).length === 0 && (
+                        <tr><td colSpan="6" className="sd-empty-state">No classes found.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <Pagination total={filterList(classes).length} perPage={PER_PAGE} page={classPage} onPage={setClassPage}/>
+              </div>
+            </>
+          )}
+
+          {/* ══════════ REPORTS TAB ══════════ */}
+          {activeSubTab === 'reports' && (
+            <>
+              <div className="sd-page-header">
+                <h1 className="sd-page-title">Student Performance Reports</h1>
+                <p className="sd-page-sub">Monitor evaluation metrics and student progression.</p>
+              </div>
+
+              {/* Skill breakdown cards */}
+              <div className="sd-card">
+                <div className="sd-card-header">
+                  <div className="sd-card-title">Overall Student Marks</div>
+                  <span className="sd-card-meta">This Semester</span>
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {(data.upcoming_lessons || []).map(lesson => (
-                    <div key={lesson.id} style={{ display: 'flex', padding: '0.9rem', borderRadius: '8px', borderLeft: '3px solid #8b5cf6', backgroundColor: '#f8fafc', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1e293b' }}>{lesson.class}</h4>
-                        <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.1rem' }}>Topic: {lesson.topic}</p>
+                  {[
+                    { label: 'Speaking',      pct: 85, color: '#6366f1' },
+                    { label: 'Vocabulary',    pct: 72, color: '#22c55e' },
+                    { label: 'Comprehension', pct: 90, color: '#3b82f6' },
+                    { label: 'Writing',       pct: 68, color: '#f59e0b' },
+                  ].map(skill => (
+                    <div key={skill.label}>
+                      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+                        <span style={{ fontSize:'0.83rem', fontWeight:600, color:'#374151' }}>{skill.label}</span>
+                        <span style={{ fontSize:'0.83rem', fontWeight:700, color: skill.color }}>{skill.pct}%</span>
                       </div>
-                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#8b5cf6', backgroundColor: '#f5f3ff', padding: '0.25rem 0.5rem', borderRadius: '4px' }}>{lesson.time}</span>
-                    </div>
-                  ))}
-                  {(!data.upcoming_lessons || data.upcoming_lessons.length === 0) && (
-                    <p style={{ color: '#64748b', fontSize: '0.875rem' }}>No lessons scheduled for today.</p>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <FiActivity style={{ color: '#10b981' }} /> Top Performing Students
-                </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {(data.student_rankings || []).map((rank, idx) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: idx < data.student_rankings.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <span style={{ fontSize: '0.875rem', fontWeight: 700, color: idx === 0 ? '#f59e0b' : idx === 1 ? '#94a3b8' : '#b45309', backgroundColor: '#f8fafc', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{idx + 1}</span>
-                        <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1e293b' }}>{rank.name}</span>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#10b981' }}>{rank.score}</span>
-                        <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{rank.progress}</div>
+                      <div style={{ width:'100%', height:8, background:'#f3f4f6', borderRadius:4, overflow:'hidden' }}>
+                        <div style={{ width:`${skill.pct}%`, height:'100%', background: skill.color, borderRadius:4, transition:'width 0.6s ease' }}/>
                       </div>
                     </div>
                   ))}
-                  {(!data.student_rankings || data.student_rankings.length === 0) && (
-                    <p style={{ color: '#64748b', fontSize: '0.875rem' }}>No student rankings available yet.</p>
-                  )}
                 </div>
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* --- STUDENTS TAB --- */}
-        {activeSubTab === 'students' && (
-          <div className="data-table-container">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Full Name</th>
-                  <th>Username</th>
-                  <th>Email Address</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStudents.length > 0 ? filteredStudents.map(student => (
-                  <tr key={student.id}>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div className="table-avatar">{student.full_name ? student.full_name.charAt(0).toUpperCase() : (student.username ? student.username.charAt(0).toUpperCase() : 'S')}</div>
-                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{student.full_name || 'N/A'}</span>
-                      </div>
-                    </td>
-                    <td>{student.username}</td>
-                    <td>{student.email || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Not provided</span>}</td>
-                    <td>
-                      <span className={`status-badge ${student.is_active ? 'active' : 'inactive'}`}>
-                        {student.is_active ? 'Active' : 'Disabled'}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="action-buttons">
-                        <button className="icon-btn edit-btn" onClick={() => openEditModal(student)} title="Edit"><FiEdit2 /></button>
-                        <button className="icon-btn delete-btn" onClick={() => handleDelete(student.id, 'student')} title="Delete"><FiTrash2 /></button>
-                      </div>
-                    </td>
-                  </tr>
-                )) : (
-                  <tr><td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>No students found</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* --- CLASSES TAB --- */}
-        {activeSubTab === 'classes' && (
-          <div className="data-table-container">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Class Name</th>
-                  <th>Grade Level</th>
-                  <th>School</th>
-                  <th>Academic Year</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredClasses.length > 0 ? filteredClasses.map(cls => (
-                  <tr key={cls.id}>
-                    <td><span style={{ fontWeight: 600, color: '#1e293b' }}>{cls.class_name}</span></td>
-                    <td>{grades.find(g => g.id === cls.grade)?.grade_name || cls.grade}</td>
-                    <td>{schools.find(s => s.school_id === cls.school)?.school_name || cls.school}</td>
-                    <td>{cls.academic_year}</td>
-                    <td>
-                      <span className={`status-badge ${cls.is_active ? 'active' : 'inactive'}`}>
-                        {cls.is_active ? 'Active' : 'Disabled'}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="action-buttons">
-                        <button className="icon-btn edit-btn" onClick={() => openEditModal(cls)} title="Edit"><FiEdit2 /></button>
-                        <button className="icon-btn delete-btn" onClick={() => handleDelete(cls.id, 'class')} title="Delete"><FiTrash2 /></button>
-                      </div>
-                    </td>
-                  </tr>
-                )) : (
-                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>No classes found</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* --- REPORTS TAB --- */}
-        {activeSubTab === 'reports' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-              <div style={{ backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.25rem' }}>Overall Student Marks</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                      <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#475569' }}>Speaking</span>
-                      <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#8b5cf6' }}>85%</span>
-                    </div>
-                    <div style={{ width: '100%', height: '8px', backgroundColor: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
-                      <div style={{ width: '85%', height: '100%', backgroundColor: '#8b5cf6' }}></div>
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                      <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#475569' }}>Vocabulary</span>
-                      <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#10b981' }}>72%</span>
-                    </div>
-                    <div style={{ width: '100%', height: '8px', backgroundColor: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
-                      <div style={{ width: '72%', height: '100%', backgroundColor: '#10b981' }}></div>
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                      <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#475569' }}>Comprehension</span>
-                      <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#3b82f6' }}>90%</span>
-                    </div>
-                    <div style={{ width: '100%', height: '8px', backgroundColor: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
-                      <div style={{ width: '90%', height: '100%', backgroundColor: '#3b82f6' }}></div>
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                      <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#475569' }}>Writing</span>
-                      <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#f59e0b' }}>68%</span>
-                    </div>
-                    <div style={{ width: '100%', height: '8px', backgroundColor: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
-                      <div style={{ width: '68%', height: '100%', backgroundColor: '#f59e0b' }}></div>
-                    </div>
-                  </div>
+              {/* Top students */}
+              <div className="sd-card">
+                <div className="sd-card-header">
+                  <div className="sd-card-title">Top 5 Students by Grade</div>
+                  <span className="sd-card-meta">All Classes</span>
                 </div>
-              </div>
-              
-              <div style={{ backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.25rem' }}>Top 5 Students by Grade</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {['Sarah Jenkins - Grade 10', 'Michael Chen - Grade 9', 'Emma Watson - Grade 8', 'David Miller - Grade 10', 'Jessica Lee - Grade 11'].map((student, idx) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: idx < 4 ? '1px solid #f1f5f9' : 'none' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#64748b', backgroundColor: '#f8fafc', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{idx + 1}</span>
-                        <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1e293b' }}>{student}</span>
+                <div className="sd-activity-list">
+                  {(data?.student_rankings?.length
+                    ? data.student_rankings.slice(0, 5)
+                    : [
+                        { name: 'Sarah Jenkins', score: '95%' },
+                        { name: 'Michael Chen',  score: '92%' },
+                        { name: 'Emma Watson',   score: '89%' },
+                        { name: 'David Miller',  score: '87%' },
+                        { name: 'Jessica Lee',   score: '85%' },
+                      ]
+                  ).map((rank, idx) => (
+                    <div className="sd-activity-item" key={idx}>
+                      <div className="sd-activity-avatar"
+                        style={{ background: ['#f59e0b','#94a3b8','#b45309','#6366f1','#22c55e'][idx] || '#6366f1',
+                          fontSize:'0.78rem', fontWeight:700 }}>
+                        {idx + 1}
                       </div>
-                      <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#10b981' }}>{95 - idx}%</span>
+                      <div className="sd-activity-body">
+                        <div className="sd-activity-name">{rank.name}</div>
+                        <div className="sd-activity-desc">{rank.progress || 'Top performer'}</div>
+                      </div>
+                      <div className="sd-activity-time" style={{ color:'#10b981', fontWeight:700, fontSize:'0.85rem' }}>
+                        {rank.score || '—'}
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* --- PROFILE TAB --- */}
-        {activeSubTab === 'profile' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem' }}>
-            <div style={{ backgroundColor: '#ffffff', padding: '2rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <FiUser style={{ color: '#8b5cf6' }} /> Update Personal Information
-              </h3>
-              <form onSubmit={handleProfileUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <div className="form-group">
-                  <label>Full Name</label>
-                  <div className="input-with-icon">
-                    <FiUser className="input-icon" />
-                    <input type="text" value={profileForm.full_name} onChange={e => setProfileForm({...profileForm, full_name: e.target.value})} required />
+              {/* Grading queue empty state */}
+              <div className="sd-card">
+                <div className="sd-card-header">
+                  <div className="sd-card-title">Grading Queue</div>
+                </div>
+                <div className="sd-reports-empty" style={{ padding:'2.5rem 1rem' }}>
+                  <FiFileText/>
+                  <h3>No pending submissions</h3>
+                  <p>Grading data will appear here once students complete their scenario assessments.</p>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ══════════ PROFILE / ACCOUNT SETTINGS ══════════ */}
+          {activeSubTab === 'profile' && (
+            <>
+              <div className="sd-page-header">
+                <h1 className="sd-page-title">Account Settings</h1>
+                <p className="sd-page-sub">Manage your personal information, security preferences, and teacher profile.</p>
+              </div>
+
+              <form onSubmit={handleProfileUpdate}>
+                <div className="sd-profile-card">
+                  {/* Header */}
+                  <div className="sd-profile-section-header">
+                    <div className="sd-profile-section-title">
+                      <FiUser/>Personal Details
+                    </div>
+                    <span className="sd-verified-badge"><FiCheckCircle/>Verified Teacher</span>
+                  </div>
+
+                  {/* Fields */}
+                  <div className="sd-form-row">
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Full Name</label>
+                      <input className="sd-form-input" type="text"
+                        value={profileForm.full_name}
+                        onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
+                        placeholder="Your full name" required/>
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Email Address</label>
+                      <input className="sd-form-input" type="email"
+                        value={profileForm.email}
+                        onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
+                        placeholder="your@email.com"/>
+                    </div>
+                  </div>
+                  <div className="sd-form-row">
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Username</label>
+                      <input className="sd-form-input" type="text" value={profileForm.username} disabled/>
+                    </div>
+                  </div>
+
+                  {/* Change password row */}
+                  <div className="sd-pw-row">
+                    <div>
+                      <div className="sd-pw-row-title">Change Password</div>
+                      <div className="sd-pw-row-sub">Update your password to stay secure</div>
+                    </div>
+                    <button type="button" className="sd-btn-outline" onClick={() => setShowPwModal(true)}>Update</button>
+                  </div>
+
+                  {/* Recent Login Activity */}
+                  <div className="sd-login-activity-section">
+                    <div className="sd-login-activity-title">Recent Login Activity</div>
+                    <div className="sd-login-item">
+                      <div className="sd-login-icon"><FiMonitor/></div>
+                      <div className="sd-login-details">
+                        <div className="sd-login-device">Chrome on MacOS • New York, USA</div>
+                        <div className="sd-login-time">Today, 10:45 AM</div>
+                      </div>
+                    </div>
+                    <div className="sd-login-item">
+                      <div className="sd-login-icon"><FiSmartphone/></div>
+                      <div className="sd-login-details">
+                        <div className="sd-login-device">iPhone 14 Pro • New York, USA</div>
+                        <div className="sd-login-time">Yesterday, 08:22 PM</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="sd-profile-save-row">
+                    <button type="submit" className="sd-btn-primary" disabled={actionLoading}>
+                      {actionLoading ? 'Saving...' : 'Save Changes'}
+                    </button>
                   </div>
                 </div>
-                <div className="form-group">
-                  <label>Email Address</label>
-                  <div className="input-with-icon">
-                    <FiLock className="input-icon" />
-                    <input type="email" value={profileForm.email} onChange={e => setProfileForm({...profileForm, email: e.target.value})} />
-                  </div>
-                </div>
-                <button type="submit" className="primary-btn" style={{ width: '100%', justifyContent: 'center', marginTop: '0.5rem' }} disabled={actionLoading}>
-                  {actionLoading ? 'Updating...' : 'Save Profile Changes'}
-                </button>
               </form>
-            </div>
+            </>
+          )}
 
-            <div style={{ backgroundColor: '#ffffff', padding: '2rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <FiLock style={{ color: '#ef4444' }} /> Change Password
-              </h3>
-              <form onSubmit={handlePasswordChange} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <div className="form-group">
-                  <label>Current Password</label>
-                  <div className="input-with-icon">
-                    <FiLock className="input-icon" />
-                    <input type="password" value={profileForm.current_password} onChange={e => setProfileForm({...profileForm, current_password: e.target.value})} required />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>New Password</label>
-                  <div className="input-with-icon">
-                    <FiLock className="input-icon" />
-                    <input type="password" value={profileForm.password} onChange={e => setProfileForm({...profileForm, password: e.target.value})} required minLength="6" />
-                  </div>
-                </div>
-                <button type="submit" className="primary-btn" style={{ width: '100%', justifyContent: 'center', marginTop: '0.5rem', backgroundColor: '#ef4444' }} disabled={actionLoading}>
-                  {actionLoading ? 'Updating...' : 'Update Password'}
-                </button>
-              </form>
-            </div>
-          </div>
-        )}
+        </div>{/* /sd-content */}
       </main>
 
-      {/* --- CRUD MODALS --- */}
+      {/* ════════════════════
+          CRUD MODAL (Students / Classes)
+          ════════════════════ */}
       {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-container">
-            <div className="modal-header">
-              <h3>{modalType === 'add' ? 'Add New' : 'Edit'} {activeSubTab.slice(0, -1)}</h3>
-              <button className="close-modal-btn" onClick={closeModal}><FiX /></button>
+        <div className="sd-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
+          <div className="sd-modal">
+            <div className="sd-modal-header">
+              <span className="sd-modal-title">
+                {modalType === 'add' ? 'Add' : 'Edit'} {activeSubTab === 'students' ? 'Student' : 'Class'}
+              </span>
+              <button className="sd-modal-close" onClick={closeModal}><FiX/></button>
             </div>
-            <div className="modal-body">
-              {errorMsg && <div className="alert alert-danger" style={{ marginBottom: '1rem' }}>{errorMsg}</div>}
-              
-              <form onSubmit={handleFormSubmit} id="crud-form">
-                
-                {/* Student Fields */}
-                {activeSubTab === 'students' && (
-                  <>
-                    <div className="form-row">
-                      <div className="form-group">
-                        <label>Username *</label>
-                        <input type="text" value={studentForm.username} onChange={e => setStudentForm({...studentForm, username: e.target.value})} required disabled={modalType === 'edit'} />
-                      </div>
-                      <div className="form-group">
-                        <label>Full Name</label>
-                        <input type="text" value={studentForm.full_name} onChange={e => setStudentForm({...studentForm, full_name: e.target.value})} />
-                      </div>
-                    </div>
-                    <div className="form-row">
-                      <div className="form-group">
-                        <label>Email</label>
-                        <input type="email" value={studentForm.email} onChange={e => setStudentForm({...studentForm, email: e.target.value})} />
-                      </div>
-                      <div className="form-group">
-                        <label>{modalType === 'add' ? 'Password *' : 'New Password (leave blank to keep current)'}</label>
-                        <input type="password" value={studentForm.password} onChange={e => setStudentForm({...studentForm, password: e.target.value})} required={modalType === 'add'} />
-                      </div>
-                    </div>
-                    <div className="form-group checkbox-group">
-                      <label>
-                        <input type="checkbox" checked={studentForm.is_active} onChange={e => setStudentForm({...studentForm, is_active: e.target.checked})} />
-                        Account is Active
-                      </label>
-                    </div>
-                  </>
-                )}
+            {errorMsg && <div className="sd-alert sd-alert-error" style={{ marginBottom:'1rem' }}><FiX/>{errorMsg}</div>}
+            <form className="sd-modal-form" onSubmit={handleFormSubmit}>
 
-                {/* Class Fields */}
-                {activeSubTab === 'classes' && (
-                  <>
-                    <div className="form-row">
-                      <div className="form-group">
-                        <label>Class Name *</label>
-                        <input type="text" value={classForm.class_name} onChange={e => setClassForm({...classForm, class_name: e.target.value})} required placeholder="e.g. 10A Science" />
-                      </div>
-                      <div className="form-group">
-                        <label>Academic Year</label>
-                        <input type="text" value={classForm.academic_year} onChange={e => setClassForm({...classForm, academic_year: e.target.value})} />
-                      </div>
-                    </div>
-                    <div className="form-row">
-                      <div className="form-group">
-                        <label>School *</label>
-                        <select value={classForm.school} onChange={e => setClassForm({...classForm, school: e.target.value})} required>
-                          {schools.map(s => <option key={s.school_id} value={s.school_id}>{s.school_name}</option>)}
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label>Grade Level *</label>
-                        <select value={classForm.grade} onChange={e => setClassForm({...classForm, grade: e.target.value})} required>
-                          {grades.map(g => <option key={g.id} value={g.id}>{g.grade_name}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="form-group checkbox-group">
-                      <label>
-                        <input type="checkbox" checked={classForm.is_active} onChange={e => setClassForm({...classForm, is_active: e.target.checked})} />
-                        Class is Active
-                      </label>
-                    </div>
-                  </>
-                )}
+              {/* Student fields */}
+              {activeSubTab === 'students' && (<>
+                <div className="sd-form-row">
+                  <div className="sd-form-group">
+                    <label className="sd-form-label">Username *</label>
+                    <input className="sd-form-input" type="text" value={studentForm.username}
+                      onChange={e => setStudentForm({ ...studentForm, username: e.target.value })}
+                      disabled={modalType === 'edit'} required/>
+                  </div>
+                  <div className="sd-form-group">
+                    <label className="sd-form-label">Full Name</label>
+                    <input className="sd-form-input" type="text" value={studentForm.full_name}
+                      onChange={e => setStudentForm({ ...studentForm, full_name: e.target.value })}/>
+                  </div>
+                </div>
+                <div className="sd-form-row">
+                  <div className="sd-form-group">
+                    <label className="sd-form-label">Email</label>
+                    <input className="sd-form-input" type="email" value={studentForm.email}
+                      onChange={e => setStudentForm({ ...studentForm, email: e.target.value })}/>
+                  </div>
+                  <div className="sd-form-group">
+                    <label className="sd-form-label">{modalType === 'add' ? 'Password *' : 'New Password'}</label>
+                    <input className="sd-form-input" type="password" value={studentForm.password}
+                      onChange={e => setStudentForm({ ...studentForm, password: e.target.value })}
+                      required={modalType === 'add'} placeholder={modalType === 'edit' ? 'Leave blank to keep current' : ''}/>
+                  </div>
+                </div>
+                <label className="sd-checkbox-label">
+                  <input type="checkbox" checked={studentForm.is_active}
+                    onChange={e => setStudentForm({ ...studentForm, is_active: e.target.checked })}/>
+                  Account is Active
+                </label>
+              </>)}
 
-              </form>
-            </div>
-            <div className="modal-footer">
-              <button className="secondary-btn" onClick={closeModal} type="button">Cancel</button>
-              <button className="primary-btn" type="submit" form="crud-form" disabled={actionLoading}>
-                {actionLoading ? 'Saving...' : (modalType === 'add' ? 'Create' : 'Save Changes')}
-              </button>
-            </div>
+              {/* Class fields */}
+              {activeSubTab === 'classes' && (<>
+                <div className="sd-form-row">
+                  <div className="sd-form-group">
+                    <label className="sd-form-label">Class Name *</label>
+                    <input className="sd-form-input" type="text" value={classForm.class_name}
+                      onChange={e => setClassForm({ ...classForm, class_name: e.target.value })}
+                      placeholder="e.g. 10A Science" required/>
+                  </div>
+                  <div className="sd-form-group">
+                    <label className="sd-form-label">Academic Year</label>
+                    <input className="sd-form-input" type="text" value={classForm.academic_year}
+                      onChange={e => setClassForm({ ...classForm, academic_year: e.target.value })}/>
+                  </div>
+                </div>
+                <div className="sd-form-row">
+                  <div className="sd-form-group">
+                    <label className="sd-form-label">School *</label>
+                    <select className="sd-form-input" value={classForm.school}
+                      onChange={e => setClassForm({ ...classForm, school: e.target.value })} required>
+                      {schools.map(s => <option key={s.school_id} value={s.school_id}>{s.school_name}</option>)}
+                    </select>
+                  </div>
+                  <div className="sd-form-group">
+                    <label className="sd-form-label">Grade Level *</label>
+                    <select className="sd-form-input" value={classForm.grade}
+                      onChange={e => setClassForm({ ...classForm, grade: e.target.value })} required>
+                      {grades.map(g => <option key={g.id} value={g.id}>{g.grade_name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <label className="sd-checkbox-label">
+                  <input type="checkbox" checked={classForm.is_active}
+                    onChange={e => setClassForm({ ...classForm, is_active: e.target.checked })}/>
+                  Class is Active
+                </label>
+              </>)}
+
+              <div className="sd-modal-footer">
+                <button type="button" className="sd-btn-cancel" onClick={closeModal}>Cancel</button>
+                <button type="submit" className="sd-btn-save" disabled={actionLoading}>
+                  {actionLoading ? 'Saving...' : modalType === 'add' ? 'Create' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
+
+      {/* ── Change Password Modal ── */}
+      {showPwModal && (
+        <div className="sd-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) setShowPwModal(false); }}>
+          <div className="sd-modal" style={{ maxWidth: 420 }}>
+            <div className="sd-modal-header">
+              <span className="sd-modal-title">Change Password</span>
+              <button className="sd-modal-close" onClick={() => setShowPwModal(false)}><FiX/></button>
+            </div>
+            <form className="sd-modal-form" onSubmit={async e => {
+              e.preventDefault();
+              setActionLoading(true);
+              try {
+                const res = await apiFetch('/api/users/change-password/', {
+                  method: 'POST',
+                  body: JSON.stringify({ old_password: profileForm.current_password, new_password: profileForm.password })
+                });
+                if (res.ok) {
+                  showFeedback('Password changed successfully!', null);
+                  setProfileForm(p => ({ ...p, current_password: '', password: '' }));
+                  setShowPwModal(false);
+                } else {
+                  const d = await res.json();
+                  showFeedback(null, d.error || 'Password change failed.');
+                }
+              } catch { showFeedback(null, 'Network error.'); }
+              finally { setActionLoading(false); }
+            }}>
+              <div className="sd-form-group">
+                <label className="sd-form-label">Current Password</label>
+                <input className="sd-form-input" type="password" value={profileForm.current_password}
+                  onChange={e => setProfileForm({ ...profileForm, current_password: e.target.value })}
+                  placeholder="Enter current password" required/>
+              </div>
+              <div className="sd-form-group">
+                <label className="sd-form-label">New Password</label>
+                <input className="sd-form-input" type="password" value={profileForm.password}
+                  onChange={e => setProfileForm({ ...profileForm, password: e.target.value })}
+                  placeholder="Minimum 6 characters" required minLength={6}/>
+              </div>
+              <div className="sd-modal-footer">
+                <button type="button" className="sd-btn-cancel" onClick={() => setShowPwModal(false)}>Cancel</button>
+                <button type="submit" className="sd-btn-save" disabled={actionLoading}>
+                  {actionLoading ? 'Updating...' : 'Update Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
