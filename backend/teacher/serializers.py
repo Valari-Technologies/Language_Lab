@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from accounts.scoping import get_user_school
+from super_admin.models import School
 from .models import Student
 
 User = get_user_model()
@@ -14,6 +15,7 @@ class StudentSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(required=False)
     is_active = serializers.BooleanField(required=False, default=True)
     school_name = serializers.CharField(source="school.school_name", read_only=True)
+    school = serializers.PrimaryKeyRelatedField(queryset=School.objects.all(), required=False, allow_null=True)
 
     class Meta:
         model = Student
@@ -50,12 +52,14 @@ class StudentSerializer(serializers.ModelSerializer):
             if User.objects.filter(username=attrs["username"]).exists():
                 raise serializers.ValidationError({"username": "A user with that username already exists."})
             validate_password(attrs["password"])
-            if request and request.user.role == "SCHOOL_ADMIN":
+            if request and request.user.role in ["SCHOOL_ADMIN", "TEACHER"]:
                 admin_school = get_user_school(request.user)
                 if not admin_school:
                     raise serializers.ValidationError("Your account is not linked to a school.")
                 attrs["school"] = admin_school
-        elif request and request.user.role == "SCHOOL_ADMIN":
+            elif "school" not in attrs or attrs["school"] is None:
+                raise serializers.ValidationError({"school": "This field is required."})
+        elif request and request.user.role in ["SCHOOL_ADMIN", "TEACHER"]:
             admin_school = get_user_school(request.user)
             if admin_school and attrs.get("school") and attrs["school"] != admin_school:
                 raise serializers.ValidationError({"school": "You can only manage students in your own school."})

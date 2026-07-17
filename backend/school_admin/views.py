@@ -6,7 +6,7 @@ from rest_framework.parsers import MultiPartParser
 from django.db import transaction
 from django.contrib.auth import get_user_model
 
-from accounts.permissions import IsSuperAdminOrSchoolAdminWrite, IsInstituteAdmin
+from accounts.permissions import IsSuperAdminOrSchoolAdminWrite, IsInstituteAdmin, IsTeacherOrAdmin
 from accounts.scoping import filter_queryset_by_school, get_user_school
 from super_admin.views import CMSBaseViewSet
 from super_admin.models import School, Grade
@@ -345,9 +345,15 @@ class TeacherViewSet(CMSBaseViewSet):
             self.request.user,
         )
 
+    def perform_destroy(self, instance):
+        user = instance.user
+        super().perform_destroy(instance)
+        if user:
+            user.delete()
+
 
 class ClassViewSet(CMSBaseViewSet):
-    permission_classes = [IsAuthenticated, IsSuperAdminOrSchoolAdminWrite]
+    permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
     queryset = Class.objects.select_related("school", "grade").all()
     serializer_class = ClassSerializer
     search_fields = ["class_name"]

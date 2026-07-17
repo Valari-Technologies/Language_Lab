@@ -106,7 +106,7 @@ class ClassSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         request = self.context.get("request")
-        if request and request.user.role == "SCHOOL_ADMIN":
+        if request and request.user.role in ["SCHOOL_ADMIN", "TEACHER"]:
             admin_school = get_user_school(request.user)
             if not admin_school:
                 raise serializers.ValidationError("Your account is not linked to a school.")
