@@ -659,10 +659,6 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
           <button className={`sd-nav-item${activeTab === 'subscriptions' ? ' active' : ''}`} onClick={() => goTo('subscriptions')}>
             <FiCheckCircle/><span>Subscriptions</span>
           </button>
-          <button className="sd-nav-item" onClick={() => { window.location.pathname = '/content-studio'; }}>
-            <FiBookOpen/><span>Content Studio</span>
-            <span style={{ marginLeft: 'auto', background: '#6366f1', color: '#fff', fontSize: '0.62rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px' }}>NEW</span>
-          </button>
           <button className={`sd-nav-item${activeTab === 'users-roles' ? ' active' : ''}`} onClick={() => goTo('users-roles')}>
             <FiUsers/><span>Users &amp; Roles</span>
           </button>
@@ -676,8 +672,6 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
 
         {/* Footer links */}
         <div className="sd-footer">
-          <button className="sd-footer-link" onClick={() => goTo('profile')}><FiSettings/><span>Settings</span></button>
-          <button className="sd-footer-link"><FiHelpCircle/><span>Support</span></button>
           <button className="sd-footer-link danger" onClick={onLogout}><FiLogOut/><span>Logout</span></button>
         </div>
 

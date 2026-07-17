@@ -134,15 +134,21 @@ const SchoolDashboard = ({ user, onLogout }) => {
 
   /* ── Pagination ── */
   const [teacherPage, setTeacherPage]   = useState(1);
+  const [studentPage, setStudentPage]   = useState(1);
   const [classPage,   setClassPage]     = useState(1);
   const [scenarioPage,setScenarioPage]  = useState(1);
   const PER_PAGE = 4;
+
+  /* ── Bulk Upload ── */
+  const [importActive, setImportActive]   = useState(false);
+  const [uploadSummary, setUploadSummary] = useState(null);
 
   /* ── Modals ── */
   const [showModal,   setShowModal]   = useState(false);
   const [modalType,   setModalType]   = useState('add');
   const [editingId,   setEditingId]   = useState(null);
   const [showPwModal, setShowPwModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, type: null });
 
   /* ── Data ── */
   const [dashboardData,  setDashboardData]  = useState(null);
@@ -154,10 +160,11 @@ const SchoolDashboard = ({ user, onLogout }) => {
   const [grades,         setGrades]         = useState([]);
 
   /* ── Reports ── */
-  const [overviewReport,  setOverviewReport]  = useState(null);
-  const [scenariosReport, setScenariosReport] = useState([]);
-  const [classesReport,   setClassesReport]   = useState([]);
-  const [studentsReport,  setStudentsReport]  = useState([]);
+  const [overviewReport,          setOverviewReport]          = useState(null);
+  const [scenariosReport,         setScenariosReport]         = useState([]);
+  const [classesReport,           setClassesReport]           = useState([]);
+  const [studentsReport,          setStudentsReport]          = useState([]);
+  const [studentCompletionReport, setStudentCompletionReport] = useState([]);
 
   /* ── Detail modals ── */
   const [selectedScenarioDetail, setSelectedScenarioDetail] = useState(null);
@@ -234,6 +241,16 @@ const SchoolDashboard = ({ user, onLogout }) => {
     } catch (e) { console.error('Failed to load scenarios.', e); }
   };
 
+  const loadStudentCompletionReport = async () => {
+    try {
+      const res = await apiFetch('/api/v1/reports/student-completion/');
+      if (res.ok) {
+        const d = await res.json();
+        setStudentCompletionReport(d.results || d);
+      }
+    } catch (e) { console.error('Failed to load student completion report', e); }
+  };
+
   const loadReportsData = async () => {
     try {
       const [overRes, scenRes, classRes, studRes] = await Promise.all([
@@ -256,7 +273,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
       await Promise.all([
         loadDashboardData(), loadSchools(), loadGrades(),
         loadTeachers(), loadStudents(), loadClasses(),
-        loadScenarios(), loadReportsData()
+        loadScenarios(), loadReportsData(), loadStudentCompletionReport()
       ]);
     } catch (e) { setErrorMsg('Error loading dashboard data.'); }
     finally { setLoading(false); }
@@ -306,7 +323,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
   const handleOpenAdd = () => { setModalType('add'); setEditingId(null); initForm(activeSubTab); setShowModal(true); };
   const handleOpenEdit = (entity) => {
     setModalType('edit');
-    setEditingId(entity.teacher_id || entity.id || entity.class_id);
+    setEditingId(entity.student_id || entity.teacher_id || entity.class_id || entity.id);
     initForm(activeSubTab, entity);
     setShowModal(true);
   };
@@ -342,7 +359,16 @@ const SchoolDashboard = ({ user, onLogout }) => {
         else if (activeSubTab === 'classes') await loadClasses();
         await loadDashboardData();
       } else {
-        setErrorMsg(`Error: ${typeof resData === 'object' ? JSON.stringify(resData) : resData}`);
+        if (resData && typeof resData === 'object') {
+          const errs = Object.entries(resData).map(([k, v]) => {
+            const field = k.charAt(0).toUpperCase() + k.slice(1);
+            const msg = Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v);
+            return `${field}: ${msg}`;
+          });
+          setErrorMsg(errs.join(' | ') || 'Operation failed.');
+        } else {
+          setErrorMsg(resData.message || 'Operation failed.');
+        }
       }
     } catch (err) {
       setErrorMsg('Failed to process request. Check connections.');
@@ -351,9 +377,54 @@ const SchoolDashboard = ({ user, onLogout }) => {
     }
   };
 
+  const handleBulkUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setErrorMsg('');
+    setSuccessMsg('');
+    setUploadSummary(null);
+    setActionLoading(true);
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_type', activeSubTab === 'teachers' ? 'teacher' : 'student');
+
+    try {
+      const res = await apiFetch('/api/cms/bulk-upload/', {
+        method: 'POST',
+        body: formData
+      });
+      const resData = await res.json();
+      if (res.ok) {
+        setUploadSummary(resData);
+        if (resData.created > 0) {
+          showFeedback(`Ingested ${resData.created} record(s) successfully.`, null);
+          if (activeSubTab === 'teachers') await loadTeachers();
+          else if (activeSubTab === 'students') await loadStudents();
+          await loadDashboardData();
+        } else {
+          setErrorMsg('Bulk upload complete with 0 records imported.');
+        }
+      } else {
+        setErrorMsg(resData.error || 'Failed to process spreadsheet.');
+      }
+    } catch (err) {
+      setErrorMsg('Failed to upload file. Check connections.');
+    } finally {
+      setActionLoading(false);
+      e.target.value = '';
+    }
+  };
+
   /* ── Delete ── */
-  const handleDelete = async (id) => {
-    if (!window.confirm(`Delete this ${activeSubTab.slice(0, -1)}?`)) return;
+  const handleDelete = (id) => {
+    setDeleteConfirm({ show: true, id, type: activeSubTab.slice(0, -1) });
+  };
+
+  const confirmDeleteAction = async () => {
+    const { id, type } = deleteConfirm;
+    if (!id || !type) return;
+    setActionLoading(true);
     setErrorMsg('');
     const url = `/api/cms/${activeSubTab}/${id}/`;
     try {
@@ -361,14 +432,21 @@ const SchoolDashboard = ({ user, onLogout }) => {
       const resData = await res.json();
       if (res.ok) {
         showFeedback(resData.message || 'Deleted successfully', null);
+        setDeleteConfirm({ show: false, id: null, type: null });
         if (activeSubTab === 'teachers') await loadTeachers();
         else if (activeSubTab === 'students') await loadStudents();
         else if (activeSubTab === 'classes') await loadClasses();
         await loadDashboardData();
       } else {
         setErrorMsg(resData.message || 'Delete operation failed.');
+        setDeleteConfirm({ show: false, id: null, type: null });
       }
-    } catch (err) { setErrorMsg('Connection error.'); }
+    } catch (err) {
+      setErrorMsg('Connection error.');
+      setDeleteConfirm({ show: false, id: null, type: null });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   /* ── Reports detail ── */
@@ -464,7 +542,17 @@ const SchoolDashboard = ({ user, onLogout }) => {
   const statAttend    = dashboardData?.monthly_engagement_rate || '—';
 
   /* ── Nav helper ── */
-  const goTo = (tab) => { setActiveSubTab(tab); setSearchQuery(''); setIsSidebarOpen(false); setTeacherPage(1); setClassPage(1); setScenarioPage(1); };
+  const goTo = (tab) => {
+    setActiveSubTab(tab);
+    setSearchQuery('');
+    setIsSidebarOpen(false);
+    setTeacherPage(1);
+    setStudentPage(1);
+    setClassPage(1);
+    setScenarioPage(1);
+    setImportActive(false);
+    setUploadSummary(null);
+  };
 
   /* ── Loading screen ── */
   if (loading) {
@@ -514,6 +602,9 @@ const SchoolDashboard = ({ user, onLogout }) => {
           </button>
           <button className={`sd-nav-item${activeSubTab==='teachers' ? ' active' : ''}`} onClick={() => goTo('teachers')}>
             <FiUsers/><span>Teachers</span>
+          </button>
+          <button className={`sd-nav-item${activeSubTab==='students' ? ' active' : ''}`} onClick={() => goTo('students')}>
+            <FiUsers/><span>Students</span>
           </button>
           <button className={`sd-nav-item${activeSubTab==='classes' ? ' active' : ''}`} onClick={() => goTo('classes')}>
             <FiBookOpen/><span>Classes</span>
@@ -727,9 +818,76 @@ const SchoolDashboard = ({ user, onLogout }) => {
                   </div>
                   <div className="sd-table-actions">
                     <button className="sd-btn-filter"><FiFilter/>Filters</button>
+                    <button className="sd-btn-outline" onClick={() => { setImportActive(!importActive); setUploadSummary(null); }}>
+                      Excel Import
+                    </button>
                     <button className="sd-btn-primary" onClick={handleOpenAdd}><FiPlus/>Add Teacher</button>
                   </div>
                 </div>
+
+                {importActive && (
+                  <div className="sd-import-panel" style={{
+                    border: '2px dashed #6366f1',
+                    borderRadius: '8px',
+                    padding: '1.5rem',
+                    background: '#f8fafc',
+                    marginBottom: '1rem',
+                    textAlign: 'center'
+                  }}>
+                    <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a' }}>Bulk Excel Upload</h4>
+                    <p style={{ margin: '0 0 1rem 0', fontSize: '0.84rem', color: '#64748b' }}>
+                      Upload a genuine <code>.xlsx</code> or <code>.xls</code> spreadsheet containing at least <code>username</code> and <code>password</code> columns.
+                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', alignItems: 'center' }}>
+                      <input
+                        type="file"
+                        accept=".xlsx, .xls"
+                        onChange={handleBulkUpload}
+                        disabled={actionLoading}
+                        style={{ display: 'none' }}
+                        id="bulk-upload-teacher-input"
+                      />
+                      <label htmlFor="bulk-upload-teacher-input" className="sd-btn-primary" style={{ cursor: 'pointer' }}>
+                        {actionLoading ? 'Uploading...' : 'Choose Excel File'}
+                      </label>
+                      <button className="sd-btn-cancel" onClick={() => { setImportActive(false); setUploadSummary(null); }}>
+                        Cancel
+                      </button>
+                    </div>
+                    {uploadSummary && (
+                      <div style={{
+                        marginTop: '1.25rem',
+                        padding: '1rem',
+                        background: '#f1f5f9',
+                        borderRadius: '6px',
+                        textAlign: 'left',
+                        fontSize: '0.84rem'
+                      }}>
+                        <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Upload Result:</div>
+                        <div style={{ display: 'flex', gap: '2rem', marginBottom: '0.5rem' }}>
+                          <span style={{ color: '#16a34a', fontWeight: 600 }}>Created: {uploadSummary.created}</span>
+                          <span style={{ color: '#ef4444', fontWeight: 600 }}>Failed: {uploadSummary.failed}</span>
+                        </div>
+                        {uploadSummary.errors && uploadSummary.errors.length > 0 && (
+                          <div style={{
+                            maxHeight: '120px',
+                            overflowY: 'auto',
+                            background: '#fff',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '4px',
+                            padding: '0.5rem'
+                          }}>
+                            {uploadSummary.errors.map((err, idx) => (
+                              <div key={idx} style={{ color: '#b91c1c', marginBottom: '0.25rem' }}>
+                                Row {err.row}: {err.error}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="sd-table-wrap">
                   <table className="sd-table">
                     <thead>
@@ -781,6 +939,145 @@ const SchoolDashboard = ({ user, onLogout }) => {
             </>
           )}
 
+          {/* ══════════ STUDENTS TAB ══════════ */}
+          {activeSubTab === 'students' && (
+            <>
+              <div className="sd-page-header">
+                <h1 className="sd-page-title">Students Management</h1>
+              </div>
+              <div className="sd-card" style={{ padding:'1.25rem 1.5rem' }}>
+                <div className="sd-table-toolbar">
+                  <div className="sd-table-search">
+                    <FiSearch/>
+                    <input
+                      type="text"
+                      placeholder="Search students..."
+                      value={searchQuery}
+                      onChange={e => { setSearchQuery(e.target.value); setStudentPage(1); }}
+                    />
+                  </div>
+                  <div className="sd-table-actions">
+                    <button className="sd-btn-filter"><FiFilter/>Filters</button>
+                    <button className="sd-btn-outline" onClick={() => { setImportActive(!importActive); setUploadSummary(null); }}>
+                      Excel Import
+                    </button>
+                    <button className="sd-btn-primary" onClick={handleOpenAdd}><FiPlus/>Add Student</button>
+                  </div>
+                </div>
+
+                {importActive && (
+                  <div className="sd-import-panel" style={{
+                    border: '2px dashed #6366f1',
+                    borderRadius: '8px',
+                    padding: '1.5rem',
+                    background: '#f8fafc',
+                    marginBottom: '1rem',
+                    textAlign: 'center'
+                  }}>
+                    <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a' }}>Bulk Excel Upload</h4>
+                    <p style={{ margin: '0 0 1rem 0', fontSize: '0.84rem', color: '#64748b' }}>
+                      Upload a genuine <code>.xlsx</code> or <code>.xls</code> spreadsheet containing at least <code>username</code> and <code>password</code> columns.
+                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', alignItems: 'center' }}>
+                      <input
+                        type="file"
+                        accept=".xlsx, .xls"
+                        onChange={handleBulkUpload}
+                        disabled={actionLoading}
+                        style={{ display: 'none' }}
+                        id="bulk-upload-student-input"
+                      />
+                      <label htmlFor="bulk-upload-student-input" className="sd-btn-primary" style={{ cursor: 'pointer' }}>
+                        {actionLoading ? 'Uploading...' : 'Choose Excel File'}
+                      </label>
+                      <button className="sd-btn-cancel" onClick={() => { setImportActive(false); setUploadSummary(null); }}>
+                        Cancel
+                      </button>
+                    </div>
+                    {uploadSummary && (
+                      <div style={{
+                        marginTop: '1.25rem',
+                        padding: '1rem',
+                        background: '#f1f5f9',
+                        borderRadius: '6px',
+                        textAlign: 'left',
+                        fontSize: '0.84rem'
+                      }}>
+                        <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Upload Result:</div>
+                        <div style={{ display: 'flex', gap: '2rem', marginBottom: '0.5rem' }}>
+                          <span style={{ color: '#16a34a', fontWeight: 600 }}>Created: {uploadSummary.created}</span>
+                          <span style={{ color: '#ef4444', fontWeight: 600 }}>Failed: {uploadSummary.failed}</span>
+                        </div>
+                        {uploadSummary.errors && uploadSummary.errors.length > 0 && (
+                          <div style={{
+                            maxHeight: '120px',
+                            overflowY: 'auto',
+                            background: '#fff',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '4px',
+                            padding: '0.5rem'
+                          }}>
+                            {uploadSummary.errors.map((err, idx) => (
+                              <div key={idx} style={{ color: '#b91c1c', marginBottom: '0.25rem' }}>
+                                Row {err.row}: {err.error}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="sd-table-wrap">
+                  <table className="sd-table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th style={{ textAlign:'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginate(filterList(students), studentPage).map((s, i) => (
+                        <tr key={s.student_id || i}>
+                          <td>
+                            <span className="sd-name-cell-primary">{s.full_name || s.username || 'N/A'}</span>
+                            <span className="sd-name-cell-email">{s.email}</span>
+                          </td>
+                          <td>{s.username}</td>
+                          <td>{s.email || <span style={{ color:'#9ca3af', fontStyle:'italic' }}>Not provided</span>}</td>
+                          <td>
+                            <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                              {s.is_active ? 'Active' : 'Disabled'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="sd-action-cell">
+                              <button className="sd-icon-action edit" onClick={() => handleOpenEdit(s)} title="Edit"><FiEdit2/></button>
+                              <button className="sd-icon-action delete" onClick={() => handleDelete(s.student_id)} title="Delete"><FiTrash2/></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {filterList(students).length === 0 && (
+                        <tr><td colSpan="5" className="sd-empty-state">No students found.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <Pagination
+                  total={filterList(students).length}
+                  perPage={PER_PAGE}
+                  page={studentPage}
+                  onPage={setStudentPage}
+                />
+              </div>
+            </>
+          )}
+
           {/* ══════════ CLASSES TAB ══════════ */}
           {activeSubTab === 'classes' && (
             <>
@@ -822,7 +1119,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
                             <span className="sd-name-cell-email">{c.school_name || ''}</span>
                           </td>
                           <td>{c.grade_name || 'N/A'}</td>
-                          <td>{c.teacher_name || 'Teacher 01'}</td>
+                          <td>{c.teacher_name || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Unassigned</span>}</td>
                           <td>{c.academic_year}</td>
                           <td>
                             <div className="sd-action-cell">
@@ -1046,6 +1343,69 @@ const SchoolDashboard = ({ user, onLogout }) => {
                       </table>
                     </div>
                   </div>
+
+                  {/* Student Scenario Completion Table */}
+                  <div className="sd-card">
+                    <div className="sd-card-header">
+                      <div className="sd-card-title">Student Scenario Completion</div>
+                      <span className="sd-card-meta">{studentCompletionReport.length} student{studentCompletionReport.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    {studentCompletionReport.length === 0 ? (
+                      <div className="sd-reports-empty" style={{ padding: '2rem 1rem' }}>
+                        <FiFileText/>
+                        <h3>No scenario assignments yet</h3>
+                        <p>Completion data will appear once scenarios are assigned and synced from the LMS.</p>
+                      </div>
+                    ) : (
+                      <div className="sd-table-wrap">
+                        <table className="sd-table">
+                          <thead>
+                            <tr>
+                              <th>Student Profile</th>
+                              <th>Assigned Scenarios</th>
+                              <th>Completed</th>
+                              <th>Completion Progress</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {studentCompletionReport.map((row) => {
+                              const pct = row.total_assigned_scenarios > 0
+                                ? Math.round((row.completed_scenarios_count / row.total_assigned_scenarios) * 100)
+                                : 0;
+                              const barColor = pct === 100 ? '#16a34a' : pct >= 60 ? '#f59e0b' : '#ef4444';
+                              return (
+                                <tr key={row.student_id}>
+                                  <td>
+                                    <span className="sd-name-cell-primary">{row.student_name}</span>
+                                  </td>
+                                  <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                                    {row.total_assigned_scenarios}
+                                  </td>
+                                  <td style={{ textAlign: 'center', fontWeight: 600, color: '#16a34a' }}>
+                                    {row.completed_scenarios_count}
+                                  </td>
+                                  <td style={{ minWidth: 160 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                      <div style={{ flex: 1, height: 8, background: '#f3f4f6', borderRadius: 4, overflow: 'hidden' }}>
+                                        <div style={{
+                                          width: `${pct}%`, height: '100%',
+                                          background: barColor, borderRadius: 4,
+                                          transition: 'width 0.6s ease'
+                                        }}/>
+                                      </div>
+                                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: barColor, minWidth: 34 }}>
+                                        {pct}%
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </>
@@ -1160,7 +1520,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
           <div className="sd-modal">
             <div className="sd-modal-header">
               <span className="sd-modal-title">
-                {modalType === 'add' ? 'Add' : 'Edit'} {activeSubTab === 'teachers' ? 'Teacher' : 'Class'}
+                {modalType === 'add' ? 'Add' : 'Edit'} {activeSubTab === 'teachers' ? 'Teacher' : activeSubTab === 'students' ? 'Student' : 'Class'}
               </span>
               <button className="sd-modal-close" onClick={() => setShowModal(false)}><FiX/></button>
             </div>
@@ -1211,6 +1571,37 @@ const SchoolDashboard = ({ user, onLogout }) => {
                 <label className="sd-checkbox-label">
                   <input type="checkbox" checked={teacherForm.is_active}
                     onChange={e => setTeacherForm({...teacherForm, is_active:e.target.checked})}/>
+                  Active Status
+                </label>
+              </>)}
+
+              {/* Student fields */}
+              {activeSubTab === 'students' && (<>
+                <div className="sd-form-group">
+                  <label className="sd-form-label">Username *</label>
+                  <input className="sd-form-input" type="text" value={studentForm.username}
+                    onChange={e => setStudentForm({...studentForm, username:e.target.value})}
+                    disabled={modalType==='edit'} required/>
+                </div>
+                <div className="sd-form-group">
+                  <label className="sd-form-label">Full Name</label>
+                  <input className="sd-form-input" type="text" value={studentForm.full_name}
+                    onChange={e => setStudentForm({...studentForm, full_name:e.target.value})}/>
+                </div>
+                <div className="sd-form-group">
+                  <label className="sd-form-label">Email</label>
+                  <input className="sd-form-input" type="email" value={studentForm.email}
+                    onChange={e => setStudentForm({...studentForm, email:e.target.value})}/>
+                </div>
+                <div className="sd-form-group">
+                  <label className="sd-form-label">{modalType === 'add' ? 'Password *' : 'New Password'}</label>
+                  <input className="sd-form-input" type="password" value={studentForm.password}
+                    onChange={e => setStudentForm({...studentForm, password:e.target.value})}
+                    required={modalType === 'add'} placeholder={modalType === 'edit' ? 'Leave blank to keep current' : ''}/>
+                </div>
+                <label className="sd-checkbox-label">
+                  <input type="checkbox" checked={studentForm.is_active}
+                    onChange={e => setStudentForm({...studentForm, is_active:e.target.checked})}/>
                   Active Status
                 </label>
               </>)}
@@ -1417,6 +1808,27 @@ const SchoolDashboard = ({ user, onLogout }) => {
             </div>
             <div className="sd-modal-footer">
               <button className="sd-btn-cancel" onClick={() => setShowStudentDetailModal(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Custom Delete Confirmation Modal ── */}
+      {deleteConfirm.show && (
+        <div className="sd-modal-backdrop" style={{ backdropFilter: 'blur(5px)' }} onClick={() => setDeleteConfirm({ show: false, id: null, type: null })}>
+          <div className="sd-modal" style={{ maxWidth: 400, textAlign: 'center', padding: '2rem 1.5rem' }} onClick={e => e.stopPropagation()}>
+            <div style={{ color: '#ef4444', fontSize: '3rem', marginBottom: '0.75rem', display: 'flex', justifyContent: 'center' }}><FiTrash2 /></div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Are you sure?</h3>
+            <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+              Do you really want to delete this {deleteConfirm.type}? This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
+              <button className="sd-btn-cancel" onClick={() => setDeleteConfirm({ show: false, id: null, type: null })}>
+                Cancel
+              </button>
+              <button className="sd-btn-primary" style={{ background: '#ef4444' }} onClick={confirmDeleteAction} disabled={actionLoading}>
+                {actionLoading ? 'Deleting...' : 'Delete'}
+              </button>
             </div>
           </div>
         </div>

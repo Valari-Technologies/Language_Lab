@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiFetch } from './api';
 import { 
   FiGrid, FiBookOpen, FiActivity, FiMonitor, FiFileText, 
   FiCheckCircle, FiDownload, FiSettings, FiHelpCircle, FiLogOut, 
@@ -15,10 +16,71 @@ import './Dashboard.css';
    CONTENT STUDIO COMPONENT
    ═══════════════════════════════════════════════════════════ */
 const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator' }, onLogout }) => {
-  // Views: dashboard, scenarios, scenario-builder, activity-builder, screen-builder, preview, media, publish
+  // Views: dashboard, scenarios, scenario-builder, activity-builder, screen-builder, preview, media, publish, profile
   const [view, setView] = useState('dashboard');
   const [selectedScenario, setSelectedScenario] = useState('At the Restaurant');
   const [selectedActivity, setSelectedActivity] = useState('Dialogue with Waiter');
+
+  // Profile / Password states
+  const [profileForm, setProfileForm] = useState({
+    username: user?.username || 'content_creator',
+    email: user?.email || '',
+    full_name: user?.full_name || 'Aisha Khan'
+  });
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: '',
+    password: ''
+  });
+  const [actionLoading, setActionLoading] = useState(false);
+  const [feedbackMsg, setFeedbackMsg] = useState({ text: '', type: '' });
+
+  const showFeedback = (text, type = 'success') => {
+    setFeedbackMsg({ text, type });
+    setTimeout(() => setFeedbackMsg({ text: '', type: '' }), 4000);
+  };
+
+  const handleProfileUpdate = async (e) => {
+    e.preventDefault();
+    setActionLoading(true);
+    try {
+      const res = await apiFetch('/api/users/profile/', {
+        method: 'PUT',
+        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email })
+      });
+      if (res.ok) {
+        showFeedback('Profile updated successfully!');
+      } else {
+        const data = await res.json();
+        showFeedback(data.error || 'Failed to update profile.', 'error');
+      }
+    } catch {
+      showFeedback('Network error occurred.', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handlePasswordUpdate = async (e) => {
+    e.preventDefault();
+    setActionLoading(true);
+    try {
+      const res = await apiFetch('/api/users/change-password/', {
+        method: 'POST',
+        body: JSON.stringify({ old_password: passwordForm.current_password, new_password: passwordForm.password })
+      });
+      if (res.ok) {
+        showFeedback('Password changed successfully!');
+        setPasswordForm({ current_password: '', password: '' });
+      } else {
+        const data = await res.json();
+        showFeedback(data.error || 'Password change failed.', 'error');
+      }
+    } catch {
+      showFeedback('Network error occurred.', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   // Media Library specific state
   const [selectedAsset, setSelectedAsset] = useState({
@@ -117,6 +179,10 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
           gap: 0.35rem;
           flex: 1;
           overflow-y: auto;
+          scrollbar-width: none;
+        }
+        .cs-nav::-webkit-scrollbar {
+          display: none;
         }
         .cs-nav-item {
           display: flex;
@@ -532,6 +598,7 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
             { key: 'preview', label: 'Runtime Preview', icon: <FiPlay/> },
             { key: 'media', label: 'Media Library', icon: <FiImage/> },
             { key: 'publish', label: 'Publish Center', icon: <FiDownload/> },
+            { key: 'profile', label: 'Profile Settings', icon: <FiUser/> },
           ].map(item => (
             <button
               key={item.key}
@@ -547,15 +614,10 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
           <button className="cs-nav-item" style={{ opacity: 0.5, cursor: 'not-allowed' }} disabled>
             <FiCheckCircle/><span>Validation Center</span>
           </button>
-          <button className="cs-nav-item" style={{ opacity: 0.5, cursor: 'not-allowed' }} disabled>
-            <FiSettings/><span>Settings</span>
-          </button>
         </nav>
 
         <div className="cs-sidebar-footer">
-          <button className="cs-footer-item"><FiSettings/>Settings</button>
-          <button className="cs-footer-item"><FiHelpCircle/>Support</button>
-          <button className="cs-footer-item" onClick={onLogout}><FiLogOut/>Logout</button>
+          <button className="cs-footer-item" onClick={onLogout} style={{ color: '#ef4444' }}><FiLogOut/>Logout</button>
 
           <div className="cs-profile-card">
             <div className="cs-profile-avatar">CC</div>
@@ -586,7 +648,6 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
               <span style={{ position: 'absolute', top: -4, right: -4, background: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: 'bold', width: 14, height: 14, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center' }}>3</span>
             </button>
             <button className="cs-icon-btn"><FiHelpCircle /></button>
-            <img className="cs-avatar-img" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=80&q=80" alt="Avatar"/>
           </div>
         </header>
 
@@ -2321,6 +2382,84 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
                 </button>
               </div>
             </>
+          )}
+
+          {/* ── View 9: Profile Settings ── */}
+          {view === 'profile' && (
+            <div className="sd-card" style={{ maxWidth: 800, margin: '0 auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '2rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
+                Profile Settings
+              </h2>
+              
+              {feedbackMsg.text && (
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  borderRadius: 6,
+                  marginBottom: '1.5rem',
+                  fontSize: '0.84rem',
+                  fontWeight: 600,
+                  background: feedbackMsg.type === 'error' ? '#fef2f2' : '#f0fdf4',
+                  color: feedbackMsg.type === 'error' ? '#ef4444' : '#15803d',
+                  border: feedbackMsg.type === 'error' ? '1px solid #fecaca' : '1px solid #bbf7d0'
+                }}>
+                  {feedbackMsg.text}
+                </div>
+              )}
+
+              <form onSubmit={handleProfileUpdate} style={{ marginBottom: '2.5rem' }}>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1e293b', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <FiUser/> Personal Details
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                  <div className="sd-form-group">
+                    <label className="sd-form-label">Full Name</label>
+                    <input className="sd-form-input" type="text"
+                      value={profileForm.full_name}
+                      onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
+                      placeholder="Your full name" required/>
+                  </div>
+                  <div className="sd-form-group">
+                    <label className="sd-form-label">Email Address</label>
+                    <input className="sd-form-input" type="email"
+                      value={profileForm.email}
+                      onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
+                      placeholder="your@email.com"/>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                  <div className="sd-form-group">
+                    <label className="sd-form-label">Username</label>
+                    <input className="sd-form-input" type="text" value={profileForm.username} disabled style={{ background: '#f1f5f9', cursor: 'not-allowed' }}/>
+                  </div>
+                </div>
+                <button type="submit" className="cs-btn-primary" disabled={actionLoading} style={{ background: '#4f46e5', padding: '0.5rem 1.5rem', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                  {actionLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </form>
+
+              <form onSubmit={handlePasswordUpdate} style={{ borderTop: '1px solid #e2e8f0', paddingTop: '2rem' }}>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1e293b', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <FiSettings/> Change Password
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                  <div className="sd-form-group">
+                    <label className="sd-form-label">Current Password</label>
+                    <input className="sd-form-input" type="password" value={passwordForm.current_password}
+                      onChange={e => setPasswordForm({ ...passwordForm, current_password: e.target.value })}
+                      placeholder="Enter current password" required/>
+                  </div>
+                  <div className="sd-form-group">
+                    <label className="sd-form-label">New Password</label>
+                    <input className="sd-form-input" type="password" value={passwordForm.password}
+                      onChange={e => setPasswordForm({ ...passwordForm, password: e.target.value })}
+                      placeholder="Minimum 6 characters" required minLength={6}/>
+                  </div>
+                </div>
+                <button type="submit" className="cs-btn-primary" disabled={actionLoading} style={{ background: '#4f46e5', padding: '0.5rem 1.5rem', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+                  {actionLoading ? 'Updating...' : 'Update Password'}
+                </button>
+              </form>
+            </div>
           )}
 
         </div>

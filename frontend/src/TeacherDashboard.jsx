@@ -338,6 +338,159 @@ const TeacherDashboard = ({ user, onLogout }) => {
      ══════════════════════════════════════ */
   return (
     <div className="sd-layout">
+      {/* ── Scoped Teacher Dashboard Luminous Slate Theme Styling ── */}
+      <style>{`
+        /* Luminous Slate Palette Overrides */
+        :root {
+          --main-bg: #F8FAFC !important; /* slate-50 - crisp, bright slate-white main body */
+          --accent: #4F46E5 !important;  /* indigo-600 - active indigo buttons */
+          --accent-hover: #4338CA !important;
+        }
+
+        /* ── Sidebar Pane (Dark Slate #0F172A / bg-slate-900) ── */
+        .sd-sidebar {
+          background: #0f172a !important;
+          border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+        }
+        .sd-brand {
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+        }
+        .sd-brand-name {
+          color: #ffffff !important;
+        }
+        .sd-brand-sub {
+          color: rgba(255, 255, 255, 0.5) !important;
+        }
+        .sd-nav-item {
+          color: rgba(255, 255, 255, 0.7) !important;
+          border-left: none !important;
+          border-radius: 8px !important;
+          transition: background 0.15s, color 0.15s;
+        }
+        .sd-nav-item svg {
+          color: rgba(255, 255, 255, 0.6) !important;
+        }
+        .sd-nav-item:hover {
+          background-color: rgba(255, 255, 255, 0.05) !important; /* bg-white/5 */
+          color: #ffffff !important;
+        }
+        .sd-nav-item.active {
+          background-color: rgba(255, 255, 255, 0.1) !important;  /* bg-white/10 */
+          color: #ffffff !important;
+          font-weight: 600 !important;
+          border-left: none !important;
+        }
+        .sd-nav-item.active svg {
+          color: #ffffff !important;
+        }
+        .sd-footer {
+          border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+        }
+        .sd-footer-link {
+          color: rgba(255, 255, 255, 0.7) !important;
+          border-left: none !important;
+        }
+        .sd-footer-link svg {
+          color: rgba(255, 255, 255, 0.6) !important;
+        }
+        .sd-footer-link:hover {
+          background-color: rgba(255, 255, 255, 0.05) !important;
+          color: #ffffff !important;
+        }
+        .sd-footer-link.danger {
+          color: #f87171 !important; /* red-400 */
+        }
+        .sd-footer-link.danger:hover {
+          background-color: rgba(239, 68, 68, 0.1) !important;
+          color: #f87171 !important;
+        }
+        .sd-user-card {
+          border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+          background: rgba(255, 255, 255, 0.03) !important;
+        }
+        .sd-user-name {
+          color: #ffffff !important;
+        }
+        .sd-user-role {
+          color: rgba(255, 255, 255, 0.5) !important;
+        }
+        .sd-user-avatar {
+          background: rgba(255, 255, 255, 0.15) !important;
+          color: #ffffff !important;
+          font-weight: 700;
+        }
+        .sd-user-chevron {
+          color: rgba(255, 255, 255, 0.5) !important;
+        }
+
+        /* ── Top Header Navbar (Clean White with Slate-100 backgrounds) ── */
+        .sd-topbar {
+          background: #ffffff !important;
+          border-bottom: 1px solid #e2e8f0 !important;
+        }
+        .sd-search {
+          background: #f1f5f9 !important; /* slate-100 inputs */
+        }
+        .sd-search svg {
+          color: #94a3b8 !important;
+        }
+        .sd-search input {
+          color: #0f172a !important;
+          font-weight: 500;
+        }
+        .sd-search input::placeholder {
+          color: #94a3b8 !important;
+        }
+        .sd-notif-btn {
+          background: #ffffff !important;
+          color: #475569 !important;
+          border: 1px solid #e2e8f0 !important;
+        }
+        .sd-notif-btn svg {
+          color: #475569 !important;
+        }
+        .sd-notif-btn:hover {
+          background: #f8fafc !important;
+        }
+        .sd-year-badge {
+          background: #ffffff !important;
+          color: #475569 !important;
+          border: 1px solid #e2e8f0 !important;
+        }
+        .sd-year-badge svg {
+          color: #475569 !important;
+        }
+        .sd-icon-btn {
+          background: #ffffff !important;
+          color: #475569 !important;
+          border: 1px solid #e2e8f0 !important;
+        }
+        .sd-icon-btn svg {
+          color: #475569 !important;
+        }
+        .sd-icon-btn:hover {
+          background: #f8fafc !important;
+        }
+
+        /* ── Inside Dashboard Buttons & Indicators ── */
+        .sd-btn-primary {
+          background: #4F46E5 !important;
+        }
+        .sd-btn-primary:hover {
+          background: #4338CA !important;
+        }
+        .sd-tab.active {
+          color: #4F46E5 !important;
+          border-bottom-color: #4F46E5 !important;
+        }
+        .sd-badge-active {
+          background-color: rgba(79, 70, 229, 0.1) !important;
+          color: #4F46E5 !important;
+        }
+        .sd-stat-card svg {
+          color: #4F46E5 !important;
+        }
+      `}</style>
 
       {/* ── Mobile top bar ── */}
       <header className="sd-mobile-header">
