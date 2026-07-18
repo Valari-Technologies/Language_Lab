@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import (
-    Scenario,
+    Experience,
     LearningOutcome,
     ActivitySkill,
     Activity,
@@ -53,8 +53,8 @@ class ScreenSerializer(serializers.ModelSerializer):
         read_only_fields = ["display_order"]
 
     def validate_activity(self, value):
-        if value.scenario.is_deleted:
-            raise serializers.ValidationError("Cannot create or update a screen for a soft-deleted scenario.")
+        if value.experience.is_deleted:
+            raise serializers.ValidationError("Cannot create or update a screen for a soft-deleted experience.")
         return value
 
     def validate_content(self, value):
@@ -67,15 +67,15 @@ class ScreenSerializer(serializers.ModelSerializer):
 
 
 class ActivitySerializer(serializers.ModelSerializer):
-    scenario_title = serializers.CharField(source="scenario.title", read_only=True)
+    experience_title = serializers.CharField(source="experience.title", read_only=True)
     skills = ActivitySkillSerializer(many=True, read_only=True)
 
     class Meta:
         model = Activity
         fields = [
             "id",
-            "scenario",
-            "scenario_title",
+            "experience",
+            "experience_title",
             "title",
             "description",
             "learning_objective",
@@ -88,9 +88,9 @@ class ActivitySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["display_order"]
 
-    def validate_scenario(self, value):
+    def validate_experience(self, value):
         if value.is_deleted:
-            raise serializers.ValidationError("Cannot create or update an activity for a soft-deleted scenario.")
+            raise serializers.ValidationError("Cannot create or update an activity for a soft-deleted experience.")
         return value
 
     def validate(self, attrs):
@@ -98,7 +98,7 @@ class ActivitySerializer(serializers.ModelSerializer):
 
 
 class ActivityDetailSerializer(serializers.ModelSerializer):
-    scenario_title = serializers.CharField(source="scenario.title", read_only=True)
+    experience_title = serializers.CharField(source="experience.title", read_only=True)
     skills = ActivitySkillSerializer(many=True, read_only=True)
     screens = ScreenSerializer(many=True, read_only=True)
 
@@ -106,8 +106,8 @@ class ActivityDetailSerializer(serializers.ModelSerializer):
         model = Activity
         fields = [
             "id",
-            "scenario",
-            "scenario_title",
+            "experience",
+            "experience_title",
             "title",
             "description",
             "learning_objective",
@@ -121,9 +121,9 @@ class ActivityDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["display_order"]
 
-    def validate_scenario(self, value):
+    def validate_experience(self, value):
         if value.is_deleted:
-            raise serializers.ValidationError("Cannot create or update an activity for a soft-deleted scenario.")
+            raise serializers.ValidationError("Cannot create or update an activity for a soft-deleted experience.")
         return value
 
     def validate(self, attrs):
@@ -156,14 +156,14 @@ def validate_strict_fields(serializer, attrs):
     return attrs
 
 
-class ScenarioSerializer(serializers.ModelSerializer):
+class ExperienceSerializer(serializers.ModelSerializer):
     grade_name = serializers.CharField(source="grade.grade_name", read_only=True)
     created_by_name = serializers.CharField(source="created_by.full_name", default="", read_only=True)
     difficulty_display = serializers.CharField(source="get_difficulty_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
 
     class Meta:
-        model = Scenario
+        model = Experience
         fields = [
             "id",
             "title",
@@ -191,7 +191,7 @@ class ScenarioSerializer(serializers.ModelSerializer):
         return validate_strict_fields(self, attrs)
 
 
-class ScenarioDetailSerializer(serializers.ModelSerializer):
+class ExperienceDetailSerializer(serializers.ModelSerializer):
     grade_name = serializers.CharField(source="grade.grade_name", read_only=True)
     created_by_name = serializers.CharField(source="created_by.full_name", default="", read_only=True)
     difficulty_display = serializers.CharField(source="get_difficulty_display", read_only=True)
@@ -200,7 +200,7 @@ class ScenarioDetailSerializer(serializers.ModelSerializer):
     activities = ActivitySerializer(many=True, read_only=True)
 
     class Meta:
-        model = Scenario
+        model = Experience
         fields = [
             "id",
             "title",
@@ -284,8 +284,8 @@ class MediaUploadSerializer(serializers.Serializer):
 
 
 class MediaUsageSerializer(serializers.Serializer):
-    scenario_id = serializers.IntegerField()
-    scenario_title = serializers.CharField()
+    experience_id = serializers.IntegerField()
+    experience_title = serializers.CharField()
     activity_id = serializers.IntegerField()
     activity_title = serializers.CharField()
     screen_id = serializers.IntegerField()
@@ -293,7 +293,7 @@ class MediaUsageSerializer(serializers.Serializer):
 
 
 class ValidationReportSerializer(serializers.ModelSerializer):
-    scenario_title = serializers.CharField(source="scenario.title", read_only=True)
+    experience_title = serializers.CharField(source="experience.title", read_only=True)
     validated_by_name = serializers.CharField(source="validated_by.full_name", default="", read_only=True)
 
     class Meta:
@@ -323,7 +323,7 @@ class PublishVersionSerializer(serializers.ModelSerializer):
 
 
 class PublishResponseSerializer(serializers.Serializer):
-    """Shape returned on a successful POST /publish/{scenarioId}/."""
+    """Shape returned on a successful POST /publish/{experienceId}/."""
     package_id = serializers.IntegerField()
     version_id = serializers.IntegerField()
     version = serializers.CharField()
@@ -336,15 +336,15 @@ class PublishResponseSerializer(serializers.Serializer):
 
 
 class PublishedPackageSerializer(serializers.ModelSerializer):
-    scenario_title = serializers.CharField(source="scenario.title", read_only=True)
+    experience_title = serializers.CharField(source="experience.title", read_only=True)
     versions = PublishVersionSerializer(many=True, read_only=True)
 
     class Meta:
         model = PublishedPackage
         fields = [
             "id",
-            "scenario",
-            "scenario_title",
+            "experience",
+            "experience_title",
             "package_name",
             "output_format",
             "compression_status",

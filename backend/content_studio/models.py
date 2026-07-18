@@ -3,7 +3,7 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
 
-class Scenario(models.Model):
+class Experience(models.Model):
     class Difficulty(models.TextChoices):
         EASY = "EASY", _("Easy")
         MEDIUM = "MEDIUM", _("Medium")
@@ -17,20 +17,20 @@ class Scenario(models.Model):
     title = models.CharField(
         max_length=200,
         verbose_name=_("Title"),
-        help_text=_("The title of the studio scenario.")
+        help_text=_("The title of the studio experience.")
     )
     description = models.TextField(
         blank=True,
         null=True,
         verbose_name=_("Description"),
-        help_text=_("Detailed scenario description.")
+        help_text=_("Detailed experience description.")
     )
     grade = models.ForeignKey(
         "super_admin.Grade",
         on_delete=models.CASCADE,
-        related_name="studio_scenarios",
+        related_name="studio_experiences",
         verbose_name=_("Grade"),
-        help_text=_("The grade this scenario targets.")
+        help_text=_("The grade this experience targets.")
     )
     subject = models.CharField(
         max_length=100,
@@ -50,7 +50,7 @@ class Scenario(models.Model):
     )
     estimated_duration = models.IntegerField(
         verbose_name=_("Estimated Duration"),
-        help_text=_("Duration of the scenario in minutes.")
+        help_text=_("Duration of the experience in minutes.")
     )
     thumbnail = models.URLField(
         blank=True,
@@ -78,7 +78,7 @@ class Scenario(models.Model):
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="created_studio_scenarios",
+        related_name="created_studio_experiences",
         verbose_name=_("Created By")
     )
     created_at = models.DateTimeField(
@@ -91,8 +91,8 @@ class Scenario(models.Model):
     )
 
     class Meta:
-        verbose_name = _("Studio Scenario")
-        verbose_name_plural = _("Studio Scenarios")
+        verbose_name = _("Studio Experience")
+        verbose_name_plural = _("Studio Experiences")
         ordering = ["-updated_at"]
 
     def __str__(self):
@@ -100,11 +100,11 @@ class Scenario(models.Model):
 
 
 class LearningOutcome(models.Model):
-    scenario = models.ForeignKey(
-        Scenario,
+    experience = models.ForeignKey(
+        Experience,
         on_delete=models.CASCADE,
         related_name="learning_outcomes",
-        verbose_name=_("Scenario")
+        verbose_name=_("Experience")
     )
     text = models.TextField(
         verbose_name=_("Outcome Text")
@@ -124,7 +124,7 @@ class LearningOutcome(models.Model):
         ordering = ["id"]
 
     def __str__(self):
-        return f"Outcome for {self.scenario.title}: {self.text[:50]}"
+        return f"Outcome for {self.experience.title}: {self.text[:50]}"
 
 
 class ActivitySkill(models.Model):
@@ -149,11 +149,11 @@ class ActivitySkill(models.Model):
 
 
 class Activity(models.Model):
-    scenario = models.ForeignKey(
-        Scenario,
+    experience = models.ForeignKey(
+        Experience,
         on_delete=models.CASCADE,
         related_name="activities",
-        verbose_name=_("Scenario")
+        verbose_name=_("Experience")
     )
     title = models.CharField(
         max_length=200,
@@ -202,8 +202,8 @@ class Activity(models.Model):
         ordering = ["display_order"]
         constraints = [
             models.UniqueConstraint(
-                fields=["scenario", "display_order"],
-                name="unique_activity_display_order_per_scenario"
+                fields=["experience", "display_order"],
+                name="unique_activity_display_order_per_experience"
             )
         ]
 
@@ -366,11 +366,11 @@ class Media(models.Model):
 
 
 class ValidationReport(models.Model):
-    scenario = models.ForeignKey(
-        Scenario,
+    experience = models.ForeignKey(
+        Experience,
         on_delete=models.CASCADE,
         related_name="validation_reports",
-        verbose_name=_("Scenario")
+        verbose_name=_("Experience")
     )
     results = models.JSONField(
         default=dict,
@@ -418,15 +418,15 @@ class ValidationReport(models.Model):
         ordering = ["-validated_at"]
 
     def __str__(self):
-        return f"Validation Report for {self.scenario.title} at {self.validated_at}"
+        return f"Validation Report for {self.experience.title} at {self.validated_at}"
 
 
 class PublishedPackage(models.Model):
-    scenario = models.OneToOneField(
-        Scenario,
+    experience = models.OneToOneField(
+        Experience,
         on_delete=models.CASCADE,
         related_name="published_package",
-        verbose_name=_("Scenario")
+        verbose_name=_("Experience")
     )
     package_name = models.CharField(
         max_length=255,

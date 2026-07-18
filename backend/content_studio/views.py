@@ -8,7 +8,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 
 from accounts.permissions import IsContentCreatorOrSuperAdmin
 from .models import (
-    Scenario,
+    Experience,
     LearningOutcome,
     ActivitySkill,
     Activity,
@@ -20,8 +20,8 @@ from .models import (
     Notification,
 )
 from .serializers import (
-    ScenarioSerializer,
-    ScenarioDetailSerializer,
+    ExperienceSerializer,
+    ExperienceDetailSerializer,
     ActivitySerializer,
     ActivityDetailSerializer,
     ScreenSerializer,
@@ -43,7 +43,7 @@ class StandardResultsSetPagination(PageNumberPagination):
     max_page_size = 100
 
 
-class ScenarioViewSet(viewsets.ModelViewSet):
+class ExperienceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsContentCreatorOrSuperAdmin]
     pagination_class = StandardResultsSetPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -52,7 +52,7 @@ class ScenarioViewSet(viewsets.ModelViewSet):
     ordering = ["-updated_at"]
 
     def get_queryset(self):
-        queryset = Scenario.objects.filter(is_deleted=False).select_related("grade", "created_by")
+        queryset = Experience.objects.filter(is_deleted=False).select_related("grade", "created_by")
         grade = self.request.query_params.get("grade")
         status_param = self.request.query_params.get("status")
         difficulty = self.request.query_params.get("difficulty")
@@ -76,8 +76,8 @@ class ScenarioViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         if self.action in ["retrieve", "duplicate", "archive", "publish"]:
-            return ScenarioDetailSerializer
-        return ScenarioSerializer
+            return ExperienceDetailSerializer
+        return ExperienceSerializer
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -90,30 +90,30 @@ class ScenarioViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def duplicate(self, request, pk=None):
-        scenario = self.get_object()
+        experience = self.get_object()
         
-        # Deep copy scenario metadata
-        new_scenario = Scenario.objects.get(pk=scenario.pk)
-        new_scenario.pk = None
-        new_scenario.title = f"{scenario.title} (Copy)"
-        new_scenario.status = Scenario.Status.DRAFT
-        new_scenario.created_by = request.user
-        new_scenario.is_deleted = False
-        new_scenario.save()
+        # Deep copy experience metadata
+        new_experience = Experience.objects.get(pk=experience.pk)
+        new_experience.pk = None
+        new_experience.title = f"{experience.title} (Copy)"
+        new_experience.status = Experience.Status.DRAFT
+        new_experience.created_by = request.user
+        new_experience.is_deleted = False
+        new_experience.save()
         
         # Copy learning outcomes
-        for outcome in scenario.learning_outcomes.all():
+        for outcome in experience.learning_outcomes.all():
             outcome.pk = None
-            outcome.scenario = new_scenario
+            outcome.experience = new_experience
             outcome.save()
 
         # Copy activities and nested screens
-        for activity in scenario.activities.all():
+        for activity in experience.activities.all():
             old_activity_pk = activity.pk
             skills = list(activity.skills.all())
             
             activity.pk = None
-            activity.scenario = new_scenario
+            activity.experience = new_experience
             activity.save()
             activity.skills.set(skills)
             
@@ -123,81 +123,81 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                 screen.activity = activity
                 screen.save()
 
-        serializer = ScenarioDetailSerializer(new_scenario)
+        serializer = ExperienceDetailSerializer(new_experience)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
     def archive(self, request, pk=None):
-        scenario = self.get_object()
-        scenario.status = Scenario.Status.ARCHIVED
-        scenario.save()
-        serializer = ScenarioDetailSerializer(scenario)
+        experience = self.get_object()
+        experience.status = Experience.Status.ARCHIVED
+        experience.save()
+        serializer = ExperienceDetailSerializer(experience)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"])
     def publish(self, request, pk=None):
-        scenario = self.get_object()
-        scenario.status = Scenario.Status.PUBLISHED
-        scenario.save()
+        experience = self.get_object()
+        experience.status = Experience.Status.PUBLISHED
+        experience.save()
         # NOTE: Real packaging and exporting is Phase 7. For now we only flip the status.
-        serializer = ScenarioDetailSerializer(scenario)
+        serializer = ExperienceDetailSerializer(experience)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"], url_path="activities")
     def activities(self, request, pk=None):
-        scenario = self.get_object()
-        activities = scenario.activities.all().order_by("display_order")
+        experience = self.get_object()
+        activities = experience.activities.all().order_by("display_order")
         serializer = ActivitySerializer(activities, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"])
     def preview(self, request, pk=None):
-        scenario = self.get_object()
+        experience = self.get_object()
         from .services import build_runtime_payload
-        payload = build_runtime_payload(scenario, request)
+        payload = build_runtime_payload(experience, request)
         return Response(payload, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="learning-outcomes")
     def add_learning_outcome(self, request, pk=None):
-        scenario = self.get_object()
+        experience = self.get_object()
         text = request.data.get("text")
         if not text:
             return Response({"text": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
-        outcome = LearningOutcome.objects.create(scenario=scenario, text=text)
+        outcome = LearningOutcome.objects.create(experience=experience, text=text)
         serializer = LearningOutcomeSerializer(outcome)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post", "delete"], url_path="tags")
     def tags(self, request, pk=None):
-        scenario = self.get_object()
+        experience = self.get_object()
         tags_payload = request.data.get("tags")
         if not tags_payload:
             return Response({"tags": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
         if isinstance(tags_payload, str):
             tags_payload = [tags_payload]
             
-        current_tags = list(scenario.tags) if scenario.tags else []
+        current_tags = list(experience.tags) if experience.tags else []
         
         if request.method == "POST":
             for tag in tags_payload:
                 if tag not in current_tags:
                     current_tags.append(tag)
-            scenario.tags = current_tags
-            scenario.save()
-            return Response(ScenarioDetailSerializer(scenario).data, status=status.HTTP_200_OK)
+            experience.tags = current_tags
+            experience.save()
+            return Response(ExperienceDetailSerializer(experience).data, status=status.HTTP_200_OK)
             
         elif request.method == "DELETE":
             new_tags = [t for t in current_tags if t not in tags_payload]
-            scenario.tags = new_tags
-            scenario.save()
-            return Response(ScenarioDetailSerializer(scenario).data, status=status.HTTP_200_OK)
+            experience.tags = new_tags
+            experience.save()
+            return Response(ExperienceDetailSerializer(experience).data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"])
     def validate(self, request, pk=None):
-        scenario = self.get_object()
+        experience = self.get_object()
         # Stub validation report for Phase 3 (Real logic is in Phase 5)
         return Response({
-            "scenario_id": scenario.id,
+            "experience_id": experience.id,
             "status": "success",
             "message": "Stub validation successful. Real validation engine is Phase 5.",
             "errors": [],
@@ -216,8 +216,8 @@ class ActivityViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         from django.db.models import Max
-        scenario = serializer.validated_data["scenario"]
-        max_order = scenario.activities.aggregate(Max('display_order'))['display_order__max'] or 0
+        experience = serializer.validated_data["experience"]
+        max_order = experience.activities.aggregate(Max('display_order'))['display_order__max'] or 0
         serializer.save(display_order=max_order + 1)
 
     @action(detail=True, methods=["get"])
@@ -231,7 +231,7 @@ class ActivityViewSet(viewsets.ModelViewSet):
     def preview(self, request, pk=None):
         activity = self.get_object()
         from .services import build_runtime_payload
-        payload = build_runtime_payload(activity.scenario, request)
+        payload = build_runtime_payload(activity.experience, request)
         act_data = next((a for a in payload["activities"] if a["id"] == activity.id), None)
         if not act_data:
             return Response({"error": "Activity not found in preview payload."}, status=status.HTTP_404_NOT_FOUND)
@@ -243,15 +243,15 @@ class ActivityViewSet(viewsets.ModelViewSet):
         if not ids or not isinstance(ids, list):
             return Response({"ids": ["List of IDs is required."]}, status=status.HTTP_400_BAD_REQUEST)
             
-        activities = Activity.objects.filter(id__in=ids).select_related("scenario")
+        activities = Activity.objects.filter(id__in=ids).select_related("experience")
         if len(activities) != len(ids):
             return Response({"error": "Some Activity IDs do not exist."}, status=status.HTTP_400_BAD_REQUEST)
             
-        scenario_ids = {act.scenario_id for act in activities}
-        if len(scenario_ids) > 1:
-            return Response({"error": "Activities must belong to the same Scenario."}, status=status.HTTP_400_BAD_REQUEST)
+        experience_ids = {act.experience_id for act in activities}
+        if len(experience_ids) > 1:
+            return Response({"error": "Activities must belong to the same Experience."}, status=status.HTTP_400_BAD_REQUEST)
             
-        parent_id = scenario_ids.pop()
+        parent_id = experience_ids.pop()
         
         from django.db import transaction
         try:
@@ -263,7 +263,7 @@ class ActivityViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
             
-        ordered_activities = Activity.objects.filter(scenario_id=parent_id).order_by("display_order")
+        ordered_activities = Activity.objects.filter(experience_id=parent_id).order_by("display_order")
         serializer = ActivitySerializer(ordered_activities, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -468,7 +468,7 @@ class MediaViewSet(viewsets.ModelViewSet):
         media = self.get_object()
         force_delete = request.query_params.get("force", "").lower() == "true"
         
-        all_screens = Screen.objects.all().select_related("activity__scenario")
+        all_screens = Screen.objects.all().select_related("activity__experience")
         usages = []
         for scr in all_screens:
             is_used = False
@@ -484,8 +484,8 @@ class MediaViewSet(viewsets.ModelViewSet):
                 
             if is_used:
                 usages.append({
-                    "scenario_id": scr.activity.scenario.id,
-                    "scenario_title": scr.activity.scenario.title,
+                    "experience_id": scr.activity.experience.id,
+                    "experience_title": scr.activity.experience.title,
                     "activity_id": scr.activity.id,
                     "activity_title": scr.activity.title,
                     "screen_id": scr.id,
@@ -518,7 +518,7 @@ class MediaViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def usage(self, request, pk=None):
         media = self.get_object()
-        all_screens = Screen.objects.all().select_related("activity__scenario")
+        all_screens = Screen.objects.all().select_related("activity__experience")
         usages = []
         for scr in all_screens:
             is_used = False
@@ -534,8 +534,8 @@ class MediaViewSet(viewsets.ModelViewSet):
 
             if is_used:
                 usages.append({
-                    "scenario_id": scr.activity.scenario.id,
-                    "scenario_title": scr.activity.scenario.title,
+                    "experience_id": scr.activity.experience.id,
+                    "experience_title": scr.activity.experience.title,
                     "activity_id": scr.activity.id,
                     "activity_title": scr.activity.title,
                     "screen_id": scr.id,
@@ -550,25 +550,25 @@ class DashboardSummaryAPIView(APIView):
     permission_classes = [IsAuthenticated, IsContentCreatorOrSuperAdmin]
 
     def get(self, request):
-        total_scenarios = Scenario.objects.filter(is_deleted=False).count()
-        draft_scenarios = Scenario.objects.filter(is_deleted=False, status=Scenario.Status.DRAFT).count()
-        published_scenarios = Scenario.objects.filter(is_deleted=False, status=Scenario.Status.PUBLISHED).count()
+        total_experiences = Experience.objects.filter(is_deleted=False).count()
+        draft_experiences = Experience.objects.filter(is_deleted=False, status=Experience.Status.DRAFT).count()
+        published_experiences = Experience.objects.filter(is_deleted=False, status=Experience.Status.PUBLISHED).count()
         total_media_assets = Media.objects.count()
 
         return Response({
-            "total_scenarios": total_scenarios,
-            "draft_scenarios": draft_scenarios,
-            "published_scenarios": published_scenarios,
+            "total_experiences": total_experiences,
+            "draft_experiences": draft_experiences,
+            "published_experiences": published_experiences,
             "total_media_assets": total_media_assets
         }, status=status.HTTP_200_OK)
 
 
-class DashboardRecentScenariosAPIView(APIView):
+class DashboardRecentExperiencesAPIView(APIView):
     permission_classes = [IsAuthenticated, IsContentCreatorOrSuperAdmin]
 
     def get(self, request):
-        scenarios = Scenario.objects.filter(is_deleted=False).select_related("grade").order_by("-updated_at")[:5]
-        serializer = ScenarioSerializer(scenarios, many=True)
+        experiences = Experience.objects.filter(is_deleted=False).select_related("grade").order_by("-updated_at")[:5]
+        serializer = ExperienceSerializer(experiences, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -577,11 +577,11 @@ class DashboardRecentActivityAPIView(APIView):
 
     def get(self, request):
         activities = []
-        recent_scenarios = Scenario.objects.filter(is_deleted=False).order_by("-updated_at")[:5]
-        for s in recent_scenarios:
+        recent_experiences = Experience.objects.filter(is_deleted=False).order_by("-updated_at")[:5]
+        for s in recent_experiences:
             activities.append({
-                "id": f"scenario-{s.id}",
-                "activity_type": "scenario_edited",
+                "id": f"experience-{s.id}",
+                "activity_type": "experience_edited",
                 "message": f"You edited '{s.title}'",
                 "timestamp": s.updated_at
             })
@@ -616,46 +616,46 @@ class DashboardNotificationsAPIView(APIView):
 class ValidationViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated, IsContentCreatorOrSuperAdmin]
 
-    @action(detail=False, methods=["post"], url_path=r"(?P<scenario_id>\d+)/run")
-    def run_validation(self, request, scenario_id=None):
-        return self._run_and_save(request, scenario_id)
+    @action(detail=False, methods=["post"], url_path=r"(?P<experience_id>\d+)/run")
+    def run_validation(self, request, experience_id=None):
+        return self._run_and_save(request, experience_id)
 
-    @action(detail=False, methods=["post"], url_path=r"(?P<scenario_id>\d+)/refresh")
-    def refresh_validation(self, request, scenario_id=None):
-        return self._run_and_save(request, scenario_id)
+    @action(detail=False, methods=["post"], url_path=r"(?P<experience_id>\d+)/refresh")
+    def refresh_validation(self, request, experience_id=None):
+        return self._run_and_save(request, experience_id)
 
-    @action(detail=False, methods=["get"], url_path=r"(?P<scenario_id>\d+)")
-    def get_latest_report(self, request, scenario_id=None):
-        return self._get_report(scenario_id)
+    @action(detail=False, methods=["get"], url_path=r"(?P<experience_id>\d+)")
+    def get_latest_report(self, request, experience_id=None):
+        return self._get_report(experience_id)
 
-    @action(detail=False, methods=["get"], url_path=r"report/(?P<scenario_id>\d+)")
-    def get_detailed_report(self, request, scenario_id=None):
-        return self._get_report(scenario_id)
+    @action(detail=False, methods=["get"], url_path=r"report/(?P<experience_id>\d+)")
+    def get_detailed_report(self, request, experience_id=None):
+        return self._get_report(experience_id)
 
-    def _get_report(self, scenario_id):
+    def _get_report(self, experience_id):
         try:
-            scenario = Scenario.objects.get(id=scenario_id, is_deleted=False)
-        except Scenario.DoesNotExist:
-            return Response({"error": "Scenario not found."}, status=status.HTTP_404_NOT_FOUND)
+            experience = Experience.objects.get(id=experience_id, is_deleted=False)
+        except Experience.DoesNotExist:
+            return Response({"error": "Experience not found."}, status=status.HTTP_404_NOT_FOUND)
             
         try:
-            report = ValidationReport.objects.filter(scenario=scenario).latest("validated_at")
+            report = ValidationReport.objects.filter(experience=experience).latest("validated_at")
         except ValidationReport.DoesNotExist:
-            return Response({"error": "Validation report has never been run for this scenario."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Validation report has never been run for this experience."}, status=status.HTTP_404_NOT_FOUND)
             
         serializer = ValidationReportSerializer(report)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    def _run_and_save(self, request, scenario_id):
+    def _run_and_save(self, request, experience_id):
         try:
-            scenario = Scenario.objects.get(id=scenario_id, is_deleted=False)
-        except Scenario.DoesNotExist:
-            return Response({"error": "Scenario not found."}, status=status.HTTP_404_NOT_FOUND)
+            experience = Experience.objects.get(id=experience_id, is_deleted=False)
+        except Experience.DoesNotExist:
+            return Response({"error": "Experience not found."}, status=status.HTTP_404_NOT_FOUND)
             
         from .validation_engine import run_validation_engine
-        report_data = run_validation_engine(scenario)
+        report_data = run_validation_engine(experience)
         
-        report, created = ValidationReport.objects.get_or_create(scenario=scenario)
+        report, created = ValidationReport.objects.get_or_create(experience=experience)
         report.results = report_data["results"]
         report.total_checks = report_data["counts"]["total_checks"]
         report.passed = report_data["counts"]["passed"]
@@ -674,32 +674,32 @@ class PreviewViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["post"], url_path="start")
     def start(self, request):
-        scenario_id = request.data.get("scenario_id")
-        if not scenario_id:
-            return Response({"scenario_id": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
+        experience_id = request.data.get("experience_id")
+        if not experience_id:
+            return Response({"experience_id": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            scenario = Scenario.objects.get(id=scenario_id, is_deleted=False)
-        except Scenario.DoesNotExist:
-            return Response({"error": "Scenario not found."}, status=status.HTTP_404_NOT_FOUND)
+            experience = Experience.objects.get(id=experience_id, is_deleted=False)
+        except Experience.DoesNotExist:
+            return Response({"error": "Experience not found."}, status=status.HTTP_404_NOT_FOUND)
             
         from .services import build_runtime_payload
-        payload = build_runtime_payload(scenario, request)
+        payload = build_runtime_payload(experience, request)
         import uuid
         session_id = str(uuid.uuid4())
         return Response({"session_id": session_id, "payload": payload}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["post"], url_path="restart")
     def restart(self, request):
-        scenario_id = request.data.get("scenario_id")
-        if not scenario_id:
-            return Response({"scenario_id": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
+        experience_id = request.data.get("experience_id")
+        if not experience_id:
+            return Response({"experience_id": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            scenario = Scenario.objects.get(id=scenario_id, is_deleted=False)
-        except Scenario.DoesNotExist:
-            return Response({"error": "Scenario not found."}, status=status.HTTP_404_NOT_FOUND)
+            experience = Experience.objects.get(id=experience_id, is_deleted=False)
+        except Experience.DoesNotExist:
+            return Response({"error": "Experience not found."}, status=status.HTTP_404_NOT_FOUND)
             
         from .services import build_runtime_payload
-        payload = build_runtime_payload(scenario, request)
+        payload = build_runtime_payload(experience, request)
         import uuid
         session_id = str(uuid.uuid4())
         return Response({"session_id": session_id, "payload": payload}, status=status.HTTP_200_OK)
@@ -717,23 +717,23 @@ class PreviewViewSet(viewsets.ViewSet):
 # ---------------------------------------------------------------------------
 class PublishViewSet(viewsets.ViewSet):
     """
-    POST /api/v1/content/publish/{scenarioId}/   — run the pipeline
-    GET  /api/v1/content/publish/{scenarioId}/   — current publish status
-    GET  /api/v1/content/publish/history/{scenarioId}/ — full version history
+    POST /api/v1/content/publish/{experienceId}/   — run the pipeline
+    GET  /api/v1/content/publish/{experienceId}/   — current publish status
+    GET  /api/v1/content/publish/history/{experienceId}/ — full version history
     """
     permission_classes = [IsAuthenticated, IsContentCreatorOrSuperAdmin]
 
-    def _get_scenario(self, scenario_id):
+    def _get_experience(self, experience_id):
         try:
-            return Scenario.objects.get(id=scenario_id, is_deleted=False)
-        except Scenario.DoesNotExist:
+            return Experience.objects.get(id=experience_id, is_deleted=False)
+        except Experience.DoesNotExist:
             return None
 
-    def publish(self, request, scenario_id=None):
-        """POST /api/v1/content/publish/{scenarioId}/"""
-        scenario = self._get_scenario(scenario_id)
-        if not scenario:
-            return Response({"error": "Scenario not found."}, status=status.HTTP_404_NOT_FOUND)
+    def publish(self, request, experience_id=None):
+        """POST /api/v1/content/publish/{experienceId}/"""
+        experience = self._get_experience(experience_id)
+        if not experience:
+            return Response({"error": "Experience not found."}, status=status.HTTP_404_NOT_FOUND)
 
         version = request.data.get("version")  # optional
         release_notes = request.data.get("release_notes", "")
@@ -741,7 +741,7 @@ class PublishViewSet(viewsets.ViewSet):
         from .services import build_elab_package
         try:
             result = build_elab_package(
-                scenario=scenario,
+                experience=experience,
                 version=version,
                 release_notes=release_notes,
                 published_by=request.user,
@@ -751,12 +751,12 @@ class PublishViewSet(viewsets.ViewSet):
             if isinstance(args, tuple) and args[0] == "VALIDATION_FAILED":
                 report = args[1]
                 return Response(
-                    {"error": "Scenario failed validation. Fix errors before publishing.", "validation_report": report},
+                    {"error": "Experience failed validation. Fix errors before publishing.", "validation_report": report},
                     status=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 )
             if isinstance(args, tuple) and args[0] == "DUPLICATE_VERSION":
                 return Response(
-                    {"error": f"Version '{args[1]}' already exists for this scenario."},
+                    {"error": f"Version '{args[1]}' already exists for this experience."},
                     status=status.HTTP_409_CONFLICT,
                 )
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -777,45 +777,45 @@ class PublishViewSet(viewsets.ViewSet):
         }
         return Response(response_data, status=status.HTTP_201_CREATED)
 
-    def status_view(self, request, scenario_id=None):
-        """GET /api/v1/content/publish/{scenarioId}/"""
-        scenario = self._get_scenario(scenario_id)
-        if not scenario:
-            return Response({"error": "Scenario not found."}, status=status.HTTP_404_NOT_FOUND)
+    def status_view(self, request, experience_id=None):
+        """GET /api/v1/content/publish/{experienceId}/"""
+        experience = self._get_experience(experience_id)
+        if not experience:
+            return Response({"error": "Experience not found."}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            pkg = PublishedPackage.objects.get(scenario=scenario)
+            pkg = PublishedPackage.objects.get(experience=experience)
         except PublishedPackage.DoesNotExist:
             return Response(
-                {"scenario_id": scenario.id, "status": scenario.status, "published_package": None},
+                {"experience_id": experience.id, "status": experience.status, "published_package": None},
                 status=status.HTTP_200_OK,
             )
 
         latest_version = pkg.versions.order_by("-published_at").first()
         return Response(
             {
-                "scenario_id": scenario.id,
-                "status": scenario.status,
+                "experience_id": experience.id,
+                "status": experience.status,
                 "published_package": PublishedPackageSerializer(pkg).data,
                 "latest_version": PublishVersionSerializer(latest_version).data if latest_version else None,
             },
             status=status.HTTP_200_OK,
         )
 
-    def history(self, request, scenario_id=None):
-        """GET /api/v1/content/publish/history/{scenarioId}/"""
-        scenario = self._get_scenario(scenario_id)
-        if not scenario:
-            return Response({"error": "Scenario not found."}, status=status.HTTP_404_NOT_FOUND)
+    def history(self, request, experience_id=None):
+        """GET /api/v1/content/publish/history/{experienceId}/"""
+        experience = self._get_experience(experience_id)
+        if not experience:
+            return Response({"error": "Experience not found."}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            pkg = PublishedPackage.objects.get(scenario=scenario)
+            pkg = PublishedPackage.objects.get(experience=experience)
         except PublishedPackage.DoesNotExist:
-            return Response({"scenario_id": scenario.id, "versions": []}, status=status.HTTP_200_OK)
+            return Response({"experience_id": experience.id, "versions": []}, status=status.HTTP_200_OK)
 
         versions = pkg.versions.order_by("-published_at")
         return Response(
-            {"scenario_id": scenario.id, "versions": PublishVersionSerializer(versions, many=True).data},
+            {"experience_id": experience.id, "versions": PublishVersionSerializer(versions, many=True).data},
             status=status.HTTP_200_OK,
         )
 
@@ -831,7 +831,7 @@ class PackageViewSet(viewsets.ViewSet):
     def _get_version(self, package_id):
         try:
             return PublishVersion.objects.select_related(
-                "published_package__scenario", "published_by"
+                "published_package__experience", "published_by"
             ).get(id=package_id)
         except PublishVersion.DoesNotExist:
             return None
@@ -889,13 +889,13 @@ class PackageViewSet(viewsets.ViewSet):
         if not version:
             return Response({"error": "Package not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        scenario = version.published_package.scenario
+        experience = version.published_package.experience
         fixed_version = version.version_number
 
         from .services import build_elab_package
         try:
             result = build_elab_package(
-                scenario=scenario,
+                experience=experience,
                 version=fixed_version,
                 release_notes=request.data.get("release_notes", ""),
                 published_by=request.user,
@@ -906,7 +906,7 @@ class PackageViewSet(viewsets.ViewSet):
             if isinstance(args, tuple) and args[0] == "VALIDATION_FAILED":
                 report = args[1]
                 return Response(
-                    {"error": "Scenario failed validation.", "validation_report": report},
+                    {"error": "Experience failed validation.", "validation_report": report},
                     status=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 )
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)

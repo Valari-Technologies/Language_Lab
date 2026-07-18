@@ -3,14 +3,14 @@ from django.contrib.auth import get_user_model
 from super_admin.models import Grade, School
 from school_admin.models import Class
 from teacher.models import Student
-from .models import ScenarioAssignment, StudentAttempt, ScreenResponse
+from .models import ExperienceAssignment, StudentAttempt, ScreenResponse
 
 User = get_user_model()
 
 
-class ScenarioAssignmentSyncSerializer(serializers.Serializer):
-    scenario_ref = serializers.CharField(max_length=255)
-    scenario_title = serializers.CharField(max_length=255)
+class ExperienceAssignmentSyncSerializer(serializers.Serializer):
+    experience_ref = serializers.CharField(max_length=255)
+    experience_title = serializers.CharField(max_length=255)
     grade = serializers.PrimaryKeyRelatedField(queryset=Grade.objects.all(), required=False, allow_null=True)
     class_obj = serializers.PrimaryKeyRelatedField(queryset=Class.objects.all(), required=False, allow_null=True)
     assigned_by_username = serializers.CharField(max_length=150, required=False, allow_null=True)
@@ -20,7 +20,7 @@ class ScenarioAssignmentSyncSerializer(serializers.Serializer):
 
 class StudentAttemptSyncSerializer(serializers.Serializer):
     lms_attempt_id = serializers.CharField(max_length=255)
-    scenario_ref = serializers.CharField(max_length=255, required=False, allow_null=True)
+    experience_ref = serializers.CharField(max_length=255, required=False, allow_null=True)
     student_username = serializers.CharField(max_length=150, required=False, allow_null=True)
     student = serializers.IntegerField(required=False, allow_null=True)
     assignment = serializers.IntegerField(required=False, allow_null=True)
@@ -54,13 +54,13 @@ class OverviewReportSerializer(serializers.Serializer):
     completion_rate = serializers.FloatField()
     average_score = serializers.FloatField()
     pass_rate = serializers.FloatField()
-    total_scenarios_attempted = serializers.IntegerField()
+    total_experiences_attempted = serializers.IntegerField()
     recent_syncs = serializers.ListField(child=serializers.DateTimeField())
 
 
-class ScenarioReportSerializer(serializers.Serializer):
-    scenario_ref = serializers.CharField()
-    scenario_title = serializers.CharField()
+class ExperienceReportSerializer(serializers.Serializer):
+    experience_ref = serializers.CharField()
+    experience_title = serializers.CharField()
     total_attempts = serializers.IntegerField()
     completed = serializers.IntegerField()
     average_score = serializers.FloatField()
@@ -89,8 +89,8 @@ class StudentReportSerializer(serializers.Serializer):
     total_attempts = serializers.IntegerField()
     completed = serializers.IntegerField()
     average_score = serializers.FloatField()
-    best_scenario = serializers.CharField()
-    worst_scenario = serializers.CharField()
+    best_experience = serializers.CharField()
+    worst_experience = serializers.CharField()
     last_attempt_date = serializers.DateTimeField()
 
 
@@ -107,8 +107,8 @@ class TeacherReportSerializer(serializers.Serializer):
 class StudentCompletionReportSerializer(serializers.Serializer):
     student_id = serializers.IntegerField(source="id")
     student_name = serializers.SerializerMethodField()
-    total_assigned_scenarios = serializers.IntegerField()
-    completed_scenarios_count = serializers.IntegerField()
+    total_assigned_experiences = serializers.IntegerField()
+    completed_experiences_count = serializers.IntegerField()
 
     def get_student_name(self, obj):
         return obj.full_name or obj.username

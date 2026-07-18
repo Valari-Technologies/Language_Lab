@@ -3,7 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
 from super_admin.models import Grade
-from .models import Scenario, Activity, Screen, Media, Notification, ActivitySkill, LearningOutcome, ValidationReport
+from .models import Experience, Activity, Screen, Media, Notification, ActivitySkill, LearningOutcome, ValidationReport
 
 User = get_user_model()
 
@@ -32,27 +32,27 @@ class ContentStudioAPITests(APITestCase):
         self.grade3 = Grade.objects.create(grade_name="Grade 3", sort_order=3, description="Grade 3")
         self.grade4 = Grade.objects.create(grade_name="Grade 4", sort_order=4, description="Grade 4")
 
-        # Create Scenarios
-        self.scenario1 = Scenario.objects.create(
+        # Create Experiences
+        self.experience1 = Experience.objects.create(
             title="Greetings - Level 1",
             description="Learn to say hello",
             grade=self.grade3,
             subject="English",
             language="English",
-            difficulty=Scenario.Difficulty.EASY,
+            difficulty=Experience.Difficulty.EASY,
             estimated_duration=15,
-            status=Scenario.Status.DRAFT,
+            status=Experience.Status.DRAFT,
             created_by=self.content_creator,
         )
-        self.scenario2 = Scenario.objects.create(
+        self.experience2 = Experience.objects.create(
             title="At the Restaurant",
             description="Ordering food",
             grade=self.grade4,
             subject="English",
             language="English",
-            difficulty=Scenario.Difficulty.MEDIUM,
+            difficulty=Experience.Difficulty.MEDIUM,
             estimated_duration=25,
-            status=Scenario.Status.PUBLISHED,
+            status=Experience.Status.PUBLISHED,
             created_by=self.content_creator,
         )
 
@@ -62,7 +62,7 @@ class ContentStudioAPITests(APITestCase):
 
         # Create Activity
         self.activity1 = Activity.objects.create(
-            scenario=self.scenario2,
+            experience=self.experience2,
             title="Dialogue with Waiter",
             description="Waiter conversation",
             learning_objective="Order food politely",
@@ -102,26 +102,26 @@ class ContentStudioAPITests(APITestCase):
 
     def test_anonymous_access_denied(self):
         """Anonymous requests should return 401 Unauthorized."""
-        response = self.client.get(reverse("scenario-list"))
+        response = self.client.get(reverse("experience-list"))
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_non_allowed_roles_forbidden(self):
         """School Admin, Teacher, and Student roles should receive 403 Forbidden."""
         for user in [self.school_admin, self.teacher, self.student]:
             self.client.force_authenticate(user=user)
-            response = self.client.get(reverse("scenario-list"))
+            response = self.client.get(reverse("experience-list"))
             self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, f"Failed for {user.username}")
 
     def test_content_creator_and_super_admin_allowed(self):
         """Content Creator role should receive 200 OK."""
         self.client.force_authenticate(user=self.content_creator)
-        response = self.client.get(reverse("scenario-list"))
+        response = self.client.get(reverse("experience-list"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_super_admin_forbidden_in_content_studio(self):
         """Super Admin role should receive 403 FORBIDDEN in Content Studio."""
         self.client.force_authenticate(user=self.super_admin)
-        response = self.client.get(reverse("scenario-list"))
+        response = self.client.get(reverse("experience-list"))
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_experiences_list_filtering(self):
@@ -129,27 +129,27 @@ class ContentStudioAPITests(APITestCase):
         self.client.force_authenticate(user=self.content_creator)
 
         # Check search
-        response = self.client.get(reverse("scenario-list"), {"search": "Waiter"})
-        self.assertEqual(len(response.data["results"]), 0)  # "Waiter" is not in Scenario title/description
+        response = self.client.get(reverse("experience-list"), {"search": "Waiter"})
+        self.assertEqual(len(response.data["results"]), 0)  # "Waiter" is not in Experience title/description
 
-        response = self.client.get(reverse("scenario-list"), {"search": "Restaurant"})
+        response = self.client.get(reverse("experience-list"), {"search": "Restaurant"})
         self.assertEqual(len(response.data["results"]), 1)
         self.assertEqual(response.data["results"][0]["title"], "At the Restaurant")
 
         # Check grade filter
-        response = self.client.get(reverse("scenario-list"), {"grade": self.grade3.id})
+        response = self.client.get(reverse("experience-list"), {"grade": self.grade3.id})
         self.assertEqual(len(response.data["results"]), 1)
         self.assertEqual(response.data["results"][0]["title"], "Greetings - Level 1")
 
         # Check status filter
-        response = self.client.get(reverse("scenario-list"), {"status": "PUBLISHED"})
+        response = self.client.get(reverse("experience-list"), {"status": "PUBLISHED"})
         self.assertEqual(len(response.data["results"]), 1)
         self.assertEqual(response.data["results"][0]["title"], "At the Restaurant")
 
     def test_experience_detail_nested_activities(self):
         """Detail endpoint should return nested activities."""
         self.client.force_authenticate(user=self.content_creator)
-        response = self.client.get(reverse("scenario-detail", args=[self.scenario2.id]))
+        response = self.client.get(reverse("experience-detail", args=[self.experience2.id]))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("activities", response.data)
         self.assertEqual(len(response.data["activities"]), 1)
@@ -206,13 +206,13 @@ class ContentStudioAPITests(APITestCase):
         # Summary
         response = self.client.get(reverse("dashboard-summary"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["total_scenarios"], 2)
-        self.assertEqual(response.data["draft_scenarios"], 1)
-        self.assertEqual(response.data["published_scenarios"], 1)
+        self.assertEqual(response.data["total_experiences"], 2)
+        self.assertEqual(response.data["draft_experiences"], 1)
+        self.assertEqual(response.data["published_experiences"], 1)
         self.assertEqual(response.data["total_media_assets"], 1)
 
         # Recent Experiences
-        response = self.client.get(reverse("dashboard-recent-scenarios"))
+        response = self.client.get(reverse("dashboard-recent-experiences"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 2)
 
@@ -239,8 +239,8 @@ class ContentStudioAPITests(APITestCase):
         response = self.client.post(reverse("dashboard-summary"), {"name": "New"})
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
-    def test_create_scenario_success(self):
-        """Content Creator can create a scenario. created_by is set automatically."""
+    def test_create_experience_success(self):
+        """Content Creator can create a experience. created_by is set automatically."""
         self.client.force_authenticate(user=self.content_creator)
         payload = {
             "title": "New Grammar Lesson",
@@ -253,12 +253,12 @@ class ContentStudioAPITests(APITestCase):
             "status": "DRAFT",
             "tags": ["grammar", "verbs"]
         }
-        response = self.client.post(reverse("scenario-list"), payload, format="json")
+        response = self.client.post(reverse("experience-list"), payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["title"], "New Grammar Lesson")
         self.assertEqual(response.data["created_by"], self.content_creator.id)
 
-    def test_create_scenario_validation_reject_extra_fields(self):
+    def test_create_experience_validation_reject_extra_fields(self):
         """Reject request if unknown or extra fields are passed."""
         self.client.force_authenticate(user=self.content_creator)
         payload = {
@@ -270,11 +270,11 @@ class ContentStudioAPITests(APITestCase):
             "status": "DRAFT",
             "extra_unsupported_field": "some_value"
         }
-        response = self.client.post(reverse("scenario-list"), payload, format="json")
+        response = self.client.post(reverse("experience-list"), payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("extra_unsupported_field", response.data)
 
-    def test_create_scenario_validation_reject_created_by(self):
+    def test_create_experience_validation_reject_created_by(self):
         """Reject setting created_by from the request body."""
         self.client.force_authenticate(user=self.content_creator)
         payload = {
@@ -286,12 +286,12 @@ class ContentStudioAPITests(APITestCase):
             "status": "DRAFT",
             "created_by": self.super_admin.id
         }
-        response = self.client.post(reverse("scenario-list"), payload, format="json")
+        response = self.client.post(reverse("experience-list"), payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("created_by", response.data)
 
-    def test_update_scenario_success(self):
-        """Content Creator can perform full update on a scenario."""
+    def test_update_experience_success(self):
+        """Content Creator can perform full update on a experience."""
         self.client.force_authenticate(user=self.content_creator)
         payload = {
             "title": "Greetings Updated",
@@ -304,50 +304,50 @@ class ContentStudioAPITests(APITestCase):
             "status": "DRAFT",
             "tags": ["greetings"]
         }
-        response = self.client.put(reverse("scenario-detail", args=[self.scenario1.id]), payload, format="json")
+        response = self.client.put(reverse("experience-detail", args=[self.experience1.id]), payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["title"], "Greetings Updated")
 
-    def test_patch_scenario_success(self):
-        """Content Creator can partially update a scenario."""
+    def test_patch_experience_success(self):
+        """Content Creator can partially update a experience."""
         self.client.force_authenticate(user=self.content_creator)
         payload = {
             "title": "Greetings Patched"
         }
-        response = self.client.patch(reverse("scenario-detail", args=[self.scenario1.id]), payload, format="json")
+        response = self.client.patch(reverse("experience-detail", args=[self.experience1.id]), payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["title"], "Greetings Patched")
 
-    def test_delete_scenario_soft_delete(self):
-        """DELETE request soft-deletes a scenario and excludes it from queries."""
+    def test_delete_experience_soft_delete(self):
+        """DELETE request soft-deletes a experience and excludes it from queries."""
         self.client.force_authenticate(user=self.content_creator)
-        response = self.client.delete(reverse("scenario-detail", args=[self.scenario1.id]))
+        response = self.client.delete(reverse("experience-detail", args=[self.experience1.id]))
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
         # Ensure it is excluded from list view
-        list_response = self.client.get(reverse("scenario-list"))
-        self.assertEqual(len(list_response.data["results"]), 1)  # Only scenario2 remains
+        list_response = self.client.get(reverse("experience-list"))
+        self.assertEqual(len(list_response.data["results"]), 1)  # Only experience2 remains
         
         # Ensure it returns 404 on detail view
-        detail_response = self.client.get(reverse("scenario-detail", args=[self.scenario1.id]))
+        detail_response = self.client.get(reverse("experience-detail", args=[self.experience1.id]))
         self.assertEqual(detail_response.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_duplicate_scenario(self):
-        """Verify deep copying of scenario and its nested activities/screens."""
+    def test_duplicate_experience(self):
+        """Verify deep copying of experience and its nested activities/screens."""
         self.client.force_authenticate(user=self.content_creator)
-        url = reverse("scenario-duplicate", args=[self.scenario2.id])
+        url = reverse("experience-duplicate", args=[self.experience2.id])
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["title"], f"{self.scenario2.title} (Copy)")
+        self.assertEqual(response.data["title"], f"{self.experience2.title} (Copy)")
         self.assertEqual(response.data["status"], "DRAFT")
         self.assertEqual(response.data["created_by"], self.content_creator.id)
 
         # Verify deep copy of nested activities & screens in DB
-        new_scenario_id = response.data["id"]
-        new_scenario = Scenario.objects.get(id=new_scenario_id)
-        self.assertEqual(new_scenario.activities.count(), 1)
+        new_experience_id = response.data["id"]
+        new_experience = Experience.objects.get(id=new_experience_id)
+        self.assertEqual(new_experience.activities.count(), 1)
         
-        new_activity = new_scenario.activities.first()
+        new_activity = new_experience.activities.first()
         self.assertEqual(new_activity.title, self.activity1.title)
         self.assertEqual(new_activity.screens.count(), 1)
         self.assertEqual(new_activity.screens.first().title, self.screen1.title)
@@ -355,45 +355,45 @@ class ContentStudioAPITests(APITestCase):
         # Verify skills are copied / associated
         self.assertEqual(new_activity.skills.count(), 2)
 
-    def test_archive_scenario(self):
-        """POST to archive changes scenario status to ARCHIVED."""
+    def test_archive_experience(self):
+        """POST to archive changes experience status to ARCHIVED."""
         self.client.force_authenticate(user=self.content_creator)
-        url = reverse("scenario-archive", args=[self.scenario1.id])
+        url = reverse("experience-archive", args=[self.experience1.id])
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], "ARCHIVED")
 
-    def test_publish_scenario(self):
-        """POST to publish changes scenario status to PUBLISHED."""
+    def test_publish_experience(self):
+        """POST to publish changes experience status to PUBLISHED."""
         self.client.force_authenticate(user=self.content_creator)
-        url = reverse("scenario-publish", args=[self.scenario1.id])
+        url = reverse("experience-publish", args=[self.experience1.id])
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], "PUBLISHED")
 
-    def test_school_admin_cannot_write_scenario(self):
+    def test_school_admin_cannot_write_experience(self):
         """School Admin gets 403 Forbidden on writes."""
         self.client.force_authenticate(user=self.school_admin)
         
         # Create
-        response = self.client.post(reverse("scenario-list"), {"title": "Forbidden"})
+        response = self.client.post(reverse("experience-list"), {"title": "Forbidden"})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         
         # Update
-        response = self.client.put(reverse("scenario-detail", args=[self.scenario1.id]), {"title": "Forbidden"})
+        response = self.client.put(reverse("experience-detail", args=[self.experience1.id]), {"title": "Forbidden"})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
         # Delete
-        response = self.client.delete(reverse("scenario-detail", args=[self.scenario1.id]))
+        response = self.client.delete(reverse("experience-detail", args=[self.experience1.id]))
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_activity_crud_operations(self):
-        """Verify activity create, update, patch, delete, and list-scoped-to-scenario."""
+        """Verify activity create, update, patch, delete, and list-scoped-to-experience."""
         self.client.force_authenticate(user=self.content_creator)
 
         # Create
         payload = {
-            "scenario": self.scenario1.id,
+            "experience": self.experience1.id,
             "title": "New Activity 2",
             "description": "desc",
             "estimated_duration": 10,
@@ -402,12 +402,12 @@ class ContentStudioAPITests(APITestCase):
         response = self.client.post(reverse("activity-list"), payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["title"], "New Activity 2")
-        # display_order should be auto-assigned to 1 since scenario1 has no other activities
+        # display_order should be auto-assigned to 1 since experience1 has no other activities
         self.assertEqual(response.data["display_order"], 1)
         new_act_id = response.data["id"]
 
-        # List scoped to scenario1
-        url = reverse("scenario-activities", args=[self.scenario1.id])
+        # List scoped to experience1
+        url = reverse("experience-activities", args=[self.experience1.id])
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
@@ -448,29 +448,29 @@ class ContentStudioAPITests(APITestCase):
         self.assertEqual(Screen.objects.filter(id=scr_id).count(), 0)
 
     def test_activity_create_rejects_deleted_parent(self):
-        """Creating an activity under a soft-deleted scenario should return 400."""
+        """Creating an activity under a soft-deleted experience should return 400."""
         self.client.force_authenticate(user=self.content_creator)
-        # Soft-delete scenario1 first
-        self.scenario1.is_deleted = True
-        self.scenario1.save()
+        # Soft-delete experience1 first
+        self.experience1.is_deleted = True
+        self.experience1.save()
 
         payload = {
-            "scenario": self.scenario1.id,
+            "experience": self.experience1.id,
             "title": "Invalid Activity",
             "estimated_duration": 10,
             "mastery_threshold": 80
         }
         response = self.client.post(reverse("activity-list"), payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("scenario", response.data)
+        self.assertIn("experience", response.data)
 
     def test_activity_reorder_and_integrity(self):
-        """Verify atomic activities reordering within same scenario, and same-parent constraint."""
+        """Verify atomic activities reordering within same experience, and same-parent constraint."""
         self.client.force_authenticate(user=self.content_creator)
 
-        # Create two activities under scenario1
-        act1 = Activity.objects.create(scenario=self.scenario1, title="Act 1", estimated_duration=5, display_order=1)
-        act2 = Activity.objects.create(scenario=self.scenario1, title="Act 2", estimated_duration=5, display_order=2)
+        # Create two activities under experience1
+        act1 = Activity.objects.create(experience=self.experience1, title="Act 1", estimated_duration=5, display_order=1)
+        act2 = Activity.objects.create(experience=self.experience1, title="Act 2", estimated_duration=5, display_order=2)
 
         # Reorder payload
         reorder_url = reverse("activity-reorder")
@@ -484,8 +484,8 @@ class ContentStudioAPITests(APITestCase):
         self.assertEqual(act2.display_order, 1)
         self.assertEqual(act1.display_order, 2)
 
-        # Integrity check: try to reorder with an activity from scenario2
-        act_other = Activity.objects.create(scenario=self.scenario2, title="Other Scenario Act", estimated_duration=5, display_order=2)
+        # Integrity check: try to reorder with an activity from experience2
+        act_other = Activity.objects.create(experience=self.experience2, title="Other Experience Act", estimated_duration=5, display_order=2)
         payload_invalid = {"ids": [act2.id, act_other.id]}
         response_invalid = self.client.patch(reorder_url, payload_invalid, format="json")
         self.assertEqual(response_invalid.status_code, status.HTTP_400_BAD_REQUEST)
@@ -557,7 +557,7 @@ class ContentStudioAPITests(APITestCase):
         self.assertEqual(self.screen1.display_order, 2)
 
         # Integrity check: try to reorder with a screen from another activity
-        act_other = Activity.objects.create(scenario=self.scenario2, title="Other Act", estimated_duration=5, display_order=2)
+        act_other = Activity.objects.create(experience=self.experience2, title="Other Act", estimated_duration=5, display_order=2)
         scr_other = Screen.objects.create(activity=act_other, title="Other Scr", screen_type="QUIZ", estimated_duration=60, display_order=1)
         payload_invalid = {"ids": [scr2.id, scr_other.id]}
         response_invalid = self.client.patch(reorder_url, payload_invalid, format="json")
@@ -568,8 +568,8 @@ class ContentStudioAPITests(APITestCase):
         """Verify learning outcome add, edit, and delete endpoints."""
         self.client.force_authenticate(user=self.content_creator)
 
-        # Add learning outcome to scenario1
-        add_url = reverse("scenario-add-learning-outcome", args=[self.scenario1.id])
+        # Add learning outcome to experience1
+        add_url = reverse("experience-add-learning-outcome", args=[self.experience1.id])
         response = self.client.post(add_url, {"text": "Learn greetings"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["text"], "Learn greetings")
@@ -586,19 +586,19 @@ class ContentStudioAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(LearningOutcome.objects.filter(id=outcome_id).count(), 0)
 
-    def test_scenario_tags_management(self):
-        """Verify tags add and remove on a scenario."""
+    def test_experience_tags_management(self):
+        """Verify tags add and remove on a experience."""
         self.client.force_authenticate(user=self.content_creator)
 
         # Add tags
-        add_url = reverse("scenario-tags", args=[self.scenario1.id])
+        add_url = reverse("experience-tags", args=[self.experience1.id])
         response = self.client.post(add_url, {"tags": ["grammar", "nouns"]}, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("grammar", response.data["tags"])
         self.assertIn("nouns", response.data["tags"])
 
         # Remove tags
-        remove_url = reverse("scenario-tags", args=[self.scenario1.id])
+        remove_url = reverse("experience-tags", args=[self.experience1.id])
         response = self.client.delete(remove_url, {"tags": ["grammar"]}, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertNotIn("grammar", response.data["tags"])
@@ -609,7 +609,7 @@ class ContentStudioAPITests(APITestCase):
         self.client.force_authenticate(user=self.school_admin)
 
         # Activity Create
-        response = self.client.post(reverse("activity-list"), {"scenario": self.scenario1.id, "title": "No"})
+        response = self.client.post(reverse("activity-list"), {"experience": self.experience1.id, "title": "No"})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
         # Activity Reorder
@@ -798,17 +798,17 @@ class ContentStudioAPITests(APITestCase):
 
         Media.objects.get(id=media_id).file.delete(save=False)
 
-    def test_validation_scenario_no_activities(self):
-        """Verify validation fails for scenario with no activities."""
+    def test_validation_experience_no_activities(self):
+        """Verify validation fails for experience with no activities."""
         self.client.force_authenticate(user=self.content_creator)
         
         # 1. Fetch latest report when never run -> 404
-        url_get = reverse("validation-get-latest-report", args=[self.scenario1.id])
+        url_get = reverse("validation-get-latest-report", args=[self.experience1.id])
         response = self.client.get(url_get)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
         # 2. Run validation -> 200 and FAILED status
-        url_run = reverse("validation-run-validation", args=[self.scenario1.id])
+        url_run = reverse("validation-run-validation", args=[self.experience1.id])
         response = self.client.post(url_run)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], "FAILED")
@@ -816,12 +816,12 @@ class ContentStudioAPITests(APITestCase):
         self.assertEqual(response.data["passed"], 2)  # has title, has grade
 
         # Verify detailed report url returns same structure
-        url_detail = reverse("validation-get-detailed-report", args=[self.scenario1.id])
+        url_detail = reverse("validation-get-detailed-report", args=[self.experience1.id])
         response_detail = self.client.get(url_detail)
         self.assertEqual(response_detail.status_code, status.HTTP_200_OK)
         self.assertEqual(response_detail.data["status"], "FAILED")
 
-    def test_validation_scenario_empty_screens_and_broken_media(self):
+    def test_validation_experience_empty_screens_and_broken_media(self):
         """Verify validation flags empty screens and broken media reference errors."""
         self.client.force_authenticate(user=self.content_creator)
 
@@ -829,8 +829,8 @@ class ContentStudioAPITests(APITestCase):
         self.screen1.content = {}
         self.screen1.save()
 
-        # Scenario 2 has 1 activity with 1 screen in setup (screen1)
-        url_run = reverse("validation-run-validation", args=[self.scenario2.id])
+        # Experience 2 has 1 activity with 1 screen in setup (screen1)
+        url_run = reverse("validation-run-validation", args=[self.experience2.id])
         response = self.client.post(url_run)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], "FAILED")
@@ -845,14 +845,14 @@ class ContentStudioAPITests(APITestCase):
         broken_media_messages = [r["message"] for r in results if r["rule"] == "screen_broken_media"]
         self.assertTrue(any("broken media" in msg.lower() for msg in broken_media_messages))
 
-    def test_validation_scenario_warnings_only_and_success(self):
+    def test_validation_experience_warnings_only_and_success(self):
         """Verify warning status and clean passed status when all rules met."""
         self.client.force_authenticate(user=self.content_creator)
 
         from super_admin.models import Grade
         grade = Grade.objects.first()
-        scen = Scenario.objects.create(
-            title="Valid Scenario",
+        scen = Experience.objects.create(
+            title="Valid Experience",
             description="desc",
             grade=grade,
             subject="English",
@@ -863,7 +863,7 @@ class ContentStudioAPITests(APITestCase):
         )
         
         # Missing thumbnail and outcomes -> Should return PASSED_WITH_WARNINGS
-        act = Activity.objects.create(scenario=scen, title="Act 1", estimated_duration=15, display_order=1)
+        act = Activity.objects.create(experience=scen, title="Act 1", estimated_duration=15, display_order=1)
         scr = Screen.objects.create(activity=act, title="Scr 1", screen_type="INFORMATION", estimated_duration=30, content={"text": "hello"}, display_order=1)
 
         url_run = reverse("validation-run-validation", args=[scen.id])
@@ -876,7 +876,7 @@ class ContentStudioAPITests(APITestCase):
         # Now satisfy warnings: add thumbnail, outcomes, and fix duration sum
         scen.thumbnail = "thumb.png"
         scen.save()
-        LearningOutcome.objects.create(scenario=scen, text="outcome")
+        LearningOutcome.objects.create(experience=scen, text="outcome")
         scen.estimated_duration = 50
         scen.save()
 
@@ -888,12 +888,12 @@ class ContentStudioAPITests(APITestCase):
         self.assertEqual(response_success.data["warnings"], 0)
 
         # Check overwrite
-        self.assertEqual(ValidationReport.objects.filter(scenario=scen).count(), 1)
+        self.assertEqual(ValidationReport.objects.filter(experience=scen).count(), 1)
 
     def test_validation_permissions(self):
         """Verify School Admin is blocked with 403, and Anon is blocked with 401."""
         self.client.force_authenticate(user=self.school_admin)
-        url_run = reverse("validation-run-validation", args=[self.scenario1.id])
+        url_run = reverse("validation-run-validation", args=[self.experience1.id])
         response = self.client.post(url_run)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -901,14 +901,14 @@ class ContentStudioAPITests(APITestCase):
         response = self.client.post(url_run)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_preview_scenario_success_and_ordering(self):
-        """Verify scenario preview returns nested structure sorted by display_order, excluding deleted items."""
+    def test_preview_experience_success_and_ordering(self):
+        """Verify experience preview returns nested structure sorted by display_order, excluding deleted items."""
         self.client.force_authenticate(user=self.content_creator)
 
         from super_admin.models import Grade
         grade = Grade.objects.first()
-        scen = Scenario.objects.create(
-            title="Preview Scenario",
+        scen = Experience.objects.create(
+            title="Preview Experience",
             description="desc",
             grade=grade,
             subject="English",
@@ -918,9 +918,9 @@ class ContentStudioAPITests(APITestCase):
             created_by=self.content_creator
         )
         
-        act2 = Activity.objects.create(scenario=scen, title="Activity Order 2", estimated_duration=10, display_order=2)
-        act1 = Activity.objects.create(scenario=scen, title="Activity Order 1", estimated_duration=10, display_order=1)
-        act_del = Activity.objects.create(scenario=scen, title="Deleted Activity", estimated_duration=10, display_order=3)
+        act2 = Activity.objects.create(experience=scen, title="Activity Order 2", estimated_duration=10, display_order=2)
+        act1 = Activity.objects.create(experience=scen, title="Activity Order 1", estimated_duration=10, display_order=1)
+        act_del = Activity.objects.create(experience=scen, title="Deleted Activity", estimated_duration=10, display_order=3)
         act_del.delete()
 
         scr2 = Screen.objects.create(activity=act1, title="Screen Order 2", screen_type="INFORMATION", display_order=2, estimated_duration=30)
@@ -928,7 +928,7 @@ class ContentStudioAPITests(APITestCase):
         scr_del = Screen.objects.create(activity=act1, title="Deleted Screen", screen_type="INFORMATION", display_order=3, estimated_duration=30)
         scr_del.delete()
 
-        url_preview = reverse("scenario-preview", args=[scen.id])
+        url_preview = reverse("experience-preview", args=[scen.id])
         response = self.client.get(url_preview)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
@@ -948,8 +948,8 @@ class ContentStudioAPITests(APITestCase):
 
         from super_admin.models import Grade
         grade = Grade.objects.first()
-        scen = Scenario.objects.create(
-            title="Preview Media Scenario",
+        scen = Experience.objects.create(
+            title="Preview Media Experience",
             grade=grade,
             subject="English",
             language="English",
@@ -957,7 +957,7 @@ class ContentStudioAPITests(APITestCase):
             status="DRAFT",
             created_by=self.content_creator
         )
-        act = Activity.objects.create(scenario=scen, title="Act", estimated_duration=10, display_order=1)
+        act = Activity.objects.create(experience=scen, title="Act", estimated_duration=10, display_order=1)
         
         media_valid = Media.objects.create(
             name="valid_scene.jpg",
@@ -977,7 +977,7 @@ class ContentStudioAPITests(APITestCase):
             content={"image_id": media_valid.id, "bg_media_id": 99999}
         )
 
-        url_preview = reverse("scenario-preview", args=[scen.id])
+        url_preview = reverse("experience-preview", args=[scen.id])
         response = self.client.get(url_preview)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
@@ -1002,7 +1002,7 @@ class ContentStudioAPITests(APITestCase):
 
         # Start Session
         url_start = reverse("preview-start")
-        response = self.client.post(url_start, {"scenario_id": self.scenario1.id})
+        response = self.client.post(url_start, {"experience_id": self.experience1.id})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("session_id", response.data)
         self.assertIn("payload", response.data)
@@ -1010,7 +1010,7 @@ class ContentStudioAPITests(APITestCase):
 
         # Restart Session
         url_restart = reverse("preview-restart")
-        response = self.client.post(url_restart, {"scenario_id": self.scenario1.id})
+        response = self.client.post(url_restart, {"experience_id": self.experience1.id})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("session_id", response.data)
         self.assertNotEqual(response.data["session_id"], session_id)
@@ -1024,7 +1024,7 @@ class ContentStudioAPITests(APITestCase):
     def test_preview_permissions(self):
         """Verify School Admin is blocked with 403, and Anon is blocked with 401."""
         self.client.force_authenticate(user=self.school_admin)
-        url_preview = reverse("scenario-preview", args=[self.scenario1.id])
+        url_preview = reverse("experience-preview", args=[self.experience1.id])
         response = self.client.get(url_preview)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -1061,8 +1061,8 @@ class PublishPipelineTests(APITestCase):
 
         self.grade = Grade.objects.create(grade_name="Grade PH7", sort_order=99)
 
-        # Build a fully-valid scenario (title + grade + 1 activity + 1 screen w/ content)
-        self.valid_scenario = Scenario.objects.create(
+        # Build a fully-valid experience (title + grade + 1 activity + 1 screen w/ content)
+        self.valid_experience = Experience.objects.create(
             title="Phase7 Publish Test",
             description="Test",
             grade=self.grade,
@@ -1074,7 +1074,7 @@ class PublishPipelineTests(APITestCase):
             created_by=self.content_creator,
         )
         self.act = Activity.objects.create(
-            scenario=self.valid_scenario,
+            experience=self.valid_experience,
             title="Activity One",
             learning_objective="Learn",
             estimated_duration=15,
@@ -1090,9 +1090,9 @@ class PublishPipelineTests(APITestCase):
             content={"text": "Hello world"},
         )
 
-        # An invalid scenario (no activities) for 422 tests
-        self.invalid_scenario = Scenario.objects.create(
-            title="No Activities Scenario",
+        # An invalid experience (no activities) for 422 tests
+        self.invalid_experience = Experience.objects.create(
+            title="No Activities Experience",
             description="Empty",
             grade=self.grade,
             subject="English",
@@ -1111,10 +1111,10 @@ class PublishPipelineTests(APITestCase):
             dj_settings.PACKAGES_ROOT = self._orig_pkg_root
 
     # ------------------------------------------------------------------
-    def test_publish_invalid_scenario_returns_422(self):
-        """Publishing a scenario with no activities → 422 + validation report."""
+    def test_publish_invalid_experience_returns_422(self):
+        """Publishing a experience with no activities → 422 + validation report."""
         self.client.force_authenticate(user=self.content_creator)
-        url = reverse("publish-scenario", kwargs={"scenario_id": self.invalid_scenario.id})
+        url = reverse("publish-experience", kwargs={"experience_id": self.invalid_experience.id})
         response = self.client.post(url, {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
@@ -1125,7 +1125,7 @@ class PublishPipelineTests(APITestCase):
         from .models import PublishVersion
         self.assertEqual(
             PublishVersion.objects.filter(
-                published_package__scenario=self.invalid_scenario
+                published_package__experience=self.invalid_experience
             ).count(),
             0,
         )
@@ -1138,13 +1138,13 @@ class PublishPipelineTests(APITestCase):
         ]
         self.assertEqual(len(elab_files), 0)
 
-    def test_publish_valid_scenario_creates_elab_on_disk(self):
-        """Publishing a valid scenario → 201, .elab on disk, DB checksum matches file."""
+    def test_publish_valid_experience_creates_elab_on_disk(self):
+        """Publishing a valid experience → 201, .elab on disk, DB checksum matches file."""
         import hashlib, os
         from .models import PublishVersion
 
         self.client.force_authenticate(user=self.content_creator)
-        url = reverse("publish-scenario", kwargs={"scenario_id": self.valid_scenario.id})
+        url = reverse("publish-experience", kwargs={"experience_id": self.valid_experience.id})
         response = self.client.post(url, {"release_notes": "First release"}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -1165,14 +1165,14 @@ class PublishPipelineTests(APITestCase):
                 h.update(chunk)
         self.assertEqual(h.hexdigest(), version_obj.checksum)
 
-        # Verify scenario status flipped to PUBLISHED
-        self.valid_scenario.refresh_from_db()
-        self.assertEqual(self.valid_scenario.status, "PUBLISHED")
+        # Verify experience status flipped to PUBLISHED
+        self.valid_experience.refresh_from_db()
+        self.assertEqual(self.valid_experience.status, "PUBLISHED")
 
     def test_version_auto_increment_and_duplicate_409(self):
         """Two publishes → 1.0 then 1.1.  Supplying duplicate version → 409."""
         self.client.force_authenticate(user=self.content_creator)
-        url = reverse("publish-scenario", kwargs={"scenario_id": self.valid_scenario.id})
+        url = reverse("publish-experience", kwargs={"experience_id": self.valid_experience.id})
 
         r1 = self.client.post(url, {}, format="json")
         self.assertEqual(r1.status_code, status.HTTP_201_CREATED)
@@ -1190,7 +1190,7 @@ class PublishPipelineTests(APITestCase):
         """Download endpoint streams the .elab with Content-Disposition and 200."""
         # First publish
         self.client.force_authenticate(user=self.content_creator)
-        pub_url = reverse("publish-scenario", kwargs={"scenario_id": self.valid_scenario.id})
+        pub_url = reverse("publish-experience", kwargs={"experience_id": self.valid_experience.id})
         pub_response = self.client.post(pub_url, {}, format="json")
         self.assertEqual(pub_response.status_code, status.HTTP_201_CREATED)
         version_id = pub_response.data["version_id"]
@@ -1213,7 +1213,7 @@ class PublishPipelineTests(APITestCase):
         from .models import PublishVersion
 
         self.client.force_authenticate(user=self.content_creator)
-        pub_url = reverse("publish-scenario", kwargs={"scenario_id": self.valid_scenario.id})
+        pub_url = reverse("publish-experience", kwargs={"experience_id": self.valid_experience.id})
         pub_r = self.client.post(pub_url, {}, format="json")
         self.assertEqual(pub_r.status_code, status.HTTP_201_CREATED)
 

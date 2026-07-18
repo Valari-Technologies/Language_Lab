@@ -2,49 +2,49 @@ from django.db import models
 from django.conf import settings
 
 
-class ScenarioAssignment(models.Model):
+class ExperienceAssignment(models.Model):
     school = models.ForeignKey(
         "super_admin.School",
         on_delete=models.CASCADE,
-        related_name="scenario_assignments"
+        related_name="experience_assignments"
     )
-    scenario_ref = models.CharField(max_length=255)
-    scenario_title = models.CharField(max_length=255)
+    experience_ref = models.CharField(max_length=255)
+    experience_title = models.CharField(max_length=255)
     grade = models.ForeignKey(
         "super_admin.Grade",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="scenario_assignments"
+        related_name="experience_assignments"
     )
     class_obj = models.ForeignKey(
         "school_admin.Class",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="scenario_assignments"
+        related_name="experience_assignments"
     )
     assigned_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="assigned_scenarios"
+        related_name="assigned_experiences"
     )
     assigned_at = models.DateTimeField()
     synced_at = models.DateTimeField(auto_now=True, db_index=True)
 
     class Meta:
-        db_table = "cms_scenario_assignment"
-        verbose_name = "Scenario Assignment"
-        verbose_name_plural = "Scenario Assignments"
+        db_table = "cms_experience_assignment"
+        verbose_name = "Experience Assignment"
+        verbose_name_plural = "Experience Assignments"
         ordering = ["-assigned_at"]
         indexes = [
             models.Index(fields=["school", "synced_at"]),
         ]
 
     def __str__(self):
-        return f"{self.scenario_title} - {self.school.school_name}"
+        return f"{self.experience_title} - {self.school.school_name}"
 
 
 class StudentAttempt(models.Model):
@@ -56,7 +56,7 @@ class StudentAttempt(models.Model):
     ]
 
     assignment = models.ForeignKey(
-        ScenarioAssignment,
+        ExperienceAssignment,
         on_delete=models.CASCADE,
         related_name="attempts"
     )
@@ -92,7 +92,7 @@ class StudentAttempt(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.student.username} - {self.assignment.scenario_title} ({self.status})"
+        return f"{self.student.username} - {self.assignment.experience_title} ({self.status})"
 
 
 class ScreenResponse(models.Model):

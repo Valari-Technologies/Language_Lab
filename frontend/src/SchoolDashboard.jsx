@@ -136,7 +136,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
   const [teacherPage, setTeacherPage]   = useState(1);
   const [studentPage, setStudentPage]   = useState(1);
   const [classPage,   setClassPage]     = useState(1);
-  const [scenarioPage,setScenarioPage]  = useState(1);
+  const [experiencePage,setExperiencePage]  = useState(1);
   const PER_PAGE = 4;
 
   /* ── Bulk Upload ── */
@@ -155,34 +155,34 @@ const SchoolDashboard = ({ user, onLogout }) => {
   const [teachers,       setTeachers]       = useState([]);
   const [students,       setStudents]       = useState([]);
   const [classes,        setClasses]        = useState([]);
-  const [scenarios,      setScenarios]      = useState([]);
+  const [experiences,      setExperiences]      = useState([]);
   const [schools,        setSchools]        = useState([]);
   const [grades,         setGrades]         = useState([]);
 
   /* ── Reports ── */
   const [overviewReport,          setOverviewReport]          = useState(null);
-  const [scenariosReport,         setScenariosReport]         = useState([]);
+  const [experiencesReport,         setExperiencesReport]         = useState([]);
   const [classesReport,           setClassesReport]           = useState([]);
   const [studentsReport,          setStudentsReport]          = useState([]);
   const [studentCompletionReport, setStudentCompletionReport] = useState([]);
 
   /* ── Detail modals ── */
-  const [selectedScenarioDetail, setSelectedScenarioDetail] = useState(null);
+  const [selectedExperienceDetail, setSelectedExperienceDetail] = useState(null);
   const [selectedClassDetail,    setSelectedClassDetail]    = useState(null);
   const [selectedStudentDetail,  setSelectedStudentDetail]  = useState(null);
-  const [showScenarioDetailModal, setShowScenarioDetailModal] = useState(false);
+  const [showExperienceDetailModal, setShowExperienceDetailModal] = useState(false);
   const [showClassDetailModal,    setShowClassDetailModal]    = useState(false);
   const [showStudentDetailModal,  setShowStudentDetailModal]  = useState(false);
 
   /* ── Forms ── */
   const [teacherForm, setTeacherForm] = useState({
-    username:'', password:'', email:'', full_name:'', is_active:true, school:'', qualification:'', experience_years:0
+    username:'', password:'', email:'', full_name:'', is_active:true, school:'', qualification:'', experience_years:0, assigned_class_ids: []
   });
   const [studentForm, setStudentForm] = useState({
     username:'', password:'', email:'', full_name:'', is_active:true
   });
   const [classForm, setClassForm] = useState({
-    class_name:'', school:'', grade:'', academic_year: new Date().getFullYear().toString(), is_active:true
+    class_name:'', school:'', grade:'', academic_year: new Date().getFullYear().toString(), is_active:true, assigned_teacher_ids: []
   });
   const [profileForm, setProfileForm] = useState({
     username: user?.username || '', email: user?.email || '', full_name: user?.full_name || '',
@@ -201,44 +201,44 @@ const SchoolDashboard = ({ user, onLogout }) => {
 
   const loadSchools = async () => {
     try {
-      const res = await apiFetch('/api/cms/schools/');
+      const res = await apiFetch('/api/cms/v1/schools/');
       if (res.ok) { const d = await res.json(); setSchools(d.results || d); }
     } catch (e) { console.error('Failed to load schools.', e); }
   };
 
   const loadGrades = async () => {
     try {
-      const res = await apiFetch('/api/cms/grades/');
+      const res = await apiFetch('/api/cms/v1/grades/');
       if (res.ok) { const d = await res.json(); setGrades(d.results || d); }
     } catch (e) { console.error('Failed to load grades.', e); }
   };
 
   const loadTeachers = async () => {
     try {
-      const res = await apiFetch('/api/cms/teachers/');
+      const res = await apiFetch('/api/cms/v1/teachers/');
       if (res.ok) { const d = await res.json(); setTeachers(d.results || d); }
     } catch (e) { console.error('Failed to load teachers.', e); }
   };
 
   const loadStudents = async () => {
     try {
-      const res = await apiFetch('/api/cms/students/');
+      const res = await apiFetch('/api/cms/v1/students/');
       if (res.ok) { const d = await res.json(); setStudents(d.results || d); }
     } catch (e) { console.error('Failed to load students.', e); }
   };
 
   const loadClasses = async () => {
     try {
-      const res = await apiFetch('/api/cms/classes/');
+      const res = await apiFetch('/api/cms/v1/classes/');
       if (res.ok) { const d = await res.json(); setClasses(d.results || d); }
     } catch (e) { console.error('Failed to load classes.', e); }
   };
 
-  const loadScenarios = async () => {
+  const loadExperiences = async () => {
     try {
-      const res = await apiFetch('/api/v1/content/scenarios/');
-      if (res.ok) { const d = await res.json(); setScenarios(d.results || d); }
-    } catch (e) { console.error('Failed to load scenarios.', e); }
+      const res = await apiFetch('/api/v1/content/experiences/');
+      if (res.ok) { const d = await res.json(); setExperiences(d.results || d); }
+    } catch (e) { console.error('Failed to load experiences.', e); }
   };
 
   const loadStudentCompletionReport = async () => {
@@ -255,12 +255,12 @@ const SchoolDashboard = ({ user, onLogout }) => {
     try {
       const [overRes, scenRes, classRes, studRes] = await Promise.all([
         apiFetch('/api/v1/reports/overview/'),
-        apiFetch('/api/v1/reports/scenarios/'),
+        apiFetch('/api/v1/reports/experiences/'),
         apiFetch('/api/v1/reports/classes/'),
         apiFetch('/api/v1/reports/students/')
       ]);
       if (overRes.ok)  setOverviewReport(await overRes.json());
-      if (scenRes.ok)  setScenariosReport(await scenRes.json());
+      if (scenRes.ok)  setExperiencesReport(await scenRes.json());
       if (classRes.ok) setClassesReport(await classRes.json());
       if (studRes.ok)  setStudentsReport(await studRes.json());
     } catch (e) { console.error('Failed to load reports data', e); }
@@ -273,7 +273,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
       await Promise.all([
         loadDashboardData(), loadSchools(), loadGrades(),
         loadTeachers(), loadStudents(), loadClasses(),
-        loadScenarios(), loadReportsData(), loadStudentCompletionReport()
+        loadExperiences(), loadReportsData(), loadStudentCompletionReport()
       ]);
     } catch (e) { setErrorMsg('Error loading dashboard data.'); }
     finally { setLoading(false); }
@@ -297,9 +297,10 @@ const SchoolDashboard = ({ user, onLogout }) => {
         is_active: entity.is_active !== undefined ? entity.is_active : true,
         school: entity.school || (schools[0]?.school_id || ''),
         qualification: entity.qualification || '',
-        experience_years: entity.experience_years || 0
+        experience_years: entity.experience_years || 0,
+        assigned_class_ids: entity.assigned_class_ids || []
       } : { username:'', password:'', email:'', full_name:'', is_active:true,
-            school: schools[0]?.school_id || '', qualification:'', experience_years:0 });
+            school: schools[0]?.school_id || '', qualification:'', experience_years:0, assigned_class_ids: [] });
     } else if (tab === 'students') {
       setStudentForm(entity ? {
         username: entity.username || '', password: '', email: entity.email || '',
@@ -312,10 +313,12 @@ const SchoolDashboard = ({ user, onLogout }) => {
         school: entity.school || (schools[0]?.school_id || ''),
         grade: entity.grade || (grades[0]?.id || ''),
         academic_year: entity.academic_year || new Date().getFullYear().toString(),
-        is_active: entity.is_active !== undefined ? entity.is_active : true
+        is_active: entity.is_active !== undefined ? entity.is_active : true,
+        assigned_teacher_ids: entity.assigned_teacher_ids || []
       } : {
         class_name:'', school: schools[0]?.school_id || '',
-        grade: grades[0]?.id || '', academic_year: new Date().getFullYear().toString(), is_active:true
+        grade: grades[0]?.id || '', academic_year: new Date().getFullYear().toString(), is_active:true,
+        assigned_teacher_ids: []
       });
     }
   };
@@ -334,7 +337,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
     setErrorMsg('');
     setActionLoading(true);
     let body = {};
-    let url = `/api/cms/${activeSubTab}/`;
+    let url = `/api/cms/v1/${activeSubTab}/`;
     if (modalType === 'edit') url += `${editingId}/`;
 
     try {
@@ -390,7 +393,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
     formData.append('upload_type', activeSubTab === 'teachers' ? 'teacher' : 'student');
 
     try {
-      const res = await apiFetch('/api/cms/bulk-upload/', {
+      const res = await apiFetch('/api/cms/v1/bulk-upload/', {
         method: 'POST',
         body: formData
       });
@@ -426,7 +429,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
     if (!id || !type) return;
     setActionLoading(true);
     setErrorMsg('');
-    const url = `/api/cms/${activeSubTab}/${id}/`;
+    const url = `/api/cms/v1/${activeSubTab}/${id}/`;
     try {
       const res = await apiFetch(url, { method: 'DELETE' });
       const resData = await res.json();
@@ -450,10 +453,10 @@ const SchoolDashboard = ({ user, onLogout }) => {
   };
 
   /* ── Reports detail ── */
-  const handleFetchScenarioDetail = async (scenario_ref) => {
+  const handleFetchExperienceDetail = async (experience_ref) => {
     try {
-      const res = await apiFetch(`/api/v1/reports/scenarios/${scenario_ref}/`);
-      if (res.ok) { setSelectedScenarioDetail(await res.json()); setShowScenarioDetailModal(true); }
+      const res = await apiFetch(`/api/v1/reports/experiences/${experience_ref}/`);
+      if (res.ok) { setSelectedExperienceDetail(await res.json()); setShowExperienceDetailModal(true); }
     } catch (e) { console.error(e); }
   };
   const handleFetchClassDetail = async (class_id) => {
@@ -537,7 +540,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
   const statTeachers  = teachers.length;
   const statStudents  = students.length;
   const statClasses   = classes.length;
-  const statScenarios = scenarios.length;
+  const statExperiences = experiences.length;
   const statSchools   = schools.length;
   const statAttend    = dashboardData?.monthly_engagement_rate || '—';
 
@@ -549,7 +552,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
     setTeacherPage(1);
     setStudentPage(1);
     setClassPage(1);
-    setScenarioPage(1);
+    setExperiencePage(1);
     setImportActive(false);
     setUploadSummary(null);
   };
@@ -609,8 +612,8 @@ const SchoolDashboard = ({ user, onLogout }) => {
           <button className={`sd-nav-item${activeSubTab==='classes' ? ' active' : ''}`} onClick={() => goTo('classes')}>
             <FiBookOpen/><span>Classes</span>
           </button>
-          <button className={`sd-nav-item${activeSubTab==='scenarios' ? ' active' : ''}`} onClick={() => goTo('scenarios')}>
-            <FiFileText/><span>Scenarios</span>
+          <button className={`sd-nav-item${activeSubTab==='experiences' ? ' active' : ''}`} onClick={() => goTo('experiences')}>
+            <FiFileText/><span>Experiences</span>
           </button>
           <button className={`sd-nav-item${activeSubTab==='reports' ? ' active' : ''}`} onClick={() => goTo('reports')}>
             <FiBarChart2/><span>Reports</span>
@@ -691,7 +694,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
                   { label:'Total Teachers',      value: statTeachers,  color:'#3b82f6', bg:'#dbeafe', icon:<FiUsers/>,      trend:'+8%' },
                   { label:'Total Students',      value: statStudents,  color:'#a855f7', bg:'#f3e8ff', icon:<FiUsers/>,      trend:'+86%' },
                   { label:'Active Batches',      value: statClasses,   color:'#10b981', bg:'#d1fae5', icon:<FiActivity/>,   trend:'+6%' },
-                  { label:'Total Courses',       value: statScenarios, color:'#f97316', bg:'#ffedd5', icon:<FiBookOpen/>,   trend:'+8%' },
+                  { label:'Total Courses',       value: statExperiences, color:'#f97316', bg:'#ffedd5', icon:<FiBookOpen/>,   trend:'+8%' },
                   { label:'Average Attendance',  value: statAttend,    color:'#06b6d4', bg:'#cffafe', icon:<FiTrendingUp/>, trend:'+5%' },
                 ].map((s, i) => (
                   <div className="sd-stat-card" key={i}>
@@ -894,7 +897,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
                       <tr>
                         <th>Name</th>
                         <th>Qualification</th>
-                        <th>Experience</th>
+                        <th>School</th>
                         <th>Assigned Classes</th>
                         <th>Status</th>
                         <th style={{ textAlign:'right' }}>Actions</th>
@@ -908,8 +911,8 @@ const SchoolDashboard = ({ user, onLogout }) => {
                             <span className="sd-name-cell-email">{t.email}</span>
                           </td>
                           <td>{t.qualification || 'N/A'}</td>
-                          <td>{t.experience_years != null ? `${t.experience_years} year${t.experience_years !== 1 ? 's' : ''}` : 'N/A'}</td>
-                          <td>{t.assigned_classes || t.school_name || '—'}</td>
+                          <td>{t.school_name || '—'}</td>
+                          <td>{t.assigned_classes || '—'}</td>
                           <td>
                             <span className={`sd-badge ${t.is_active ? 'sd-badge-active' : 'sd-badge-leave'}`}>
                               {t.is_active ? 'Active' : 'On Leave'}
@@ -1045,7 +1048,6 @@ const SchoolDashboard = ({ user, onLogout }) => {
                         <tr key={s.student_id || i}>
                           <td>
                             <span className="sd-name-cell-primary">{s.full_name || s.username || 'N/A'}</span>
-                            <span className="sd-name-cell-email">{s.email}</span>
                           </td>
                           <td>{s.username}</td>
                           <td>{s.email || <span style={{ color:'#9ca3af', fontStyle:'italic' }}>Not provided</span>}</td>
@@ -1145,11 +1147,11 @@ const SchoolDashboard = ({ user, onLogout }) => {
             </>
           )}
 
-          {/* ══════════ SCENARIOS TAB ══════════ */}
-          {activeSubTab === 'scenarios' && (
+          {/* ══════════ EXPERIENCES TAB ══════════ */}
+          {activeSubTab === 'experiences' && (
             <>
               <div className="sd-page-header">
-                <h1 className="sd-page-title">Manage Scenario</h1>
+                <h1 className="sd-page-title">Manage Experience</h1>
               </div>
               <div className="sd-card" style={{ padding:'1.25rem 1.5rem' }}>
                 <div className="sd-table-toolbar">
@@ -1157,9 +1159,9 @@ const SchoolDashboard = ({ user, onLogout }) => {
                     <FiSearch/>
                     <input
                       type="text"
-                      placeholder="Search scenarios..."
+                      placeholder="Search experiences..."
                       value={searchQuery}
-                      onChange={e => { setSearchQuery(e.target.value); setScenarioPage(1); }}
+                      onChange={e => { setSearchQuery(e.target.value); setExperiencePage(1); }}
                     />
                   </div>
                   <div className="sd-table-actions">
@@ -1170,7 +1172,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
                   <table className="sd-table">
                     <thead>
                       <tr>
-                        <th>Scenario Title</th>
+                        <th>Experience Title</th>
                         <th>Grade Level</th>
                         <th>Difficulty</th>
                         <th>Status</th>
@@ -1178,7 +1180,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {paginate(filterList(scenarios), scenarioPage).map((s, i) => (
+                      {paginate(filterList(experiences), experiencePage).map((s, i) => (
                         <tr key={s.id || i}>
                           <td>
                             <span className="sd-name-cell-primary">{s.title}</span>
@@ -1198,17 +1200,17 @@ const SchoolDashboard = ({ user, onLogout }) => {
                           <td>{s.estimated_duration ? `${s.estimated_duration} min` : '—'}</td>
                         </tr>
                       ))}
-                      {filterList(scenarios).length === 0 && (
-                        <tr><td colSpan="5" className="sd-empty-state">No scenarios found.</td></tr>
+                      {filterList(experiences).length === 0 && (
+                        <tr><td colSpan="5" className="sd-empty-state">No experiences found.</td></tr>
                       )}
                     </tbody>
                   </table>
                 </div>
                 <Pagination
-                  total={filterList(scenarios).length}
+                  total={filterList(experiences).length}
                   perPage={PER_PAGE}
-                  page={scenarioPage}
-                  onPage={setScenarioPage}
+                  page={experiencePage}
+                  onPage={setExperiencePage}
                 />
               </div>
             </>
@@ -1248,26 +1250,26 @@ const SchoolDashboard = ({ user, onLogout }) => {
                     ))}
                   </div>
 
-                  {/* Scenario Report Table */}
+                  {/* Experience Report Table */}
                   <div className="sd-card">
                     <div className="sd-card-header">
-                      <div className="sd-card-title">Scenario Performance Analysis</div>
-                      <button className="sd-btn-outline" onClick={() => handleExportCSV('scenarios')}>Export CSV</button>
+                      <div className="sd-card-title">Experience Performance Analysis</div>
+                      <button className="sd-btn-outline" onClick={() => handleExportCSV('experiences')}>Export CSV</button>
                     </div>
                     <div className="sd-table-wrap">
                       <table className="sd-table">
                         <thead>
                           <tr>
-                            <th>Scenario Title</th><th>Scenario Ref</th><th>Attempts</th>
+                            <th>Experience Title</th><th>Experience Ref</th><th>Attempts</th>
                             <th>Completed</th><th>Avg Score</th><th>Pass Rate</th>
                             <th>High / Low</th><th>Avg Time</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {scenariosReport.map((s, i) => (
-                            <tr key={i} onClick={() => handleFetchScenarioDetail(s.scenario_ref)} style={{ cursor:'pointer' }}>
-                              <td><span className="sd-name-cell-primary">{s.scenario_title}</span></td>
-                              <td style={{ color:'#6b7280' }}>{s.scenario_ref}</td>
+                          {experiencesReport.map((s, i) => (
+                            <tr key={i} onClick={() => handleFetchExperienceDetail(s.experience_ref)} style={{ cursor:'pointer' }}>
+                              <td><span className="sd-name-cell-primary">{s.experience_title}</span></td>
+                              <td style={{ color:'#6b7280' }}>{s.experience_ref}</td>
                               <td>{s.total_attempts}</td>
                               <td>{s.completed}</td>
                               <td style={{ fontWeight:700, color:'#7c3aed' }}>{s.average_score}%</td>
@@ -1323,7 +1325,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
                         <thead>
                           <tr>
                             <th>Student</th><th>Class</th><th>Attempts</th><th>Completed</th>
-                            <th>Avg Score</th><th>Best Scenario</th><th>Worst Scenario</th><th>Last Attempt</th>
+                            <th>Avg Score</th><th>Best Experience</th><th>Worst Experience</th><th>Last Attempt</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1334,8 +1336,8 @@ const SchoolDashboard = ({ user, onLogout }) => {
                               <td>{st.total_attempts}</td>
                               <td>{st.completed}</td>
                               <td style={{ fontWeight:700, color:'#3b82f6' }}>{st.average_score}%</td>
-                              <td style={{ color:'#047857' }}>{st.best_scenario}</td>
-                              <td style={{ color:'#b91c1c' }}>{st.worst_scenario}</td>
+                              <td style={{ color:'#047857' }}>{st.best_experience}</td>
+                              <td style={{ color:'#b91c1c' }}>{st.worst_experience}</td>
                               <td>{st.last_attempt_date ? new Date(st.last_attempt_date).toLocaleDateString() : 'N/A'}</td>
                             </tr>
                           ))}
@@ -1344,17 +1346,17 @@ const SchoolDashboard = ({ user, onLogout }) => {
                     </div>
                   </div>
 
-                  {/* Student Scenario Completion Table */}
+                  {/* Student Experience Completion Table */}
                   <div className="sd-card">
                     <div className="sd-card-header">
-                      <div className="sd-card-title">Student Scenario Completion</div>
+                      <div className="sd-card-title">Student Experience Completion</div>
                       <span className="sd-card-meta">{studentCompletionReport.length} student{studentCompletionReport.length !== 1 ? 's' : ''}</span>
                     </div>
                     {studentCompletionReport.length === 0 ? (
                       <div className="sd-reports-empty" style={{ padding: '2rem 1rem' }}>
                         <FiFileText/>
-                        <h3>No scenario assignments yet</h3>
-                        <p>Completion data will appear once scenarios are assigned and synced from the LMS.</p>
+                        <h3>No experience assignments yet</h3>
+                        <p>Completion data will appear once experiences are assigned and synced from the LMS.</p>
                       </div>
                     ) : (
                       <div className="sd-table-wrap">
@@ -1362,15 +1364,15 @@ const SchoolDashboard = ({ user, onLogout }) => {
                           <thead>
                             <tr>
                               <th>Student Profile</th>
-                              <th>Assigned Scenarios</th>
+                              <th>Assigned Experiences</th>
                               <th>Completed</th>
                               <th>Completion Progress</th>
                             </tr>
                           </thead>
                           <tbody>
                             {studentCompletionReport.map((row) => {
-                              const pct = row.total_assigned_scenarios > 0
-                                ? Math.round((row.completed_scenarios_count / row.total_assigned_scenarios) * 100)
+                              const pct = row.total_assigned_experiences > 0
+                                ? Math.round((row.completed_experiences_count / row.total_assigned_experiences) * 100)
                                 : 0;
                               const barColor = pct === 100 ? '#16a34a' : pct >= 60 ? '#f59e0b' : '#ef4444';
                               return (
@@ -1379,10 +1381,10 @@ const SchoolDashboard = ({ user, onLogout }) => {
                                     <span className="sd-name-cell-primary">{row.student_name}</span>
                                   </td>
                                   <td style={{ textAlign: 'center', fontWeight: 600 }}>
-                                    {row.total_assigned_scenarios}
+                                    {row.total_assigned_experiences}
                                   </td>
                                   <td style={{ textAlign: 'center', fontWeight: 600, color: '#16a34a' }}>
-                                    {row.completed_scenarios_count}
+                                    {row.completed_experiences_count}
                                   </td>
                                   <td style={{ minWidth: 160 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1564,10 +1566,30 @@ const SchoolDashboard = ({ user, onLogout }) => {
                     onChange={e => setTeacherForm({...teacherForm, qualification:e.target.value})}/>
                 </div>
                 <div className="sd-form-group">
-                  <label className="sd-form-label">Experience (Years)</label>
-                  <input className="sd-form-input" type="number" min="0" value={teacherForm.experience_years}
-                    onChange={e => setTeacherForm({...teacherForm, experience_years:e.target.value})}/>
+                  <label className="sd-form-label">Assign Classes</label>
+                  <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.5rem', background: '#fff' }}>
+                    {classes.map(c => (
+                      <label key={c.class_id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={teacherForm.assigned_class_ids?.includes(c.class_id)}
+                          onChange={e => {
+                            const checked = e.target.checked;
+                            const currentIds = teacherForm.assigned_class_ids || [];
+                            if (checked) {
+                              setTeacherForm({ ...teacherForm, assigned_class_ids: [...currentIds, c.class_id] });
+                            } else {
+                              setTeacherForm({ ...teacherForm, assigned_class_ids: currentIds.filter(id => id !== c.class_id) });
+                            }
+                          }}
+                        />
+                        <span>{c.class_name} ({c.grade_name || ''})</span>
+                      </label>
+                    ))}
+                    {classes.length === 0 && <span style={{ color: '#9ca3af', fontSize: '0.85rem', fontStyle: 'italic' }}>No classes available</span>}
+                  </div>
                 </div>
+
                 <label className="sd-checkbox-label">
                   <input type="checkbox" checked={teacherForm.is_active}
                     onChange={e => setTeacherForm({...teacherForm, is_active:e.target.checked})}/>
@@ -1632,6 +1654,30 @@ const SchoolDashboard = ({ user, onLogout }) => {
                   <label className="sd-form-label">Academic Year</label>
                   <input className="sd-form-input" type="text" value={classForm.academic_year}
                     onChange={e => setClassForm({...classForm, academic_year:e.target.value})} required/>
+                </div>
+                <div className="sd-form-group">
+                  <label className="sd-form-label">Assign Teachers</label>
+                  <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.5rem', background: '#fff' }}>
+                    {teachers.map(t => (
+                      <label key={t.teacher_id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={classForm.assigned_teacher_ids?.includes(t.teacher_id)}
+                          onChange={e => {
+                            const checked = e.target.checked;
+                            const currentIds = classForm.assigned_teacher_ids || [];
+                            if (checked) {
+                              setClassForm({ ...classForm, assigned_teacher_ids: [...currentIds, t.teacher_id] });
+                            } else {
+                              setClassForm({ ...classForm, assigned_teacher_ids: currentIds.filter(id => id !== t.teacher_id) });
+                            }
+                          }}
+                        />
+                        <span>{t.full_name || t.username}</span>
+                      </label>
+                    ))}
+                    {teachers.length === 0 && <span style={{ color: '#9ca3af', fontSize: '0.85rem', fontStyle: 'italic' }}>No teachers available</span>}
+                  </div>
                 </div>
                 <label className="sd-checkbox-label">
                   <input type="checkbox" checked={classForm.is_active}
@@ -1702,26 +1748,26 @@ const SchoolDashboard = ({ user, onLogout }) => {
         </div>
       )}
 
-      {/* ── Scenario Detail Modal ── */}
-      {showScenarioDetailModal && selectedScenarioDetail && (
-        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowScenarioDetailModal(false); }}>
+      {/* ── Experience Detail Modal ── */}
+      {showExperienceDetailModal && selectedExperienceDetail && (
+        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowExperienceDetailModal(false); }}>
           <div className="sd-modal" style={{ maxWidth:700 }}>
             <div className="sd-modal-header">
-              <span className="sd-modal-title">Scenario: {selectedScenarioDetail.scenario_title}</span>
-              <button className="sd-modal-close" onClick={() => setShowScenarioDetailModal(false)}><FiX/></button>
+              <span className="sd-modal-title">Experience: {selectedExperienceDetail.experience_title}</span>
+              <button className="sd-modal-close" onClick={() => setShowExperienceDetailModal(false)}><FiX/></button>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(120px,1fr))', gap:'0.75rem', marginBottom:'1.25rem', padding:'0.85rem', background:'#f8fafc', borderRadius:8, fontSize:'0.84rem' }}>
-              <div><strong>Attempts:</strong> {selectedScenarioDetail.total_attempts}</div>
-              <div><strong>Completed:</strong> {selectedScenarioDetail.completed}</div>
-              <div><strong>Avg Score:</strong> {selectedScenarioDetail.average_score}%</div>
-              <div><strong>Pass Rate:</strong> {selectedScenarioDetail.pass_rate}%</div>
-              <div><strong>High/Low:</strong> {selectedScenarioDetail.highest_score}% / {selectedScenarioDetail.lowest_score}%</div>
+              <div><strong>Attempts:</strong> {selectedExperienceDetail.total_attempts}</div>
+              <div><strong>Completed:</strong> {selectedExperienceDetail.completed}</div>
+              <div><strong>Avg Score:</strong> {selectedExperienceDetail.average_score}%</div>
+              <div><strong>Pass Rate:</strong> {selectedExperienceDetail.pass_rate}%</div>
+              <div><strong>High/Low:</strong> {selectedExperienceDetail.highest_score}% / {selectedExperienceDetail.lowest_score}%</div>
             </div>
             <div className="sd-table-wrap">
               <table className="sd-table">
                 <thead><tr><th>Student</th><th>Class</th><th>Score</th><th>Status</th><th>Time</th></tr></thead>
                 <tbody>
-                  {selectedScenarioDetail.attempts?.map((att, i) => (
+                  {selectedExperienceDetail.attempts?.map((att, i) => (
                     <tr key={i}>
                       <td style={{ fontWeight:600 }}>{att.student_name}</td>
                       <td>{att.class_name}</td>
@@ -1734,7 +1780,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
               </table>
             </div>
             <div className="sd-modal-footer">
-              <button className="sd-btn-cancel" onClick={() => setShowScenarioDetailModal(false)}>Close</button>
+              <button className="sd-btn-cancel" onClick={() => setShowExperienceDetailModal(false)}>Close</button>
             </div>
           </div>
         </div>
@@ -1792,11 +1838,11 @@ const SchoolDashboard = ({ user, onLogout }) => {
             </div>
             <div className="sd-table-wrap">
               <table className="sd-table">
-                <thead><tr><th>Scenario</th><th>Class</th><th>Score</th><th>Status</th><th>Started At</th></tr></thead>
+                <thead><tr><th>Experience</th><th>Class</th><th>Score</th><th>Status</th><th>Started At</th></tr></thead>
                 <tbody>
                   {selectedStudentDetail.attempts?.map((att, i) => (
                     <tr key={i}>
-                      <td style={{ fontWeight:600 }}>{att.scenario_title}</td>
+                      <td style={{ fontWeight:600 }}>{att.experience_title}</td>
                       <td>{att.class_name}</td>
                       <td style={{ fontWeight:700, color:'#3b82f6' }}>{att.percentage != null ? att.percentage+'%' : 'N/A'}</td>
                       <td>{att.status}</td>

@@ -156,8 +156,8 @@ class TeacherDashboardAPIView(APIView):
 
         data = {
             "assigned_classes": assigned_classes,
-            # No Teacher<->Scenario assignment relationship exists in the schema yet.
-            "active_scenarios": 0,
+            # No Teacher<->Experience assignment relationship exists in the schema yet.
+            "active_experiences": 0,
             # No Submission/grading model exists in this codebase yet -- returning an
             # empty/zero value instead of inventing fake numbers.
             "grading_queue_count": 0,

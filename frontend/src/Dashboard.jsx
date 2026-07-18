@@ -183,21 +183,21 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   const [schoolsPage, setSchoolsPage] = useState(1);
   const [usersPage, setUsersPage] = useState(1);
   const [gradesPage, setGradesPage] = useState(1);
-  const [scenariosPage, setScenariosPage] = useState(1);
-  const [scenarioBuildersPage, setScenarioBuildersPage] = useState(1);
+  const [experiencesPage, setExperiencesPage] = useState(1);
+  const [experienceBuildersPage, setExperienceBuildersPage] = useState(1);
   const [publishPage, setPublishPage] = useState(1);
   const PER_PAGE = 4;
 
   /* ── Data lists ── */
   const [grades, setGrades] = useState([]);
-  const [scenarios, setScenarios] = useState([]);
-  const [scenarioBuilders, setScenarioBuilders] = useState([]);
+  const [experiences, setExperiences] = useState([]);
+  const [experienceBuilders, setExperienceBuilders] = useState([]);
   const [schools, setSchools] = useState([]);
   const [publishContents, setPublishContents] = useState([]);
   const [schoolAdmins, setSchoolAdmins] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({ total_schools: 0, total_school_admins: 0, total_publish_contents: 0, total_grades: 0 });
-  const [previewScenario, setPreviewScenario] = useState(null);
+  const [previewExperience, setPreviewExperience] = useState(null);
   const [subPage, setSubPage] = useState('overview');
   const [schoolSubTab, setSchoolSubTab] = useState('schools-list');
   const [isAddingSchool, setIsAddingSchool] = useState(false);
@@ -209,16 +209,16 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   /* ── Forms ── */
   const [profileForm, setProfileForm] = useState({ username: user?.username || '', email: user?.email || '', full_name: user?.full_name || '', current_password: '', password: '' });
   const [schoolForm, setSchoolForm] = useState({ school_name: '', address: '', phone: '', email: '', logo: '', is_active: true });
-  const [publishForm, setPublishForm] = useState({ release_name: '', grade: '', total_scenarios: 0, status: 'DRAFT', export_file: '', checksum: '' });
+  const [publishForm, setPublishForm] = useState({ release_name: '', grade: '', total_experiences: 0, status: 'DRAFT', export_file: '', checksum: '' });
   const [gradeForm, setGradeForm] = useState({ grade_name: '', description: '', sort_order: 1 });
-  const [scenarioForm, setScenarioForm] = useState({ grade: '', title: '', description: '', objective: '', estimated_duration: 15, difficulty: 'MEDIUM', status: 'DRAFT', thumbnail: '' });
-  const [scenarioBuilderForm, setScenarioBuilderForm] = useState({ scenario: '', block_type: 'VIDEO', title: '', content: '', media_url: '', display_order: 1, settings: '{}' });
+  const [experienceForm, setExperienceForm] = useState({ grade: '', title: '', description: '', objective: '', estimated_duration: 15, difficulty: 'MEDIUM', status: 'DRAFT', thumbnail: '' });
+  const [experienceBuilderForm, setExperienceBuilderForm] = useState({ experience: '', block_type: 'VIDEO', title: '', content: '', media_url: '', display_order: 1, settings: '{}' });
   const [schoolAdminForm, setSchoolAdminForm] = useState({ username: '', email: '', full_name: '', is_active: true, school: '', password: '' });
   const [teacherForm, setTeacherForm] = useState({ username: '', full_name: '', email: '', is_active: true, school: '', qualification: '', experience_years: 0, password: '' });
 
   /* ── Filter overrides for nested navigation ── */
   const [selectedGradeFilter, setSelectedGradeFilter] = useState('');
-  const [selectedScenarioFilter, setSelectedScenarioFilter] = useState('');
+  const [selectedExperienceFilter, setSelectedExperienceFilter] = useState('');
 
   /* ── Loading & error feedback ── */
   const [loading, setLoading] = useState(false);
@@ -236,71 +236,71 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
      ══════════════════════════════════ */
   const loadSchools = async () => {
     try {
-      const res = await apiFetch('/api/cms/schools/');
+      const res = await apiFetch('/api/cms/v1/schools/');
       if (res.ok) { const data = await res.json(); setSchools(data.results || data); }
     } catch (e) { console.error('Failed to load schools', e); }
   };
 
   const loadPublishContents = async () => {
     try {
-      const res = await apiFetch('/api/cms/publish-contents/');
+      const res = await apiFetch('/api/cms/v1/publish-contents/');
       if (res.ok) { const data = await res.json(); setPublishContents(data.results || data); }
     } catch (e) { console.error('Failed to load publish contents', e); }
   };
 
   const loadDashboardStats = async () => {
     try {
-      const res = await apiFetch('/api/cms/dashboard-stats/');
+      const res = await apiFetch('/api/cms/v1/dashboard-stats/');
       if (res.ok) { const data = await res.json(); setDashboardStats(data); }
     } catch (e) { console.error('Failed to load dashboard stats', e); }
   };
 
-  const handlePreviewScenario = async (scenario) => {
+  const handlePreviewExperience = async (experience) => {
     try {
-      const res = await apiFetch(`/api/cms/scenario-builders/?scenario=${scenario.id}`);
+      const res = await apiFetch(`/api/cms/v1/experience-builders/?experience=${experience.id}`);
       if (res.ok) {
         const data = await res.json();
-        setPreviewScenario({ ...scenario, steps: data.results || data });
+        setPreviewExperience({ ...experience, steps: data.results || data });
       } else {
-        setPreviewScenario({ ...scenario, steps: [] });
+        setPreviewExperience({ ...experience, steps: [] });
       }
     } catch (e) {
-      console.error('Failed to load scenario steps', e);
-      setPreviewScenario({ ...scenario, steps: [] });
+      console.error('Failed to load experience steps', e);
+      setPreviewExperience({ ...experience, steps: [] });
     }
   };
 
   const loadGrades = async () => {
     try {
-      const res = await apiFetch('/api/cms/grades/');
+      const res = await apiFetch('/api/cms/v1/grades/');
       if (res.ok) { const data = await res.json(); setGrades(data.results || data); }
     } catch (e) { console.error('Failed to load grades', e); }
   };
 
-  const loadScenarios = async () => {
+  const loadExperiences = async () => {
     try {
-      const res = await apiFetch('/api/cms/scenarios/');
-      if (res.ok) { const data = await res.json(); setScenarios(data.results || data); }
-    } catch (e) { console.error('Failed to load scenarios', e); }
+      const res = await apiFetch('/api/cms/v1/experiences/');
+      if (res.ok) { const data = await res.json(); setExperiences(data.results || data); }
+    } catch (e) { console.error('Failed to load experiences', e); }
   };
 
-  const loadScenarioBuilders = async () => {
+  const loadExperienceBuilders = async () => {
     try {
-      const res = await apiFetch('/api/cms/scenario-builders/');
-      if (res.ok) { const data = await res.json(); setScenarioBuilders(data.results || data); }
-    } catch (e) { console.error('Failed to load scenario builders', e); }
+      const res = await apiFetch('/api/cms/v1/experience-builders/');
+      if (res.ok) { const data = await res.json(); setExperienceBuilders(data.results || data); }
+    } catch (e) { console.error('Failed to load experience builders', e); }
   };
 
   const loadSchoolAdmins = async () => {
     try {
-      const res = await apiFetch('/api/cms/school-admins/');
+      const res = await apiFetch('/api/cms/v1/school-admins/');
       if (res.ok) { const data = await res.json(); setSchoolAdmins(data.results || data); }
     } catch (e) { console.error('Failed to load school admins', e); }
   };
 
   const loadTeachers = async () => {
     try {
-      const res = await apiFetch('/api/cms/teachers/');
+      const res = await apiFetch('/api/cms/v1/teachers/');
       if (res.ok) { const data = await res.json(); setTeachers(data.results || data); }
     } catch (e) { console.error('Failed to load teachers', e); }
   };
@@ -311,7 +311,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
     try {
       await Promise.all([
         loadSchools(), loadPublishContents(), loadDashboardStats(),
-        loadGrades(), loadScenarios(), loadScenarioBuilders(),
+        loadGrades(), loadExperiences(), loadExperienceBuilders(),
         loadSchoolAdmins(), loadTeachers(),
       ]);
     } catch (e) {
@@ -341,16 +341,16 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
     } else if (tab === 'publish-contents' || tab === 'reports') {
       setPublishForm(entity ? {
         release_name: entity.release_name || '', grade: entity.grade || '',
-        total_scenarios: entity.total_scenarios || 0, status: entity.status || 'DRAFT',
+        total_experiences: entity.total_experiences || 0, status: entity.status || 'DRAFT',
         export_file: entity.export_file || '', checksum: entity.checksum || ''
-      } : { release_name: '', grade: '', total_scenarios: 0, status: 'DRAFT', export_file: '', checksum: '' });
+      } : { release_name: '', grade: '', total_experiences: 0, status: 'DRAFT', export_file: '', checksum: '' });
     } else if (tab === 'grades') {
       setGradeForm(entity ? {
         grade_name: entity.grade_name || '', description: entity.description || '',
         sort_order: entity.sort_order || 1
       } : { grade_name: '', description: '', sort_order: grades.length + 1 });
-    } else if (tab === 'scenarios') {
-      setScenarioForm(entity ? {
+    } else if (tab === 'experiences') {
+      setExperienceForm(entity ? {
         grade: entity.grade?.id || entity.grade || '', title: entity.title || '',
         description: entity.description || '', objective: entity.objective || '',
         estimated_duration: entity.estimated_duration || 15, difficulty: entity.difficulty || 'MEDIUM',
@@ -359,15 +359,15 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         grade: selectedGradeFilter || (grades[0]?.id || ''), title: '', description: '',
         objective: '', estimated_duration: 15, difficulty: 'MEDIUM', status: 'DRAFT', thumbnail: ''
       });
-    } else if (tab === 'scenario-builders') {
-      setScenarioBuilderForm(entity ? {
-        scenario: entity.scenario?.id || entity.scenario || '', block_type: entity.block_type || 'VIDEO',
+    } else if (tab === 'experience-builders') {
+      setExperienceBuilderForm(entity ? {
+        experience: entity.experience?.id || entity.experience || '', block_type: entity.block_type || 'VIDEO',
         title: entity.title || '', content: entity.content || '', media_url: entity.media_url || '',
         display_order: entity.display_order || 1, settings: JSON.stringify(entity.settings || {}, null, 2)
       } : {
-        scenario: selectedScenarioFilter || (scenarios[0]?.id || ''), block_type: 'VIDEO', title: '',
+        experience: selectedExperienceFilter || (experiences[0]?.id || ''), block_type: 'VIDEO', title: '',
         content: '', media_url: '',
-        display_order: scenarioBuilders.filter(s => s.scenario?.id === parseInt(selectedScenarioFilter) || s.scenario === parseInt(selectedScenarioFilter)).length + 1,
+        display_order: experienceBuilders.filter(s => s.experience?.id === parseInt(selectedExperienceFilter) || s.experience === parseInt(selectedExperienceFilter)).length + 1,
         settings: '{}'
       });
     } else if (tab === 'school-admins' || tab === 'users-roles') {
@@ -393,23 +393,23 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
     setErrorMsg('');
     let body = {};
     const targetTab = activeTab === 'users-roles' ? 'school-admins' : (activeTab === 'reports' ? 'publish-contents' : activeTab);
-    let url = `/api/cms/${targetTab}/`;
+    let url = `/api/cms/v1/${targetTab}/`;
     if (modalType === 'edit') url += `${editingId}/`;
 
     try {
       if (activeTab === 'schools') {
         body = { ...schoolForm };
       } else if (activeTab === 'publish-contents' || activeTab === 'reports') {
-        body = { ...publishForm, grade: parseInt(publishForm.grade), total_scenarios: parseInt(publishForm.total_scenarios) };
+        body = { ...publishForm, grade: parseInt(publishForm.grade), total_experiences: parseInt(publishForm.total_experiences) };
       } else if (activeTab === 'grades') {
         body = { ...gradeForm };
-      } else if (activeTab === 'scenarios') {
-        body = { ...scenarioForm, grade: parseInt(scenarioForm.grade) };
-      } else if (activeTab === 'scenario-builders') {
+      } else if (activeTab === 'experiences') {
+        body = { ...experienceForm, grade: parseInt(experienceForm.grade) };
+      } else if (activeTab === 'experience-builders') {
         let settingsJson = {};
-        try { settingsJson = JSON.parse(scenarioBuilderForm.settings || '{}'); }
+        try { settingsJson = JSON.parse(experienceBuilderForm.settings || '{}'); }
         catch { setErrorMsg('Settings must be valid JSON object.'); return; }
-        body = { ...scenarioBuilderForm, scenario: parseInt(scenarioBuilderForm.scenario), settings: settingsJson };
+        body = { ...experienceBuilderForm, experience: parseInt(experienceBuilderForm.experience), settings: settingsJson };
       } else if (activeTab === 'school-admins' || activeTab === 'users-roles') {
         body = { ...schoolAdminForm, school: parseInt(schoolAdminForm.school, 10) };
         if (modalType === 'edit') delete body.password;
@@ -424,8 +424,8 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         if (targetTab === 'schools') { await loadSchools(); await loadDashboardStats(); }
         else if (targetTab === 'publish-contents') { await loadPublishContents(); await loadDashboardStats(); }
         else if (targetTab === 'grades') await loadGrades();
-        else if (targetTab === 'scenarios') await loadScenarios();
-        else if (targetTab === 'scenario-builders') await loadScenarioBuilders();
+        else if (targetTab === 'experiences') await loadExperiences();
+        else if (targetTab === 'experience-builders') await loadExperienceBuilders();
         else if (targetTab === 'school-admins') { await loadSchoolAdmins(); await loadDashboardStats(); }
       } else {
         const errorDetail = typeof resData === 'object' ? JSON.stringify(resData) : resData;
@@ -442,7 +442,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
     if (!window.confirm(`Are you sure you want to delete this?`)) return;
     setErrorMsg('');
     const targetTab = activeTab === 'users-roles' ? 'school-admins' : (activeTab === 'reports' ? 'publish-contents' : activeTab);
-    const url = `/api/cms/${targetTab}/${id}/`;
+    const url = `/api/cms/v1/${targetTab}/${id}/`;
     try {
       const res = await apiFetch(url, { method: 'DELETE' });
       const resData = await res.json();
@@ -451,8 +451,8 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         if (targetTab === 'schools') { await loadSchools(); await loadDashboardStats(); }
         else if (targetTab === 'publish-contents') { await loadPublishContents(); await loadDashboardStats(); }
         else if (targetTab === 'grades') await loadGrades();
-        else if (targetTab === 'scenarios') await loadScenarios();
-        else if (targetTab === 'scenario-builders') await loadScenarioBuilders();
+        else if (targetTab === 'experiences') await loadExperiences();
+        else if (targetTab === 'experience-builders') await loadExperienceBuilders();
         else if (targetTab === 'school-admins') { await loadSchoolAdmins(); await loadDashboardStats(); }
       } else { setErrorMsg(resData.message || 'Failed to delete record.'); }
     } catch (err) { setErrorMsg('Error communicating with backend.'); console.error(err); }
@@ -501,7 +501,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         is_active: true
       };
 
-      const sRes = await apiFetch('/api/cms/schools/', {
+      const sRes = await apiFetch('/api/cms/v1/schools/', {
         method: 'POST',
         body: JSON.stringify(schoolPayload)
       });
@@ -523,7 +523,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         is_active: true
       };
 
-      const aRes = await apiFetch('/api/cms/school-admins/', {
+      const aRes = await apiFetch('/api/cms/v1/school-admins/', {
         method: 'POST',
         body: JSON.stringify(adminPayload)
       });
@@ -610,7 +610,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
     setSchoolSubTab('schools-list');
     setIsAddingSchool(false);
     setSchoolsPage(1); setUsersPage(1); setGradesPage(1);
-    setScenariosPage(1); setScenarioBuildersPage(1); setPublishPage(1);
+    setExperiencesPage(1); setExperienceBuildersPage(1); setPublishPage(1);
     setIsSidebarOpen(false);
     onTabChange(tab);
   };
@@ -621,7 +621,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
     teachers: teachers.length,
     publish_contents: publishContents.length,
     grades: grades.length,
-    scenarios: scenarios.length,
+    experiences: experiences.length,
   };
 
   /* ══════════════════════════════════════════════════
@@ -1741,7 +1741,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                       <tr>
                         <th>Release Name</th>
                         <th>Grade</th>
-                        <th>Total Scenarios</th>
+                        <th>Total Experiences</th>
                         <th>Status</th>
                         <th>Checksum</th>
                         <th>Package</th>
@@ -1753,7 +1753,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                         <tr key={p.publish_id || i}>
                           <td style={{ fontWeight: 600, color: '#1e293b' }}>{p.release_name}</td>
                           <td>{p.grade_name || p.grade}</td>
-                          <td>{p.total_scenarios}</td>
+                          <td>{p.total_experiences}</td>
                           <td>
                             <span className={`sd-badge ${p.status === 'PUBLISHED' ? 'sd-badge-published' : 'sd-badge-draft'}`}>
                               {p.status}
@@ -1887,8 +1887,8 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                           <td style={{ fontWeight: 600 }}>{g.grade_name}</td>
                           <td>{g.description || <span style={{ color:'#9ca3af', fontStyle:'italic' }}>No description</span>}</td>
                           <td>
-                            <button onClick={() => { setSelectedGradeFilter(g.id); onTabChange('scenarios'); }} className="sd-btn-outline" style={{ display: 'flex', gap: '4px', alignItems: 'center', fontSize: '0.78rem', padding: '0.35rem 0.75rem' }}>
-                              <FiCornerDownRight/> Scenarios
+                            <button onClick={() => { setSelectedGradeFilter(g.id); onTabChange('experiences'); }} className="sd-btn-outline" style={{ display: 'flex', gap: '4px', alignItems: 'center', fontSize: '0.78rem', padding: '0.35rem 0.75rem' }}>
+                              <FiCornerDownRight/> Experiences
                             </button>
                           </td>
                           <td>
@@ -1910,15 +1910,15 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
             </>
           )}
 
-          {/* ══════════ SCENARIOS TAB ══════════ */}
-          {activeTab === 'scenarios' && (
+          {/* ══════════ EXPERIENCES TAB ══════════ */}
+          {activeTab === 'experiences' && (
             <>
               <div className="sd-page-header">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '1rem' }}>
                   <div>
-                    <h1 className="sd-page-title">Manage Scenarios</h1>
+                    <h1 className="sd-page-title">Manage Experiences</h1>
                   </div>
-                  <button className="sd-btn-primary" onClick={handleOpenAdd}><FiPlus/>Add Scenario</button>
+                  <button className="sd-btn-primary" onClick={handleOpenAdd}><FiPlus/>Add Experience</button>
                 </div>
               </div>
 
@@ -1929,13 +1929,13 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                       <FiSearch/>
                       <input
                         type="text"
-                        placeholder="Search scenarios..."
+                        placeholder="Search experiences..."
                         value={searchQuery}
-                        onChange={e => { setSearchQuery(e.target.value); setScenariosPage(1); }}
+                        onChange={e => { setSearchQuery(e.target.value); setExperiencesPage(1); }}
                       />
                     </div>
                     <select className="sd-btn-filter" style={{ border: '1.5px solid #e8edf5', background: '#fff', fontSize: '0.8rem', fontWeight: 500 }}
-                      value={selectedGradeFilter} onChange={e => { setSelectedGradeFilter(e.target.value); setScenariosPage(1); }}>
+                      value={selectedGradeFilter} onChange={e => { setSelectedGradeFilter(e.target.value); setExperiencesPage(1); }}>
                       <option value="">All Grades</option>
                       {grades.map(g => <option key={g.id} value={g.id}>{g.grade_name}</option>)}
                     </select>
@@ -1955,7 +1955,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {paginate(filterList(scenarios).filter(ex => !selectedGradeFilter || ex.grade?.id === parseInt(selectedGradeFilter) || ex.grade === parseInt(selectedGradeFilter)), scenariosPage).map((ex, i) => (
+                      {paginate(filterList(experiences).filter(ex => !selectedGradeFilter || ex.grade?.id === parseInt(selectedGradeFilter) || ex.grade === parseInt(selectedGradeFilter)), experiencesPage).map((ex, i) => (
                         <tr key={ex.id || i}>
                           <td><span className="sd-badge sd-badge-active" style={{ background: '#e0f2fe', color: '#0369a1' }}>{ex.grade_name || `Grade ID: ${ex.grade}`}</span></td>
                           <td style={{ fontWeight: 600 }}>{ex.title}</td>
@@ -1971,26 +1971,26 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                             </span>
                           </td>
                           <td>
-                            <button onClick={() => { setSelectedScenarioFilter(ex.id); onTabChange('scenario-builders'); }} className="btn-link" style={{ background:'none', border:'none', color:'#6366f1', textDecoration:'underline', cursor:'pointer', fontSize:'0.8rem', fontWeight:600 }}>
-                              Scenario Builders
+                            <button onClick={() => { setSelectedExperienceFilter(ex.id); onTabChange('experience-builders'); }} className="btn-link" style={{ background:'none', border:'none', color:'#6366f1', textDecoration:'underline', cursor:'pointer', fontSize:'0.8rem', fontWeight:600 }}>
+                              Experience Builders
                             </button>
                           </td>
                           <td>
                             <div className="sd-action-cell">
-                              <button className="sd-icon-action edit" onClick={() => handlePreviewScenario(ex)} title="Preview"><FiBookOpen style={{ color:'#3b82f6' }}/></button>
+                              <button className="sd-icon-action edit" onClick={() => handlePreviewExperience(ex)} title="Preview"><FiBookOpen style={{ color:'#3b82f6' }}/></button>
                               <button className="sd-icon-action edit" onClick={() => handleOpenEdit(ex)} title="Edit"><FiEdit2/></button>
                               <button className="sd-icon-action delete" onClick={() => handleDelete(ex.id)} title="Delete"><FiTrash2/></button>
                             </div>
                           </td>
                         </tr>
                       ))}
-                      {filterList(scenarios).length === 0 && (
-                        <tr><td colSpan="7" className="sd-empty-state">No scenarios found.</td></tr>
+                      {filterList(experiences).length === 0 && (
+                        <tr><td colSpan="7" className="sd-empty-state">No experiences found.</td></tr>
                       )}
                     </tbody>
                   </table>
                 </div>
-                <Pagination total={filterList(scenarios).filter(ex => !selectedGradeFilter || ex.grade?.id === parseInt(selectedGradeFilter) || ex.grade === parseInt(selectedGradeFilter)).length} perPage={PER_PAGE} page={scenariosPage} onPage={setScenariosPage}/>
+                <Pagination total={filterList(experiences).filter(ex => !selectedGradeFilter || ex.grade?.id === parseInt(selectedGradeFilter) || ex.grade === parseInt(selectedGradeFilter)).length} perPage={PER_PAGE} page={experiencesPage} onPage={setExperiencesPage}/>
               </div>
             </>
           )}
@@ -2054,8 +2054,8 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                 </div>
                 <div className="sd-form-row">
                   <div className="sd-form-group">
-                    <label className="sd-form-label">Total Scenarios *</label>
-                    <input className="sd-form-input" type="number" required value={publishForm.total_scenarios} onChange={e => setPublishForm({ ...publishForm, total_scenarios: parseInt(e.target.value) || 0 })}/>
+                    <label className="sd-form-label">Total Experiences *</label>
+                    <input className="sd-form-input" type="number" required value={publishForm.total_experiences} onChange={e => setPublishForm({ ...publishForm, total_experiences: parseInt(e.target.value) || 0 })}/>
                   </div>
                   <div className="sd-form-group">
                     <label className="sd-form-label">Status *</label>
@@ -2088,31 +2088,31 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                 </div>
               </>)}
 
-              {/* Scenarios Form */}
-              {activeTab === 'scenarios' && (<>
+              {/* Experiences Form */}
+              {activeTab === 'experiences' && (<>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Grade Level *</label>
-                  <select className="sd-form-input" required value={scenarioForm.grade} onChange={e => setScenarioForm({ ...scenarioForm, grade: e.target.value })}>
+                  <select className="sd-form-input" required value={experienceForm.grade} onChange={e => setExperienceForm({ ...experienceForm, grade: e.target.value })}>
                     <option value="">Select Grade</option>
                     {grades.map(g => <option key={g.id} value={g.id}>{g.grade_name}</option>)}
                   </select>
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Title *</label>
-                  <input className="sd-form-input" type="text" required value={scenarioForm.title} onChange={e => setScenarioForm({ ...scenarioForm, title: e.target.value })} placeholder="Beginner Lesson"/>
+                  <input className="sd-form-input" type="text" required value={experienceForm.title} onChange={e => setExperienceForm({ ...experienceForm, title: e.target.value })} placeholder="Beginner Lesson"/>
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Description</label>
-                  <textarea className="sd-form-input" value={scenarioForm.description} onChange={e => setScenarioForm({ ...scenarioForm, description: e.target.value })}/>
+                  <textarea className="sd-form-input" value={experienceForm.description} onChange={e => setExperienceForm({ ...experienceForm, description: e.target.value })}/>
                 </div>
                 <div className="sd-form-row">
                   <div className="sd-form-group">
                     <label className="sd-form-label">Duration *</label>
-                    <input className="sd-form-input" type="number" required value={scenarioForm.estimated_duration} onChange={e => setScenarioForm({ ...scenarioForm, estimated_duration: parseInt(e.target.value) || 15 })}/>
+                    <input className="sd-form-input" type="number" required value={experienceForm.estimated_duration} onChange={e => setExperienceForm({ ...experienceForm, estimated_duration: parseInt(e.target.value) || 15 })}/>
                   </div>
                   <div className="sd-form-group">
                     <label className="sd-form-label">Difficulty *</label>
-                    <select className="sd-form-input" value={scenarioForm.difficulty} onChange={e => setScenarioForm({ ...scenarioForm, difficulty: e.target.value })}>
+                    <select className="sd-form-input" value={experienceForm.difficulty} onChange={e => setExperienceForm({ ...experienceForm, difficulty: e.target.value })}>
                       <option value="EASY">Easy</option>
                       <option value="MEDIUM">Medium</option>
                       <option value="HARD">Hard</option>
@@ -2121,7 +2121,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Lifecycle Status *</label>
-                  <select className="sd-form-input" value={scenarioForm.status} onChange={e => setScenarioForm({ ...scenarioForm, status: e.target.value })}>
+                  <select className="sd-form-input" value={experienceForm.status} onChange={e => setExperienceForm({ ...experienceForm, status: e.target.value })}>
                     <option value="DRAFT">Draft</option>
                     <option value="REVIEW">Review</option>
                     <option value="PUBLISHED">Published</option>
@@ -2214,23 +2214,23 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         </div>
       )}
 
-      {/* ── Scenario Preview Modal ── */}
-      {previewScenario && (
-        <div className="sd-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) setPreviewScenario(null); }}>
+      {/* ── Experience Preview Modal ── */}
+      {previewExperience && (
+        <div className="sd-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) setPreviewExperience(null); }}>
           <div className="sd-modal" style={{ maxWidth: 700 }}>
             <div className="sd-modal-header">
-              <span className="sd-modal-title">Preview Scenario: {previewScenario.title}</span>
-              <button className="sd-modal-close" onClick={() => setPreviewScenario(null)}><FiX/></button>
+              <span className="sd-modal-title">Preview Experience: {previewExperience.title}</span>
+              <button className="sd-modal-close" onClick={() => setPreviewExperience(null)}><FiX/></button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', fontSize: '0.85rem' }}>
-              <div><strong>Grade:</strong> {previewScenario.grade_name || `Grade ID: ${previewScenario.grade}`}</div>
-              <div><strong>Duration:</strong> {previewScenario.estimated_duration} mins</div>
-              <div><strong>Difficulty:</strong> {previewScenario.difficulty}</div>
-              <div><strong>Status:</strong> {previewScenario.status}</div>
+              <div><strong>Grade:</strong> {previewExperience.grade_name || `Grade ID: ${previewExperience.grade}`}</div>
+              <div><strong>Duration:</strong> {previewExperience.estimated_duration} mins</div>
+              <div><strong>Difficulty:</strong> {previewExperience.difficulty}</div>
+              <div><strong>Status:</strong> {previewExperience.status}</div>
             </div>
-            <h4 style={{ marginBottom: '0.75rem', fontWeight: 700, fontSize: '0.9rem' }}>Scenario Steps</h4>
+            <h4 style={{ marginBottom: '0.75rem', fontWeight: 700, fontSize: '0.9rem' }}>Experience Steps</h4>
             <div className="sd-activity-list">
-              {previewScenario.steps?.map((s, idx) => (
+              {previewExperience.steps?.map((s, idx) => (
                 <div className="sd-activity-item" key={s.id || idx}>
                   <div className="sd-activity-body">
                     <div className="sd-activity-name">Step #{s.display_order}: {s.title} ({s.block_type})</div>
@@ -2240,7 +2240,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
               ))}
             </div>
             <div className="sd-modal-footer">
-              <button className="sd-btn-cancel" onClick={() => setPreviewScenario(null)}>Close</button>
+              <button className="sd-btn-cancel" onClick={() => setPreviewExperience(null)}>Close</button>
             </div>
           </div>
         </div>

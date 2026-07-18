@@ -1,6 +1,6 @@
 import logging
 from django.conf import settings
-from .models import Scenario, Activity, Screen, Media, ValidationReport
+from .models import Experience, Activity, Screen, Media, ValidationReport
 from .validation_engine import get_referenced_media_ids_and_urls
 
 logger = logging.getLogger(__name__)
@@ -15,9 +15,9 @@ def resolve_absolute_url(url_path, request=None):
     # Fallback to default domain or relative path
     return f"{settings.MEDIA_URL.rstrip('/')}/{url_path.lstrip('/')}"
 
-def build_runtime_payload(scenario, request=None):
+def build_runtime_payload(experience, request=None):
     """
-    Assembles a complete Scenario hierarchy (Scenario -> Activities -> Screens -> resolved Media)
+    Assembles a complete Experience hierarchy (Experience -> Activities -> Screens -> resolved Media)
     into a single structured runtime JSON payload for desktop/Electron app rendering.
     """
     debug_missing = []
@@ -25,7 +25,7 @@ def build_runtime_payload(scenario, request=None):
     
     # 1. Resolve Validation Status
     try:
-        latest_report = ValidationReport.objects.filter(scenario=scenario).latest("validated_at")
+        latest_report = ValidationReport.objects.filter(experience=experience).latest("validated_at")
         validation_status = latest_report.status
         # Collect warnings from last report if any
         if latest_report.results:
@@ -33,27 +33,27 @@ def build_runtime_payload(scenario, request=None):
     except ValidationReport.DoesNotExist:
         validation_status = "NOT_RUN"
 
-    # 2. Assemble Scenario Metadata
-    scenario_data = {
-        "id": scenario.id,
-        "title": scenario.title,
-        "description": scenario.description or "",
+    # 2. Assemble Experience Metadata
+    experience_data = {
+        "id": experience.id,
+        "title": experience.title,
+        "description": experience.description or "",
         "grade": {
-            "id": scenario.grade.id,
-            "name": scenario.grade.grade_name
-        } if scenario.grade else None,
-        "subject": scenario.subject,
-        "language": scenario.language,
-        "difficulty": scenario.difficulty,
-        "estimated_duration": scenario.estimated_duration,
-        "learning_outcomes": [lo.text for lo in scenario.learning_outcomes.all()],
-        "tags": scenario.tags or [],
-        "thumbnail_url": resolve_absolute_url(scenario.thumbnail, request) if scenario.thumbnail else ""
+            "id": experience.grade.id,
+            "name": experience.grade.grade_name
+        } if experience.grade else None,
+        "subject": experience.subject,
+        "language": experience.language,
+        "difficulty": experience.difficulty,
+        "estimated_duration": experience.estimated_duration,
+        "learning_outcomes": [lo.text for lo in experience.learning_outcomes.all()],
+        "tags": experience.tags or [],
+        "thumbnail_url": resolve_absolute_url(experience.thumbnail, request) if experience.thumbnail else ""
     }
 
     # 3. Assemble Activities (ordered by display_order, excluding is_deleted=True)
     activities_list = []
-    activities = scenario.activities.all().order_by("display_order")
+    activities = experience.activities.all().order_by("display_order")
     
     for act in activities:
         # Assemble Screens (ordered by display_order)
@@ -141,7 +141,7 @@ def build_runtime_payload(scenario, request=None):
         })
 
     payload = {
-        "scenario": scenario_data,
+        "experience": experience_data,
         "activities": activities_list,
         "debug": {
             "missing_assets": debug_missing,
@@ -234,7 +234,7 @@ def _rewrite_payload_media_urls(payload, media_file_map):
     return _json.loads(payload_str)
 
 
-def build_elab_package(scenario, version=None, release_notes=None, published_by=None, force_regenerate=False):
+def build_elab_package(experience, version=None, release_notes=None, published_by=None, force_regenerate=False):
     """
     Full 7-step .elab packaging pipeline.
 
@@ -252,23 +252,23 @@ def build_elab_package(scenario, version=None, release_notes=None, published_by=
     # -----------------------------------------------------------------------
     # STEP 1: GATE — run validation fresh
     # -----------------------------------------------------------------------
-    report_data = run_validation_engine(scenario)
+    report_data = run_validation_engine(experience)
     if report_data["status"] == "FAILED":
         raise ValueError(("VALIDATION_FAILED", report_data))
 
     # -----------------------------------------------------------------------
     # STEP 2: ASSEMBLE — call build_runtime_payload (no request → relative URLs)
     # -----------------------------------------------------------------------
-    payload = build_runtime_payload(scenario, request=None)
+    payload = build_runtime_payload(experience, request=None)
 
     # -----------------------------------------------------------------------
     # STEP 3: MEDIA — resolve physical files; build the rewrite map
     # -----------------------------------------------------------------------
     # Get or create the PublishedPackage record first (needed for version check)
     package, _ = PublishedPackage.objects.get_or_create(
-        scenario=scenario,
+        experience=experience,
         defaults={
-            "package_name": scenario.title,
+            "package_name": experience.title,
             "compression_status": "PENDING",
         }
     )
@@ -360,26 +360,26 @@ def build_elab_package(scenario, version=None, release_notes=None, published_by=
         rewritten_payload = _rewrite_payload_media_urls(payload, media_file_map)
 
         # -----------------------------------------------------------------------
-        # STEP 3 continued: write scenario.json
+        # STEP 3 continued: write experience.json
         # -----------------------------------------------------------------------
-        scenario_json_bytes = _json.dumps(rewritten_payload, indent=2, ensure_ascii=False).encode("utf-8")
-        scenario_json_path = os.path.join(pkg_dir, "scenario.json")
-        with open(scenario_json_path, "wb") as f:
-            f.write(scenario_json_bytes)
-        scenario_json_checksum = _sha256_bytes(scenario_json_bytes)
+        experience_json_bytes = _json.dumps(rewritten_payload, indent=2, ensure_ascii=False).encode("utf-8")
+        experience_json_path = os.path.join(pkg_dir, "experience.json")
+        with open(experience_json_path, "wb") as f:
+            f.write(experience_json_bytes)
+        experience_json_checksum = _sha256_bytes(experience_json_bytes)
         file_list.insert(0, {
-            "path": "scenario.json",
-            "size": len(scenario_json_bytes),
-            "checksum": scenario_json_checksum,
+            "path": "experience.json",
+            "size": len(experience_json_bytes),
+            "checksum": experience_json_checksum,
         })
 
         # -----------------------------------------------------------------------
         # STEP 4: MANIFEST
         # -----------------------------------------------------------------------
         manifest = {
-            "package_name": _slugify(scenario.title),
-            "scenario_id": scenario.id,
-            "scenario_title": scenario.title,
+            "package_name": _slugify(experience.title),
+            "experience_id": experience.id,
+            "experience_title": experience.title,
             "version": new_version,
             "build_number": build_number,
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -387,7 +387,7 @@ def build_elab_package(scenario, version=None, release_notes=None, published_by=
             "runtime_version": "1.0.0",
             "files": file_list,
             "checksums": {
-                "scenario_json": scenario_json_checksum,
+                "experience_json": experience_json_checksum,
             }
         }
         manifest_bytes = _json.dumps(manifest, indent=2, ensure_ascii=False).encode("utf-8")
@@ -398,8 +398,8 @@ def build_elab_package(scenario, version=None, release_notes=None, published_by=
         # -----------------------------------------------------------------------
         # STEP 5: COMPRESS → .elab (zip with custom extension)
         # -----------------------------------------------------------------------
-        scenario_slug = _slugify(scenario.title)
-        elab_filename = f"{scenario_slug}_v{new_version}.elab"
+        experience_slug = _slugify(experience.title)
+        elab_filename = f"{experience_slug}_v{new_version}.elab"
         tmp_elab_path = os.path.join(tmp_dir, elab_filename)
 
         with zipfile.ZipFile(tmp_elab_path, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -429,7 +429,7 @@ def build_elab_package(scenario, version=None, release_notes=None, published_by=
         # -----------------------------------------------------------------------
         with transaction.atomic():
             # Update PublishedPackage
-            package.package_name = scenario.title
+            package.package_name = experience.title
             package.compression_status = "COMPLETED"
             package.save()
 
@@ -472,9 +472,9 @@ def build_elab_package(scenario, version=None, release_notes=None, published_by=
             version_obj.download_url = f"/api/v1/content/packages/{version_obj.id}/download/"
             version_obj.save(update_fields=["download_url"])
 
-            # Mark scenario as PUBLISHED
-            scenario.status = "PUBLISHED"
-            scenario.save(update_fields=["status"])
+            # Mark experience as PUBLISHED
+            experience.status = "PUBLISHED"
+            experience.save(update_fields=["status"])
 
         return {
             "version_obj": version_obj,
@@ -490,7 +490,7 @@ def build_elab_package(scenario, version=None, release_notes=None, published_by=
         # Re-raise validation/duplicate errors cleanly
         raise
     except Exception as exc:
-        logger.exception("Error during .elab packaging for scenario %s", scenario.id)
+        logger.exception("Error during .elab packaging for experience %s", experience.id)
         raise RuntimeError(f"Packaging failed: {exc}") from exc
     finally:
         # Cleanup temp directory — always runs

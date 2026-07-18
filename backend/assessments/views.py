@@ -14,13 +14,13 @@ from school_admin.models import Class, Teacher, TeacherClass
 from teacher.models import Student
 from django.contrib.auth import get_user_model
 
-from .models import ScenarioAssignment, StudentAttempt, ScreenResponse
+from .models import ExperienceAssignment, StudentAttempt, ScreenResponse
 from .serializers import (
-    ScenarioAssignmentSyncSerializer,
+    ExperienceAssignmentSyncSerializer,
     StudentAttemptSyncSerializer,
     ScreenResponseSyncSerializer,
     OverviewReportSerializer,
-    ScenarioReportSerializer,
+    ExperienceReportSerializer,
     ClassReportSerializer,
     StudentReportSerializer,
     TeacherReportSerializer,
@@ -32,7 +32,7 @@ User = get_user_model()
 
 class SyncAssignmentsAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdminRole]
-    serializer_class = ScenarioAssignmentSyncSerializer
+    serializer_class = ExperienceAssignmentSyncSerializer
 
     def post(self, request):
         # Note: Production should use API keys or service tokens instead of user JWT.
@@ -49,7 +49,7 @@ class SyncAssignmentsAPIView(APIView):
         errors = []
 
         for index, item in enumerate(payload):
-            serializer = ScenarioAssignmentSyncSerializer(data=item)
+            serializer = ExperienceAssignmentSyncSerializer(data=item)
             if not serializer.is_valid():
                 failed_count += 1
                 errors.append({"row": index, "errors": serializer.errors})
@@ -81,12 +81,12 @@ class SyncAssignmentsAPIView(APIView):
                 assigned_by_user = User.objects.filter(username=assigned_by_username).first()
 
             try:
-                assignment, created = ScenarioAssignment.objects.update_or_create(
+                assignment, created = ExperienceAssignment.objects.update_or_create(
                     school=target_school,
-                    scenario_ref=data["scenario_ref"],
+                    experience_ref=data["experience_ref"],
                     class_obj=class_obj,
                     defaults={
-                        "scenario_title": data["scenario_title"],
+                        "experience_title": data["experience_title"],
                         "grade": data.get("grade"),
                         "assigned_by": assigned_by_user,
                         "assigned_at": data["assigned_at"]
@@ -165,27 +165,27 @@ class SyncAttemptsAPIView(APIView):
                 errors.append({"row": index, "errors": f"Student '{student_name}' does not belong to school {target_school.school_id}"})
                 continue
 
-            # Find or create ScenarioAssignment
-            scenario_ref = data.get("scenario_ref")
+            # Find or create ExperienceAssignment
+            experience_ref = data.get("experience_ref")
             assignment_id = data.get("assignment")
             assignment = None
             if assignment_id:
-                assignment = ScenarioAssignment.objects.filter(id=assignment_id, school=target_school).first()
-            elif scenario_ref:
-                assignment = ScenarioAssignment.objects.filter(school=target_school, scenario_ref=scenario_ref).first()
+                assignment = ExperienceAssignment.objects.filter(id=assignment_id, school=target_school).first()
+            elif experience_ref:
+                assignment = ExperienceAssignment.objects.filter(school=target_school, experience_ref=experience_ref).first()
 
             if not assignment:
-                if scenario_ref:
+                if experience_ref:
                     started_at_val = data.get("started_at") or timezone.now()
-                    assignment = ScenarioAssignment.objects.create(
+                    assignment = ExperienceAssignment.objects.create(
                         school=target_school,
-                        scenario_ref=scenario_ref,
-                        scenario_title=scenario_ref,
+                        experience_ref=experience_ref,
+                        experience_title=experience_ref,
                         assigned_at=started_at_val
                     )
                 else:
                     failed_count += 1
-                    errors.append({"row": index, "errors": "Assignment or scenario_ref is required."})
+                    errors.append({"row": index, "errors": "Assignment or experience_ref is required."})
                     continue
 
             started_at_val = data.get("started_at") or timezone.now()
@@ -314,7 +314,7 @@ class ReportsOverviewAPIView(APIView):
         passed_attempts = completed_attempts.filter(percentage__gte=60.0).count()
         pass_rate = (passed_attempts / total_completed * 100) if total_completed > 0 else 0.0
         
-        total_scenarios_attempted = attempts.values("assignment__scenario_ref").distinct().count()
+        total_experiences_attempted = attempts.values("assignment__experience_ref").distinct().count()
         recent_syncs = list(attempts.order_by("-synced_at").values_list("synced_at", flat=True)[:5])
 
         return Response({
@@ -324,30 +324,30 @@ class ReportsOverviewAPIView(APIView):
             "completion_rate": round(float(completion_rate), 2),
             "average_score": round(float(average_score), 2),
             "pass_rate": round(float(pass_rate), 2),
-            "total_scenarios_attempted": total_scenarios_attempted,
+            "total_experiences_attempted": total_experiences_attempted,
             "recent_syncs": recent_syncs
         }, status=status.HTTP_200_OK)
 
 
-class ReportsScenariosAPIView(APIView):
+class ReportsExperiencesAPIView(APIView):
     permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
-    serializer_class = ScenarioReportSerializer
+    serializer_class = ExperienceReportSerializer
 
     def get(self, request):
         attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user)
         
-        scenario_refs = attempts.values_list("assignment__scenario_ref", flat=True).distinct()
+        experience_refs = attempts.values_list("assignment__experience_ref", flat=True).distinct()
         
         results = []
-        for ref in scenario_refs:
-            scenario_attempts = attempts.filter(assignment__scenario_ref=ref)
-            first_att = scenario_attempts.first()
-            scenario_title = first_att.assignment.scenario_title if first_att else ref
+        for ref in experience_refs:
+            experience_attempts = attempts.filter(assignment__experience_ref=ref)
+            first_att = experience_attempts.first()
+            experience_title = first_att.assignment.experience_title if first_att else ref
             
-            total_attempts = scenario_attempts.count()
-            completed = scenario_attempts.filter(status="COMPLETED").count()
+            total_attempts = experience_attempts.count()
+            completed = experience_attempts.filter(status="COMPLETED").count()
             
-            completed_attempts = scenario_attempts.filter(status="COMPLETED", percentage__isnull=False)
+            completed_attempts = experience_attempts.filter(status="COMPLETED", percentage__isnull=False)
             average_score = completed_attempts.aggregate(avg=models.Avg("percentage"))["avg"] or 0.0
             
             passed = completed_attempts.filter(percentage__gte=60.0).count()
@@ -359,8 +359,8 @@ class ReportsScenariosAPIView(APIView):
             avg_time = completed_attempts.aggregate(avg_time=models.Avg("time_spent_seconds"))["avg_time"] or 0.0
             
             results.append({
-                "scenario_ref": ref,
-                "scenario_title": scenario_title,
+                "experience_ref": ref,
+                "experience_title": experience_title,
                 "total_attempts": total_attempts,
                 "completed": completed,
                 "average_score": round(float(average_score), 2),
@@ -373,16 +373,16 @@ class ReportsScenariosAPIView(APIView):
         return Response(results, status=status.HTTP_200_OK)
 
 
-class ReportsScenarioDetailAPIView(APIView):
+class ReportsExperienceDetailAPIView(APIView):
     permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
-    serializer_class = ScenarioReportSerializer
+    serializer_class = ExperienceReportSerializer
 
-    def get(self, request, scenario_ref):
-        attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user).filter(assignment__scenario_ref=scenario_ref)
+    def get(self, request, experience_ref):
+        attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user).filter(assignment__experience_ref=experience_ref)
         if not attempts.exists():
-            return Response({"message": "Scenario report not found or no attempts."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Experience report not found or no attempts."}, status=status.HTTP_404_NOT_FOUND)
         
-        scenario_title = attempts.first().assignment.scenario_title
+        experience_title = attempts.first().assignment.experience_title
         total_attempts = attempts.count()
         completed = attempts.filter(status="COMPLETED").count()
         
@@ -413,8 +413,8 @@ class ReportsScenarioDetailAPIView(APIView):
             })
 
         return Response({
-            "scenario_ref": scenario_ref,
-            "scenario_title": scenario_title,
+            "experience_ref": experience_ref,
+            "experience_title": experience_title,
             "total_attempts": total_attempts,
             "completed": completed,
             "average_score": round(float(average_score), 2),
@@ -556,13 +556,13 @@ class ReportsStudentsAPIView(APIView):
             completed_attempts = student_attempts.filter(status="COMPLETED", percentage__isnull=False)
             average_score = completed_attempts.aggregate(avg=models.Avg("percentage"))["avg"] or 0.0
             
-            best_scenario = "N/A"
-            worst_scenario = "N/A"
+            best_experience = "N/A"
+            worst_experience = "N/A"
             
-            scenario_scores = student_attempts.filter(percentage__isnull=False).values("assignment__scenario_title").annotate(avg_pct=models.Avg("percentage")).order_by("-avg_pct")
-            if scenario_scores.exists():
-                best_scenario = scenario_scores.first()["assignment__scenario_title"]
-                worst_scenario = scenario_scores.last()["assignment__scenario_title"]
+            experience_scores = student_attempts.filter(percentage__isnull=False).values("assignment__experience_title").annotate(avg_pct=models.Avg("percentage")).order_by("-avg_pct")
+            if experience_scores.exists():
+                best_experience = experience_scores.first()["assignment__experience_title"]
+                worst_experience = experience_scores.last()["assignment__experience_title"]
                 
             last_attempt = student_attempts.order_by("-started_at").first()
             
@@ -576,8 +576,8 @@ class ReportsStudentsAPIView(APIView):
                 "total_attempts": total_attempts,
                 "completed": completed,
                 "average_score": round(float(average_score), 2),
-                "best_scenario": best_scenario,
-                "worst_scenario": worst_scenario,
+                "best_experience": best_experience,
+                "worst_experience": worst_experience,
                 "last_attempt_date": last_attempt.started_at if last_attempt else None
             })
             
@@ -614,8 +614,8 @@ class ReportsStudentDetailAPIView(APIView):
         for att in attempts.select_related("assignment__class_obj"):
             attempts_list.append({
                 "lms_attempt_id": att.lms_attempt_id,
-                "scenario_ref": att.assignment.scenario_ref,
-                "scenario_title": att.assignment.scenario_title,
+                "experience_ref": att.assignment.experience_ref,
+                "experience_title": att.assignment.experience_title,
                 "class_name": att.assignment.class_obj.class_name if att.assignment.class_obj else "N/A",
                 "started_at": att.started_at,
                 "completed_at": att.completed_at,
@@ -685,24 +685,24 @@ class ReportsExportAPIView(APIView):
     permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
 
     def get(self, request):
-        export_type = request.query_params.get("type", "scenarios")
+        export_type = request.query_params.get("type", "experiences")
         
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="report_{export_type}_{timezone.now().strftime("%Y%m%d")}.csv"'
         
         writer = csv.writer(response)
         
-        if export_type == "scenarios":
+        if export_type == "experiences":
             writer.writerow([
-                "Scenario Ref", "Scenario Title", "Total Attempts", 
+                "Experience Ref", "Experience Title", "Total Attempts", 
                 "Completed Attempts", "Average Score (%)", "Pass Rate (%)", 
                 "Highest Score (%)", "Lowest Score (%)", "Average Time (Seconds)"
             ])
-            scenarios_view = ReportsScenariosAPIView()
-            data = scenarios_view.get(request).data
+            experiences_view = ReportsExperiencesAPIView()
+            data = experiences_view.get(request).data
             for row in data:
                 writer.writerow([
-                    row["scenario_ref"], row["scenario_title"], row["total_attempts"],
+                    row["experience_ref"], row["experience_title"], row["total_attempts"],
                     row["completed"], row["average_score"], row["pass_rate"],
                     row["highest_score"], row["lowest_score"], row["average_time_seconds"]
                 ])
@@ -725,16 +725,16 @@ class ReportsExportAPIView(APIView):
         elif export_type == "students":
             writer.writerow([
                 "Student ID", "Student Name", "Class Name", "Total Attempts",
-                "Completed Attempts", "Average Score (%)", "Best Scenario",
-                "Worst Scenario", "Last Attempt Date"
+                "Completed Attempts", "Average Score (%)", "Best Experience",
+                "Worst Experience", "Last Attempt Date"
             ])
             students_view = ReportsStudentsAPIView()
             data = students_view.get(request).data
             for row in data:
                 writer.writerow([
                     row["student_id"], row["student_name"], row["class_name"], row["total_attempts"],
-                    row["completed"], row["average_score"], row["best_scenario"],
-                    row["worst_scenario"], row["last_attempt_date"]
+                    row["completed"], row["average_score"], row["best_experience"],
+                    row["worst_experience"], row["last_attempt_date"]
                 ])
         else:
             return Response({"message": "Invalid export type."}, status=status.HTTP_400_BAD_REQUEST)
@@ -768,8 +768,8 @@ class ReportsStudentCompletionAPIView(APIView):
 
         # Annotate
         queryset = student_users.annotate(
-            total_assigned_scenarios=models.Count("assignments", distinct=True),
-            completed_scenarios_count=models.Count(
+            total_assigned_experiences=models.Count("assignments", distinct=True),
+            completed_experiences_count=models.Count(
                 "assignments__attempts",
                 filter=(
                     models.Q(assignments__attempts__status="completed") |

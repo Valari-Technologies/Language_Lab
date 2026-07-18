@@ -151,7 +151,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/grades/",
+							"raw": "{{base_url}}/api/cms/v1/grades/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -180,7 +180,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/cms/grades/",
+							"raw": "{{base_url}}/api/cms/v1/grades/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -200,7 +200,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/grades/1/",
+							"raw": "{{base_url}}/api/cms/v1/grades/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -230,7 +230,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/cms/grades/1/",
+							"raw": "{{base_url}}/api/cms/v1/grades/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -251,7 +251,7 @@
 						"method": "DELETE",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/grades/1/",
+							"raw": "{{base_url}}/api/cms/v1/grades/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -277,7 +277,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/scenarios/?grade=1&difficulty=MEDIUM&status=DRAFT",
+							"raw": "{{base_url}}/api/cms/v1/scenarios/?grade=1&difficulty=MEDIUM&status=DRAFT",
 							"host": [
 								"{{base_url}}"
 							],
@@ -320,7 +320,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/cms/scenarios/",
+							"raw": "{{base_url}}/api/cms/v1/scenarios/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -340,7 +340,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/scenarios/1/",
+							"raw": "{{base_url}}/api/cms/v1/scenarios/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -370,7 +370,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/cms/scenarios/1/",
+							"raw": "{{base_url}}/api/cms/v1/scenarios/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -391,7 +391,7 @@
 						"method": "DELETE",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/scenarios/1/",
+							"raw": "{{base_url}}/api/cms/v1/scenarios/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -417,7 +417,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/scenario-builders/?scenario=1&block_type=VIDEO",
+							"raw": "{{base_url}}/api/cms/v1/scenario-builders/?scenario=1&block_type=VIDEO",
 							"host": [
 								"{{base_url}}"
 							],
@@ -456,7 +456,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/cms/scenario-builders/",
+							"raw": "{{base_url}}/api/cms/v1/scenario-builders/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -476,7 +476,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/scenario-builders/1/",
+							"raw": "{{base_url}}/api/cms/v1/scenario-builders/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -506,7 +506,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/cms/scenario-builders/1/",
+							"raw": "{{base_url}}/api/cms/v1/scenario-builders/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -527,7 +527,7 @@
 						"method": "DELETE",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/scenario-builders/1/",
+							"raw": "{{base_url}}/api/cms/v1/scenario-builders/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -553,7 +553,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/assessments/?experience=1",
+							"raw": "{{base_url}}/api/cms/v1/assessments/?experience=1",
 							"host": [
 								"{{base_url}}"
 							],
@@ -588,7 +588,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/cms/assessments/",
+							"raw": "{{base_url}}/api/cms/v1/assessments/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -608,7 +608,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/assessments/1/",
+							"raw": "{{base_url}}/api/cms/v1/assessments/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -638,7 +638,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/cms/assessments/1/",
+							"raw": "{{base_url}}/api/cms/v1/assessments/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -659,7 +659,7 @@
 						"method": "DELETE",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/assessments/1/",
+							"raw": "{{base_url}}/api/cms/v1/assessments/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -685,7 +685,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/questions/?assessment=1&question_type=MCQ",
+							"raw": "{{base_url}}/api/cms/v1/questions/?assessment=1&question_type=MCQ",
 							"host": [
 								"{{base_url}}"
 							],
@@ -724,7 +724,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/cms/questions/",
+							"raw": "{{base_url}}/api/cms/v1/questions/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -744,7 +744,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/questions/1/",
+							"raw": "{{base_url}}/api/cms/v1/questions/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -774,7 +774,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/cms/questions/1/",
+							"raw": "{{base_url}}/api/cms/v1/questions/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -795,7 +795,7 @@
 						"method": "DELETE",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/questions/1/",
+							"raw": "{{base_url}}/api/cms/v1/questions/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -821,7 +821,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/options/?question=1&is_correct=true",
+							"raw": "{{base_url}}/api/cms/v1/options/?question=1&is_correct=true",
 							"host": [
 								"{{base_url}}"
 							],
@@ -860,7 +860,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/cms/options/",
+							"raw": "{{base_url}}/api/cms/v1/options/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -880,7 +880,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/options/1/",
+							"raw": "{{base_url}}/api/cms/v1/options/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -910,7 +910,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{base_url}}/api/cms/options/1/",
+							"raw": "{{base_url}}/api/cms/v1/options/1/",
 							"host": [
 								"{{base_url}}"
 							],
@@ -931,7 +931,7 @@
 						"method": "DELETE",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/cms/options/1/",
+							"raw": "{{base_url}}/api/cms/v1/options/1/",
 							"host": [
 								"{{base_url}}"
 							],

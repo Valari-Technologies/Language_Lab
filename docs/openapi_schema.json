@@ -160,7 +160,7 @@
                 }
             }
         },
-        "/api/cms/classes/": {
+        "/api/cms/v1/classes/": {
             "get": {
                 "operationId": "cms_classes_list",
                 "parameters": [
@@ -241,7 +241,7 @@
                 }
             }
         },
-        "/api/cms/classes/{class_id}/": {
+        "/api/cms/v1/classes/{class_id}/": {
             "get": {
                 "operationId": "cms_classes_retrieve",
                 "parameters": [
@@ -391,7 +391,7 @@
                 }
             }
         },
-        "/api/cms/dashboard-stats/": {
+        "/api/cms/v1/dashboard-stats/": {
             "get": {
                 "operationId": "cms_dashboard_stats_retrieve",
                 "tags": [
@@ -404,7 +404,7 @@
                 }
             }
         },
-        "/api/cms/grades/": {
+        "/api/cms/v1/grades/": {
             "get": {
                 "operationId": "cms_grades_list",
                 "parameters": [
@@ -485,7 +485,7 @@
                 }
             }
         },
-        "/api/cms/grades/{id}/": {
+        "/api/cms/v1/grades/{id}/": {
             "get": {
                 "operationId": "cms_grades_retrieve",
                 "parameters": [
@@ -635,7 +635,7 @@
                 }
             }
         },
-        "/api/cms/school-admins/": {
+        "/api/cms/v1/school-admins/": {
             "get": {
                 "operationId": "cms_school_admins_list",
                 "parameters": [
@@ -715,7 +715,7 @@
                 }
             }
         },
-        "/api/cms/school-admins/{id}/": {
+        "/api/cms/v1/school-admins/{id}/": {
             "get": {
                 "operationId": "cms_school_admins_retrieve",
                 "parameters": [
@@ -864,7 +864,7 @@
                 }
             }
         },
-        "/api/cms/schools/": {
+        "/api/cms/v1/schools/": {
             "get": {
                 "operationId": "cms_schools_list",
                 "parameters": [
@@ -945,7 +945,7 @@
                 }
             }
         },
-        "/api/cms/schools/{school_id}/": {
+        "/api/cms/v1/schools/{school_id}/": {
             "get": {
                 "operationId": "cms_schools_retrieve",
                 "parameters": [
@@ -1095,7 +1095,7 @@
                 }
             }
         },
-        "/api/cms/students/": {
+        "/api/cms/v1/students/": {
             "get": {
                 "operationId": "cms_students_list",
                 "parameters": [
@@ -1176,7 +1176,7 @@
                 }
             }
         },
-        "/api/cms/students/{student_id}/": {
+        "/api/cms/v1/students/{student_id}/": {
             "get": {
                 "operationId": "cms_students_retrieve",
                 "parameters": [
@@ -1326,7 +1326,7 @@
                 }
             }
         },
-        "/api/cms/teacher-classes/": {
+        "/api/cms/v1/teacher-classes/": {
             "get": {
                 "operationId": "cms_teacher_classes_list",
                 "parameters": [
@@ -1407,7 +1407,7 @@
                 }
             }
         },
-        "/api/cms/teacher-classes/{id}/": {
+        "/api/cms/v1/teacher-classes/{id}/": {
             "get": {
                 "operationId": "cms_teacher_classes_retrieve",
                 "parameters": [
@@ -1557,7 +1557,7 @@
                 }
             }
         },
-        "/api/cms/teachers/": {
+        "/api/cms/v1/teachers/": {
             "get": {
                 "operationId": "cms_teachers_list",
                 "parameters": [
@@ -1638,7 +1638,7 @@
                 }
             }
         },
-        "/api/cms/teachers/{teacher_id}/": {
+        "/api/cms/v1/teachers/{teacher_id}/": {
             "get": {
                 "operationId": "cms_teachers_retrieve",
                 "parameters": [

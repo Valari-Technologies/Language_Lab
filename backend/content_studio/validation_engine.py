@@ -1,5 +1,5 @@
 import json
-from .models import Scenario, Activity, Screen, Media
+from .models import Experience, Activity, Screen, Media
 
 def get_referenced_media_ids_and_urls(content):
     referenced_ids = set()
@@ -27,109 +27,109 @@ def get_referenced_media_ids_and_urls(content):
     recurse(content)
     return referenced_ids, referenced_urls
 
-# Scenario Rules
-def check_scenario_metadata(scenario):
+# Experience Rules
+def check_experience_metadata(experience):
     results = []
     # Title rule
-    if not scenario.title or not scenario.title.strip():
+    if not experience.title or not experience.title.strip():
         results.append({
-            "rule": "scenario_title_required",
+            "rule": "experience_title_required",
             "severity": "ERROR",
-            "message": "Scenario is missing a title.",
-            "item": f"scenario-{scenario.id}"
+            "message": "Experience is missing a title.",
+            "item": f"experience-{experience.id}"
         })
     else:
         results.append({
-            "rule": "scenario_title_required",
+            "rule": "experience_title_required",
             "severity": "PASSED",
-            "message": "Scenario has a valid title.",
-            "item": f"scenario-{scenario.id}"
+            "message": "Experience has a valid title.",
+            "item": f"experience-{experience.id}"
         })
         
     # Grade rule
-    if not scenario.grade_id:
+    if not experience.grade_id:
         results.append({
-            "rule": "scenario_grade_required",
+            "rule": "experience_grade_required",
             "severity": "ERROR",
-            "message": "Scenario has no grade assigned.",
-            "item": f"scenario-{scenario.id}"
+            "message": "Experience has no grade assigned.",
+            "item": f"experience-{experience.id}"
         })
     else:
         results.append({
-            "rule": "scenario_grade_required",
+            "rule": "experience_grade_required",
             "severity": "PASSED",
-            "message": "Scenario has a grade assigned.",
-            "item": f"scenario-{scenario.id}"
+            "message": "Experience has a grade assigned.",
+            "item": f"experience-{experience.id}"
         })
         
     # Thumbnail rule
-    if not scenario.thumbnail:
+    if not experience.thumbnail:
         results.append({
-            "rule": "scenario_thumbnail_recommended",
+            "rule": "experience_thumbnail_recommended",
             "severity": "WARNING",
-            "message": "Scenario is missing a thumbnail image.",
-            "item": f"scenario-{scenario.id}"
+            "message": "Experience is missing a thumbnail image.",
+            "item": f"experience-{experience.id}"
         })
     else:
         results.append({
-            "rule": "scenario_thumbnail_recommended",
+            "rule": "experience_thumbnail_recommended",
             "severity": "PASSED",
-            "message": "Scenario has a thumbnail image.",
-            "item": f"scenario-{scenario.id}"
+            "message": "Experience has a thumbnail image.",
+            "item": f"experience-{experience.id}"
         })
         
     # Learning outcomes rule
-    if scenario.learning_outcomes.count() == 0:
+    if experience.learning_outcomes.count() == 0:
         results.append({
-            "rule": "scenario_outcomes_recommended",
+            "rule": "experience_outcomes_recommended",
             "severity": "WARNING",
-            "message": "Scenario has no learning outcomes defined.",
-            "item": f"scenario-{scenario.id}"
+            "message": "Experience has no learning outcomes defined.",
+            "item": f"experience-{experience.id}"
         })
     else:
         results.append({
-            "rule": "scenario_outcomes_recommended",
+            "rule": "experience_outcomes_recommended",
             "severity": "PASSED",
-            "message": "Scenario has learning outcomes defined.",
-            "item": f"scenario-{scenario.id}"
+            "message": "Experience has learning outcomes defined.",
+            "item": f"experience-{experience.id}"
         })
         
     return results
 
-def check_scenario_has_activities(scenario, activities):
+def check_experience_has_activities(experience, activities):
     results = []
     if len(activities) == 0:
         results.append({
-            "rule": "scenario_activities_required",
+            "rule": "experience_activities_required",
             "severity": "ERROR",
-            "message": "Scenario has zero activities. At least one activity is required.",
-            "item": f"scenario-{scenario.id}"
+            "message": "Experience has zero activities. At least one activity is required.",
+            "item": f"experience-{experience.id}"
         })
     else:
         results.append({
-            "rule": "scenario_activities_required",
+            "rule": "experience_activities_required",
             "severity": "PASSED",
-            "message": f"Scenario contains {len(activities)} activity/activities.",
-            "item": f"scenario-{scenario.id}"
+            "message": f"Experience contains {len(activities)} activity/activities.",
+            "item": f"experience-{experience.id}"
         })
     return results
 
-def check_scenario_duration_sanity(scenario, activities):
+def check_experience_duration_sanity(experience, activities):
     results = []
     sum_durations = sum(act.estimated_duration for act in activities)
-    if scenario.estimated_duration < sum_durations:
+    if experience.estimated_duration < sum_durations:
         results.append({
-            "rule": "scenario_duration_sanity",
+            "rule": "experience_duration_sanity",
             "severity": "WARNING",
-            "message": f"Scenario duration ({scenario.estimated_duration}m) is less than the sum of its activities ({sum_durations}m).",
-            "item": f"scenario-{scenario.id}"
+            "message": f"Experience duration ({experience.estimated_duration}m) is less than the sum of its activities ({sum_durations}m).",
+            "item": f"experience-{experience.id}"
         })
     else:
         results.append({
-            "rule": "scenario_duration_sanity",
+            "rule": "experience_duration_sanity",
             "severity": "PASSED",
-            "message": "Scenario estimated duration matches or exceeds the sum of its activities.",
-            "item": f"scenario-{scenario.id}"
+            "message": "Experience estimated duration matches or exceeds the sum of its activities.",
+            "item": f"experience-{experience.id}"
         })
     return results
 
@@ -245,18 +245,18 @@ def check_screen_media_references(screen):
 
 
 # Validation Runner Engine
-def run_validation_engine(scenario):
+def run_validation_engine(experience):
     all_results = []
     
-    # 1. Scenario Metadata Checks
-    all_results.extend(check_scenario_metadata(scenario))
+    # 1. Experience Metadata Checks
+    all_results.extend(check_experience_metadata(experience))
     
     # 2. Activities & Scoped Validation
-    activities = scenario.activities.all()
-    all_results.extend(check_scenario_has_activities(scenario, activities))
+    activities = experience.activities.all()
+    all_results.extend(check_experience_has_activities(experience, activities))
     
     if len(activities) > 0:
-        all_results.extend(check_scenario_duration_sanity(scenario, activities))
+        all_results.extend(check_experience_duration_sanity(experience, activities))
         
     for act in activities:
         # Check Activity Metadata

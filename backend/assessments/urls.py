@@ -4,8 +4,8 @@ from .views import (
     SyncAttemptsAPIView,
     SyncResponsesAPIView,
     ReportsOverviewAPIView,
-    ReportsScenariosAPIView,
-    ReportsScenarioDetailAPIView,
+    ReportsExperiencesAPIView,
+    ReportsExperienceDetailAPIView,
     ReportsClassesAPIView,
     ReportsClassDetailAPIView,
     ReportsStudentsAPIView,
@@ -23,8 +23,8 @@ urlpatterns = [
 
     # Reports endpoints
     path("reports/overview/", ReportsOverviewAPIView.as_view(), name="reports_overview"),
-    path("reports/scenarios/", ReportsScenariosAPIView.as_view(), name="reports_scenarios"),
-    path("reports/scenarios/<str:scenario_ref>/", ReportsScenarioDetailAPIView.as_view(), name="reports_scenario_detail"),
+    path("reports/experiences/", ReportsExperiencesAPIView.as_view(), name="reports_experiences"),
+    path("reports/experiences/<str:experience_ref>/", ReportsExperienceDetailAPIView.as_view(), name="reports_experience_detail"),
     path("reports/classes/", ReportsClassesAPIView.as_view(), name="reports_classes"),
     path("reports/classes/<int:class_id>/", ReportsClassDetailAPIView.as_view(), name="reports_class_detail"),
     path("reports/students/", ReportsStudentsAPIView.as_view(), name="reports_students"),

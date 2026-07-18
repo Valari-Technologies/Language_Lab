@@ -12,7 +12,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from super_admin.models import School, Grade, SchoolAdminProfile
 from school_admin.models import Class, Teacher, TeacherClass
 from teacher.models import Student
-from .models import ScenarioAssignment, StudentAttempt, ScreenResponse
+from .models import ExperienceAssignment, StudentAttempt, ScreenResponse
 
 User = get_user_model()
 
@@ -111,8 +111,8 @@ class AssessmentsTests(TestCase):
         url = reverse("sync_assignments")
         payload = [
             {
-                "scenario_ref": "scen_1",
-                "scenario_title": "Scenario One",
+                "experience_ref": "scen_1",
+                "experience_title": "Experience One",
                 "grade": self.grade_6.id,
                 "class_obj": self.class_a.class_id,
                 "assigned_by_username": "teacher_a",
@@ -123,15 +123,15 @@ class AssessmentsTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["created"], 1)
         self.assertEqual(response.data["failed"], 0)
-        self.assertTrue(ScenarioAssignment.objects.filter(scenario_ref="scen_1", school=self.school_a).exists())
+        self.assertTrue(ExperienceAssignment.objects.filter(experience_ref="scen_1", school=self.school_a).exists())
 
     def test_sync_assignments_invalid_class_fails_row(self):
         # Class B belongs to School B, but synced using Admin A (School A)
         url = reverse("sync_assignments")
         payload = [
             {
-                "scenario_ref": "scen_1",
-                "scenario_title": "Scenario One",
+                "experience_ref": "scen_1",
+                "experience_title": "Experience One",
                 "grade": self.grade_6.id,
                 "class_obj": self.class_b.class_id,  # Invalid class for School A
                 "assigned_by_username": "teacher_a",
@@ -150,7 +150,7 @@ class AssessmentsTests(TestCase):
         payload = [
             {
                 "lms_attempt_id": "attempt_1",
-                "scenario_ref": "scen_1",
+                "experience_ref": "scen_1",
                 "student_username": "student_a",
                 "started_at": timezone.now().isoformat(),
                 "completed_at": (timezone.now() + timedelta(minutes=15)).isoformat(),
@@ -181,7 +181,7 @@ class AssessmentsTests(TestCase):
         payload = [
             {
                 "lms_attempt_id": "attempt_2",
-                "scenario_ref": "scen_1",
+                "experience_ref": "scen_1",
                 "student_username": "student_b",
                 "started_at": timezone.now().isoformat(),
                 "status": "STARTED"
@@ -202,10 +202,10 @@ class AssessmentsTests(TestCase):
         self.assertEqual(response.data["completion_rate"], 0.0)
 
         # 2. Sync an attempt under School A
-        assignment = ScenarioAssignment.objects.create(
+        assignment = ExperienceAssignment.objects.create(
             school=self.school_a,
-            scenario_ref="scen_1",
-            scenario_title="Scenario One",
+            experience_ref="scen_1",
+            experience_title="Experience One",
             class_obj=self.class_a,
             assigned_at=timezone.now()
         )
@@ -235,10 +235,10 @@ class AssessmentsTests(TestCase):
 
     def test_reports_export_csv(self):
         # Setup data
-        assignment = ScenarioAssignment.objects.create(
+        assignment = ExperienceAssignment.objects.create(
             school=self.school_a,
-            scenario_ref="scen_1",
-            scenario_title="Scenario One",
+            experience_ref="scen_1",
+            experience_title="Experience One",
             class_obj=self.class_a,
             assigned_at=timezone.now()
         )
@@ -290,26 +290,26 @@ class AssessmentsTests(TestCase):
         url = reverse("reports_student_completion")
         
         # Clear existing assignments & attempts to make test calculations predictable
-        ScenarioAssignment.objects.all().delete()
+        ExperienceAssignment.objects.all().delete()
         StudentAttempt.objects.all().delete()
         
         # Create assignments under School A
-        assignment_a1 = ScenarioAssignment.objects.create(
+        assignment_a1 = ExperienceAssignment.objects.create(
             school=self.school_a,
-            scenario_ref="scen_a1",
-            scenario_title="Scenario A1",
+            experience_ref="scen_a1",
+            experience_title="Experience A1",
             class_obj=self.class_a,
             assigned_at=timezone.now()
         )
-        assignment_a2 = ScenarioAssignment.objects.create(
+        assignment_a2 = ExperienceAssignment.objects.create(
             school=self.school_a,
-            scenario_ref="scen_a2",
-            scenario_title="Scenario A2",
+            experience_ref="scen_a2",
+            experience_title="Experience A2",
             class_obj=self.class_a,
             assigned_at=timezone.now()
         )
         
-        # Student A (School A) attempts and completes one scenario
+        # Student A (School A) attempts and completes one experience
         StudentAttempt.objects.create(
             assignment=assignment_a1,
             student=self.student_user_a,
@@ -334,16 +334,16 @@ class AssessmentsTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Should see student_a with correct metrics
         student_data = [item for item in response.data if item["student_id"] == self.student_user_a.id][0]
-        self.assertEqual(student_data["total_assigned_scenarios"], 2)
-        self.assertEqual(student_data["completed_scenarios_count"], 1)
+        self.assertEqual(student_data["total_assigned_experiences"], 2)
+        self.assertEqual(student_data["completed_experiences_count"], 1)
 
         # Teacher A checks reports (teacher is assigned to class_a, which includes class_a attempts)
         token_teacher_a = self.get_token("teacher_a")
         response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {token_teacher_a}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         student_data_teacher = [item for item in response.data if item["student_id"] == self.student_user_a.id][0]
-        self.assertEqual(student_data_teacher["total_assigned_scenarios"], 2)
-        self.assertEqual(student_data_teacher["completed_scenarios_count"], 1)
+        self.assertEqual(student_data_teacher["total_assigned_experiences"], 2)
+        self.assertEqual(student_data_teacher["completed_experiences_count"], 1)
         
         # School Admin B checks reports (should NOT see School A's student metrics due to isolation)
         response_b = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {self.token_b}")

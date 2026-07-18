@@ -110,10 +110,10 @@ class DashboardStatsAPIView(APIView):
             "total_school_admins": User.objects.filter(role="SCHOOL_ADMIN").count(),
             "total_publish_contents": 0,
             "total_grades": Grade.objects.count(),
-            "total_scenarios": 0,
-            "draft_scenarios": 0,
-            "published_scenarios": 0,
-            "recent_scenarios": []
+            "total_experiences": 0,
+            "draft_experiences": 0,
+            "published_experiences": 0,
+            "recent_experiences": []
         }, status=status.HTTP_200_OK)
 
 

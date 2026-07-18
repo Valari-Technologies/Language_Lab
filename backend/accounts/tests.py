@@ -327,7 +327,7 @@ class CMSSchoolAdminAndTeacherTests(TestCase):
         )
 
     def test_list_school_admins(self):
-        url = "/api/cms/school-admins/"
+        url = "/api/cms/v1/school-admins/"
         response = self.client.get(url, HTTP_AUTHORIZATION=f"Bearer {self.token}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         results = response.data.get("results", response.data) if isinstance(response.data, dict) else response.data
@@ -335,7 +335,7 @@ class CMSSchoolAdminAndTeacherTests(TestCase):
         self.assertEqual(results[0]["username"], "school_admin_test")
 
     def test_update_school_admin(self):
-        url = f"/api/cms/school-admins/{self.school_admin.id}/"
+        url = f"/api/cms/v1/school-admins/{self.school_admin.id}/"
         data = {
             "full_name": "Updated School Admin Name",
             "email": "updatedadmin@testschool.edu",
@@ -353,14 +353,14 @@ class CMSSchoolAdminAndTeacherTests(TestCase):
         self.assertFalse(self.school_admin.is_active)
 
     def test_delete_school_admin(self):
-        url = f"/api/cms/school-admins/{self.school_admin.id}/"
+        url = f"/api/cms/v1/school-admins/{self.school_admin.id}/"
         response = self.client.delete(url, HTTP_AUTHORIZATION=f"Bearer {self.token}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Verify deleted
         self.assertFalse(User.objects.filter(id=self.school_admin.id).exists())
 
     def test_update_teacher_with_user_details(self):
-        url = f"/api/cms/teachers/{self.teacher.teacher_id}/"
+        url = f"/api/cms/v1/teachers/{self.teacher.teacher_id}/"
         data = {
             "school": self.school.school_id,
             "qualification": "M.A. English literature",
@@ -386,14 +386,14 @@ class CMSSchoolAdminAndTeacherTests(TestCase):
         self.assertFalse(self.teacher_user.is_active)
 
     def test_delete_teacher(self):
-        url = f"/api/cms/teachers/{self.teacher.teacher_id}/"
+        url = f"/api/cms/v1/teachers/{self.teacher.teacher_id}/"
         response = self.client.delete(url, HTTP_AUTHORIZATION=f"Bearer {self.token}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Verify teacher deleted
         self.assertFalse(Teacher.objects.filter(teacher_id=self.teacher.teacher_id).exists())
 
     def test_create_school_admin(self):
-        url = "/api/cms/school-admins/"
+        url = "/api/cms/v1/school-admins/"
         data = {
             "username": "new_school_admin",
             "password": "newpassword123",
@@ -412,7 +412,7 @@ class CMSSchoolAdminAndTeacherTests(TestCase):
         self.assertEqual(user.role, "SCHOOL_ADMIN")
 
     def test_create_teacher_profile(self):
-        url = "/api/cms/teachers/"
+        url = "/api/cms/v1/teachers/"
         data = {
             "username": "new_teacher_user",
             "password": "newpassword123",

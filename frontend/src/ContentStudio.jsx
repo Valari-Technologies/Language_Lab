@@ -16,9 +16,9 @@ import './Dashboard.css';
    CONTENT STUDIO COMPONENT
    ═══════════════════════════════════════════════════════════ */
 const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator' }, onLogout }) => {
-  // Views: dashboard, scenarios, scenario-builder, activity-builder, screen-builder, preview, media, publish, profile
+  // Views: dashboard, experiences, experience-builder, activity-builder, screen-builder, preview, media, publish, profile
   const [view, setView] = useState('dashboard');
-  const [selectedScenario, setSelectedScenario] = useState('At the Restaurant');
+  const [selectedExperience, setSelectedExperience] = useState('At the Restaurant');
   const [selectedActivity, setSelectedActivity] = useState('Dialogue with Waiter');
 
   // Profile / Password states
@@ -591,8 +591,8 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
         <nav className="cs-nav">
           {[
             { key: 'dashboard', label: 'Dashboard', icon: <FiGrid/> },
-            { key: 'scenarios', label: 'Experience Library', icon: <FiBookOpen/> },
-            { key: 'scenario-builder', label: 'Experience Builder', icon: <FiActivity/> },
+            { key: 'experiences', label: 'Experience Library', icon: <FiBookOpen/> },
+            { key: 'experience-builder', label: 'Experience Builder', icon: <FiActivity/> },
             { key: 'activity-builder', label: 'Activity Builder', icon: <FiSettings/> },
             { key: 'screen-builder', label: 'Screen Builder', icon: <FiMonitor/> },
             { key: 'preview', label: 'Runtime Preview', icon: <FiPlay/> },
@@ -639,7 +639,7 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
             <input 
               className="cs-search-input" 
               type="text" 
-              placeholder={view === 'scenarios' ? "Search experiences by title, grade, subject" : "Search experiences, activities..."} 
+              placeholder={view === 'experiences' ? "Search experiences by title, grade, subject" : "Search experiences, activities..."} 
             />
           </div>
           <div className="cs-header-actions">
@@ -698,8 +698,8 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', textAlign: 'center' }}>
                       {[
-                        { label: 'New Experience', desc: 'Create a new lesson', icon: <FiPlusCircle style={{ fontSize: '1.5rem', color: '#0284c7' }}/>, bg: '#e0f2fe', action: () => setView('scenario-builder') },
-                        { label: 'Experience Library', desc: 'Manage your content', icon: <FiFolder style={{ fontSize: '1.5rem', color: '#16a34a' }}/>, bg: '#dcfce7', action: () => setView('scenarios') },
+                        { label: 'New Experience', desc: 'Create a new lesson', icon: <FiPlusCircle style={{ fontSize: '1.5rem', color: '#0284c7' }}/>, bg: '#e0f2fe', action: () => setView('experience-builder') },
+                        { label: 'Experience Library', desc: 'Manage your content', icon: <FiFolder style={{ fontSize: '1.5rem', color: '#16a34a' }}/>, bg: '#dcfce7', action: () => setView('experiences') },
                         { label: 'Media Library', desc: 'Upload assets', icon: <FiImage style={{ fontSize: '1.5rem', color: '#7c3aed' }}/>, bg: '#f3e8ff', action: () => setView('media') },
                         { label: 'Publish Center', desc: 'Go live with content', icon: <FiSend style={{ fontSize: '1.5rem', color: '#ea580c' }}/>, bg: '#ffedd5', action: () => setView('publish') },
                       ].map((qa, idx) => (
@@ -718,7 +718,7 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
                   <div className="cs-card">
                     <div className="cs-card-header">
                       <h3 className="cs-card-title">Recent Experiences</h3>
-                      <button className="cs-btn-outline" style={{ padding: '0.25rem 0.6rem', fontSize: '0.72rem' }} onClick={() => setView('scenarios')}>View All</button>
+                      <button className="cs-btn-outline" style={{ padding: '0.25rem 0.6rem', fontSize: '0.72rem' }} onClick={() => setView('experiences')}>View All</button>
                     </div>
                     <div className="cs-table-wrap" style={{ overflowX: 'auto' }}>
                       <table className="cs-table">
@@ -752,7 +752,7 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
                               </td>
                               <td>{row.date}</td>
                               <td>
-                                <button className="cs-btn-outline" style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }} onClick={() => { setSelectedScenario(row.name); setView('scenario-builder'); }}>Open</button>
+                                <button className="cs-btn-outline" style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }} onClick={() => { setSelectedExperience(row.name); setView('experience-builder'); }}>Open</button>
                               </td>
                             </tr>
                           ))}
@@ -817,7 +817,7 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
           )}
 
           {/* ───────────────── VIEW 2: EXPERIENCE LIBRARY (Image 1) ───────────────── */}
-          {view === 'scenarios' && (
+          {view === 'experiences' && (
             <>
               <div style={{ marginBottom: '1.5rem' }}>
                 <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: 0 }}>Experience Library</h1>
@@ -837,7 +837,7 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
                       ↺ Reset
                     </button>
                   </div>
-                  <button className="cs-btn-primary" onClick={() => setView('scenario-builder')}>+ New Experience</button>
+                  <button className="cs-btn-primary" onClick={() => setView('experience-builder')}>+ New Experience</button>
                 </div>
               </div>
 
@@ -863,7 +863,7 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
                       { name: 'Asking for Directions', desc: 'How to ask and give directions', grade: 'Grade 5', sub: 'Speaking & Listening', diff: 'Medium', diffColor: '#3b82f6', status: 'DRAFT', ver: '1.0.0', date: 'May 18, 2025', tag: 'COMMUNICATION' },
                       { name: 'Shopping for Clothes', desc: 'Shopping and talking about clothes', grade: 'Grade 3', sub: 'Reading', diff: 'Easy', diffColor: '#10b981', status: 'DRAFT', ver: '0.9.0', date: 'May 17, 2025', tag: 'VOCABULARY' }
                     ].map((row, idx) => (
-                      <tr key={idx} style={{ cursor: 'pointer' }} onClick={() => { setSelectedScenario(row.name); setView('scenario-builder'); }}>
+                      <tr key={idx} style={{ cursor: 'pointer' }} onClick={() => { setSelectedExperience(row.name); setView('experience-builder'); }}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             <div style={{ width: 48, height: 34, background: '#f1f5f9', borderRadius: 6 }}/>
@@ -925,12 +925,12 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
           )}
 
           {/* ───────────────── VIEW 3: EXPERIENCE BUILDER (Image 3) ───────────────── */}
-          {view === 'scenario-builder' && (
+          {view === 'experience-builder' && (
             <>
               {/* Top breadcrumb navigation */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <button className="cs-icon-btn" onClick={() => setView('scenarios')}><FiArrowLeft/></button>
+                  <button className="cs-icon-btn" onClick={() => setView('experiences')}><FiArrowLeft/></button>
                   <div>
                     <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
                       Experience Library &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Experience Builder</span>
@@ -1091,7 +1091,7 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
                     <div style={{ position: 'absolute', left: 23, top: 10, bottom: 10, width: 2, background: '#cbd5e1', zIndex: 1 }}/>
 
                     {[
-                      { num: 1, title: 'Introduction', desc: 'Introduction to the restaurant scenario', type: 'Video', time: '02:30' },
+                      { num: 1, title: 'Introduction', desc: 'Introduction to the restaurant experience', type: 'Video', time: '02:30' },
                       { num: 2, title: 'Dialogue', desc: 'Watch and listen to the conversation', type: 'Interactive', time: '08:00', active: true },
                       { num: 3, title: 'Comprehension Check', desc: 'Answer questions about the dialogue', type: 'Quiz', time: '04:00' },
                       { num: 4, title: 'Speaking Practice', desc: 'Practice ordering food', type: 'Speaking', time: '08:00' },
@@ -1156,7 +1156,7 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
               {/* Top breadcrumbs */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <button className="cs-icon-btn" onClick={() => setView('scenario-builder')}><FiArrowLeft/></button>
+                  <button className="cs-icon-btn" onClick={() => setView('experience-builder')}><FiArrowLeft/></button>
                   <div>
                     <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
                       Experience Library &nbsp;&gt;&nbsp; Experience Builder &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Activity Builder</span>
@@ -1622,13 +1622,13 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
                   </p>
                 </div>
                 <div style={{ display: 'flex', gap: '0.55rem' }}>
-                  <button className="cs-btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => setView('scenario-builder')}>
+                  <button className="cs-btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => setView('experience-builder')}>
                     <FiX/> Exit Preview
                   </button>
                   <button className="cs-btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => { setPreviewScreenNum(3); setSelectedAnswer('B'); }}>
                     ↺ Restart Experience
                   </button>
-                  <button className="cs-btn-primary" style={{ background: '#4f46e5', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => setView('scenario-builder')}>
+                  <button className="cs-btn-primary" style={{ background: '#4f46e5', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => setView('experience-builder')}>
                     End Preview
                   </button>
                 </div>
@@ -2374,7 +2374,7 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
 
               {/* Bottom Sticky action footer bar */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', background: '#fff', padding: '0.75rem 1.25rem', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                <button className="cs-btn-outline" style={{ fontSize: '0.78rem' }} onClick={() => setView('scenario-builder')}>
+                <button className="cs-btn-outline" style={{ fontSize: '0.78rem' }} onClick={() => setView('experience-builder')}>
                   ← Back to Experience Builder
                 </button>
                 <button className="cs-btn-primary" style={{ background: '#4f46e5', padding: '0.5rem 1.5rem' }} onClick={() => alert('Downloading Package...')}>

@@ -167,28 +167,28 @@ const TeacherDashboard = ({ user, onLogout }) => {
 
   const loadSchools = async () => {
     try {
-      const res = await apiFetch('/api/cms/schools/');
+      const res = await apiFetch('/api/cms/v1/schools/');
       if (res.ok) { const d = await res.json(); setSchools(d.results || d); }
     } catch (e) { console.error('Failed to load schools.', e); }
   };
 
   const loadGrades = async () => {
     try {
-      const res = await apiFetch('/api/cms/grades/');
+      const res = await apiFetch('/api/cms/v1/grades/');
       if (res.ok) { const d = await res.json(); setGrades(d.results || d); }
     } catch (e) { console.error('Failed to load grades.', e); }
   };
 
   const loadStudents = async () => {
     try {
-      const res = await apiFetch('/api/cms/students/');
+      const res = await apiFetch('/api/cms/v1/students/');
       if (res.ok) { const d = await res.json(); setStudents(d.results || d); }
     } catch (e) { console.error('Failed to load students.', e); }
   };
 
   const loadClasses = async () => {
     try {
-      const res = await apiFetch('/api/cms/classes/');
+      const res = await apiFetch('/api/cms/v1/classes/');
       if (res.ok) { const d = await res.json(); setClasses(d.results || d); }
     } catch (e) { console.error('Failed to load classes.', e); }
   };
@@ -246,11 +246,11 @@ const TeacherDashboard = ({ user, onLogout }) => {
     const method = modalType === 'add' ? 'POST' : 'PUT';
     let payload = {};
     if (activeSubTab === 'students') {
-      endpoint = modalType === 'add' ? '/api/cms/students/' : `/api/cms/students/${editingId}/`;
+      endpoint = modalType === 'add' ? '/api/cms/v1/students/' : `/api/cms/v1/students/${editingId}/`;
       payload = { ...studentForm, role: 'STUDENT' };
       if (modalType === 'edit' && !payload.password) delete payload.password;
     } else if (activeSubTab === 'classes') {
-      endpoint = modalType === 'add' ? '/api/cms/classes/' : `/api/cms/classes/${editingId}/`;
+      endpoint = modalType === 'add' ? '/api/cms/v1/classes/' : `/api/cms/v1/classes/${editingId}/`;
       payload = { ...classForm };
     }
     try {
@@ -272,7 +272,7 @@ const TeacherDashboard = ({ user, onLogout }) => {
   const handleDelete = async (id, type) => {
     if (!window.confirm(`Are you sure you want to delete this ${type}?`)) return;
     try {
-      const res = await apiFetch(`/api/cms/${type}s/${id}/`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/cms/v1/${type}s/${id}/`, { method: 'DELETE' });
       if (res.ok) {
         showFeedback(`${type} deleted successfully!`, null);
         if (type === 'student') loadStudents();
@@ -315,7 +315,7 @@ const TeacherDashboard = ({ user, onLogout }) => {
   /* ── Stat values ── */
   const statClasses  = data?.assigned_classes?.length || classes.length;
   const statStudents = students.length;
-  const statScenarios = data?.active_scenarios || 0;
+  const statExperiences = data?.active_experiences || 0;
   const statLessons  = data?.upcoming_lessons?.length || 0;
 
   /* ── Loading screen ── */
@@ -599,7 +599,7 @@ const TeacherDashboard = ({ user, onLogout }) => {
                 {[
                   { label: 'Assigned Classes',  value: statClasses,   color: '#22c55e', bg: '#dcfce7', icon: <FiBookOpen/>,   trend: '+2%'  },
                   { label: 'Total Students',    value: statStudents,  color: '#3b82f6', bg: '#dbeafe', icon: <FiUsers/>,      trend: '+12%' },
-                  { label: 'Active Scenarios',  value: statScenarios, color: '#a855f7', bg: '#f3e8ff', icon: <FiFileText/>,   trend: '+5%'  },
+                  { label: 'Active Experiences',  value: statExperiences, color: '#a855f7', bg: '#f3e8ff', icon: <FiFileText/>,   trend: '+5%'  },
                   { label: "Today's Lessons",   value: statLessons,   color: '#f97316', bg: '#ffedd5', icon: <FiClock/>,      trend: '0%'   },
                   { label: 'Avg Student Score', value: '—',           color: '#06b6d4', bg: '#cffafe', icon: <FiAward/>,      trend: '—'    },
                   { label: 'Completion Rate',   value: '—',           color: '#10b981', bg: '#d1fae5', icon: <FiTrendingUp/>, trend: '—'    },
@@ -771,7 +771,6 @@ const TeacherDashboard = ({ user, onLogout }) => {
                         <tr key={s.id || i}>
                           <td>
                             <span className="sd-name-cell-primary">{s.full_name || 'N/A'}</span>
-                            <span className="sd-name-cell-email">{s.email || ''}</span>
                           </td>
                           <td>{s.username}</td>
                           <td>{s.email || <span style={{ color:'#9ca3af', fontStyle:'italic' }}>Not provided</span>}</td>
@@ -943,7 +942,7 @@ const TeacherDashboard = ({ user, onLogout }) => {
                 <div className="sd-reports-empty" style={{ padding:'2.5rem 1rem' }}>
                   <FiFileText/>
                   <h3>No pending submissions</h3>
-                  <p>Grading data will appear here once students complete their scenario assessments.</p>
+                  <p>Grading data will appear here once students complete their experience assessments.</p>
                 </div>
               </div>
             </>
