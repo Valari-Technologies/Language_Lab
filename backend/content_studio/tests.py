@@ -1284,8 +1284,8 @@ class PublishPipelineTests(APITestCase):
         media = Media.objects.create(
             file=dummy_file,
             media_type="IMAGE",
-            title="Sample Image",
-            created_by=self.content_creator,
+            name="Sample Image",
+            uploaded_by=self.content_creator,
         )
 
         # Attach media reference to screen content
