@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'teacher',
     'content_studio',
     'assessments',
+    'lms',
     'drf_spectacular',
 ]
 

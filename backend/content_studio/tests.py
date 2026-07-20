@@ -1232,3 +1232,77 @@ class PublishPipelineTests(APITestCase):
         new_checksum = regen_r.data["checksum"]
         self.assertEqual(len(new_checksum), 64)
 
+    def test_publish_package_internal_layout_and_metadata(self):
+        """
+        Verifies that .elab archives physically bundle experience.json, metadata.json, and manifest.json
+        at the root, and validates the 8 structural schema keys inside metadata.json.
+        """
+        import json as _json, zipfile
+        from .models import PublishVersion
+
+        self.client.force_authenticate(user=self.content_creator)
+        url = reverse("publish-experience", kwargs={"experience_id": self.valid_experience.id})
+        response = self.client.post(url, {"release_notes": "Layout test"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        version_obj = PublishVersion.objects.get(id=response.data["version_id"])
+
+        with zipfile.ZipFile(version_obj.file_path, "r") as zf:
+            namelist = zf.namelist()
+            self.assertIn("experience.json", namelist, "experience.json missing from zip root")
+            self.assertIn("metadata.json", namelist, "metadata.json missing from zip root")
+            self.assertIn("manifest.json", namelist, "manifest.json missing from zip root")
+
+            # Validate metadata.json structural schema layout
+            meta_bytes = zf.read("metadata.json")
+            meta_data = _json.loads(meta_bytes.decode("utf-8"))
+            required_keys = ["title", "grade", "subject", "language", "difficulty", "duration", "thumbnail", "version"]
+            for k in required_keys:
+                self.assertIn(k, meta_data, f"Key '{k}' missing from metadata.json")
+
+            self.assertEqual(meta_data["title"], self.valid_experience.title)
+            self.assertEqual(meta_data["version"], "1.0")
+
+            # Validate manifest.json checksums dictionary
+            manifest_bytes = zf.read("manifest.json")
+            manifest_data = _json.loads(manifest_bytes.decode("utf-8"))
+            self.assertIn("checksums", manifest_data)
+            self.assertIn("experience_json", manifest_data["checksums"])
+            self.assertIn("metadata_json", manifest_data["checksums"])
+
+    def test_publish_package_assets_directory_structure(self):
+        """
+        Verifies that physical media assets are collected under assets/ subfolders (e.g. assets/images/)
+        instead of historical media/ paths.
+        """
+        import zipfile
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from .models import Media, PublishVersion
+
+        # Create a test Media asset
+        dummy_file = SimpleUploadedFile("sample_img.jpg", b"fake_image_data", content_type="image/jpeg")
+        media = Media.objects.create(
+            file=dummy_file,
+            media_type="IMAGE",
+            title="Sample Image",
+            created_by=self.content_creator,
+        )
+
+        # Attach media reference to screen content
+        self.scr.content = {"image_id": media.id}
+        self.scr.save()
+
+        self.client.force_authenticate(user=self.content_creator)
+        url = reverse("publish-experience", kwargs={"experience_id": self.valid_experience.id})
+        response = self.client.post(url, {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        version_obj = PublishVersion.objects.get(id=response.data["version_id"])
+
+        with zipfile.ZipFile(version_obj.file_path, "r") as zf:
+            namelist = zf.namelist()
+            asset_paths = [n for n in namelist if n.startswith("assets/")]
+            self.assertGreater(len(asset_paths), 0, "No assets found under assets/ tree branch")
+            self.assertTrue(any("assets/images/" in p for p in asset_paths), "assets/images/ subfolder missing")
+
+

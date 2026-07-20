@@ -153,8 +153,8 @@ class ExperienceViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def preview(self, request, pk=None):
         experience = self.get_object()
-        from .services import build_runtime_payload
-        payload = build_runtime_payload(experience, request)
+        from content_studio.services.preview_service import get_experience_preview_payload
+        payload = get_experience_preview_payload(experience, request)
         return Response(payload, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="learning-outcomes")
@@ -230,8 +230,8 @@ class ActivityViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def preview(self, request, pk=None):
         activity = self.get_object()
-        from .services import build_runtime_payload
-        payload = build_runtime_payload(activity.experience, request)
+        from content_studio.services.preview_service import get_experience_preview_payload
+        payload = get_experience_preview_payload(activity.experience, request)
         act_data = next((a for a in payload["activities"] if a["id"] == activity.id), None)
         if not act_data:
             return Response({"error": "Activity not found in preview payload."}, status=status.HTTP_404_NOT_FOUND)
@@ -682,8 +682,8 @@ class PreviewViewSet(viewsets.ViewSet):
         except Experience.DoesNotExist:
             return Response({"error": "Experience not found."}, status=status.HTTP_404_NOT_FOUND)
             
-        from .services import build_runtime_payload
-        payload = build_runtime_payload(experience, request)
+        from content_studio.services.preview_service import get_experience_preview_payload
+        payload = get_experience_preview_payload(experience, request)
         import uuid
         session_id = str(uuid.uuid4())
         return Response({"session_id": session_id, "payload": payload}, status=status.HTTP_200_OK)
@@ -698,8 +698,8 @@ class PreviewViewSet(viewsets.ViewSet):
         except Experience.DoesNotExist:
             return Response({"error": "Experience not found."}, status=status.HTTP_404_NOT_FOUND)
             
-        from .services import build_runtime_payload
-        payload = build_runtime_payload(experience, request)
+        from content_studio.services.preview_service import get_experience_preview_payload
+        payload = get_experience_preview_payload(experience, request)
         import uuid
         session_id = str(uuid.uuid4())
         return Response({"session_id": session_id, "payload": payload}, status=status.HTTP_200_OK)
@@ -738,7 +738,7 @@ class PublishViewSet(viewsets.ViewSet):
         version = request.data.get("version")  # optional
         release_notes = request.data.get("release_notes", "")
 
-        from .services import build_elab_package
+        from content_studio.publish.publish_service import build_elab_package
         try:
             result = build_elab_package(
                 experience=experience,
@@ -892,7 +892,7 @@ class PackageViewSet(viewsets.ViewSet):
         experience = version.published_package.experience
         fixed_version = version.version_number
 
-        from .services import build_elab_package
+        from content_studio.publish.publish_service import build_elab_package
         try:
             result = build_elab_package(
                 experience=experience,
