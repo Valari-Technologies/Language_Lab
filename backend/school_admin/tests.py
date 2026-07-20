@@ -288,3 +288,76 @@ class BulkUploadAPITests(TestCase):
         self.assertEqual(response_success.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response_success.data["created"], 1)
         self.assertTrue(Teacher.objects.filter(user__username="t_super_1", school=self.school_a).exists())
+
+    def test_school_bulk_upload_success(self):
+        headers = ["schoolname", "email", "password", "admin name", "location"]
+        rows = [
+            ["St. Mary's Academy", "admin1@stmarys.com", "SecurePass@123", "Sister Agnes", "Boston, MA"],
+            ["Oakwood High", "admin2@oakwood.com", "SecurePass@123", "Mr. John Doe", "Chicago, IL"]
+        ]
+        excel_file = create_mock_excel(headers, rows)
+        excel_file.name = "schools.xlsx"
+        
+        response = self.client.post(
+            self.url,
+            {
+                "file": excel_file,
+                "upload_type": "school"
+            },
+            HTTP_AUTHORIZATION=f"Bearer {self.token_super}"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["created"], 2)
+        self.assertEqual(response.data["failed"], 0)
+        
+        school1 = School.objects.get(school_name="St. Mary's Academy")
+        self.assertEqual(school1.address, "Boston, MA")
+        self.assertEqual(school1.email, "admin1@stmarys.com")
+        
+        user1 = User.objects.get(email="admin1@stmarys.com")
+        self.assertEqual(user1.username, "admin1")
+        self.assertEqual(user1.role, "SCHOOL_ADMIN")
+        self.assertEqual(user1.full_name, "Sister Agnes")
+        self.assertTrue(SchoolAdminProfile.objects.filter(user=user1, school=school1).exists())
+        
+        school2 = School.objects.get(school_name="Oakwood High")
+        user2 = User.objects.get(email="admin2@oakwood.com")
+        self.assertEqual(user2.username, "admin2")
+        self.assertEqual(user2.role, "SCHOOL_ADMIN")
+        self.assertEqual(user2.full_name, "Mr. John Doe")
+        self.assertTrue(SchoolAdminProfile.objects.filter(user=user2, school=school2).exists())
+
+    def test_school_bulk_upload_access_denied_for_non_super_admin(self):
+        headers = ["schoolname", "email", "password", "admin name", "location"]
+        rows = [["Test School", "admin@test.com", "SecurePass@123", "Admin User", "Test City"]]
+        excel_file = create_mock_excel(headers, rows)
+        excel_file.name = "schools.xlsx"
+        
+        response1 = self.client.post(
+            self.url,
+            {"file": excel_file, "upload_type": "school"},
+            HTTP_AUTHORIZATION=f"Bearer {self.token_admin_a}"
+        )
+        self.assertEqual(response1.status_code, status.HTTP_403_FORBIDDEN)
+        
+        excel_file.seek(0)
+        response2 = self.client.post(
+            self.url,
+            {"file": excel_file, "upload_type": "school"},
+            HTTP_AUTHORIZATION=f"Bearer {self.token_teacher_a}"
+        )
+        self.assertEqual(response2.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_school_bulk_upload_missing_headers(self):
+        headers = ["schoolname", "email", "password", "admin name"]
+        rows = [["Test School", "admin@test.com", "SecurePass@123", "Admin User"]]
+        excel_file = create_mock_excel(headers, rows)
+        excel_file.name = "schools.xlsx"
+        
+        response = self.client.post(
+            self.url,
+            {"file": excel_file, "upload_type": "school"},
+            HTTP_AUTHORIZATION=f"Bearer {self.token_super}"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Missing required column header", response.data["error"])
