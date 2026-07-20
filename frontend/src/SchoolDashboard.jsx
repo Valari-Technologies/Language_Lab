@@ -5,10 +5,12 @@ import {
   FiPlus, FiEdit2, FiTrash2, FiX, FiMenu,
   FiChevronDown, FiCalendar, FiBell, FiFilter,
   FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
-  FiActivity, FiTrendingUp, FiAward, FiLock, FiChevronLeft, FiChevronRight
+  FiActivity, FiTrendingUp, FiAward, FiLock, FiChevronLeft, FiChevronRight, FiDownload
 } from 'react-icons/fi';
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
+import logoIcon from './assets/icon.png';
+import teacherHeaderBanner from './assets/teacher_header_banner.png';
 
 /* ─── Static chart data (reference-matched visual) ─── */
 const CHART_MONTHS = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
@@ -31,20 +33,29 @@ const DonutChart = ({ pct = 68 }) => {
   const circ = 2 * Math.PI * R;
   const filled = (pct / 100) * circ;
   return (
-    <svg viewBox="0 0 120 120" width="130" height="130" className="sd-donut-svg">
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#e8edf5" strokeWidth="12"/>
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#6366f1" strokeWidth="12"
-        strokeDasharray={`${filled} ${circ}`}
-        strokeLinecap="round"
+    <svg viewBox="0 0 120 120" width="160" height="160" className="sd-donut-svg" style={{ overflow: 'visible' }}>
+      <defs>
+        <linearGradient id="donutGradSchool" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#006aa6" />
+          <stop offset="100%" stopColor="#0ea5e9" />
+        </linearGradient>
+        <filter id="donutShadowSchool" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="8" stdDeviation="6" floodColor="#006aa6" floodOpacity="0.45" />
+        </filter>
+      </defs>
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f1f5f9" strokeWidth="10"/>
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="url(#donutGradSchool)" strokeWidth="12"
+        strokeDasharray={`${filled} ${circ}`} strokeLinecap="round"
         transform={`rotate(-90 ${CX} ${CY})`}
+        filter="url(#donutShadowSchool)"
         style={{ transition: 'stroke-dasharray 0.8s ease' }}
       />
       <text x={CX} y={CY - 5} textAnchor="middle" dominantBaseline="middle"
-        style={{ fontSize: 14, fontWeight: 700, fill: '#0f172a', fontFamily: 'Outfit,Inter,sans-serif' }}>
+        style={{ fontSize: 17, fontWeight: 800, fill: '#0f172a', fontFamily: 'Outfit,Inter,sans-serif' }}>
         {pct}%
       </text>
       <text x={CX} y={CY + 12} textAnchor="middle" dominantBaseline="middle"
-        style={{ fontSize: 8, fill: '#6b7280', fontFamily: 'Outfit,Inter,sans-serif' }}>
+        style={{ fontSize: 9, fill: '#6b7280', fontWeight: 600, fontFamily: 'Outfit,Inter,sans-serif' }}>
         Completed
       </text>
     </svg>
@@ -577,12 +588,160 @@ const SchoolDashboard = ({ user, onLogout }) => {
      ══════════════════════════════════════════════════ */
   return (
     <div className="sd-layout">
+      <style>{`
+        /* ── Page Header / Banner ── */
+        .sd-dashboard-header-card {
+          position: relative !important;
+          background-size: cover !important;
+          background-position: center !important;
+          border-radius: 20px !important;
+          padding: 2.25rem 2.5rem !important;
+          min-height: 180px !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: center !important;
+          color: #0f172a !important;
+          margin-bottom: 1.5rem !important;
+          border: 1px solid #e2e8f0 !important;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02) !important;
+        }
+        .sd-header-text-section {
+          max-width: 50% !important;
+          z-index: 2 !important;
+        }
+        .sd-dashboard-header-card h1 {
+          font-size: 1.85rem !important;
+          font-weight: 800 !important;
+          color: #0f172a !important;
+          margin: 0 0 0.5rem 0 !important;
+          letter-spacing: -0.02em !important;
+        }
+        .sd-dashboard-header-card p {
+          font-size: 0.88rem !important;
+          color: #475569 !important;
+          line-height: 1.5 !important;
+          margin: 0 !important;
+          font-weight: 500 !important;
+        }
+        .sd-header-actions-widget {
+          position: absolute !important;
+          bottom: 1.5rem !important;
+          right: 2.5rem !important;
+          display: flex !important;
+          align-items: center !important;
+          gap: 0.75rem !important;
+          z-index: 3 !important;
+        }
+
+        /* Card shadows and style matches */
+        .sd-card {
+          border: 1px solid #e2e8f0 !important;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02) !important;
+        }
+        .sd-stat-row {
+          display: grid !important;
+          grid-template-columns: repeat(6, 1fr) !important;
+          gap: 0.75rem !important;
+          margin-bottom: 1.5rem !important;
+        }
+        @media (max-width: 1200px) {
+          .sd-stat-row {
+            grid-template-columns: repeat(3, 1fr) !important;
+          }
+        }
+        @media (max-width: 600px) {
+          .sd-stat-row {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+        }
+        .sd-stat-card {
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: flex-start !important;
+          gap: 0.75rem !important;
+          padding: 1rem 0.65rem !important;
+          border: 1px solid #e2e8f0 !important;
+          border-top: 3px solid #2563eb !important;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02) !important;
+          background: #ffffff !important;
+          border-radius: 12px !important;
+          min-height: 96px !important;
+        }
+        .sd-stat-card-icon-part {
+          flex-shrink: 0 !important;
+          width: 38px !important;
+          height: 38px !important;
+          border-radius: 8px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.015) !important;
+        }
+        .sd-stat-card-icon-part svg {
+          font-size: 1.25rem !important;
+        }
+        .sd-stat-card-content-part {
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 0.15rem !important;
+          align-items: flex-start !important;
+          flex: 1 !important;
+          overflow: hidden !important;
+        }
+        .sd-stat-value {
+          font-size: 1.35rem !important;
+          font-weight: 800 !important;
+          color: #0f172a !important;
+          line-height: 1.1 !important;
+        }
+        .sd-stat-label {
+          font-size: 0.64rem !important;
+          color: #64748b !important;
+          font-weight: 600 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.01em !important;
+          margin: 0 !important;
+          white-space: nowrap !important;
+          text-overflow: ellipsis !important;
+          overflow: hidden !important;
+          width: 100% !important;
+        }
+        .sd-stat-trend {
+          font-size: 0.68rem !important;
+          font-weight: 700 !important;
+          padding: 2px 8px !important;
+          border-radius: 20px !important;
+          margin-top: 3px !important;
+          display: inline-flex !important;
+        }
+        .sd-tab.active {
+          color: #2563eb !important;
+          border-bottom-color: #2563eb !important;
+        }
+        .sd-badge-active {
+          background-color: rgba(37, 99, 235, 0.1) !important;
+          color: #2563eb !important;
+        }
+        .sd-search {
+          background: #ffffff !important;
+          border: 1px solid #d2e1f0 !important;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03) !important;
+          transition: border-color 0.2s, box-shadow 0.2s !important;
+        }
+        .sd-search:focus-within {
+          border-color: #2563eb !important;
+          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+        }
+      `}</style>
 
       {/* ── Mobile top bar ── */}
       <header className="sd-mobile-header">
         <button className="sd-hamburger" onClick={() => setIsSidebarOpen(true)} aria-label="Open menu"><FiMenu/></button>
-        <span className="sd-mobile-brand">LinguaLab</span>
-        <div style={{ width:34 }}/>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <img src={logoIcon} alt="Logo" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+          <span className="sd-mobile-brand">LinguaLab</span>
+        </div>
+        <div style={{ width: 34 }}/>
       </header>
 
       {/* ── Sidebar backdrop (mobile) ── */}
@@ -593,9 +752,12 @@ const SchoolDashboard = ({ user, onLogout }) => {
           ════════════════════════ */}
       <aside className={`sd-sidebar${isSidebarOpen ? ' open' : ''}`}>
         {/* Brand */}
-        <div className="sd-brand">
-          <div className="sd-brand-name">LinguaLab</div>
-          <div className="sd-brand-sub">School Admin Portal</div>
+        <div className="sd-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <img src={logoIcon} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+          <div>
+            <div className="sd-brand-name">LinguaLab</div>
+            <div className="sd-brand-sub">School Admin Portal</div>
+          </div>
         </div>
 
         {/* Nav */}
@@ -681,10 +843,19 @@ const SchoolDashboard = ({ user, onLogout }) => {
           {/* ══════════ OVERVIEW / DASHBOARD TAB ══════════ */}
           {activeSubTab === 'overview' && (
             <>
-              {/* Page header */}
-              <div className="sd-page-header">
-                <h1 className="sd-page-title">Schools</h1>
-                <p className="sd-page-sub">Manage your Institute profile, contact information, courses, and academic details from one centralized dashboard.</p>
+              {/* Premium Dashboard Header Card with Background Image */}
+              <div className="sd-dashboard-header-card" style={{ backgroundImage: `url(${teacherHeaderBanner})`, position: 'relative' }}>
+                <div className="sd-header-text-section" style={{ maxWidth: '50%' }}>
+                  <h1>Welcome back, {profileForm.full_name || user?.username || 'School Admin'}!</h1>
+                  <p>Manage teachers, track student progress, monitor classes, and coordinate academic resources.</p>
+                </div>
+
+                {/* Export Report placed in the bottom-right corner of the card */}
+                <div className="sd-header-actions-widget">
+                  <button className="sd-btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.5rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                    Export Report <FiDownload style={{ fontSize: '0.9rem' }}/>
+                  </button>
+                </div>
               </div>
 
               {/* Stat cards */}
@@ -698,45 +869,92 @@ const SchoolDashboard = ({ user, onLogout }) => {
                   { label:'Average Attendance',  value: statAttend,    color:'#06b6d4', bg:'#cffafe', icon:<FiTrendingUp/>, trend:'+5%' },
                 ].map((s, i) => (
                   <div className="sd-stat-card" key={i}>
-                    <div className="sd-stat-icon-row">
-                      <div className="sd-stat-icon" style={{ background: s.bg, color: s.color }}>
-                        {s.icon}
-                      </div>
+                    <div className="sd-stat-card-icon-part" style={{ background: s.bg, color: s.color }}>
+                      {s.icon}
                     </div>
-                    <div className="sd-stat-value">{s.value}</div>
-                    <div className="sd-stat-label">{s.label}</div>
-                    <span className="sd-stat-trend">{s.trend}</span>
+                    <div className="sd-stat-card-content-part">
+                      <div className="sd-stat-value">{s.value}</div>
+                      <div className="sd-stat-label">{s.label}</div>
+                      <span className="sd-stat-trend">{s.trend}</span>
+                    </div>
                   </div>
                 ))}
               </div>
 
-              {/* Course Completion card */}
-              <div className="sd-card">
-                <div className="sd-card-header">
+              {/* Course Completion donut (Full Width Card) */}
+              <div className="sd-card" style={{ width: '100%', marginBottom: '1.5rem' }}>
+                <div className="sd-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div className="sd-card-title">Course Completion</div>
-                    <div className="sd-card-sub">Course Progress</div>
+                    <div className="sd-card-sub">Class Progress Overview</div>
                   </div>
-                  <span className="sd-card-meta">This Month</span>
+                  <button className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>This Month <FiChevronDown/></button>
                 </div>
-                <div className="sd-completion-grid">
-                  <div className="sd-donut-wrap">
+                <div style={{ display: 'flex', gap: '2.5rem', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', padding: '0.5rem 0' }}>
+                  {/* Left: Donut wrapper */}
+                  <div className="sd-donut-wrap" style={{ display: 'flex', justifyContent: 'center', padding: '0 0.5rem' }}>
                     <DonutChart pct={68}/>
                   </div>
-                  <div className="sd-legend">
+                  
+                  {/* Middle: Legend with progress bars */}
+                  <div className="sd-legend" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: '1.5', minWidth: '300px' }}>
                     {[
-                      { label:'Completed',   color:'#6366f1', pct:'86%' },
-                      { label:'In Progress', color:'#22c55e', pct:'22%' },
-                      { label:'Not Started', color:'#cbd5e1', pct:'10%' },
+                      { label: 'Completed',   color: '#2563eb', pct: '68%' },
+                      { label: 'In Progress', color: '#10b981', pct: '22%' },
+                      { label: 'Not Started', color: '#cbd5e1', pct: '10%' },
                     ].map(l => (
-                      <div className="sd-legend-row" key={l.label}>
-                        <div className="sd-legend-dot-label">
-                          <div className="sd-legend-dot" style={{ background: l.color }}/>
+                      <div className="sd-legend-row" key={l.label} style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.6fr 1.5fr', alignItems: 'center', gap: '1rem', width: '100%' }}>
+                        <div className="sd-legend-dot-label" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.9rem', fontWeight: 600, color: '#475569' }}>
+                          <div className="sd-legend-dot" style={{ width: 10, height: 10, borderRadius: '50%', background: l.color }}/>
                           {l.label}
                         </div>
-                        <span className="sd-legend-pct">{l.pct}</span>
+                        <span className="sd-legend-pct" style={{ fontSize: '0.92rem', fontWeight: 800, color: '#1e293b', textAlign: 'right' }}>{l.pct}</span>
+                        <div style={{ width: '100%', height: 10, background: '#f1f5f9', borderRadius: 5, overflow: 'hidden' }}>
+                          <div style={{ width: l.pct, height: '100%', background: l.color, borderRadius: 5 }}/>
+                        </div>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Right: Completion Insights Box */}
+                  <div style={{
+                    background: '#eff6ff',
+                    borderRadius: '16px',
+                    padding: '1.5rem',
+                    flex: '2',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    border: '1px solid #dbeafe',
+                    minWidth: '320px',
+                    height: '140px'
+                  }}>
+                    <div style={{ position: 'absolute', right: '12px', bottom: '12px', opacity: 0.15 }}>
+                      <svg width="130" height="80" viewBox="0 0 110 70" fill="none">
+                        <path d="M10 60 L28 42 L46 50 L64 25 L82 33 L100 8" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M100 8 L90 8 M100 8 L100 18" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        <rect x="23" y="47" width="7" height="13" fill="#2563eb" rx="1"/>
+                        <rect x="41" y="52" width="7" height="8" fill="#2563eb" rx="1"/>
+                        <rect x="59" y="30" width="7" height="30" fill="#2563eb" rx="1"/>
+                        <rect x="77" y="38" width="7" height="22" fill="#2563eb" rx="1"/>
+                        <rect x="95" y="13" width="7" height="47" fill="#2563eb" rx="1"/>
+                      </svg>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem', zIndex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', background: '#dbeafe', borderRadius: '50%', color: '#2563eb' }}>
+                        <FiActivity style={{ fontSize: '1rem' }}/>
+                      </div>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e40af' }}>Completion Insights</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: '#1e293b', lineHeight: 1.4, zIndex: 1 }}>
+                      Great job! <span style={{ color: '#2563eb' }}>68%</span> of the coursework has been completed this month.
+                    </p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: '#64748b', fontWeight: 500, zIndex: 1 }}>
+                      Keep encouraging your students to stay on track.
+                    </p>
                   </div>
                 </div>
               </div>

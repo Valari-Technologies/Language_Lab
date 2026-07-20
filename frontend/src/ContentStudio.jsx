@@ -11,6 +11,8 @@ import {
   FiUser, FiClock
 } from 'react-icons/fi';
 import './Dashboard.css';
+import contentCreatorHeaderBanner from './assets/content_creator_header_banner.png';
+import logoIcon from './assets/icon.png';
 
 /* ═══════════════════════════════════════════════════════════
    CONTENT STUDIO COMPONENT
@@ -138,45 +140,50 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
           width: 100vw;
           overflow: hidden;
           font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-          background-color: #f8fafc;
+          background-color: #e5ecf4;
           color: #1e293b;
         }
 
         /* ── Sidebar ── */
         .cs-sidebar {
-          width: 250px;
-          background-color: #120e43; /* dark navy */
+          width: 260px;
+          background: linear-gradient(180deg, #006aa6 0%, #005080 100%);
           color: #cbd5e1;
           display: flex;
           flex-direction: column;
           height: 100%;
-          border-right: 1px solid #1e1b4b;
+          border-right: 1px solid rgba(255, 255, 255, 0.03);
           flex-shrink: 0;
+          position: relative;
+          overflow: hidden;
         }
         .cs-brand {
           padding: 1.5rem;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
           display: flex;
-          flex-direction: column;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          align-items: center;
+          gap: 0.65rem;
         }
         .cs-brand-title {
-          font-size: 1.25rem;
-          font-weight: 700;
+          font-size: 1.35rem;
+          font-weight: 800;
           color: #ffffff;
           margin: 0;
-          letter-spacing: 0.02em;
+          letter-spacing: -0.02em;
+          line-height: 1.1;
         }
         .cs-brand-sub {
-          font-size: 0.75rem;
-          color: #94a3b8;
-          margin-top: 2px;
+          font-size: 0.78rem;
+          color: rgba(255, 255, 255, 0.75);
+          margin-top: 1px;
           font-weight: 500;
+          display: block;
         }
         .cs-nav {
-          padding: 1rem 0.75rem;
+          padding: 1.5rem 1rem;
           display: flex;
           flex-direction: column;
-          gap: 0.35rem;
+          gap: 4px;
           flex: 1;
           overflow-y: auto;
           scrollbar-width: none;
@@ -187,41 +194,46 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
         .cs-nav-item {
           display: flex;
           align-items: center;
-          gap: 0.75rem;
-          padding: 0.7rem 0.85rem;
+          gap: 0.85rem;
+          padding: 0.75rem 1rem;
           border: none;
           background: none;
-          color: #cbd5e1;
+          color: rgba(255, 255, 255, 0.9);
           border-radius: 8px;
           cursor: pointer;
-          font-size: 0.86rem;
+          font-size: 0.9rem;
           font-weight: 500;
           text-align: left;
           transition: all 0.2s ease;
           width: 100%;
         }
         .cs-nav-item:hover {
-          background-color: rgba(255, 255, 255, 0.06);
+          background-color: rgba(255, 255, 255, 0.1);
           color: #ffffff;
         }
         .cs-nav-item.active {
-          background: linear-gradient(135deg, #0ea5e9, #0284c7);
-          color: #ffffff;
-          font-weight: 600;
+          background: #ffffff !important;
+          color: #006aa6 !important;
+          font-weight: 700;
+          box-shadow: 0 4px 12px rgba(0, 106, 166, 0.15) !important;
         }
+        .cs-nav-item svg { font-size: 1.15rem; flex-shrink: 0; color: rgba(255, 255, 255, 0.85); transition: color 0.18s; }
+        .cs-nav-item:hover svg { color: #ffffff; }
+        .cs-nav-item.active svg { color: #006aa6 !important; }
         .cs-sidebar-footer {
           padding: 0.75rem;
           border-top: 1px solid rgba(255, 255, 255, 0.08);
           display: flex;
           flex-direction: column;
           gap: 0.2rem;
+          z-index: 5;
         }
         .cs-footer-item {
           display: flex;
           align-items: center;
           gap: 0.75rem;
           padding: 0.55rem 0.85rem;
-          color: #94a3b8;
+          color: #cbd5e1;
           background: none;
           border: none;
           cursor: pointer;
@@ -238,11 +250,17 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
         .cs-profile-card {
           margin-top: 0.5rem;
           padding: 0.65rem 0.75rem;
-          background-color: #0b092b;
+          background: rgba(255, 255, 255, 0.01);
           border-radius: 10px;
           display: flex;
           align-items: center;
           gap: 0.65rem;
+          transition: background 0.18s;
+          cursor: pointer;
+          z-index: 5;
+        }
+        .cs-profile-card:hover {
+          background: rgba(255, 255, 255, 0.05);
         }
         .cs-profile-avatar {
           width: 32px;
@@ -270,7 +288,7 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
         }
         .cs-profile-desc {
           font-size: 0.7rem;
-          color: #64748b;
+          color: rgba(255, 255, 255, 0.6);
         }
 
         /* ── Main Area ── */
@@ -283,8 +301,8 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
         }
         .cs-header {
           height: 60px;
-          border-bottom: 1px solid #e2e8f0;
-          background-color: #ffffff;
+          border-bottom: none;
+          background-color: #e5ecf4;
           padding: 0 1.5rem;
           display: flex;
           align-items: center;
@@ -304,18 +322,22 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
         }
         .cs-search-input {
           width: 380px;
-          background-color: #f1f5f9;
-          border: 1px solid transparent;
+          background-color: #ffffff;
+          border: none;
           border-radius: 20px;
           padding: 0.5rem 1rem 0.5rem 2.25rem;
           font-size: 0.84rem;
           transition: all 0.2s;
+          color: #0f172a;
+        }
+        .cs-search-input::placeholder {
+          color: #94a3b8;
         }
         .cs-search-input:focus {
           background-color: #ffffff;
           border-color: #0284c7;
           outline: none;
-          box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
+          box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
         }
         .cs-header-actions {
           display: flex;
@@ -326,15 +348,14 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
           background: none;
           border: none;
           cursor: pointer;
-          color: #64748b;
+          color: #475569;
           font-size: 1.15rem;
           display: flex;
-          align-items: center;
-          justify-content: center;
+          transition: color 0.2s;
           position: relative;
         }
         .cs-icon-btn:hover {
-          color: #0f172a;
+          color: #0284c7;
         }
         .cs-avatar-img {
           width: 32px;
@@ -344,19 +365,33 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
           border: 1.5px solid #e2e8f0;
         }
 
+
+
         .cs-body {
           flex: 1;
           padding: 1.5rem;
           overflow-y: auto;
         }
 
+        /* Override banner card to remove border */
+        .sd-dashboard-header-card {
+          border: none !important;
+          background-size: cover !important;
+          background-position: center right !important;
+          background-color: transparent !important;
+        }
+
         /* ── Custom Cards ── */
         .cs-card {
           background-color: #ffffff;
-          border-radius: 12px;
+          border-radius: 16px;
           border: 1px solid #e2e8f0;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+          box-shadow: 0 6px 15px rgba(0, 0, 0, 0.03), 0 1px 3px rgba(0, 0, 0, 0.02);
           padding: 1.25rem 1.5rem;
+          transition: box-shadow 0.3s ease;
+        }
+        .cs-card:hover {
+          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05), 0 2px 5px rgba(0, 0, 0, 0.02);
         }
         .cs-card-header {
           display: flex;
@@ -421,12 +456,34 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
         }
         .cs-stat-card {
           background: #ffffff;
-          border-radius: 12px;
+          border-radius: 16px;
           border: 1px solid #e2e8f0;
-          padding: 1.25rem;
+          padding: 1.5rem 1.25rem;
           display: flex;
           flex-direction: column;
           position: relative;
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02), 0 1px 3px rgba(0, 0, 0, 0.03);
+          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s ease;
+          overflow: hidden;
+        }
+        .cs-stat-card::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 4px;
+          background-color: #0284c7;
+          opacity: 0.8;
+          transition: height 0.3s ease;
+        }
+        .cs-stat-card:hover {
+          transform: translateY(-6px);
+          border-color: #bae6fd;
+          box-shadow: 0 15px 30px rgba(0, 0, 0, 0.06), 0 5px 10px rgba(0, 0, 0, 0.02);
+        }
+        .cs-stat-card:hover::before {
+          height: 6px;
         }
         .cs-stat-val-row {
           display: flex;
@@ -552,6 +609,42 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
           border-color: #0252cc;
         }
 
+        /* Quick Actions Card */
+        .cs-quick-action-card {
+          cursor: pointer;
+          padding: 1.5rem 1.25rem;
+          border-radius: 16px;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          border: 1px solid #f1f5f9;
+          background: #ffffff;
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02), 0 1px 3px rgba(0, 0, 0, 0.03);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          position: relative;
+          overflow: hidden;
+        }
+        .cs-quick-action-card::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 4px;
+          background-color: #0284c7;
+          opacity: 0.8;
+          transition: height 0.3s ease;
+        }
+        .cs-quick-action-card:hover {
+          transform: translateY(-6px);
+          border-color: #bae6fd;
+          box-shadow: 0 15px 30px rgba(0, 0, 0, 0.08), 0 5px 10px rgba(0, 0, 0, 0.03);
+          background-color: #fbfcfe;
+        }
+        .cs-quick-action-card:hover::before {
+          height: 6px;
+        }
+
         /* Screen Builder Elements */
         .cs-element-card {
           border: 1px solid #e2e8f0;
@@ -584,8 +677,11 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
       {/* ── Sidebar ── */}
       <aside className="cs-sidebar">
         <div className="cs-brand">
-          <h2 className="cs-brand-title">LinguaLab</h2>
-          <span className="cs-brand-sub">Admin Portal</span>
+          <img src={logoIcon} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+          <div>
+            <h2 className="cs-brand-title">LinguaLab</h2>
+            <span className="cs-brand-sub">Content Studio</span>
+          </div>
         </div>
 
         <nav className="cs-nav">
@@ -657,18 +753,21 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
           {/* ───────────────── VIEW 1: STUDIO DASHBOARD (Image 2) ───────────────── */}
           {view === 'dashboard' && (
             <>
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: 0 }}>Dashboard</h1>
-                <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' }}>Welcome back, Aisha! Here's what's happening.</p>
+              {/* Premium Dashboard Header Card with Background Image */}
+              <div className="sd-dashboard-header-card" style={{ backgroundImage: `url(${contentCreatorHeaderBanner})`, position: 'relative' }}>
+                <div className="sd-header-text-section" style={{ maxWidth: '60%' }}>
+                  <h1>Welcome back, Aisha!</h1>
+                  <p>Empowering Better Learning Experiences.<br />Create, organize, and publish engaging educational content with ease.</p>
+                </div>
               </div>
 
               {/* 4 Stats Cards */}
               <div className="cs-stat-row">
                 {[
-                  { label: 'Total Experiences', value: '128', icon: <FiFileText style={{ color: '#0284c7' }}/>, bg: '#e0f2fe', trend: '↑ 12 this month', trendBg: '#dcfce7', trendColor: '#15803d' },
-                  { label: 'Draft Experiences', value: '42', icon: <FiFileText style={{ color: '#ea580c' }}/>, bg: '#ffedd5', trend: '↑ 5 this week', trendBg: '#ffedd5', trendColor: '#ea580c' },
-                  { label: 'Published Experiences', value: '86', icon: <FiCheckCircle style={{ color: '#16a34a' }}/>, bg: '#dcfce7', trend: '↑ 10 this month', trendBg: '#dcfce7', trendColor: '#16a34a' },
-                  { label: 'Total Media Assets', value: '532', icon: <FiImage style={{ color: '#7c3aed' }}/>, bg: '#f3e8ff', trend: '↑ 20 this month', trendBg: '#f3e8ff', trendColor: '#7c3aed' },
+                  { label: 'Total Experiences', value: '128', icon: <FiFileText style={{ color: '#0284c7', fontSize: '1.5rem' }}/>, bg: '#e0f2fe', trend: '↑ 12 this month', trendBg: '#dcfce7', trendColor: '#15803d' },
+                  { label: 'Draft Experiences', value: '42', icon: <FiFileText style={{ color: '#ea580c', fontSize: '1.5rem' }}/>, bg: '#ffedd5', trend: '↑ 5 this week', trendBg: '#ffedd5', trendColor: '#ea580c' },
+                  { label: 'Published Experiences', value: '86', icon: <FiCheckCircle style={{ color: '#16a34a', fontSize: '1.5rem' }}/>, bg: '#dcfce7', trend: '↑ 10 this month', trendBg: '#dcfce7', trendColor: '#16a34a' },
+                  { label: 'Total Media Assets', value: '532', icon: <FiImage style={{ color: '#7c3aed', fontSize: '1.5rem' }}/>, bg: '#f3e8ff', trend: '↑ 20 this month', trendBg: '#f3e8ff', trendColor: '#7c3aed' },
                 ].map((stat, idx) => (
                   <div className="cs-stat-card" key={idx}>
                     <div className="cs-stat-val-row">
@@ -703,7 +802,7 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
                         { label: 'Media Library', desc: 'Upload assets', icon: <FiImage style={{ fontSize: '1.5rem', color: '#7c3aed' }}/>, bg: '#f3e8ff', action: () => setView('media') },
                         { label: 'Publish Center', desc: 'Go live with content', icon: <FiSend style={{ fontSize: '1.5rem', color: '#ea580c' }}/>, bg: '#ffedd5', action: () => setView('publish') },
                       ].map((qa, idx) => (
-                        <div key={idx} onClick={qa.action} style={{ cursor: 'pointer', padding: '1rem', borderRadius: '10px', transition: 'all 0.2s', border: '1px solid #f1f5f9' }} className="cs-element-card">
+                        <div key={idx} onClick={qa.action} className="cs-quick-action-card">
                           <div style={{ background: qa.bg, padding: '0.6rem', borderRadius: '50%', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.5rem auto' }}>
                             {qa.icon}
                           </div>
@@ -820,7 +919,7 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
           {view === 'experiences' && (
             <>
               <div style={{ marginBottom: '1.5rem' }}>
-                <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: 0 }}>Experience Library</h1>
+                <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>Experience Library</h1>
                 <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' }}>Create, manage and organize all learning experiences.</p>
               </div>
 
@@ -2163,7 +2262,7 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
                   <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
                     Experience Builder &nbsp;&gt;&nbsp; At the Restaurant (Grade 4) &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Publish Center</span>
                   </div>
-                  <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: 8, color: '#0f172a' }}>
                     Publish Center <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '10px', padding: '3px 8px', borderRadius: 12, fontWeight: 700 }}>✓ Validation Passed</span>
                   </h1>
                   <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '2px 0 0 0' }}>

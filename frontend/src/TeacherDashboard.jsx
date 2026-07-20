@@ -6,18 +6,20 @@ import {
   FiChevronDown, FiCalendar, FiBell, FiFilter,
   FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
   FiActivity, FiTrendingUp, FiClock, FiAward,
-  FiChevronLeft, FiChevronRight, FiLock
+  FiChevronLeft, FiChevronRight, FiLock, FiArrowRight, FiDownload
 } from 'react-icons/fi';
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
+import teacherHeaderBanner from './assets/teacher_header_banner.png';
+import logoIcon from './assets/icon.png';
 
 /* ─── Static chart data (same as SchoolDashboard reference) ─── */
 const CHART_MONTHS = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
 const CHART_LINES = [
-  { label: 'Weekly',    color: '#6366f1', points: [40, 55, 45, 70, 60, 80] },
-  { label: 'Monthly',   color: '#22c55e', points: [30, 40, 55, 45, 65, 55] },
+  { label: 'Weekly',    color: '#2563eb', points: [40, 55, 45, 70, 60, 80] },
+  { label: 'Monthly',   color: '#10b981', points: [30, 40, 55, 45, 65, 55] },
   { label: 'Ability',   color: '#f97316', points: [55, 35, 60, 50, 40, 70] },
-  { label: 'Authority', color: '#a78bfa', points: [25, 45, 35, 60, 50, 45] },
+  { label: 'Authority', color: '#a855f7', points: [25, 45, 35, 60, 50, 45] },
 ];
 const RECENT_ACTIVITY = [
   { id: 1, name: 'John Doe',      color: '#6366f1', desc: 'Completed lesson on "Tenses"',  time: '10:32 AM' },
@@ -32,19 +34,29 @@ const DonutChart = ({ pct = 68 }) => {
   const circ = 2 * Math.PI * R;
   const filled = (pct / 100) * circ;
   return (
-    <svg viewBox="0 0 120 120" width="130" height="130" className="sd-donut-svg">
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#e8edf5" strokeWidth="12"/>
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#6366f1" strokeWidth="12"
+    <svg viewBox="0 0 120 120" width="160" height="160" className="sd-donut-svg" style={{ overflow: 'visible' }}>
+      <defs>
+        <linearGradient id="donutGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#2563eb" />
+          <stop offset="100%" stopColor="#0ea5e9" />
+        </linearGradient>
+        <filter id="donutShadow" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="8" stdDeviation="6" floodColor="#2563eb" floodOpacity="0.45" />
+        </filter>
+      </defs>
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f1f5f9" strokeWidth="10"/>
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="url(#donutGrad)" strokeWidth="12"
         strokeDasharray={`${filled} ${circ}`} strokeLinecap="round"
         transform={`rotate(-90 ${CX} ${CY})`}
+        filter="url(#donutShadow)"
         style={{ transition: 'stroke-dasharray 0.8s ease' }}
       />
       <text x={CX} y={CY - 5} textAnchor="middle" dominantBaseline="middle"
-        style={{ fontSize: 14, fontWeight: 700, fill: '#0f172a', fontFamily: 'Outfit,Inter,sans-serif' }}>
+        style={{ fontSize: 17, fontWeight: 800, fill: '#0f172a', fontFamily: 'Outfit,Inter,sans-serif' }}>
         {pct}%
       </text>
       <text x={CX} y={CY + 12} textAnchor="middle" dominantBaseline="middle"
-        style={{ fontSize: 8, fill: '#6b7280', fontFamily: 'Outfit,Inter,sans-serif' }}>
+        style={{ fontSize: 9, fill: '#6b7280', fontFamily: 'Outfit,Inter,sans-serif', fontWeight: 600 }}>
         Completed
       </text>
     </svg>
@@ -340,162 +352,335 @@ const TeacherDashboard = ({ user, onLogout }) => {
     <div className="sd-layout">
       {/* ── Scoped Teacher Dashboard Luminous Slate Theme Styling ── */}
       <style>{`
-        /* Luminous Slate Palette Overrides */
+        /* Scoped Teacher Dashboard Style Overrides matching the reference image */
         :root {
-          --main-bg: #F8FAFC !important; /* slate-50 - crisp, bright slate-white main body */
-          --accent: #4F46E5 !important;  /* indigo-600 - active indigo buttons */
-          --accent-hover: #4338CA !important;
+          --main-bg: #e5ecf4 !important; 
+          --accent: #2563eb !important;  
+          --accent-hover: #1d4ed8 !important;
+          --sidebar-bg-top: #006aa6;
+          --sidebar-bg-bot: #005080;
         }
 
-        /* ── Sidebar Pane (Dark Slate #0F172A / bg-slate-900) ── */
-        .sd-sidebar {
-          background: #0f172a !important;
-          border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+        /* ── Premium Dashboard Header Card ── */
+        .sd-dashboard-header-card {
+          background-color: #d5e3f2 !important;
+          background-size: cover !important;
+          background-position: center right !important;
+          background-repeat: no-repeat !important;
+          border: 1px solid #b9cde3 !important;
+          border-radius: 16px !important;
+          padding: 2.2rem 2.5rem !important;
+          position: relative !important;
+          min-height: 180px !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: center !important;
+          margin-bottom: 1.5rem !important;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02) !important;
+          overflow: hidden !important;
         }
+        .sd-header-text-section {
+          max-width: 50% !important;
+          z-index: 2 !important;
+        }
+        .sd-header-text-section h1 {
+          font-size: 1.85rem !important;
+          font-weight: 800 !important;
+          color: #0f172a !important;
+          display: flex !important;
+          align-items: center !important;
+          gap: 0.5rem !important;
+          margin: 0 !important;
+        }
+        .sd-header-text-section p {
+          font-size: 0.9rem !important;
+          color: #475569 !important;
+          line-height: 1.5 !important;
+          margin-top: 8px !important;
+        }
+        .sd-platform-status-widget {
+          position: absolute !important;
+          top: 1.5rem !important;
+          right: 2.5rem !important;
+          background: #ffffff !important;
+          border: 1px solid #e2e8f0 !important;
+          border-radius: 12px !important;
+          padding: 0.65rem 1rem !important;
+          display: flex !important;
+          align-items: center !important;
+          gap: 0.75rem !important;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03) !important;
+          z-index: 2 !important;
+        }
+        .sd-status-dot-glowing {
+          width: 8px !important;
+          height: 8px !important;
+          background-color: #10b981 !important;
+          border-radius: 50% !important;
+          box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25) !important;
+          animation: sd-pulse 2s infinite !important;
+        }
+        @keyframes sd-pulse {
+          0% { box-shadow: 0 0 0 0px rgba(16, 185, 129, 0.4); }
+          70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+          100% { box-shadow: 0 0 0 0px rgba(16, 185, 129, 0); }
+        }
+        .sd-status-text-stack {
+          display: flex !important;
+          flex-direction: column !important;
+        }
+        .sd-status-text-title {
+          font-size: 0.85rem !important;
+          font-weight: 700 !important;
+        }
+        .sd-status-text-sub {
+          font-size: 0.72rem !important;
+          color: #64748b !important;
+          margin-top: 1px !important;
+        }
+        .sd-header-actions-widget {
+          position: absolute !important;
+          bottom: 1.5rem !important;
+          right: 2.5rem !important;
+          display: flex !important;
+          align-items: center !important;
+          gap: 0.75rem !important;
+          z-index: 2 !important;
+        }
+
+        /* ── Sidebar Pane (Solid/Deep Navy Blue) ── */
+        .sd-sidebar {
+          background: linear-gradient(180deg, #006aa6 0%, #005080 100%) !important;
+          border-right: 1px solid rgba(255, 255, 255, 0.03) !important;
+          position: relative;
+          overflow: hidden;
+          width: 260px !important;
+        }
+
         .sd-brand {
-          border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+          padding: 1.75rem 1.5rem 1.5rem !important;
         }
         .sd-brand-name {
           color: #ffffff !important;
+          font-size: 1.35rem !important;
+          font-weight: 800 !important;
+          letter-spacing: -0.02em !important;
         }
         .sd-brand-sub {
-          color: rgba(255, 255, 255, 0.5) !important;
+          color: rgba(255, 255, 255, 0.6) !important;
+          font-size: 0.78rem !important;
+          font-weight: 500 !important;
+        }
+        .sd-nav {
+          padding: 1.5rem 1rem !important;
+          gap: 4px !important;
         }
         .sd-nav-item {
-          color: rgba(255, 255, 255, 0.7) !important;
-          border-left: none !important;
+          color: rgba(255, 255, 255, 0.9) !important;
+          padding: 0.75rem 1rem !important;
+          font-size: 0.9rem !important;
+          font-weight: 500 !important;
           border-radius: 8px !important;
-          transition: background 0.15s, color 0.15s;
+          background: transparent !important;
         }
         .sd-nav-item svg {
-          color: rgba(255, 255, 255, 0.6) !important;
+          color: rgba(255, 255, 255, 0.85) !important;
+          font-size: 1.15rem !important;
         }
         .sd-nav-item:hover {
-          background-color: rgba(255, 255, 255, 0.05) !important; /* bg-white/5 */
+          background-color: rgba(255, 255, 255, 0.1) !important;
           color: #ffffff !important;
         }
         .sd-nav-item.active {
-          background-color: rgba(255, 255, 255, 0.1) !important;  /* bg-white/10 */
-          color: #ffffff !important;
-          font-weight: 600 !important;
-          border-left: none !important;
+          background: #ffffff !important;
+          color: #006aa6 !important;
+          font-weight: 700 !important;
+          box-shadow: 0 4px 12px rgba(0, 106, 166, 0.15) !important;
         }
         .sd-nav-item.active svg {
-          color: #ffffff !important;
+          color: #006aa6 !important;
         }
         .sd-footer {
-          border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+          border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
+          z-index: 5;
         }
         .sd-footer-link {
           color: rgba(255, 255, 255, 0.7) !important;
-          border-left: none !important;
+          padding: 0.75rem 1rem !important;
+          font-size: 0.9rem !important;
         }
         .sd-footer-link svg {
-          color: rgba(255, 255, 255, 0.6) !important;
+          color: rgba(255, 255, 255, 0.7) !important;
         }
         .sd-footer-link:hover {
           background-color: rgba(255, 255, 255, 0.05) !important;
           color: #ffffff !important;
         }
         .sd-footer-link.danger {
-          color: #f87171 !important; /* red-400 */
+          color: #f87171 !important;
         }
         .sd-footer-link.danger:hover {
           background-color: rgba(239, 68, 68, 0.1) !important;
           color: #f87171 !important;
         }
         .sd-user-card {
-          border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-          background: rgba(255, 255, 255, 0.03) !important;
+          border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
+          background: rgba(255, 255, 255, 0.01) !important;
+          padding: 1.1rem 1.25rem !important;
+          z-index: 5;
+        }
+        .sd-user-card:hover {
+          background: rgba(255, 255, 255, 0.05) !important;
         }
         .sd-user-name {
           color: #ffffff !important;
+          font-size: 0.9rem !important;
         }
         .sd-user-role {
           color: rgba(255, 255, 255, 0.5) !important;
+          font-size: 0.75rem !important;
         }
         .sd-user-avatar {
-          background: rgba(255, 255, 255, 0.15) !important;
+          background: linear-gradient(135deg, #2563eb, #0ea5e9) !important;
           color: #ffffff !important;
-          font-weight: 700;
+          width: 38px !important;
+          height: 38px !important;
+          font-size: 0.85rem !important;
         }
         .sd-user-chevron {
           color: rgba(255, 255, 255, 0.5) !important;
         }
 
-        /* ── Top Header Navbar (Clean White with Slate-100 backgrounds) ── */
+        /* ── Top Header Navbar ── */
         .sd-topbar {
-          background: #ffffff !important;
+          background: var(--main-bg) !important;
           border-bottom: 1px solid #e2e8f0 !important;
         }
         .sd-search {
-          background: #f1f5f9 !important; /* slate-100 inputs */
+          background: #ffffff !important;
+          border: 1px solid #d2e1f0 !important;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03) !important;
+          transition: border-color 0.2s, box-shadow 0.2s !important;
+        }
+        .sd-search:focus-within {
+          border-color: #2563eb !important;
+          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
         }
         .sd-search svg {
           color: #94a3b8 !important;
         }
         .sd-search input {
           color: #0f172a !important;
-          font-weight: 500;
         }
         .sd-search input::placeholder {
           color: #94a3b8 !important;
         }
-        .sd-notif-btn {
-          background: #ffffff !important;
-          color: #475569 !important;
-          border: 1px solid #e2e8f0 !important;
-        }
-        .sd-notif-btn svg {
-          color: #475569 !important;
-        }
-        .sd-notif-btn:hover {
-          background: #f8fafc !important;
-        }
-        .sd-year-badge {
-          background: #ffffff !important;
-          color: #475569 !important;
-          border: 1px solid #e2e8f0 !important;
-        }
-        .sd-year-badge svg {
-          color: #475569 !important;
-        }
-        .sd-icon-btn {
-          background: #ffffff !important;
-          color: #475569 !important;
-          border: 1px solid #e2e8f0 !important;
-        }
-        .sd-icon-btn svg {
-          color: #475569 !important;
-        }
-        .sd-icon-btn:hover {
-          background: #f8fafc !important;
-        }
 
-        /* ── Inside Dashboard Buttons & Indicators ── */
+        /* Card shadows and style matches */
+        .sd-card {
+          border: 1px solid #e2e8f0 !important;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02) !important;
+        }
+        .sd-stat-row {
+          display: grid !important;
+          grid-template-columns: repeat(6, 1fr) !important;
+          gap: 0.75rem !important;
+          margin-bottom: 1.5rem !important;
+        }
+        @media (max-width: 1200px) {
+          .sd-stat-row {
+            grid-template-columns: repeat(3, 1fr) !important;
+          }
+        }
+        @media (max-width: 600px) {
+          .sd-stat-row {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+        }
+        .sd-stat-card {
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: flex-start !important;
+          gap: 0.75rem !important;
+          padding: 1rem 0.65rem !important;
+          border: 1px solid #e2e8f0 !important;
+          border-top: 3px solid #2563eb !important;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02) !important;
+          background: #ffffff !important;
+          border-radius: 12px !important;
+          min-height: 96px !important;
+        }
+        .sd-stat-card-icon-part {
+          flex-shrink: 0 !important;
+          width: 38px !important;
+          height: 38px !important;
+          border-radius: 8px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.015) !important;
+        }
+        .sd-stat-card-icon-part svg {
+          font-size: 1.25rem !important;
+        }
+        .sd-stat-card-content-part {
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 0.15rem !important;
+          align-items: flex-start !important;
+          flex: 1 !important;
+          overflow: hidden !important;
+        }
+        .sd-stat-value {
+          font-size: 1.35rem !important;
+          font-weight: 800 !important;
+          color: #0f172a !important;
+          line-height: 1.1 !important;
+        }
+        .sd-stat-label {
+          font-size: 0.64rem !important;
+          color: #64748b !important;
+          font-weight: 600 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.01em !important;
+          margin: 0 !important;
+          white-space: nowrap !important;
+          text-overflow: ellipsis !important;
+          overflow: hidden !important;
+          width: 100% !important;
+        }
+        .sd-stat-trend {
+          font-size: 0.68rem !important;
+          font-weight: 700 !important;
+          padding: 2px 8px !important;
+          border-radius: 20px !important;
+          margin-top: 3px !important;
+          display: inline-flex !important;
+        }
         .sd-btn-primary {
-          background: #4F46E5 !important;
+          background: #2563eb !important;
         }
         .sd-btn-primary:hover {
-          background: #4338CA !important;
+          background: #1d4ed8 !important;
         }
         .sd-tab.active {
-          color: #4F46E5 !important;
-          border-bottom-color: #4F46E5 !important;
+          color: #2563eb !important;
+          border-bottom-color: #2563eb !important;
         }
         .sd-badge-active {
-          background-color: rgba(79, 70, 229, 0.1) !important;
-          color: #4F46E5 !important;
-        }
-        .sd-stat-card svg {
-          color: #4F46E5 !important;
+          background-color: rgba(37, 99, 235, 0.1) !important;
+          color: #2563eb !important;
         }
       `}</style>
 
       {/* ── Mobile top bar ── */}
       <header className="sd-mobile-header">
         <button className="sd-hamburger" onClick={() => setIsSidebarOpen(true)} aria-label="Open menu"><FiMenu/></button>
-        <span className="sd-mobile-brand">LinguaLab</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <img src={logoIcon} alt="Logo" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+          <span className="sd-mobile-brand">LinguaLab</span>
+        </div>
         <div style={{ width: 34 }}/>
       </header>
 
@@ -507,9 +692,12 @@ const TeacherDashboard = ({ user, onLogout }) => {
           ═════════════════ */}
       <aside className={`sd-sidebar${isSidebarOpen ? ' open' : ''}`}>
         {/* Brand */}
-        <div className="sd-brand">
-          <div className="sd-brand-name">LinguaLab</div>
-          <div className="sd-brand-sub">Teacher Portal</div>
+        <div className="sd-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <img src={logoIcon} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+          <div>
+            <div className="sd-brand-name">LinguaLab</div>
+            <div className="sd-brand-sub">Teacher Portal</div>
+          </div>
         </div>
 
         {/* Nav */}
@@ -589,83 +777,147 @@ const TeacherDashboard = ({ user, onLogout }) => {
           {/* ══════════ OVERVIEW / DASHBOARD ══════════ */}
           {activeSubTab === 'overview' && (
             <>
-              <div className="sd-page-header">
-                <h1 className="sd-page-title">Teacher Dashboard</h1>
-                <p className="sd-page-sub">Monitor class performance, review schedules, and track student progress.</p>
+              {/* Premium Dashboard Header Card with Background Image */}
+              <div className="sd-dashboard-header-card" style={{ backgroundImage: `url(${teacherHeaderBanner})` }}>
+                <div className="sd-header-text-section">
+                  <h1>Welcome back, Teacher 01!</h1>
+                  <p>Manage classes, track student progress, coordinate learning scenarios, and review academic performance.</p>
+                </div>
+
+                {/* Header Actions Widget (Export Report only) */}
+                <div className="sd-header-actions-widget">
+                  <button className="sd-btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.5rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                    Export Report <FiDownload style={{ fontSize: '0.9rem' }}/>
+                  </button>
+                </div>
               </div>
 
               {/* Stat cards */}
               <div className="sd-stat-row">
                 {[
-                  { label: 'Assigned Classes',  value: statClasses,   color: '#22c55e', bg: '#dcfce7', icon: <FiBookOpen/>,   trend: '+2%'  },
-                  { label: 'Total Students',    value: statStudents,  color: '#3b82f6', bg: '#dbeafe', icon: <FiUsers/>,      trend: '+12%' },
-                  { label: 'Active Experiences',  value: statExperiences, color: '#a855f7', bg: '#f3e8ff', icon: <FiFileText/>,   trend: '+5%'  },
+                  { label: 'Assigned Classes', value: statClasses, color: '#22c55e', bg: '#dcfce7', icon: <FiBookOpen />, trend: '+2%' },
+                  { label: 'Total Students', value: statStudents, color: '#3b82f6', bg: '#dbeafe', icon: <FiUsers />, trend: '+12%' },
+                  { label: 'Active Experiences', value: statExperiences, color: '#a855f7', bg: '#f3e8ff', icon: <FiFileText />, trend: '+5%' },
                   { label: "Today's Lessons",   value: statLessons,   color: '#f97316', bg: '#ffedd5', icon: <FiClock/>,      trend: '0%'   },
                   { label: 'Avg Student Score', value: '—',           color: '#06b6d4', bg: '#cffafe', icon: <FiAward/>,      trend: '—'    },
                   { label: 'Completion Rate',   value: '—',           color: '#10b981', bg: '#d1fae5', icon: <FiTrendingUp/>, trend: '—'    },
                 ].map((s, i) => (
                   <div className="sd-stat-card" key={i}>
-                    <div className="sd-stat-icon-row">
-                      <div className="sd-stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
+                    <div className="sd-stat-card-icon-part" style={{ background: s.bg, color: s.color }}>
+                      {s.icon}
                     </div>
-                    <div className="sd-stat-value">{s.value}</div>
-                    <div className="sd-stat-label">{s.label}</div>
-                    <span className="sd-stat-trend">{s.trend}</span>
+                    <div className="sd-stat-card-content-part">
+                      <div className="sd-stat-value">{s.value}</div>
+                      <div className="sd-stat-label">{s.label}</div>
+                      <span className="sd-stat-trend">{s.trend}</span>
+                    </div>
                   </div>
                 ))}
               </div>
 
-              {/* Course Completion donut */}
-              <div className="sd-card">
-                <div className="sd-card-header">
+              {/* Course Completion donut (Full Width Card) */}
+              <div className="sd-card" style={{ width: '100%', marginBottom: '1.5rem' }}>
+                <div className="sd-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div className="sd-card-title">Course Completion</div>
-                    <div className="sd-card-sub">Class Progress</div>
+                    <div className="sd-card-sub">Class Progress Overview</div>
                   </div>
-                  <span className="sd-card-meta">This Month</span>
+                  <button className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>This Month <FiChevronDown/></button>
                 </div>
-                <div className="sd-completion-grid">
-                  <div className="sd-donut-wrap">
+                <div style={{ display: 'flex', gap: '2.5rem', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', padding: '0.5rem 0' }}>
+                  {/* Left: Donut wrapper */}
+                  <div className="sd-donut-wrap" style={{ display: 'flex', justifyContent: 'center', padding: '0 0.5rem' }}>
                     <DonutChart pct={68}/>
                   </div>
-                  <div className="sd-legend">
+                  
+                  {/* Middle: Legend with progress bars */}
+                  <div className="sd-legend" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: '1.5', minWidth: '300px' }}>
                     {[
-                      { label: 'Completed',   color: '#6366f1', pct: '68%' },
-                      { label: 'In Progress', color: '#22c55e', pct: '22%' },
+                      { label: 'Completed',   color: '#2563eb', pct: '68%' },
+                      { label: 'In Progress', color: '#10b981', pct: '22%' },
                       { label: 'Not Started', color: '#cbd5e1', pct: '10%' },
                     ].map(l => (
-                      <div className="sd-legend-row" key={l.label}>
-                        <div className="sd-legend-dot-label">
-                          <div className="sd-legend-dot" style={{ background: l.color }}/>
+                      <div className="sd-legend-row" key={l.label} style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.6fr 1.5fr', alignItems: 'center', gap: '1rem', width: '100%' }}>
+                        <div className="sd-legend-dot-label" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.9rem', fontWeight: 600, color: '#475569' }}>
+                          <div className="sd-legend-dot" style={{ width: 10, height: 10, borderRadius: '50%', background: l.color }}/>
                           {l.label}
                         </div>
-                        <span className="sd-legend-pct">{l.pct}</span>
+                        <span className="sd-legend-pct" style={{ fontSize: '0.92rem', fontWeight: 800, color: '#1e293b', textAlign: 'right' }}>{l.pct}</span>
+                        <div style={{ width: '100%', height: 10, background: '#f1f5f9', borderRadius: 5, overflow: 'hidden' }}>
+                          <div style={{ width: l.pct, height: '100%', background: l.color, borderRadius: 5 }}/>
+                        </div>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Right: Completion Insights Box */}
+                  <div style={{
+                    background: '#eff6ff',
+                    borderRadius: '16px',
+                    padding: '1.5rem',
+                    flex: '2',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    border: '1px solid #dbeafe',
+                    minWidth: '320px',
+                    height: '140px'
+                  }}>
+                    <div style={{ position: 'absolute', right: '12px', bottom: '12px', opacity: 0.15 }}>
+                      <svg width="130" height="80" viewBox="0 0 110 70" fill="none">
+                        <path d="M10 60 L28 42 L46 50 L64 25 L82 33 L100 8" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M100 8 L90 8 M100 8 L100 18" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        <rect x="23" y="47" width="7" height="13" fill="#2563eb" rx="1"/>
+                        <rect x="41" y="52" width="7" height="8" fill="#2563eb" rx="1"/>
+                        <rect x="59" y="30" width="7" height="30" fill="#2563eb" rx="1"/>
+                        <rect x="77" y="38" width="7" height="22" fill="#2563eb" rx="1"/>
+                        <rect x="95" y="13" width="7" height="47" fill="#2563eb" rx="1"/>
+                      </svg>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem', zIndex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', background: '#dbeafe', borderRadius: '50%', color: '#2563eb' }}>
+                        <FiActivity style={{ fontSize: '1rem' }}/>
+                      </div>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e40af' }}>Completion Insights</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: '#1e293b', lineHeight: 1.4, zIndex: 1 }}>
+                      Great job! <span style={{ color: '#2563eb' }}>68%</span> of the coursework has been completed this month.
+                    </p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: '#64748b', fontWeight: 500, zIndex: 1 }}>
+                      Keep encouraging your students to stay on track.
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* Bottom two-col grid */}
-              <div className="sd-bottom-grid">
+
+
+              {/* Row 3: Student Performance (left) and Student Activity (right) side by side */}
+              <div className="sd-bottom-grid" style={{ gridTemplateColumns: '1.4fr 1fr', marginBottom: '1.5rem' }}>
                 {/* Student Performance Chart */}
-                <div className="sd-card">
-                  <div className="sd-card-header">
+                <div className="sd-card" style={{ margin: 0 }}>
+                  <div className="sd-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem' }}>
                     <div>
                       <div className="sd-card-title">Student Performance</div>
                       <div className="sd-card-sub">Active Students</div>
                     </div>
-                    <span className="sd-card-meta">This Month</span>
+                    <button className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>This Month <FiChevronDown/></button>
                   </div>
-                  <div className="sd-chart-legend">
+                  
+                  {/* Legend items directly under the header */}
+                  <div className="sd-chart-legend" style={{ display: 'flex', gap: '1rem', border: 'none', margin: '0.25rem 0 1rem 0', padding: 0 }}>
                     {CHART_LINES.map(l => (
-                      <div className="sd-chart-legend-item" key={l.label}>
-                        <div className="sd-chart-legend-dot" style={{ background: l.color }}/>
+                      <div className="sd-chart-legend-item" key={l.label} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', fontWeight: 600, color: '#64748b' }}>
+                        <div className="sd-chart-legend-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: l.color }}/>
                         {l.label}
                       </div>
                     ))}
                   </div>
-                  <div className="sd-chart-wrap">
+
+                  <div className="sd-chart-wrap" style={{ marginTop: '0.5rem' }}>
                     <LineChart lines={CHART_LINES}/>
                   </div>
                   <div className="sd-x-labels">
@@ -674,9 +926,12 @@ const TeacherDashboard = ({ user, onLogout }) => {
                 </div>
 
                 {/* Recent Student Activity */}
-                <div className="sd-card">
-                  <div className="sd-card-header">
-                    <div className="sd-card-title">Student Activity</div>
+                <div className="sd-card" style={{ margin: 0 }}>
+                  <div className="sd-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div className="sd-card-title">Student Activity</div>
+                      <div className="sd-card-sub">Recent Activities</div>
+                    </div>
                     <button className="sd-view-all" onClick={() => goTo('students')}>View All</button>
                   </div>
                   <div className="sd-activity-list">
@@ -730,6 +985,8 @@ const TeacherDashboard = ({ user, onLogout }) => {
                   </div>
                 </div>
               )}
+
+              {/* Bottom Banner removed */}
             </>
           )}
 

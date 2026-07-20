@@ -4,6 +4,12 @@
   padding: 0;
 }
 
+/* Hide default password reveal eye icon in Edge/IE */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
 html, body, #root {
   height: 100vh;
   margin: 0;

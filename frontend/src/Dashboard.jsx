@@ -7,15 +7,17 @@ import {
   FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
   FiActivity, FiTrendingUp, FiAward, FiLock,
   FiChevronLeft, FiChevronRight, FiEye, FiList,
-  FiCornerDownRight, FiXCircle
+  FiCornerDownRight, FiXCircle, FiMoreVertical, FiDownload
 } from 'react-icons/fi';
-import './SchoolDashboard.css';
+import './Dashboard.css';
 import { apiFetch } from './api';
+import dashboardHeaderBanner from './assets/dashboard_header_banner.png';
+import logoIcon from './assets/icon.png';
 
 /* ─── SVG Donut Chart helper ─── */
-const MultiDonutChart = ({ total = 124, activeCount = 110, expiringCount = 9, expiredCount = 5 }) => {
-  const R = 46, CX = 60, CY = 60;
-  const circ = 2 * Math.PI * R; // ~289.02
+const MultiDonutChart = ({ total = 124, activeCount = 78, expiringCount = 28, expiredCount = 18 }) => {
+  const R = 44, CX = 60, CY = 60;
+  const circ = 2 * Math.PI * R; // ~276.46
   const activePct = activeCount / total;
   const expiringPct = expiringCount / total;
   const expiredPct = expiredCount / total;
@@ -25,29 +27,36 @@ const MultiDonutChart = ({ total = 124, activeCount = 110, expiringCount = 9, ex
   const expiredDash = expiredPct * circ;
 
   return (
-    <svg viewBox="0 0 120 120" width="130" height="130" className="sd-donut-svg">
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#e8edf5" strokeWidth="8"/>
-      {/* Active Segment (Green) */}
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#22c55e" strokeWidth="8"
+    <svg viewBox="0 0 120 120" width="135" height="135" className="sd-donut-svg">
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f1f5f9" strokeWidth="12"/>
+      {/* Active Segment (Deep Blue) */}
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#006aa6" strokeWidth="12"
         strokeDasharray={`${activeDash} ${circ}`}
+        strokeLinecap="round"
         transform={`rotate(-90 ${CX} ${CY})`}
       />
-      {/* Expiring Soon Segment (Orange) */}
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f97316" strokeWidth="8"
+      {/* Expiring Soon Segment (Medium Blue-Cyan) */}
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#0ea5e9" strokeWidth="12"
         strokeDasharray={`${expiringDash} ${circ}`}
+        strokeLinecap="round"
         transform={`rotate(${-90 + (activePct * 360)} ${CX} ${CY})`}
       />
-      {/* Expired Segment (Red) */}
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#ef4444" strokeWidth="8"
+      {/* Expired Segment (Light Sky Blue) */}
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#38bdf8" strokeWidth="12"
         strokeDasharray={`${expiredDash} ${circ}`}
+        strokeLinecap="round"
         transform={`rotate(${-90 + ((activePct + expiringPct) * 360)} ${CX} ${CY})`}
       />
-      <text x={CX} y={CY - 5} textAnchor="middle" dominantBaseline="middle"
-        style={{ fontSize: 15, fontWeight: 700, fill: '#0f172a', fontFamily: 'Outfit,Inter,sans-serif' }}>
+      
+      {/* Inner circle for cleaner donut hole */}
+      <circle cx={CX} cy={CY} r={R - 6} fill="#ffffff" />
+
+      <text x={CX} y={CY - 4} textAnchor="middle" dominantBaseline="middle"
+        style={{ fontSize: 16, fontWeight: 800, fill: '#0f172a', fontFamily: 'Outfit,Inter,sans-serif' }}>
         {total}
       </text>
-      <text x={CX} y={CY + 10} textAnchor="middle" dominantBaseline="middle"
-        style={{ fontSize: 8, fill: '#6b7280', fontWeight: 600, fontFamily: 'Outfit,Inter,sans-serif' }}>
+      <text x={CX} y={CY + 11} textAnchor="middle" dominantBaseline="middle"
+        style={{ fontSize: 9, fill: '#64748b', fontWeight: 600, fontFamily: 'Outfit,Inter,sans-serif', letterSpacing: '0.02em' }}>
         Total
       </text>
     </svg>
@@ -56,8 +65,8 @@ const MultiDonutChart = ({ total = 124, activeCount = 110, expiringCount = 9, ex
 
 /* ─── SVG Subscription Plan Distribution Donut helper ─── */
 const DistributionDonutChart = () => {
-  const R = 46, CX = 60, CY = 60;
-  const circ = 2 * Math.PI * R; // ~289.02
+  const R = 44, CX = 60, CY = 60;
+  const circ = 2 * Math.PI * R; // ~276.46
   const basicPct = 0.363;
   const standardPct = 0.306;
   const premiumPct = 0.226;
@@ -71,72 +80,173 @@ const DistributionDonutChart = () => {
   const expiredDash = expiredPct * circ;
 
   return (
-    <svg viewBox="0 0 120 120" width="130" height="130" className="sd-donut-svg">
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#e8edf5" strokeWidth="8"/>
-      {/* Basic (Blue) */}
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#3b82f6" strokeWidth="8"
+    <svg viewBox="0 0 120 120" width="135" height="135" className="sd-donut-svg" style={{ filter: 'drop-shadow(0px 6px 12px rgba(3, 105, 161, 0.15))', transition: 'all 0.3s ease' }}>
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f1f5f9" strokeWidth="12"/>
+      {/* Basic (Dark Navy Blue) */}
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#004e75" strokeWidth="12"
         strokeDasharray={`${basicDash} ${circ}`}
+        strokeLinecap="round"
         transform={`rotate(-90 ${CX} ${CY})`}
       />
-      {/* Standard (Green) */}
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#22c55e" strokeWidth="8"
+      {/* Standard (Deep Blue) */}
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#006aa6" strokeWidth="12"
         strokeDasharray={`${standardDash} ${circ}`}
+        strokeLinecap="round"
         transform={`rotate(${-90 + (basicPct * 360)} ${CX} ${CY})`}
       />
-      {/* Premium (Orange) */}
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f97316" strokeWidth="8"
+      {/* Premium (Medium Blue-Cyan) */}
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#0ea5e9" strokeWidth="12"
         strokeDasharray={`${premiumDash} ${circ}`}
+        strokeLinecap="round"
         transform={`rotate(${-90 + ((basicPct + standardPct) * 360)} ${CX} ${CY})`}
       />
-      {/* Enterprise (Purple) */}
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#a855f7" strokeWidth="8"
+      {/* Enterprise (Light Sky Blue) */}
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#38bdf8" strokeWidth="12"
         strokeDasharray={`${enterpriseDash} ${circ}`}
+        strokeLinecap="round"
         transform={`rotate(${-90 + ((basicPct + standardPct + premiumPct) * 360)} ${CX} ${CY})`}
       />
-      {/* Expired (Red) */}
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#ef4444" strokeWidth="8"
+      {/* Expired / Cancelled (Very Light Blue) */}
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#bae6fd" strokeWidth="12"
         strokeDasharray={`${expiredDash} ${circ}`}
+        strokeLinecap="round"
         transform={`rotate(${-90 + ((basicPct + standardPct + premiumPct + enterprisePct) * 360)} ${CX} ${CY})`}
       />
-      <text x={CX} y={CY - 5} textAnchor="middle" dominantBaseline="middle"
-        style={{ fontSize: 15, fontWeight: 700, fill: '#0f172a', fontFamily: 'Outfit,Inter,sans-serif' }}>
+
+      {/* Inner circle for cleaner donut hole */}
+      <circle cx={CX} cy={CY} r={R - 6} fill="#ffffff" />
+
+      <text x={CX} y={CY - 4} textAnchor="middle" dominantBaseline="middle"
+        style={{ fontSize: 16, fontWeight: 800, fill: '#0f172a', fontFamily: 'Outfit,Inter,sans-serif' }}>
         124
       </text>
-      <text x={CX} y={CY + 10} textAnchor="middle" dominantBaseline="middle"
-        style={{ fontSize: 8, fill: '#6b7280', fontWeight: 600, fontFamily: 'Outfit,Inter,sans-serif' }}>
+      <text x={CX} y={CY + 11} textAnchor="middle" dominantBaseline="middle"
+        style={{ fontSize: 9, fill: '#64748b', fontWeight: 600, fontFamily: 'Outfit,Inter,sans-serif', letterSpacing: '0.02em' }}>
         TOTAL
       </text>
     </svg>
   );
 };
 
+/* ─── SVG Stat Card Mini Charts ─── */
+const MiniLineChart = ({ color, fillGradId, points }) => {
+  return (
+    <svg viewBox="0 0 100 40" width="95" height="38" style={{ overflow: 'visible' }}>
+      <defs>
+        <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.0" />
+        </linearGradient>
+      </defs>
+      <path
+        d={points.map((p, i) => `${i === 0 ? 'M' : 'L'}${i * 25},${40 - p}`).join(' ')}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d={`${points.map((p, i) => `${i === 0 ? 'M' : 'L'}${i * 25},${40 - p}`).join(' ')} L100,40 L0,40 Z`}
+        fill={`url(#${fillGradId})`}
+      />
+      <circle cx="100" cy={40 - points[points.length - 1]} r="3.5" fill={color} stroke="#ffffff" strokeWidth="1.5" />
+    </svg>
+  );
+};
+
+const MiniBarChart = ({ color, values }) => {
+  return (
+    <svg viewBox="0 0 80 40" width="75" height="38">
+      {values.map((v, i) => (
+        <rect
+          key={i}
+          x={i * 12 + 6}
+          y={40 - v}
+          width="6"
+          height={v}
+          rx="2.5"
+          fill={color}
+        />
+      ))}
+    </svg>
+  );
+};
+
 /* ─── SVG Line Chart helper ─── */
 const ActivityLineChart = () => {
-  const W = 400, H = 120;
-  const PAD = { top: 10, right: 12, bottom: 10, left: 12 };
-  const chartW = W - PAD.left - PAD.right;
-  const chartH = H - PAD.top - PAD.bottom;
-  const pts = 5;
-  const toX = (i) => PAD.left + (i / (pts - 1)) * chartW;
-  const toY = (v) => PAD.top + chartH - (v / 8000) * chartH; // scale by 8K max
-
-  // May 15, May 22, May 29, Jun 05, Jun 13
-  const lineActive = [3800, 4800, 3200, 4200, 6000];
-  const lineCompleted = [2000, 2600, 1800, 2900, 2100];
-
-  const getPointsPath = (dataList) => {
-    return dataList.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(i)},${toY(v)}`).join(' ');
-  };
-
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="140" preserveAspectRatio="none" className="sd-chart-svg">
-      {[2000, 4000, 6000, 8000].map(v => (
-        <line key={v} x1={PAD.left} y1={toY(v)} x2={W - PAD.right} y2={toY(v)} stroke="#f3f4f6" strokeWidth="1"/>
-      ))}
-      <path d={getPointsPath(lineActive)} fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
-      {lineActive.map((v, i) => <circle key={`act-${i}`} cx={toX(i)} cy={toY(v)} r="3" fill="#6366f1"/>)}
-      <path d={getPointsPath(lineCompleted)} fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
-      {lineCompleted.map((v, i) => <circle key={`comp-${i}`} cx={toX(i)} cy={toY(v)} r="3" fill="#22c55e"/>)}
+    <svg viewBox="0 0 500 160" width="100%" height="180" style={{ overflow: 'visible' }}>
+      <defs>
+        <filter id="shadow-blue" x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0" dy="4" stdDeviation="4.5" flood-color="#3b82f6" flood-opacity="0.32" />
+        </filter>
+        <filter id="shadow-green" x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0" dy="4" stdDeviation="4.5" flood-color="#10b981" flood-opacity="0.32" />
+        </filter>
+        <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.15" />
+          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
+        </linearGradient>
+        <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#10b981" stopOpacity="0.15" />
+          <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+        </linearGradient>
+      </defs>
+
+      {/* Y-Axis Labels */}
+      <text x="15" y="20" textAnchor="end" dominantBaseline="middle" style={{ fontSize: 10, fill: '#64748b', fontWeight: 600, fontFamily: 'Outfit,Inter,sans-serif' }}>80K</text>
+      <text x="15" y="52.5" textAnchor="end" dominantBaseline="middle" style={{ fontSize: 10, fill: '#64748b', fontWeight: 600, fontFamily: 'Outfit,Inter,sans-serif' }}>60K</text>
+      <text x="15" y="85" textAnchor="end" dominantBaseline="middle" style={{ fontSize: 10, fill: '#64748b', fontWeight: 600, fontFamily: 'Outfit,Inter,sans-serif' }}>40K</text>
+      <text x="15" y="117.5" textAnchor="end" dominantBaseline="middle" style={{ fontSize: 10, fill: '#64748b', fontWeight: 600, fontFamily: 'Outfit,Inter,sans-serif' }}>20K</text>
+      <text x="15" y="150" textAnchor="end" dominantBaseline="middle" style={{ fontSize: 10, fill: '#64748b', fontWeight: 600, fontFamily: 'Outfit,Inter,sans-serif' }}>0</text>
+
+      {/* Grid lines starting at x1="30" */}
+      <line x1="30" y1="150" x2="500" y2="150" stroke="#dbe3f0" strokeWidth="1" strokeOpacity="0.6" />
+      <line x1="30" y1="117.5" x2="500" y2="117.5" stroke="#dbe3f0" strokeWidth="1" strokeOpacity="0.6" />
+      <line x1="30" y1="85" x2="500" y2="85" stroke="#dbe3f0" strokeWidth="1" strokeOpacity="0.6" />
+      <line x1="30" y1="52.5" x2="500" y2="52.5" stroke="#dbe3f0" strokeWidth="1" strokeOpacity="0.6" />
+      <line x1="30" y1="20" x2="500" y2="20" stroke="#dbe3f0" strokeWidth="1" strokeOpacity="0.6" />
+
+      {/* Blue Path (Active Students) */}
+      <path
+        d="M 35 85 C 95 70, 115 50, 155 55 C 195 60, 235 100, 275 90 C 315 80, 355 50, 395 45 C 435 40, 455 25, 495 20"
+        fill="none"
+        stroke="#3b82f6"
+        strokeWidth="3"
+        strokeLinecap="round"
+        filter="url(#shadow-blue)"
+      />
+      <path
+        d="M 35 85 C 95 70, 115 50, 155 55 C 195 60, 235 100, 275 90 C 315 80, 355 50, 395 45 C 435 40, 455 25, 495 20 L 495 150 L 35 150 Z"
+        fill="url(#blueGrad)"
+      />
+      {/* Dots on Blue Path */}
+      <circle cx="35" cy="85" r="4.5" fill="#3b82f6" stroke="#fff" strokeWidth="2" />
+      <circle cx="155" cy="55" r="4.5" fill="#3b82f6" stroke="#fff" strokeWidth="2" />
+      <circle cx="275" cy="90" r="4.5" fill="#3b82f6" stroke="#fff" strokeWidth="2" />
+      <circle cx="395" cy="45" r="4.5" fill="#3b82f6" stroke="#fff" strokeWidth="2" />
+      <circle cx="495" cy="20" r="4.5" fill="#3b82f6" stroke="#fff" strokeWidth="2" />
+
+      {/* Green Path (Completed Activities) */}
+      <path
+        d="M 35 115 C 95 110, 115 95, 155 102 C 195 110, 235 128, 275 120 C 315 112, 355 98, 395 102 C 435 106, 455 108, 495 110"
+        fill="none"
+        stroke="#10b981"
+        strokeWidth="3"
+        strokeLinecap="round"
+        filter="url(#shadow-green)"
+      />
+      <path
+        d="M 35 115 C 95 110, 115 95, 155 102 C 195 110, 235 128, 275 120 C 315 112, 355 98, 395 102 C 435 106, 455 108, 495 110 L 495 150 L 35 150 Z"
+        fill="url(#greenGrad)"
+      />
+      {/* Dots on Green Path */}
+      <circle cx="35" cy="115" r="4.5" fill="#10b981" stroke="#fff" strokeWidth="2" />
+      <circle cx="155" cy="102" r="4.5" fill="#10b981" stroke="#fff" strokeWidth="2" />
+      <circle cx="275" cy="120" r="4.5" fill="#10b981" stroke="#fff" strokeWidth="2" />
+      <circle cx="395" cy="102" r="4.5" fill="#10b981" stroke="#fff" strokeWidth="2" />
+      <circle cx="495" cy="110" r="4.5" fill="#10b981" stroke="#fff" strokeWidth="2" />
     </svg>
   );
 };
@@ -633,7 +743,10 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
       {/* ── Mobile top bar ── */}
       <header className="sd-mobile-header">
         <button className="sd-hamburger" onClick={() => setIsSidebarOpen(true)} aria-label="Open menu"><FiMenu/></button>
-        <span className="sd-mobile-brand">LinguaLab</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <img src={logoIcon} alt="Logo" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+          <span className="sd-mobile-brand">LinguaLab</span>
+        </div>
         <div style={{ width: 34 }}/>
       </header>
 
@@ -644,9 +757,12 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
           SIDEBAR
           ═════════════════ */}
       <aside className={`sd-sidebar${isSidebarOpen ? ' open' : ''}`}>
-        <div className="sd-brand">
-          <div className="sd-brand-name">LinguaLab</div>
-          <div className="sd-brand-sub">Admin Portal</div>
+        <div className="sd-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <img src={logoIcon} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+          <div>
+            <div className="sd-brand-name">LinguaLab</div>
+            <div className="sd-brand-sub">Admin Portal</div>
+          </div>
         </div>
 
         <nav className="sd-nav">
@@ -698,12 +814,15 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
             <FiSearch/>
             <input
               type="text"
-              placeholder="Search media by name, tag, or type..."
+              placeholder="Search anything..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="sd-topbar-right">
+          <div className="sd-topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.5rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+              <FiCalendar/> May 15 - Jun 13, 2025 <FiChevronDown/>
+            </button>
             <button className="sd-icon-btn"><FiBell/></button>
             <button className="sd-icon-btn"><FiHelpCircle/></button>
           </div>
@@ -719,44 +838,90 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
           {/* ══════════ OVERVIEW / DASHBOARD TAB ══════════ */}
           {activeTab === 'dashboard' && (
             <>
-              <div className="sd-page-header">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '1rem' }}>
-                  <div>
-                    <h1 className="sd-page-title">Dashboard</h1>
-                    <p className="sd-page-sub">Welcome back, Super Admin! Here's what's happening.</p>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center' }}>
-                    <button className="sd-year-badge"><FiCalendar/>May 15 - Jun 13, 2025<FiChevronDown/></button>
-                    <button className="sd-btn-outline" style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>Export Report</button>
-                    <button className="sd-icon-btn" style={{ position: 'relative' }}>
-                      <FiBell/>
-                      <span style={{ position: 'absolute', top: -3, right: -3, background: '#ef4444', color: '#fff', fontSize: '0.6rem', fontWeight: 700, padding: '2px 4px', borderRadius: '50%' }}>12</span>
-                    </button>
-                  </div>
+              {/* Premium Dashboard Header Card with Background Image */}
+              <div className="sd-dashboard-header-card" style={{ backgroundImage: `url(${dashboardHeaderBanner})`, position: 'relative' }}>
+                <div className="sd-header-text-section" style={{ maxWidth: '50%' }}>
+                  <h1>Welcome back, Super Admin!</h1>
+                  <p>Monitor schools, track student engagement, analyze subscriptions, and make data-driven decisions from one unified dashboard.</p>
                 </div>
+
+                {/* Export Report placed in the bottom-right corner of the card */}
+                <button className="sd-btn-outline" style={{ position: 'absolute', bottom: '1.5rem', right: '2.5rem', background: '#ffffff', color: '#475569', border: '1px solid #dbeafe', margin: 0, padding: '0.5rem 1.25rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', zIndex: 3 }}>
+                  Export Report <FiDownload style={{ fontSize: '0.9rem' }}/>
+                </button>
               </div>
 
               {/* 4 Stat Cards */}
-              <div className="sd-stat-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+              <div className="sd-stat-row sd-stat-row--4col">
                 {[
-                  { label: 'Total Schools',       value: dashboardStats.total_schools || 128,   color: '#3b82f6', bg: '#e0f2fe', icon: <FiGrid/>,     trend: '+8 this month' },
-                  { label: 'Total Students',      value: '34,567',                              color: '#22c55e', bg: '#dcfce7', icon: <FiUsers/>,    trend: '+1,345 this month' },
-                  { label: 'Active Subscriptions', value: '124',                                 color: '#f97316', bg: '#ffedd5', icon: <FiUser/>,     trend: '+6 this month' },
-                  { label: 'Total Revenue',       value: '₹12,45,000',                          color: '#a855f7', bg: '#f3e8ff', icon: <FiAward/>,    trend: '15% this month' },
+                  {
+                    label: 'Total Schools',
+                    value: dashboardStats.total_schools || 1,
+                    color: '#4f46e5',
+                    bg: '#eef2ff',
+                    trendBg: '#e0e7ff',
+                    trendColor: '#3730a3',
+                    icon: (
+                      <svg stroke="currentColor" fill="none" strokeWidth="2.2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="1.1em" width="1.1em" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4 22V4c0-.5.2-1 .6-1.4C5 2.2 5.5 2 6 2h12c.5 0 1 .2 1.4.6.4.4.6.9.6 1.4v18" />
+                        <path d="M10 6h4M10 10h4M10 14h4M10 18h4" />
+                      </svg>
+                    ),
+                    trend: '↑ 8% this month',
+                    chart: <MiniLineChart color="#4f46e5" fillGradId="schGrad" points={[10, 15, 12, 18, 30]} />
+                  },
+                  {
+                    label: 'Total Students',
+                    value: '34,567',
+                    color: '#0d9488',
+                    bg: '#f0fdfa',
+                    trendBg: '#ccfbf1',
+                    trendColor: '#0f766e',
+                    icon: <FiUsers/>,
+                    trend: '↑ 13.4% this month',
+                    chart: <MiniBarChart color="#0d9488" values={[8, 15, 22, 28, 35, 40]} />
+                  },
+                  {
+                    label: 'Active Subscriptions',
+                    value: '124',
+                    color: '#8b5cf6',
+                    bg: '#f5f3ff',
+                    trendBg: '#ede9fe',
+                    trendColor: '#6d28d9',
+                    icon: <FiUser/>,
+                    trend: '↑ 6% this month',
+                    chart: <MiniLineChart color="#8b5cf6" fillGradId="subGrad" points={[12, 28, 14, 22, 35]} />
+                  },
+                  {
+                    label: 'Total Revenue',
+                    value: '₹12,45,000',
+                    color: '#059669',
+                    bg: '#ecfdf5',
+                    trendBg: '#d1fae5',
+                    trendColor: '#047857',
+                    icon: <div style={{ fontSize: '1.05rem', fontWeight: 800, lineHeight: 1, fontFamily: 'Outfit,Inter,sans-serif' }}>₹</div>,
+                    trend: '↑ 15% this month',
+                    chart: <MiniBarChart color="#059669" values={[10, 18, 15, 25, 32, 40]} />
+                  },
                 ].map((s, i) => (
-                  <div className="sd-stat-card" key={i}>
-                    <div className="sd-stat-icon-row">
-                      <div className="sd-stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
+                  <div className="sd-stat-card sd-stat-card--horizontal" key={i}>
+                    <div className="sd-stat-card-left">
+                      <div className="sd-stat-icon" style={{ background: s.bg, color: s.color, marginBottom: '0.15rem' }}>{s.icon}</div>
+                      <div className="sd-stat-label">{s.label}</div>
+                      <div className="sd-stat-value">{s.value}</div>
+                      <span className="sd-stat-trend" style={{ background: s.trendBg, color: s.trendColor, padding: '1px 6px', borderRadius: '12px', fontSize: '0.64rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', marginTop: '0.2rem', width: 'fit-content' }}>
+                        {s.trend}
+                      </span>
                     </div>
-                    <div className="sd-stat-value">{s.value}</div>
-                    <div className="sd-stat-label">{s.label}</div>
-                    <span className="sd-stat-trend">{s.trend}</span>
+                    <div className="sd-stat-card-right">
+                      {s.chart}
+                    </div>
                   </div>
                 ))}
               </div>
 
               {/* Middle Row Charts */}
-              <div className="sd-bottom-grid" style={{ gridTemplateColumns: '1.4fr 1fr' }}>
+              <div className="sd-bottom-grid">
                 {/* Students Activity Overview */}
                 <div className="sd-card">
                   <div className="sd-card-header">
@@ -765,47 +930,56 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                     </div>
                     <div className="sd-chart-legend" style={{ marginBottom: 0 }}>
                       <div className="sd-chart-legend-item">
-                        <div className="sd-chart-legend-dot" style={{ background: '#6366f1' }}/>
+                        <div className="sd-chart-legend-dot" style={{ background: '#3b82f6' }}/>
                         Active Students
                       </div>
                       <div className="sd-chart-legend-item">
-                        <div className="sd-chart-legend-dot" style={{ background: '#22c55e' }}/>
+                        <div className="sd-chart-legend-dot" style={{ background: '#10b981' }}/>
                         Completed Activities
                       </div>
                     </div>
                   </div>
-                  <div className="sd-chart-wrap" style={{ marginTop: '1rem' }}>
+                  <div className="sd-chart-wrap" style={{ marginTop: '1.25rem' }}>
                     <ActivityLineChart/>
                   </div>
-                  <div className="sd-x-labels">
+                  <div className="sd-x-labels" style={{ paddingLeft: '35px', paddingRight: '5px' }}>
                     {['May 15', 'May 22', 'May 29', 'Jun 05', 'Jun 13'].map(m => <span className="sd-x-label" key={m}>{m}</span>)}
                   </div>
                 </div>
 
                 {/* Subscription Status Donut */}
-                <div className="sd-card">
-                  <div className="sd-card-header">
-                    <div className="sd-card-title">Subscription Status</div>
-                  </div>
-                  <div className="sd-completion-grid">
-                    <div className="sd-donut-wrap">
-                      <MultiDonutChart total={124} activeCount={110} expiringCount={9} expiredCount={5}/>
+                <div className="sd-card sd-card--subscription-donut" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <div className="sd-card-header" style={{ marginBottom: '1rem' }}>
+                      <div className="sd-card-title">Subscription Status</div>
                     </div>
-                    <div className="sd-legend">
-                      {[
-                        { label: 'Active',        color: '#22c55e', pct: '110 (88.7%)' },
-                        { label: 'Expiring Soon', color: '#f97316', pct: '9 (7.3%)' },
-                        { label: 'Expired',       color: '#ef4444', pct: '5 (4.0%)' },
-                      ].map(l => (
-                        <div className="sd-legend-row" key={l.label}>
-                          <div className="sd-legend-dot-label">
-                            <div className="sd-legend-dot" style={{ background: l.color }}/>
-                            {l.label}
+                    <div className="sd-completion-grid">
+                      <div className="sd-donut-wrap">
+                        <MultiDonutChart total={124} activeCount={78} expiringCount={28} expiredCount={18}/>
+                      </div>
+                      <div className="sd-legend">
+                        {[
+                          { label: 'Active',        color: '#006aa6', pct: '78 (62.9%)' },
+                          { label: 'Expiring Soon', color: '#0ea5e9', pct: '28 (22.6%)' },
+                          { label: 'Expired',       color: '#38bdf8', pct: '18 (14.5%)' },
+                        ].map(l => (
+                          <div className="sd-legend-row" key={l.label}>
+                            <div className="sd-legend-dot-label">
+                              <div className="sd-legend-dot" style={{ background: l.color }}/>
+                              {l.label}
+                            </div>
+                            <span className="sd-legend-pct">{l.pct}</span>
                           </div>
-                          <span className="sd-legend-pct">{l.pct}</span>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
+                  </div>
+                  
+                  {/* View All Subscriptions Link */}
+                  <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'center' }}>
+                    <button className="sd-view-all" onClick={() => goTo('subscriptions')} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#2563eb', fontWeight: 600, fontSize: '0.82rem', background: 'none', border: 'none', cursor: 'pointer' }}>
+                      View all subscriptions <span style={{ fontSize: '1rem' }}>→</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -818,18 +992,26 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                     <div className="sd-card-title">Recent Activity</div>
                     <button className="sd-view-all">View All</button>
                   </div>
-                  <div className="sd-activity-list">
+                  <div className="sd-activity-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                     {[
-                      { id: 1, name: 'GP', color: '#22c55e', desc: 'Greenfield Public School renewed Premium Plan', time: '2 min ago' },
-                      { id: 2, name: 'HV', color: '#3b82f6', desc: 'New school registered: Happy Valley School', time: '15 min ago' },
-                      { id: 3, name: 'DC', color: '#f97316', desc: 'Content published: Daily Conversation - Level 2', time: '1 hour ago' },
+                      { id: 1, icon: <FiGrid />, color: '#3b82f6', bg: '#eff6ff', desc: "New school \"Greenfield Academy\" registered", meta: 'Super Admin • 10 mins ago', tag: 'New School', tagBg: '#dcfce7', tagColor: '#15803d' },
+                      { id: 2, icon: <FiActivity />, color: '#0d9488', bg: '#f0fdfa', desc: "Subscription renewed for \"Bright Future School\"", meta: 'System • 1 hour ago', tag: 'Subscription', tagBg: '#e0f2fe', tagColor: '#0369a1' },
+                      { id: 3, icon: <FiUsers />, color: '#8b5cf6', bg: '#f5f3ff', desc: "12 new students added to \"Silver Oak High\"", meta: 'Admin User • 3 hours ago', tag: 'Students', tagBg: '#f3e8ff', tagColor: '#6b21a8' },
+                      { id: 4, icon: <FiFileText />, color: '#f59e0b', bg: '#fffbeb', desc: "Monthly report generated", meta: 'System • 5 hours ago', tag: 'Report', tagBg: '#fef3c7', tagColor: '#b45309' },
                     ].map(act => (
-                      <div className="sd-activity-item" key={act.id}>
-                        <div className="sd-activity-avatar" style={{ background: act.color }}>{act.name}</div>
-                        <div className="sd-activity-body">
-                          <div className="sd-activity-name">{act.desc}</div>
+                      <div className="sd-activity-item" key={act.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: 0 }}>
+                          <div className="sd-activity-icon-container" style={{ width: 36, height: 36, borderRadius: '50%', background: act.bg, color: act.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {act.icon}
+                          </div>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div className="sd-activity-desc" style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{act.desc}</div>
+                            <div className="sd-activity-meta" style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '2px' }}>{act.meta}</div>
+                          </div>
                         </div>
-                        <div className="sd-activity-time">{act.time}</div>
+                        <span className="sd-activity-badge" style={{ fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: '12px', background: act.tagBg, color: act.tagColor, flexShrink: 0 }}>
+                          {act.tag}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -846,20 +1028,33 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                       <thead>
                         <tr>
                           <th>School Name</th>
-                          <th>Students Active</th>
-                          <th>Activities Completed</th>
+                          <th>Active Students</th>
+                          <th>Completed Activities</th>
+                          <th>Performance</th>
                         </tr>
                       </thead>
                       <tbody>
                         {[
-                          { name: 'Sunshine High School', active: '987', completed: '4,582' },
-                          { name: 'Greenfield Public School', active: '1,245', completed: '4,120' },
-                          { name: 'Bright Future Academy', active: '758', completed: '3,245' },
+                          { name: 'Bright Future School', active: '8,567', completed: '9,832', pct: 92 },
+                          { name: 'Silver Oak High', active: '6,432', completed: '7,456', pct: 89 },
+                          { name: 'Greenfield Academy', active: '5,678', completed: '6,302', pct: 85 },
+                          { name: 'Sunrise Public School', active: '4,321', completed: '4,982', pct: 78 },
                         ].map((sch, i) => (
                           <tr key={i}>
-                            <td style={{ fontWeight: 600, color: '#1e293b' }}>{sch.name}</td>
+                            <td style={{ fontWeight: 600, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#6366f1' }}></span>
+                              {sch.name}
+                            </td>
                             <td>{sch.active}</td>
                             <td>{sch.completed}</td>
+                            <td style={{ width: '120px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ fontWeight: 700, fontSize: '0.78rem', color: '#1e293b', width: '30px' }}>{sch.pct}%</span>
+                                <div style={{ flex: 1, height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                                  <div style={{ width: `${sch.pct}%`, height: '100%', background: '#10b981', borderRadius: '3px' }}></div>
+                                </div>
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1383,20 +1578,20 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
               {subPage === 'overview' && (
                 <>
                   {/* 4 Stat Cards */}
-                  <div className="sd-stat-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+                  <div className="sd-stat-row sd-stat-row--4col">
                     {[
                       { label: 'TOTAL ACTIVE',    value: '124',          color: '#3b82f6', bg: '#e0f2fe', icon: <FiUser/>,     trend: '↑ 6 this month', trendColor: '#22c55e' },
                       { label: 'EXPIRING SOON',   value: '9',            color: '#f97316', bg: '#ffedd5', icon: <FiBell/>,     trend: 'Within 30 days', trendColor: '#64748b' },
                       { label: 'EXPIRED',         value: '5',            color: '#ef4444', bg: '#fee2e2', icon: <FiXCircle/>,  trend: 'Needs attention', trendColor: '#ef4444' },
                       { label: 'TOTAL REVENUE',   value: '₹12,45,000',   color: '#a855f7', bg: '#f3e8ff', icon: <FiAward/>,    trend: '↑ 15% this month', trendColor: '#22c55e' },
                     ].map((s, i) => (
-                      <div className="sd-stat-card" key={i}>
-                        <div className="sd-stat-icon-row">
-                          <div className="sd-stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
+                      <div className="sd-sub-stat-card" key={i}>
+                        <div className="sd-sub-stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
+                        <div className="sd-sub-stat-content">
+                          <div className="sd-sub-stat-value">{s.value}</div>
+                          <div className="sd-sub-stat-label">{s.label}</div>
+                          <span className="sd-sub-stat-trend" style={{ color: s.trendColor }}>{s.trend}</span>
                         </div>
-                        <div className="sd-stat-value">{s.value}</div>
-                        <div className="sd-stat-label" style={{ fontSize: '0.72rem', letterSpacing: '0.05em' }}>{s.label}</div>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: s.trendColor }}>{s.trend}</span>
                       </div>
                     ))}
                   </div>
@@ -1415,11 +1610,11 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                         </div>
                         <div className="sd-legend">
                           {[
-                            { label: 'Basic Plan',          color: '#3b82f6', pct: '45 (36.3%)' },
-                            { label: 'Standard Plan',       color: '#22c55e', pct: '38 (30.6%)' },
-                            { label: 'Premium Plan',        color: '#f97316', pct: '28 (22.6%)' },
-                            { label: 'Enterprise Plan',     color: '#a855f7', pct: '10 (8.1%)' },
-                            { label: 'Expired / Cancelled', color: '#ef4444', pct: '3 (2.4%)' },
+                            { label: 'Basic Plan',          color: '#004e75', pct: '45 (36.3%)' },
+                            { label: 'Standard Plan',       color: '#006aa6', pct: '38 (30.6%)' },
+                            { label: 'Premium Plan',        color: '#0ea5e9', pct: '28 (22.6%)' },
+                            { label: 'Enterprise Plan',     color: '#38bdf8', pct: '10 (8.1%)' },
+                            { label: 'Expired / Cancelled', color: '#bae6fd', pct: '3 (2.4%)' },
                           ].map(l => (
                             <div className="sd-legend-row" key={l.label}>
                               <div className="sd-legend-dot-label">
