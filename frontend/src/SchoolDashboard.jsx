@@ -128,6 +128,19 @@ const Pagination = ({ total, perPage = 4, page, onPage }) => {
   );
 };
 
+const defaultGradesList = [
+  { id: 1, grade_name: 'Grade 1' },
+  { id: 2, grade_name: 'Grade 2' },
+  { id: 3, grade_name: 'Grade 3' },
+  { id: 4, grade_name: 'Grade 4' },
+  { id: 5, grade_name: 'Grade 5' },
+  { id: 6, grade_name: 'Grade 6' },
+  { id: 7, grade_name: 'Grade 7' },
+  { id: 8, grade_name: 'Grade 8' },
+  { id: 9, grade_name: 'Grade 9' },
+  { id: 10, grade_name: 'Grade 10' }
+];
+
 /* ═══════════════════════════════════════════════════════════
    MAIN COMPONENT
    ═══════════════════════════════════════════════════════════ */
@@ -168,7 +181,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
   const [classes,        setClasses]        = useState([]);
   const [experiences,      setExperiences]      = useState([]);
   const [schools,        setSchools]        = useState([]);
-  const [grades,         setGrades]         = useState([]);
+  const [grades,         setGrades]         = useState(defaultGradesList);
 
   /* ── Reports ── */
   const [overviewReport,          setOverviewReport]          = useState(null);
@@ -197,6 +210,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
   });
   const [profileForm, setProfileForm] = useState({
     username: user?.username || '', email: user?.email || '', full_name: user?.full_name || '',
+    school_name: localStorage.getItem('school_admin_school_name') || user?.school_name || 'Default Seed School',
     current_password:'', password:''
   });
 
@@ -220,8 +234,13 @@ const SchoolDashboard = ({ user, onLogout }) => {
   const loadGrades = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/grades/');
-      if (res.ok) { const d = await res.json(); setGrades(d.results || d); }
-    } catch (e) { console.error('Failed to load grades.', e); }
+      if (res.ok) {
+        const d = await res.json();
+        const resList = d.results || d;
+        if (Array.isArray(resList) && resList.length > 0) setGrades(resList);
+        else setGrades(defaultGradesList);
+      } else { setGrades(defaultGradesList); }
+    } catch (e) { setGrades(defaultGradesList); }
   };
 
   const loadTeachers = async () => {
@@ -298,20 +317,42 @@ const SchoolDashboard = ({ user, onLogout }) => {
     if (error)   { setErrorMsg(error);   setTimeout(() => setErrorMsg(''),   4000); }
   };
 
+  const getSelectedSchoolId = () => {
+    const customName = profileForm.school_name || localStorage.getItem('school_admin_school_name') || 'Default Seed School';
+    const matched = schools.find(s => String(s.school_name).toLowerCase() === String(customName).toLowerCase() || String(s.school_id).toLowerCase() === String(customName).toLowerCase());
+    if (matched) return matched.school_id;
+    if (schools.length > 0) return schools[0].school_id;
+    return customName;
+  };
+
+  const getSchoolOptions = () => {
+    const customName = profileForm.school_name || localStorage.getItem('school_admin_school_name') || 'Default Seed School';
+    if (!customName) return schools;
+    const exists = schools.some(s => String(s.school_name).toLowerCase() === String(customName).toLowerCase() || String(s.school_id).toLowerCase() === String(customName).toLowerCase());
+    if (exists || schools.length === 0) {
+      if (schools.length === 0) {
+        return [{ school_id: customName, school_name: customName }];
+      }
+      return schools;
+    }
+    return [{ school_id: customName, school_name: customName }, ...schools];
+  };
+
   /* ── Init forms ── */
   const initForm = (tab, entity = null) => {
     setErrorMsg('');
+    const defaultSchool = getSelectedSchoolId();
     if (tab === 'teachers') {
       setTeacherForm(entity ? {
         username: entity.username || '', password: '',
         email: entity.email || '', full_name: entity.full_name || '',
         is_active: entity.is_active !== undefined ? entity.is_active : true,
-        school: entity.school || (schools[0]?.school_id || ''),
+        school: entity.school || defaultSchool,
         qualification: entity.qualification || '',
         experience_years: entity.experience_years || 0,
         assigned_class_ids: entity.assigned_class_ids || []
       } : { username:'', password:'', email:'', full_name:'', is_active:true,
-            school: schools[0]?.school_id || '', qualification:'', experience_years:0, assigned_class_ids: [] });
+            school: defaultSchool, qualification:'', experience_years:0, assigned_class_ids: [] });
     } else if (tab === 'students') {
       setStudentForm(entity ? {
         username: entity.username || '', password: '', email: entity.email || '',
@@ -321,13 +362,13 @@ const SchoolDashboard = ({ user, onLogout }) => {
     } else if (tab === 'classes') {
       setClassForm(entity ? {
         class_name: entity.class_name || '',
-        school: entity.school || (schools[0]?.school_id || ''),
+        school: entity.school || defaultSchool,
         grade: entity.grade || (grades[0]?.id || ''),
         academic_year: entity.academic_year || new Date().getFullYear().toString(),
         is_active: entity.is_active !== undefined ? entity.is_active : true,
         assigned_teacher_ids: entity.assigned_teacher_ids || []
       } : {
-        class_name:'', school: schools[0]?.school_id || '',
+        class_name:'', school: defaultSchool,
         grade: grades[0]?.id || '', academic_year: new Date().getFullYear().toString(), is_active:true,
         assigned_teacher_ids: []
       });
@@ -1115,7 +1156,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
                       <tr>
                         <th>Name</th>
                         <th>Qualification</th>
-                        <th>School</th>
+                        
                         <th>Assigned Classes</th>
                         <th>Status</th>
                         <th style={{ textAlign:'right' }}>Actions</th>
@@ -1646,8 +1687,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
                     <div className="sd-profile-section-title">
                       <FiUser/>Personal Details
                     </div>
-                    <span className="sd-verified-badge"><FiCheckCircle/>Verified Admin</span>
-                  </div>
+                             </div>
 
                   {/* Full Name + Email */}
                   <div className="sd-form-row">
@@ -1675,10 +1715,19 @@ const SchoolDashboard = ({ user, onLogout }) => {
                     </div>
                   </div>
 
-                  {/* Phone (username shown as reference) */}
+                  {/* School Name + Phone */}
                   <div className="sd-form-row">
                     <div className="sd-form-group">
-                      <label className="sd-form-label">Phone Number</label>
+                      <label className="sd-form-label">School Name</label>
+                      <input
+                        className="sd-form-input"
+                        type="text"
+                        value={profileForm.school_name || 'Default Seed School'}
+                        disabled
+                      />
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">User Name</label>
                       <input
                         className="sd-form-input"
                         type="text"
@@ -1700,24 +1749,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
                     </button>
                   </div>
 
-                  {/* Recent Login Activity */}
-                  <div className="sd-login-activity-section">
-                    <div className="sd-login-activity-title">Recent Login Activity</div>
-                    <div className="sd-login-item">
-                      <div className="sd-login-icon"><FiMonitor/></div>
-                      <div className="sd-login-details">
-                        <div className="sd-login-device">Chrome on MacOS • New York, USA</div>
-                        <div className="sd-login-time">Today, 10:45 AM</div>
-                      </div>
-                    </div>
-                    <div className="sd-login-item">
-                      <div className="sd-login-icon"><FiSmartphone/></div>
-                      <div className="sd-login-details">
-                        <div className="sd-login-device">iPhone 14 Pro • New York, USA</div>
-                        <div className="sd-login-time">Yesterday, 08:22 PM</div>
-                      </div>
-                    </div>
-                  </div>
+
 
                   <div className="sd-profile-save-row">
                     <button type="submit" className="sd-btn-primary" disabled={actionLoading}>
@@ -1773,10 +1805,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">School</label>
-                  <select className="sd-form-input" value={teacherForm.school}
-                    onChange={e => setTeacherForm({...teacherForm, school:e.target.value})} required>
-                    {schools.map(s => <option key={s.school_id} value={s.school_id}>{s.school_name}</option>)}
-                  </select>
+                  <input className="sd-form-input" type="text" value={profileForm.school_name || 'Default Seed School'} disabled />
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Qualification</label>
@@ -1850,22 +1879,21 @@ const SchoolDashboard = ({ user, onLogout }) => {
               {activeSubTab === 'classes' && (<>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Class Name</label>
-                  <input className="sd-form-input" type="text" placeholder="e.g. Class 6-A"
+                  <input className="sd-form-input" type="text" placeholder=""
                     value={classForm.class_name}
                     onChange={e => setClassForm({...classForm, class_name:e.target.value})} required/>
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">School</label>
-                  <select className="sd-form-input" value={classForm.school}
-                    onChange={e => setClassForm({...classForm, school:e.target.value})} required>
-                    {schools.map(s => <option key={s.school_id} value={s.school_id}>{s.school_name}</option>)}
-                  </select>
+                  <input className="sd-form-input" type="text" value={profileForm.school_name || 'Default Seed School'} disabled />
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Grade Level</label>
                   <select className="sd-form-input" value={classForm.grade}
                     onChange={e => setClassForm({...classForm, grade:e.target.value})} required>
-                    {grades.map(g => <option key={g.id} value={g.id}>{g.grade_name}</option>)}
+                    {defaultGradesList.map(g => (
+                      <option key={g.id} value={g.id}>{g.grade_name}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="sd-form-group">

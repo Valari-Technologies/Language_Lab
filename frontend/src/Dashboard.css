@@ -318,6 +318,8 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
 
 /* Page header */
 .sd-page-header { margin-bottom: 0.25rem; }
+.sd-breadcrumb-link { transition: color 0.15s; }
+.sd-breadcrumb-link:hover { color: #4f46e5 !important; text-decoration: underline; }
 .sd-page-title {
   font-size: 1.5rem;
   font-weight: 800;

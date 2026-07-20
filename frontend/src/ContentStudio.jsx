@@ -11,7 +11,7 @@ import {
   FiUser, FiClock
 } from 'react-icons/fi';
 import './Dashboard.css';
-import contentCreatorHeaderBanner from './assets/content_creator_header_banner.png';
+import contentCreatorHeaderBanner from './assets/3.jpeg';
 import logoIcon from './assets/icon.png';
 
 /* ═══════════════════════════════════════════════════════════

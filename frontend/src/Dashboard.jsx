@@ -11,7 +11,7 @@ import {
 } from 'react-icons/fi';
 import './Dashboard.css';
 import { apiFetch } from './api';
-import dashboardHeaderBanner from './assets/dashboard_header_banner.png';
+import dashboardHeaderBanner from './assets/1.jpeg';
 import logoIcon from './assets/icon.png';
 
 /* ─── SVG Donut Chart helper ─── */
@@ -313,7 +313,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   const [isAddingSchool, setIsAddingSchool] = useState(false);
   const [newSchoolForm, setNewSchoolForm] = useState({
     school_name: '', school_code: '', address: '', city: '', state: '', pincode: '',
-    admin_name: '', email: '', mobile: ''
+    admin_name: '', email: '', password: ''
   });
   
   /* ── Forms ── */
@@ -629,7 +629,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         email: newSchoolForm.email,
         full_name: newSchoolForm.admin_name,
         school: createdSchoolId,
-        password: 'SchoolAdmin123!',
+        password: newSchoolForm.password || 'SchoolAdmin123!',
         is_active: true
       };
 
@@ -643,7 +643,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         setIsAddingSchool(false);
         setNewSchoolForm({
           school_name: '', school_code: '', address: '', city: '', state: '', pincode: '',
-          admin_name: '', email: '', mobile: ''
+          admin_name: '', email: '', password: ''
         });
         await loadSchools();
         await loadSchoolAdmins();
@@ -1190,7 +1190,14 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                 <>
                   <div className="sd-page-header">
                     <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.25rem' }}>
-                      Manage Schools &nbsp;&gt;&nbsp; <span style={{ color: '#4f46e5', fontWeight: 600 }}>Add School</span>
+                      <span 
+                        onClick={() => setIsAddingSchool(false)}
+                        style={{ cursor: 'pointer', fontWeight: 500 }}
+                        className="sd-breadcrumb-link"
+                      >
+                        Manage Schools
+                      </span>
+                      &nbsp;&gt;&nbsp; <span style={{ color: '#4f46e5', fontWeight: 600 }}>Add School</span>
                     </p>
                     <h1 className="sd-page-title">Add New School</h1>
                     <p className="sd-page-sub">Register a new school to the EnglishLab platform.</p>
@@ -1263,9 +1270,9 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                               value={newSchoolForm.email} onChange={e => setNewSchoolForm({ ...newSchoolForm, email: e.target.value })}/>
                           </div>
                           <div className="sd-form-group">
-                            <label className="sd-form-label">Mobile Number <span style={{ color: '#ef4444' }}>*</span></label>
-                            <input className="sd-form-input" type="text" placeholder="Enter mobile number" required
-                              value={newSchoolForm.mobile} onChange={e => setNewSchoolForm({ ...newSchoolForm, mobile: e.target.value })}/>
+                            <label className="sd-form-label">Password <span style={{ color: '#ef4444' }}>*</span></label>
+                            <input className="sd-form-input" type="password" placeholder="Enter password" required
+                              value={newSchoolForm.password || ''} onChange={e => setNewSchoolForm({ ...newSchoolForm, password: e.target.value })}/>
                           </div>
                         </div>
                       </div>
@@ -1279,221 +1286,79 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                   </form>
                 </>
               ) : (
-                /* ───────────────── LISTS SCREEN (Image 1) ───────────────── */
+                /* ───────────────── MANAGE SCHOOLS SCREEN (Image 2) ───────────────── */
                 <>
                   <div className="sd-page-header">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '1rem' }}>
                       <div>
-                        <h1 className="sd-page-title">Manage Schools &amp; Admins</h1>
+                        <h1 className="sd-page-title">Manage Schools</h1>
                         <p className="sd-page-sub">Configure English Learning Content and structures dynamically</p>
-                      </div>
-                      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                        {schoolSubTab === 'schools-list' ? (
-                          <button className="sd-btn-primary" onClick={() => setIsAddingSchool(true)}>+ Add School</button>
-                        ) : (
-                          <button className="sd-btn-primary" onClick={() => setIsAddingSchool(true)}>+ Add New School Admin</button>
-                        )}
                       </div>
                     </div>
                   </div>
 
                   <div className="sd-card" style={{ padding: '1.25rem 1.5rem' }}>
-                    {/* Inner tab switcher */}
-                    <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', marginBottom: '1.25rem', gap: '1.5rem' }}>
-                      <button
-                        onClick={() => { setSchoolSubTab('schools-list'); setSearchQuery(''); }}
-                        style={{
-                          paddingBottom: '0.75rem',
-                          borderBottom: schoolSubTab === 'schools-list' ? '2.5px solid #6366f1' : 'none',
-                          background: 'none',
-                          borderTop: 'none',
-                          borderLeft: 'none',
-                          borderRight: 'none',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          fontWeight: schoolSubTab === 'schools-list' ? 600 : 500,
-                          color: schoolSubTab === 'schools-list' ? '#4f46e5' : '#64748b',
-                          fontSize: '0.85rem'
-                        }}
-                      >
-                        Schools List
-                      </button>
-                      <button
-                        onClick={() => { setSchoolSubTab('school-admins'); setSearchQuery(''); }}
-                        style={{
-                          paddingBottom: '0.75rem',
-                          borderBottom: schoolSubTab === 'school-admins' ? '2.5px solid #6366f1' : 'none',
-                          background: 'none',
-                          borderTop: 'none',
-                          borderLeft: 'none',
-                          borderRight: 'none',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          fontWeight: schoolSubTab === 'school-admins' ? 600 : 500,
-                          color: schoolSubTab === 'school-admins' ? '#4f46e5' : '#64748b',
-                          fontSize: '0.85rem'
-                        }}
-                      >
-                        School Admins
-                      </button>
+                    <div className="sd-table-toolbar">
+                      <div className="sd-table-search">
+                        <FiSearch/>
+                        <input
+                          type="text"
+                          placeholder="Search schools..."
+                          value={searchQuery}
+                          onChange={e => { setSearchQuery(e.target.value); setSchoolsPage(1); }}
+                        />
+                      </div>
+                      <div className="sd-table-actions">
+                        <button className="sd-btn-filter"><FiFilter/>Filters</button>
+                        <button className="sd-btn-primary" onClick={() => setIsAddingSchool(true)}><FiPlus/>Add School</button>
+                      </div>
                     </div>
 
-                    {/* SCHOOLS LIST TAB VIEW */}
-                    {schoolSubTab === 'schools-list' && (
-                      <>
-                        <div className="sd-table-toolbar">
-                          <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', flex: 1 }}>
-                            <div className="sd-table-search">
-                              <FiSearch/>
-                              <input
-                                type="text"
-                                placeholder="Search schools..."
-                                value={searchQuery}
-                                onChange={e => { setSearchQuery(e.target.value); setSchoolsPage(1); }}
-                              />
-                            </div>
-                            <select className="sd-btn-filter" style={{ border: '1.5px solid #e8edf5', background: '#fff', fontSize: '0.8rem', fontWeight: 500 }}
-                              value={selectedStatusFilter} onChange={e => { setSelectedStatusFilter(e.target.value); setSchoolsPage(1); }}>
-                              <option value="">All Status</option>
-                              <option value="active">Active</option>
-                              <option value="inactive">Inactive</option>
-                            </select>
-                            <select className="sd-btn-filter" style={{ border: '1.5px solid #e8edf5', background: '#fff', fontSize: '0.8rem', fontWeight: 500 }}
-                              value={selectedLocationFilter} onChange={e => { setSelectedLocationFilter(e.target.value); setSchoolsPage(1); }}>
-                              <option value="">All Locations</option>
-                              <option value="Chennai">Chennai</option>
-                              <option value="Coimbatore">Coimbatore</option>
-                              <option value="Madurai">Madurai</option>
-                              <option value="Salem">Salem</option>
-                              <option value="Bangalore">Bangalore</option>
-                              <option value="Hyderabad">Hyderabad</option>
-                              <option value="Trichy">Trichy</option>
-                            </select>
-                          </div>
-                          <button className="sd-btn-filter"><FiFilter/>Filter</button>
-                        </div>
-                        <div className="sd-table-wrap">
-                          <table className="sd-table">
-                            <thead>
-                              <tr>
-                                <th>School Name</th>
-                                <th>Admin Name</th>
-                                <th>Location</th>
-                                <th>Students</th>
-                                <th>Teachers</th>
-                                <th>Status</th>
-                                <th style={{ textAlign: 'right' }}>Actions</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {paginate(filterList(schools).filter(s => {
-                                if (selectedStatusFilter) {
-                                  const wantActive = selectedStatusFilter === 'active';
-                                  if (s.is_active !== wantActive) return false;
-                                }
-                                if (selectedLocationFilter) {
-                                  if (!(s.address || '').toLowerCase().includes(selectedLocationFilter.toLowerCase())) return false;
-                                }
-                                return true;
-                              }), schoolsPage).map((s, i) => {
-                                const admin = schoolAdmins.find(sa => sa.school === s.school_id || sa.school_id === s.school_id);
-                                const adminName = admin ? (admin.full_name || admin.username) : '—';
-                                const teachersCount = teachers.filter(t => t.school === s.school_id || t.school_id === s.school_id).length;
-                                const studentCount = s.school_id ? (s.school_id * 127 + 288) % 1500 : 0;
+                    <div className="sd-table-wrap">
+                      <table className="sd-table">
+                        <thead>
+                          <tr>
+                            <th>SCHOOL NAME</th>
+                            <th>ADMIN NAME</th>
+                            <th>EMAIL</th>
+                            <th>TEACHERS</th>
+                            <th>STUDENTS</th>
+                            <th>LOCATION</th>
+                            <th style={{ textAlign: 'right' }}>ACTIONS</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginate(filterList(schools), schoolsPage).map((s, i) => {
+                            const admin = schoolAdmins.find(sa => sa.school === s.school_id || sa.school_id === s.school_id);
+                            const adminName = admin ? (admin.full_name || admin.username) : (s.admin_name || 'N/A');
+                            const adminEmail = admin ? admin.email : (s.email || 'admin@example.com');
+                            const teachersCount = teachers.filter(t => t.school === s.school_id || t.school_id === s.school_id).length;
+                            const studentCount = s.school_id ? (s.school_id * 127 + 288) % 1500 : 0;
 
-                                return (
-                                  <tr key={s.school_id || i}>
-                                    <td style={{ fontWeight: 600, color: '#1e293b' }}>{s.school_name}</td>
-                                    <td>{adminName}</td>
-                                    <td>{s.address}</td>
-                                    <td>{studentCount || '—'}</td>
-                                    <td>{teachersCount}</td>
-                                    <td>
-                                      <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
-                                        {s.is_active ? 'Active' : 'Inactive'}
-                                      </span>
-                                    </td>
-                                    <td>
-                                      <div className="sd-action-cell">
-                                        <button className="sd-icon-action edit" onClick={() => handleOpenEdit(s)} title="Edit"><FiEdit2/></button>
-                                        <button className="sd-icon-action delete" onClick={() => handleDelete(s.school_id || s.id)} title="Delete"><FiTrash2/></button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                              {filterList(schools).length === 0 && (
-                                <tr><td colSpan="7" className="sd-empty-state">No schools found.</td></tr>
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                        <Pagination total={filterList(schools).filter(s => {
-                          if (selectedStatusFilter) {
-                            const wantActive = selectedStatusFilter === 'active';
-                            if (s.is_active !== wantActive) return false;
-                          }
-                          if (selectedLocationFilter) {
-                            if (!(s.address || '').toLowerCase().includes(selectedLocationFilter.toLowerCase())) return false;
-                          }
-                          return true;
-                        }).length} perPage={PER_PAGE} page={schoolsPage} onPage={setSchoolsPage}/>
-                      </>
-                    )}
-
-                    {/* SCHOOL ADMINS TAB VIEW (Image 1 list style) */}
-                    {schoolSubTab === 'school-admins' && (
-                      <>
-                        <div className="sd-table-toolbar">
-                          <div className="sd-table-search">
-                            <FiSearch/>
-                            <input
-                              type="text"
-                              placeholder="Search admins..."
-                              value={searchQuery}
-                              onChange={e => setSearchQuery(e.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <div className="sd-table-wrap">
-                          <table className="sd-table">
-                            <thead>
-                              <tr>
-                                <th>USERNAME</th>
-                                <th>FULL NAME</th>
-                                <th>EMAIL</th>
-                                <th>SCHOOL</th>
-                                <th>STATUS</th>
-                                <th style={{ textAlign: 'right' }}>ACTIONS</th>
+                            return (
+                              <tr key={s.school_id || i}>
+                                <td style={{ fontWeight: 600, color: '#1e293b' }}>{s.school_name}</td>
+                                <td>{adminName}</td>
+                                <td>{adminEmail}</td>
+                                <td>{teachersCount}</td>
+                                <td>{studentCount || '—'}</td>
+                                <td>{s.address || s.city || 'N/A'}</td>
+                                <td>
+                                  <div className="sd-action-cell">
+                                    <button className="sd-icon-action edit" onClick={() => handleOpenEdit(s)} title="Edit"><FiEdit2/></button>
+                                    <button className="sd-icon-action delete" onClick={() => handleDelete(s.school_id || s.id)} title="Delete"><FiTrash2/></button>
+                                  </div>
+                                </td>
                               </tr>
-                            </thead>
-                            <tbody>
-                              {paginate(filterList(schoolAdmins), usersPage).map((sa, i) => (
-                                <tr key={sa.id || i}>
-                                  <td style={{ fontWeight: 600, color: '#1e293b' }}>{sa.username}</td>
-                                  <td>{sa.full_name || 'N/A'}</td>
-                                  <td>{sa.email || 'N/A'}</td>
-                                  <td>{sa.school_name || `School ID: ${sa.school}`}</td>
-                                  <td>
-                                    <span className="sd-badge sd-badge-active">ACTIVE</span>
-                                  </td>
-                                  <td>
-                                    <div className="sd-action-cell">
-                                      <button className="sd-icon-action edit" onClick={() => handleOpenEdit(sa)} title="Edit"><FiEdit2/></button>
-                                      <button className="sd-icon-action delete" onClick={() => handleDelete(sa.id)} title="Delete"><FiTrash2/></button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
-                              {filterList(schoolAdmins).length === 0 && (
-                                <tr><td colSpan="6" className="sd-empty-state">No school admins found.</td></tr>
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                        <Pagination total={filterList(schoolAdmins).length} perPage={PER_PAGE} page={usersPage} onPage={setUsersPage}/>
-                      </>
-                    )}
+                            );
+                          })}
+                          {filterList(schools).length === 0 && (
+                            <tr><td colSpan="7" className="sd-empty-state">No schools found.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <Pagination total={filterList(schools).length} perPage={PER_PAGE} page={schoolsPage} onPage={setSchoolsPage}/>
                   </div>
                 </>
               )}

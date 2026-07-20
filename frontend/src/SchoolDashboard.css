@@ -341,8 +341,6 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
 .sd-content::-webkit-scrollbar-thumb { background: #c8cfe0; border-radius: 3px; }
 .sd-content::-webkit-scrollbar-track { background: transparent; }
 
-/* Modifier kept for backward-compat (JSX still applies it on overview tab) */
-.sd-content--dashboard { /* same behaviour — no extra rules needed */ }
 
 /* Page header */
 .sd-page-header { margin-bottom: 0.25rem; }

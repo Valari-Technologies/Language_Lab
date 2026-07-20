@@ -10,7 +10,7 @@ import {
 } from 'react-icons/fi';
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
-import teacherHeaderBanner from './assets/teacher_header_banner.png';
+import teacherHeaderBanner from './assets/6.jpeg';
 import logoIcon from './assets/icon.png';
 
 /* ─── Static chart data (same as SchoolDashboard reference) ─── */
@@ -1074,7 +1074,7 @@ const TeacherDashboard = ({ user, onLogout }) => {
                   </div>
                   <div className="sd-table-actions">
                     <button className="sd-btn-filter"><FiFilter/>Filters</button>
-                    <button className="sd-btn-primary" onClick={openAddModal}><FiPlus/>Add Class</button>
+                    {/* <button className="sd-btn-primary" onClick={openAddModal}><FiPlus/>Add Class</button> */}
                   </div>
                 </div>
                 <div className="sd-table-wrap">
@@ -1083,7 +1083,7 @@ const TeacherDashboard = ({ user, onLogout }) => {
                       <tr>
                         <th>Class Name</th>
                         <th>Grade Level</th>
-                        <th>School</th>
+                        
                         <th>Academic Year</th>
                         <th>Status</th>
                         <th style={{ textAlign: 'right' }}>Actions</th>
@@ -1220,7 +1220,7 @@ const TeacherDashboard = ({ user, onLogout }) => {
                     <div className="sd-profile-section-title">
                       <FiUser/>Personal Details
                     </div>
-                    <span className="sd-verified-badge"><FiCheckCircle/>Verified Teacher</span>
+                    {/* <span className="sd-verified-badge"><FiCheckCircle/>Verified Teacher</span> */}
                   </div>
 
                   {/* Fields */}
@@ -1256,24 +1256,7 @@ const TeacherDashboard = ({ user, onLogout }) => {
                     <button type="button" className="sd-btn-outline" onClick={() => setShowPwModal(true)}>Update</button>
                   </div>
 
-                  {/* Recent Login Activity */}
-                  <div className="sd-login-activity-section">
-                    <div className="sd-login-activity-title">Recent Login Activity</div>
-                    <div className="sd-login-item">
-                      <div className="sd-login-icon"><FiMonitor/></div>
-                      <div className="sd-login-details">
-                        <div className="sd-login-device">Chrome on MacOS • New York, USA</div>
-                        <div className="sd-login-time">Today, 10:45 AM</div>
-                      </div>
-                    </div>
-                    <div className="sd-login-item">
-                      <div className="sd-login-icon"><FiSmartphone/></div>
-                      <div className="sd-login-details">
-                        <div className="sd-login-device">iPhone 14 Pro • New York, USA</div>
-                        <div className="sd-login-time">Yesterday, 08:22 PM</div>
-                      </div>
-                    </div>
-                  </div>
+
 
                   <div className="sd-profile-save-row">
                     <button type="submit" className="sd-btn-primary" disabled={actionLoading}>
