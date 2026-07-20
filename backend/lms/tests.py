@@ -163,7 +163,7 @@ class LMSPackageAPITests(TestCase):
         self.creator = User.objects.create_user(username="creator_lms", password="pass", role="CONTENT_CREATOR")
 
         # Package A (Grade 10)
-        self.exp_a = Experience.objects.create(title="Physics Lab", grade=self.grade_10, status="PUBLISHED", created_by=self.creator)
+        self.exp_a = Experience.objects.create(title="Physics Lab", grade=self.grade_10, status="PUBLISHED", created_by=self.creator, estimated_duration=30)
         self.pub_pkg_a = PublishedPackage.objects.create(experience=self.exp_a, package_name="Physics Lab", compression_status="COMPLETED")
 
         fake_elab_a = os.path.join(self.temp_dir, "physics_lab_v1.elab")
@@ -181,7 +181,7 @@ class LMSPackageAPITests(TestCase):
         )
 
         # Package B (Grade 8)
-        self.exp_b = Experience.objects.create(title="Bio Basics", grade=self.grade_8, status="PUBLISHED", created_by=self.creator)
+        self.exp_b = Experience.objects.create(title="Bio Basics", grade=self.grade_8, status="PUBLISHED", created_by=self.creator, estimated_duration=30)
         self.pub_pkg_b = PublishedPackage.objects.create(experience=self.exp_b, package_name="Bio Basics", compression_status="COMPLETED")
 
         fake_elab_b = os.path.join(self.temp_dir, "bio_basics_v1.elab")
