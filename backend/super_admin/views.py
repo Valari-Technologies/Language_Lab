@@ -8,12 +8,13 @@ from rest_framework.views import APIView
 
 from accounts.permissions import IsSuperAdmin, IsSuperAdminOrReadOnlyStaff
 from accounts.scoping import filter_queryset_by_school
-from .models import Grade, School, SchoolAdminProfile
+from .models import Grade, School, SchoolAdminProfile, PublishContent
 from .serializers import (
     GradeDetailSerializer,
     GradeSerializer,
     SchoolAdminSerializer,
     SchoolSerializer,
+    PublishContentSerializer,
 )
 
 User = get_user_model()
@@ -105,14 +106,20 @@ class DashboardStatsAPIView(APIView):
     permission_classes = [IsAuthenticated, IsSuperAdmin]
 
     def get(self, request):
+        from content_studio.models import Experience, PublishedPackage
+        total_exp = Experience.objects.count()
+        draft_exp = Experience.objects.filter(status="DRAFT").count()
+        published_exp = Experience.objects.filter(status="PUBLISHED").count()
+        total_pkg = PublishedPackage.objects.count()
+
         return Response({
             "total_schools": School.objects.count(),
             "total_school_admins": User.objects.filter(role="SCHOOL_ADMIN").count(),
-            "total_publish_contents": 0,
+            "total_publish_contents": total_pkg,
             "total_grades": Grade.objects.count(),
-            "total_experiences": 0,
-            "draft_experiences": 0,
-            "published_experiences": 0,
+            "total_experiences": total_exp,
+            "draft_experiences": draft_exp,
+            "published_experiences": published_exp,
             "recent_experiences": []
         }, status=status.HTTP_200_OK)
 
@@ -129,3 +136,10 @@ class SchoolAdminViewSet(CMSBaseViewSet):
     def perform_destroy(self, instance):
         SchoolAdminProfile.objects.filter(user=instance).delete()
         super().perform_destroy(instance)
+
+
+class PublishContentViewSet(CMSBaseViewSet):
+    permission_classes = [IsAuthenticated, IsSuperAdminOrReadOnlyStaff]
+    queryset = PublishContent.objects.all()
+    serializer_class = PublishContentSerializer
+    search_fields = ["release_name", "checksum"]

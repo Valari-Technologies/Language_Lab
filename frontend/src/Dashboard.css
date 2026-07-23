@@ -127,23 +127,27 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
 .sd-nav-item:hover svg { color: #ffffff; }
 .sd-nav-item.active svg { color: #006aa6 !important; }
 
+/* Sidebar bottom wrapper — groups user card + logout */
+.sd-sidebar-bottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
 /* Footer links */
 .sd-footer {
-  padding: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  z-index: 5;
+  padding: 0.35rem 0.75rem 0.75rem;
 }
 .sd-footer-link {
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 1rem;
   border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: rgba(255, 255, 255, 0.7);
   font-family: var(--font);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 500;
   cursor: pointer;
   width: 100%;
@@ -153,8 +157,7 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
 .sd-footer-link:hover { background: rgba(255, 255, 255, 0.05); color: #ffffff; }
 .sd-footer-link.danger { color: #f87171; }
 .sd-footer-link.danger:hover { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
-.sd-footer-link svg { font-size: 1.15rem; color: rgba(255, 255, 255, 0.7); }
-.sd-footer-link:hover svg { color: #ffffff; }
+.sd-footer-link svg { font-size: 1.1rem; color: inherit; flex-shrink: 0; }
 .sd-footer-link.danger svg { color: inherit; }
 
 /* User card at very bottom */
@@ -162,13 +165,10 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 1.1rem 1.25rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 0.9rem 1.1rem;
   cursor: pointer;
-  position: relative;
-  background: rgba(255, 255, 255, 0.01);
+  background: transparent;
   transition: background 0.18s;
-  z-index: 5;
 }
 .sd-user-card:hover {
   background: rgba(255, 255, 255, 0.05);
@@ -202,6 +202,27 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
   color: rgba(255, 255, 255, 0.5);
 }
 .sd-user-chevron { color: rgba(255, 255, 255, 0.3); font-size: 1rem; }
+
+/* Logout icon button inside user card */
+.sd-logout-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 1.05rem;
+  cursor: pointer;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: color 0.18s, background 0.18s;
+}
+.sd-logout-icon-btn:hover {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.15);
+}
 
 /* ============================
    MAIN CONTENT AREA
@@ -266,6 +287,7 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  margin-left: auto;
 }
 .sd-year-badge {
   display: flex;
@@ -319,7 +341,7 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
 /* Page header */
 .sd-page-header { margin-bottom: 0.25rem; }
 .sd-breadcrumb-link { transition: color 0.15s; }
-.sd-breadcrumb-link:hover { color: #4f46e5 !important; text-decoration: underline; }
+.sd-breadcrumb-link:hover { color: #4f46e5 !important; text-decoration:none;}
 .sd-page-title {
   font-size: 1.5rem;
   font-weight: 800;
@@ -725,6 +747,15 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
   border-bottom: 1px solid #f1f5f9;
   color: var(--text-mid);
   vertical-align: middle;
+}
+
+.sd-checkbox-cell {
+  width: 40px !important;
+  max-width: 40px !important;
+  padding: 0.7rem 0.25rem !important;
+  text-overflow: clip !important;
+  overflow: visible !important;
+  text-align: center !important;
 }
 .sd-table tbody tr:last-child td { border-bottom: none; }
 .sd-table tbody tr:hover { background: #fafbff; }

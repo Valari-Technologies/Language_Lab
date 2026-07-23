@@ -51,11 +51,22 @@ class ProfileSerializer(serializers.ModelSerializer):
     Serializer for the logged-in user viewing/updating their own profile.
     Username and role are intentionally read-only here.
     """
+    school_name = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ("id", "username", "email", "full_name", "role")
-        read_only_fields = ("id", "username", "role")
+        fields = ("id", "username", "email", "full_name", "phone_no", "role", "school_name")
+        read_only_fields = ("id", "username", "role", "school_name")
 
+    def get_school_name(self, obj):
+        if hasattr(obj, "school_admin_profile") and obj.school_admin_profile.school:
+            return obj.school_admin_profile.school.school_name
+        if hasattr(obj, "teacher_profile") and obj.teacher_profile.school:
+            return obj.teacher_profile.school.school_name
+        return ""
+
+
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 class ChangePasswordSerializer(serializers.Serializer):
     """
@@ -64,6 +75,7 @@ class ChangePasswordSerializer(serializers.Serializer):
     """
     old_password = serializers.CharField(write_only=True, required=True)
     new_password = serializers.CharField(write_only=True, required=True)
+    confirm_password = serializers.CharField(write_only=True, required=False)
 
     def validate_old_password(self, value):
         user = self.context["request"].user
@@ -72,8 +84,17 @@ class ChangePasswordSerializer(serializers.Serializer):
         return value
 
     def validate_new_password(self, value):
-        validate_password(value, user=self.context["request"].user)
+        try:
+            validate_password(value, user=self.context["request"].user)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(list(e.messages))
         return value
+
+    def validate(self, attrs):
+        confirm = attrs.get("confirm_password")
+        if confirm is not None and attrs.get("new_password") != confirm:
+            raise serializers.ValidationError({"confirm_password": "New password and confirm password do not match."})
+        return attrs
 
     def save(self, **kwargs):
         user = self.context["request"].user
@@ -81,3 +102,36 @@ class ChangePasswordSerializer(serializers.Serializer):
         user.save()
         blacklist_user_tokens(user)
         return user
+
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+    def validate_email(self, value):
+        email = value.strip().lower()
+        if not User.objects.filter(email__iexact=email, is_active=True).exists():
+            raise serializers.ValidationError("No active user found with this email address.")
+        return email
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    otp_code = serializers.CharField(max_length=6, min_length=6, required=True)
+    new_password = serializers.CharField(write_only=True, required=True)
+    confirm_password = serializers.CharField(write_only=True, required=True)
+
+    def validate_email(self, value):
+        return value.strip().lower()
+
+    def validate_new_password(self, value):
+        try:
+            validate_password(value)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(list(e.messages))
+        return value
+
+    def validate(self, attrs):
+        if attrs.get("new_password") != attrs.get("confirm_password"):
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+        return attrs
+

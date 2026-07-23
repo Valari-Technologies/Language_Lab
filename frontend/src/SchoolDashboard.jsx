@@ -5,7 +5,8 @@ import {
   FiPlus, FiEdit2, FiTrash2, FiX, FiMenu,
   FiChevronDown, FiCalendar, FiBell, FiFilter,
   FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
-  FiActivity, FiTrendingUp, FiAward, FiLock, FiChevronLeft, FiChevronRight, FiDownload
+  FiActivity, FiTrendingUp, FiAward, FiLock, FiChevronLeft, FiChevronRight, FiDownload,
+  FiEye, FiEyeOff, FiAlertTriangle
 } from 'react-icons/fi';
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
@@ -154,6 +155,20 @@ const SchoolDashboard = ({ user, onLogout }) => {
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg]       = useState('');
   const [successMsg, setSuccessMsg]   = useState('');
+
+  useEffect(() => {
+    if (errorMsg) {
+      const timer = setTimeout(() => setErrorMsg(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMsg]);
+
+  useEffect(() => {
+    if (successMsg) {
+      const timer = setTimeout(() => setSuccessMsg(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMsg]);
   const [searchQuery, setSearchQuery] = useState('');
 
   /* ── Pagination ── */
@@ -162,6 +177,11 @@ const SchoolDashboard = ({ user, onLogout }) => {
   const [classPage,   setClassPage]     = useState(1);
   const [experiencePage,setExperiencePage]  = useState(1);
   const PER_PAGE = 4;
+
+  /* ── Selection State ── */
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  const [selectedClassIds,   setSelectedClassIds]   = useState([]);
 
   /* ── Bulk Upload ── */
   const [importActive, setImportActive]   = useState(false);
@@ -210,9 +230,12 @@ const SchoolDashboard = ({ user, onLogout }) => {
   });
   const [profileForm, setProfileForm] = useState({
     username: user?.username || '', email: user?.email || '', full_name: user?.full_name || '',
-    school_name: localStorage.getItem('school_admin_school_name') || user?.school_name || 'Default Seed School',
+    phone_no: user?.phone_no || '',
+    school_name: localStorage.getItem('school_admin_school_name') || user?.school_name || '',
     current_password:'', password:''
   });
+  const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
+  const [pwModalError, setPwModalError] = useState('');
 
   /* ══════════════════════════════════
      DATA LOADERS (unchanged from original)
@@ -220,7 +243,14 @@ const SchoolDashboard = ({ user, onLogout }) => {
   const loadDashboardData = async () => {
     try {
       const res = await apiFetch('/api/school/dashboard/');
-      if (res.ok) setDashboardData(await res.json());
+      if (res.ok) {
+        const d = await res.json();
+        setDashboardData(d);
+        if (d.school_name) {
+          setProfileForm(prev => ({ ...prev, school_name: d.school_name }));
+          try { localStorage.setItem('school_admin_school_name', d.school_name); } catch {}
+        }
+      }
     } catch (e) { console.error('Failed to load school dashboard data.', e); }
   };
 
@@ -309,16 +339,45 @@ const SchoolDashboard = ({ user, onLogout }) => {
     finally { setLoading(false); }
   };
 
+  const formatErrorMsg = (err) => {
+    if (!err) return '';
+    let msg = typeof err === 'object' ? (err.detail || err.error || err.message || JSON.stringify(err)) : String(err);
+    if (msg.startsWith('{') || msg.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(msg);
+        msg = parsed.detail || parsed.error || Object.values(parsed).flat().join(', ');
+      } catch {
+        // use raw
+      }
+    }
+    if (msg.length > 85) msg = msg.slice(0, 80) + '...';
+    return msg;
+  };
+
+  useEffect(() => {
+    if (errorMsg) {
+      const timer = setTimeout(() => setErrorMsg(''), 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMsg]);
+
+  useEffect(() => {
+    if (successMsg) {
+      const timer = setTimeout(() => setSuccessMsg(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMsg]);
+
   useEffect(() => { loadAllData(); }, []);
 
   /* ── Feedback helpers ── */
   const showFeedback = (success, error) => {
-    if (success) { setSuccessMsg(success); setTimeout(() => setSuccessMsg(''), 4000); }
-    if (error)   { setErrorMsg(error);   setTimeout(() => setErrorMsg(''),   4000); }
+    if (success) { setSuccessMsg(success); }
+    if (error)   { setErrorMsg(formatErrorMsg(error)); }
   };
 
   const getSelectedSchoolId = () => {
-    const customName = profileForm.school_name || localStorage.getItem('school_admin_school_name') || 'Default Seed School';
+    const customName = profileForm.school_name || localStorage.getItem('school_admin_school_name') || '';
     const matched = schools.find(s => String(s.school_name).toLowerCase() === String(customName).toLowerCase() || String(s.school_id).toLowerCase() === String(customName).toLowerCase());
     if (matched) return matched.school_id;
     if (schools.length > 0) return schools[0].school_id;
@@ -326,7 +385,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
   };
 
   const getSchoolOptions = () => {
-    const customName = profileForm.school_name || localStorage.getItem('school_admin_school_name') || 'Default Seed School';
+    const customName = profileForm.school_name || localStorage.getItem('school_admin_school_name') || '';
     if (!customName) return schools;
     const exists = schools.some(s => String(s.school_name).toLowerCase() === String(customName).toLowerCase() || String(s.school_id).toLowerCase() === String(customName).toLowerCase());
     if (exists || schools.length === 0) {
@@ -432,6 +491,59 @@ const SchoolDashboard = ({ user, onLogout }) => {
     }
   };
 
+  /* ── Selection Handlers ── */
+  const handleSelectAllTeachers = (e) => {
+    if (e.target.checked) {
+      const filtered = filterList(teachers);
+      setSelectedTeacherIds(filtered.map(t => t.teacher_id || t.id));
+    } else {
+      setSelectedTeacherIds([]);
+    }
+  };
+  const handleSelectTeacherRow = (id) => {
+    setSelectedTeacherIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+  };
+
+  const handleSelectAllStudents = (e) => {
+    if (e.target.checked) {
+      const filtered = filterList(students);
+      setSelectedStudentIds(filtered.map(s => s.student_id || s.id));
+    } else {
+      setSelectedStudentIds([]);
+    }
+  };
+  const handleSelectStudentRow = (id) => {
+    setSelectedStudentIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+  };
+
+  const handleSelectAllClasses = (e) => {
+    if (e.target.checked) {
+      const filtered = filterList(classes);
+      setSelectedClassIds(filtered.map(c => c.class_id || c.id));
+    } else {
+      setSelectedClassIds([]);
+    }
+  };
+  const handleSelectClassRow = (id) => {
+    setSelectedClassIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+  };
+
+  /* ── Bulk Delete Handlers ── */
+  const handleBulkDeleteTeachers = () => {
+    if (selectedTeacherIds.length === 0) return;
+    setDeleteConfirm({ show: true, id: 'bulk-teachers', type: 'teachers', isBulk: true, count: selectedTeacherIds.length, ids: [...selectedTeacherIds] });
+  };
+
+  const handleBulkDeleteStudents = () => {
+    if (selectedStudentIds.length === 0) return;
+    setDeleteConfirm({ show: true, id: 'bulk-students', type: 'students', isBulk: true, count: selectedStudentIds.length, ids: [...selectedStudentIds] });
+  };
+
+  const handleBulkDeleteClasses = () => {
+    if (selectedClassIds.length === 0) return;
+    setDeleteConfirm({ show: true, id: 'bulk-classes', type: 'classes', isBulk: true, count: selectedClassIds.length, ids: [...selectedClassIds] });
+  };
+
   const handleBulkUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -477,14 +589,37 @@ const SchoolDashboard = ({ user, onLogout }) => {
   };
 
   const confirmDeleteAction = async () => {
-    const { id, type } = deleteConfirm;
-    if (!id || !type) return;
+    if (!deleteConfirm.show) return;
     setActionLoading(true);
     setErrorMsg('');
-    const url = `/api/cms/v1/${activeSubTab}/${id}/`;
     try {
+      if (deleteConfirm.isBulk) {
+        const { id: bulkType, ids, count } = deleteConfirm;
+        if (bulkType === 'bulk-teachers') {
+          await Promise.all(ids.map(id => apiFetch(`/api/cms/v1/teachers/${id}/`, { method: 'DELETE' })));
+          showFeedback(`Successfully deleted ${count} teacher(s).`, null);
+          setSelectedTeacherIds([]);
+          await loadTeachers();
+        } else if (bulkType === 'bulk-students') {
+          await Promise.all(ids.map(id => apiFetch(`/api/cms/v1/students/${id}/`, { method: 'DELETE' })));
+          showFeedback(`Successfully deleted ${count} student(s).`, null);
+          setSelectedStudentIds([]);
+          await loadStudents();
+        } else if (bulkType === 'bulk-classes') {
+          await Promise.all(ids.map(id => apiFetch(`/api/cms/v1/classes/${id}/`, { method: 'DELETE' })));
+          showFeedback(`Successfully deleted ${count} class(es).`, null);
+          setSelectedClassIds([]);
+          await loadClasses();
+        }
+        await loadDashboardData();
+        setDeleteConfirm({ show: false, id: null, type: null, isBulk: false, ids: [], count: 0 });
+        return;
+      }
+      const { id, type } = deleteConfirm;
+      if (!id || !type) return;
+      const url = `/api/cms/v1/${activeSubTab}/${id}/`;
       const res = await apiFetch(url, { method: 'DELETE' });
-      const resData = await res.json();
+      const resData = await res.json().catch(() => ({}));
       if (res.ok) {
         showFeedback(resData.message || 'Deleted successfully', null);
         setDeleteConfirm({ show: false, id: null, type: null });
@@ -554,25 +689,33 @@ const SchoolDashboard = ({ user, onLogout }) => {
     setErrorMsg('');
     setActionLoading(true);
     try {
-      const profRes = await apiFetch('/api/users/profile/', {
+      const res = await apiFetch('/api/users/profile/', {
         method: 'PATCH',
-        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email })
+        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no })
       });
-      const profData = await profRes.json();
-      if (!profRes.ok) { setErrorMsg(profData.message || 'Profile update failed.'); setActionLoading(false); return; }
-      if (profileForm.password) {
-        if (!profileForm.current_password) { setErrorMsg('Current password is required.'); setActionLoading(false); return; }
-        const pwRes = await apiFetch('/api/users/change-password/', {
-          method: 'POST',
-          body: JSON.stringify({ old_password: profileForm.current_password, new_password: profileForm.password })
-        });
-        const pwData = await pwRes.json();
-        if (!pwRes.ok) { setErrorMsg(typeof pwData === 'object' ? JSON.stringify(pwData) : 'Password change failed.'); setActionLoading(false); return; }
+      let resData = {};
+      try { resData = await res.json(); } catch { resData = {}; }
+      if (!res.ok) {
+        let msg = 'Failed to update profile.';
+        if (resData.email) msg = Array.isArray(resData.email) ? resData.email.join(' ') : resData.email;
+        else if (resData.phone_no) msg = Array.isArray(resData.phone_no) ? resData.phone_no.join(' ') : resData.phone_no;
+        else if (resData.full_name) msg = Array.isArray(resData.full_name) ? resData.full_name.join(' ') : resData.full_name;
+        else if (resData.detail) msg = String(resData.detail);
+        else if (resData.error) msg = String(resData.error);
+        else if (typeof resData === 'object' && Object.keys(resData).length > 0) {
+          const firstVal = Object.values(resData)[0];
+          msg = Array.isArray(firstVal) ? firstVal.join(' ') : String(firstVal);
+        }
+        setErrorMsg(msg);
+        return;
       }
-      setProfileForm(prev => ({ ...prev, current_password:'', password:'' }));
+      const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
+      try { localStorage.setItem('user', JSON.stringify(updatedUser)); } catch {}
       showFeedback('Profile updated successfully', null);
-    } catch (err) { setErrorMsg('Connection error.'); }
-    finally { setActionLoading(false); }
+    } catch (err) {
+      console.error('Profile update error:', err);
+      setErrorMsg('Failed to update profile.');
+    } finally { setActionLoading(false); }
   };
 
   /* ── Filter helpers ── */
@@ -793,8 +936,8 @@ const SchoolDashboard = ({ user, onLogout }) => {
           ════════════════════════ */}
       <aside className={`sd-sidebar${isSidebarOpen ? ' open' : ''}`}>
         {/* Brand */}
-        <div className="sd-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-          <img src={logoIcon} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+        <div className="sd-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem 1.25rem' }}>
+          <img src={logoIcon} alt="Logo" style={{ width: '62px', height: '100px', objectFit: 'contain' }} />
           <div>
             <div className="sd-brand-name">LinguaLab</div>
             <div className="sd-brand-sub">School Admin Portal</div>
@@ -826,21 +969,20 @@ const SchoolDashboard = ({ user, onLogout }) => {
           </button>
         </nav>
 
-        {/* Footer links */}
-        <div className="sd-footer">
-          <button className="sd-footer-link danger" onClick={onLogout}><FiLogOut/><span>Logout</span></button>
-        </div>
-
-        {/* User card */}
-        <div className="sd-user-card">
-          <div className="sd-user-avatar">
-            {(user?.username || 'SA').slice(0, 2).toUpperCase()}
+        {/* Sidebar bottom: user card with logout icon */}
+        <div className="sd-sidebar-bottom">
+          <div className="sd-user-card">
+            <div className="sd-user-avatar">
+              {(user?.username || 'SA').slice(0, 2).toUpperCase()}
+            </div>
+            <div className="sd-user-meta">
+              <div className="sd-user-name">{profileForm.full_name || user?.username || 'School Admin'}</div>
+              <div className="sd-user-role">School Admin</div>
+            </div>
+            <button className="sd-logout-icon-btn" onClick={onLogout} title="Logout">
+              <FiLogOut/>
+            </button>
           </div>
-          <div className="sd-user-meta">
-            <div className="sd-user-name">{profileForm.full_name || user?.username || 'Institute Name'}</div>
-            <div className="sd-user-role">Location</div>
-          </div>
-          <FiChevronDown className="sd-user-chevron"/>
         </div>
       </aside>
 
@@ -851,7 +993,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
 
         {/* ── Top Bar ── */}
         <div className="sd-topbar">
-          <div className="sd-search">
+          {/* <div className="sd-search">
             <FiSearch/>
             <input
               type="text"
@@ -859,27 +1001,30 @@ const SchoolDashboard = ({ user, onLogout }) => {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
+          </div> */}
+          <div className="sd-topbar-right" style={{ marginLeft: 'auto' }}>
+            <button className="sd-year-badge"><FiCalendar/>2024 · 2025<FiChevronDown/></button>
+            <button className="sd-icon-btn"><FiSettings/></button>
+            <button className="sd-icon-btn"><FiBell/></button>
           </div>
-          {activeSubTab === 'overview' ? (
-            <div className="sd-topbar-right">
-              <button className="sd-year-badge"><FiCalendar/>2024 · 2025<FiChevronDown/></button>
-              <button className="sd-icon-btn"><FiSettings/></button>
-              <button className="sd-icon-btn"><FiBell/></button>
-            </div>
-          ) : (
-            <div className="sd-topbar-right">
-              <button className="sd-notif-btn"><FiBell/>Notification</button>
-              <button className="sd-notif-btn"><FiHelpCircle/>Support</button>
-            </div>
-          )}
         </div>
 
         {/* ── Page Content ── */}
         <div className={`sd-content${activeSubTab === 'overview' ? ' sd-content--dashboard' : ''}`}>
 
           {/* Alerts */}
-          {successMsg && <div className="sd-alert sd-alert-success"><FiCheckCircle/>{successMsg}</div>}
-          {errorMsg   && <div className="sd-alert sd-alert-error"><FiX/>{errorMsg}</div>}
+          {successMsg && (
+            <div className="sd-alert sd-alert-success" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <FiCheckCircle/> <span>{successMsg}</span>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setSuccessMsg('')}><FiX/></button>
+            </div>
+          )}
+          {errorMsg && (
+            <div className="sd-alert sd-alert-error" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>{errorMsg}</span>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setErrorMsg('')}><FiX/></button>
+            </div>
+          )}
 
           {/* ══════════ OVERVIEW / DASHBOARD TAB ══════════ */}
           {activeSubTab === 'overview' && (
@@ -887,7 +1032,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
               {/* Premium Dashboard Header Card with Background Image */}
               <div className="sd-dashboard-header-card" style={{ backgroundImage: `url(${teacherHeaderBanner})`, position: 'relative' }}>
                 <div className="sd-header-text-section" style={{ maxWidth: '50%' }}>
-                  <h1>Welcome back, {profileForm.full_name || user?.username || 'School Admin'}!</h1>
+                  <h1>Welcome back, { profileForm.username || user?.username || 'School Admin' }!</h1>
                   <p>Manage teachers, track student progress, monitor classes, and coordinate academic resources.</p>
                 </div>
 
@@ -1079,7 +1224,11 @@ const SchoolDashboard = ({ user, onLogout }) => {
                     />
                   </div>
                   <div className="sd-table-actions">
-                    <button className="sd-btn-filter"><FiFilter/>Filters</button>
+                    {selectedTeacherIds.length > 0 && (
+                      <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteTeachers}>
+                        <FiTrash2/> Delete Selected ({selectedTeacherIds.length})
+                      </button>
+                    )}
                     <button className="sd-btn-outline" onClick={() => { setImportActive(!importActive); setUploadSummary(null); }}>
                       Excel Import
                     </button>
@@ -1152,39 +1301,66 @@ const SchoolDashboard = ({ user, onLogout }) => {
                 )}
                 <div className="sd-table-wrap">
                   <table className="sd-table">
+                    <colgroup>
+                      <col style={{ width: '4%' }} />
+                      <col style={{ width: '28%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '26%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '14%' }} />
+                    </colgroup>
                     <thead>
                       <tr>
+                        <th className="sd-checkbox-cell">
+                          <input
+                            type="checkbox"
+                            checked={teachers.length > 0 && selectedTeacherIds.length === filterList(teachers).length}
+                            onChange={handleSelectAllTeachers}
+                          />
+                        </th>
                         <th>Name</th>
                         <th>Qualification</th>
-                        
                         <th>Assigned Classes</th>
                         <th>Status</th>
-                        <th style={{ textAlign:'right' }}>Actions</th>
+                        <th style={{ textAlign:'center' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {paginate(filterList(teachers), teacherPage).map((t, i) => (
-                        <tr key={t.teacher_id || i}>
-                          <td>
-                            <span className="sd-name-cell-primary">{t.full_name || t.username || 'N/A'}</span>
-                            <span className="sd-name-cell-email">{t.email}</span>
-                          </td>
-                          <td>{t.qualification || 'N/A'}</td>
-                          <td>{t.school_name || '—'}</td>
-                          <td>{t.assigned_classes || '—'}</td>
-                          <td>
-                            <span className={`sd-badge ${t.is_active ? 'sd-badge-active' : 'sd-badge-leave'}`}>
-                              {t.is_active ? 'Active' : 'On Leave'}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="sd-action-cell">
-                              <button className="sd-icon-action edit" onClick={() => handleOpenEdit(t)} title="Edit"><FiEdit2/></button>
-                              <button className="sd-icon-action delete" onClick={() => handleDelete(t.teacher_id)} title="Delete"><FiTrash2/></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                      {paginate(filterList(teachers), teacherPage).map((t, i) => {
+                        const tid = t.teacher_id || t.id;
+                        return (
+                          <tr key={tid || i}>
+                            <td className="sd-checkbox-cell">
+                              <input
+                                type="checkbox"
+                                checked={selectedTeacherIds.includes(tid)}
+                                onChange={() => handleSelectTeacherRow(tid)}
+                              />
+                            </td>
+                            <td>
+                              <span className="sd-name-cell-primary">{t.full_name || t.username || 'N/A'}</span>
+                              <span className="sd-name-cell-email">{t.email}</span>
+                            </td>
+                            <td>{t.qualification || 'N/A'}</td>
+                            <td>
+                              <span style={{ fontSize:'0.82rem', color:'#374151' }}>
+                                {t.assigned_classes || <span style={{ color:'#9ca3af', fontStyle:'italic' }}>Unassigned</span>}
+                              </span>
+                            </td>
+                            <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
+                              <span className={`sd-badge ${t.is_active ? 'sd-badge-active' : 'sd-badge-leave'}`}>
+                                {t.is_active ? 'Active' : 'On Leave'}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="sd-action-cell" style={{ justifyContent:'center' }}>
+                                <button className="sd-icon-action edit" onClick={() => handleOpenEdit(t)} title="Edit"><FiEdit2/></button>
+                                <button className="sd-icon-action delete" onClick={() => handleDelete(tid)} title="Delete"><FiTrash2/></button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                       {filterList(teachers).length === 0 && (
                         <tr><td colSpan="6" className="sd-empty-state">No teachers found.</td></tr>
                       )}
@@ -1219,7 +1395,11 @@ const SchoolDashboard = ({ user, onLogout }) => {
                     />
                   </div>
                   <div className="sd-table-actions">
-                    <button className="sd-btn-filter"><FiFilter/>Filters</button>
+                    {selectedStudentIds.length > 0 && (
+                      <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteStudents}>
+                        <FiTrash2/> Delete Selected ({selectedStudentIds.length})
+                      </button>
+                    )}
                     <button className="sd-btn-outline" onClick={() => { setImportActive(!importActive); setUploadSummary(null); }}>
                       Excel Import
                     </button>
@@ -1293,38 +1473,63 @@ const SchoolDashboard = ({ user, onLogout }) => {
 
                 <div className="sd-table-wrap">
                   <table className="sd-table">
+                    <colgroup>
+                      <col style={{ width: '4%' }} />
+                      <col style={{ width: '23%' }} />
+                      <col style={{ width: '20%' }} />
+                      <col style={{ width: '30%' }} />
+                      <col style={{ width: '11%' }} />
+                      <col style={{ width: '12%' }} />
+                    </colgroup>
                     <thead>
                       <tr>
+                        <th className="sd-checkbox-cell">
+                          <input
+                            type="checkbox"
+                            checked={students.length > 0 && selectedStudentIds.length === filterList(students).length}
+                            onChange={handleSelectAllStudents}
+                          />
+                        </th>
                         <th>Name</th>
                         <th>Username</th>
                         <th>Email</th>
                         <th>Status</th>
-                        <th style={{ textAlign:'right' }}>Actions</th>
+                        <th style={{ textAlign:'center' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {paginate(filterList(students), studentPage).map((s, i) => (
-                        <tr key={s.student_id || i}>
-                          <td>
-                            <span className="sd-name-cell-primary">{s.full_name || s.username || 'N/A'}</span>
-                          </td>
-                          <td>{s.username}</td>
-                          <td>{s.email || <span style={{ color:'#9ca3af', fontStyle:'italic' }}>Not provided</span>}</td>
-                          <td>
-                            <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
-                              {s.is_active ? 'Active' : 'Disabled'}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="sd-action-cell">
-                              <button className="sd-icon-action edit" onClick={() => handleOpenEdit(s)} title="Edit"><FiEdit2/></button>
-                              <button className="sd-icon-action delete" onClick={() => handleDelete(s.student_id)} title="Delete"><FiTrash2/></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                      {paginate(filterList(students), studentPage).map((s, i) => {
+                        const sid = s.student_id || s.id;
+                        return (
+                          <tr key={sid || i}>
+                            <td className="sd-checkbox-cell">
+                              <input
+                                type="checkbox"
+                                checked={selectedStudentIds.includes(sid)}
+                                onChange={() => handleSelectStudentRow(sid)}
+                              />
+                            </td>
+                            <td>
+                              <span className="sd-name-cell-primary">{s.full_name || s.username || 'N/A'}</span>
+                            </td>
+                            <td>{s.username}</td>
+                            <td>{s.email || <span style={{ color:'#9ca3af', fontStyle:'italic' }}>Not provided</span>}</td>
+                            <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
+                              <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                                {s.is_active ? 'Active' : 'Disabled'}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="sd-action-cell" style={{ justifyContent:'center' }}>
+                                <button className="sd-icon-action edit" onClick={() => handleOpenEdit(s)} title="Edit"><FiEdit2/></button>
+                                <button className="sd-icon-action delete" onClick={() => handleDelete(sid)} title="Delete"><FiTrash2/></button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                       {filterList(students).length === 0 && (
-                        <tr><td colSpan="5" className="sd-empty-state">No students found.</td></tr>
+                        <tr><td colSpan="6" className="sd-empty-state">No students found.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -1357,41 +1562,70 @@ const SchoolDashboard = ({ user, onLogout }) => {
                     />
                   </div>
                   <div className="sd-table-actions">
-                    <button className="sd-btn-filter"><FiFilter/>Filters</button>
+                    {selectedClassIds.length > 0 && (
+                      <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteClasses}>
+                        <FiTrash2/> Delete Selected ({selectedClassIds.length})
+                      </button>
+                    )}
                     <button className="sd-btn-primary" onClick={handleOpenAdd}><FiPlus/>Add Class</button>
                   </div>
                 </div>
                 <div className="sd-table-wrap">
                   <table className="sd-table">
+                    <colgroup>
+                      <col style={{ width: '4%' }} />
+                      <col style={{ width: '26%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '26%' }} />
+                      <col style={{ width: '14%' }} />
+                      <col style={{ width: '14%' }} />
+                    </colgroup>
                     <thead>
                       <tr>
+                        <th className="sd-checkbox-cell">
+                          <input
+                            type="checkbox"
+                            checked={classes.length > 0 && selectedClassIds.length === filterList(classes).length}
+                            onChange={handleSelectAllClasses}
+                          />
+                        </th>
                         <th>Class Name</th>
                         <th>Grade Level</th>
                         <th>Assigned Teachers</th>
                         <th>Academic Year</th>
-                        <th style={{ textAlign:'right' }}>Actions</th>
+                        <th style={{ textAlign:'center' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {paginate(filterList(classes), classPage).map((c, i) => (
-                        <tr key={c.class_id || i}>
-                          <td>
-                            <span className="sd-name-cell-primary">{c.class_name}</span>
-                            <span className="sd-name-cell-email">{c.school_name || ''}</span>
-                          </td>
-                          <td>{c.grade_name || 'N/A'}</td>
-                          <td>{c.teacher_name || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Unassigned</span>}</td>
-                          <td>{c.academic_year}</td>
-                          <td>
-                            <div className="sd-action-cell">
-                              <button className="sd-icon-action edit" onClick={() => handleOpenEdit(c)} title="Edit"><FiEdit2/></button>
-                              <button className="sd-icon-action delete" onClick={() => handleDelete(c.class_id)} title="Delete"><FiTrash2/></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                      {paginate(filterList(classes), classPage).map((c, i) => {
+                        const cid = c.class_id || c.id;
+                        return (
+                          <tr key={cid || i}>
+                            <td className="sd-checkbox-cell">
+                              <input
+                                type="checkbox"
+                                checked={selectedClassIds.includes(cid)}
+                                onChange={() => handleSelectClassRow(cid)}
+                              />
+                            </td>
+                            <td>
+                              <span className="sd-name-cell-primary">{c.class_name}</span>
+                              <span className="sd-name-cell-email">{c.school_name || ''}</span>
+                            </td>
+                            <td>{c.grade_name || 'N/A'}</td>
+                            <td>{c.teacher_name || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Unassigned</span>}</td>
+                            <td>{c.academic_year}</td>
+                            <td>
+                              <div className="sd-action-cell" style={{ justifyContent:'center' }}>
+                                <button className="sd-icon-action edit" onClick={() => handleOpenEdit(c)} title="Edit"><FiEdit2/></button>
+                                <button className="sd-icon-action delete" onClick={() => handleDelete(cid)} title="Delete"><FiTrash2/></button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                       {filterList(classes).length === 0 && (
-                        <tr><td colSpan="5" className="sd-empty-state">No classes found.</td></tr>
+                        <tr><td colSpan="6" className="sd-empty-state">No classes found.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -1424,7 +1658,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
                     />
                   </div>
                   <div className="sd-table-actions">
-                    <button className="sd-btn-filter"><FiFilter/>Filters</button>
+                    {/* <button className="sd-btn-filter"><FiFilter/>Filters</button> */}
                   </div>
                 </div>
                 <div className="sd-table-wrap">
@@ -1446,12 +1680,12 @@ const SchoolDashboard = ({ user, onLogout }) => {
                             <span className="sd-name-cell-email">{s.description?.slice(0, 50) || ''}</span>
                           </td>
                           <td>{s.grade_name || (s.grade && `Grade ${s.grade}`) || 'N/A'}</td>
-                          <td>
+                          <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
                             <span className={`sd-badge ${s.difficulty === 'EASY' ? 'sd-badge-active' : s.difficulty === 'HARD' ? 'sd-badge-leave' : 'sd-badge-review'}`}>
                               {s.difficulty || 'MEDIUM'}
                             </span>
                           </td>
-                          <td>
+                          <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
                             <span className={`sd-badge ${s.status === 'PUBLISHED' ? 'sd-badge-published' : s.status === 'REVIEW' ? 'sd-badge-review' : 'sd-badge-draft'}`}>
                               {s.status || 'DRAFT'}
                             </span>
@@ -1689,17 +1923,15 @@ const SchoolDashboard = ({ user, onLogout }) => {
                     </div>
                              </div>
 
-                  {/* Full Name + Email */}
+                  {/* Username + Email */}
                   <div className="sd-form-row">
                     <div className="sd-form-group">
-                      <label className="sd-form-label">Full Name</label>
+                      <label className="sd-form-label">Username</label>
                       <input
                         className="sd-form-input"
                         type="text"
-                        value={profileForm.full_name}
-                        onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
-                        placeholder="Your full name"
-                        required
+                        value={profileForm.username}
+                        disabled
                       />
                     </div>
                     <div className="sd-form-group">
@@ -1715,25 +1947,25 @@ const SchoolDashboard = ({ user, onLogout }) => {
                     </div>
                   </div>
 
-                  {/* School Name + Phone */}
+                  {/* School Name + Phone Number */}
                   <div className="sd-form-row">
                     <div className="sd-form-group">
                       <label className="sd-form-label">School Name</label>
                       <input
                         className="sd-form-input"
                         type="text"
-                        value={profileForm.school_name || 'Default Seed School'}
+                        value={profileForm.school_name || ''}
                         disabled
                       />
                     </div>
                     <div className="sd-form-group">
-                      <label className="sd-form-label">User Name</label>
+                      <label className="sd-form-label">Phone Number</label>
                       <input
                         className="sd-form-input"
-                        type="text"
-                        value={profileForm.username}
-                        disabled
-                        placeholder="+1 (555) 0123-4567"
+                        type="tel"
+                        value={profileForm.phone_no}
+                        onChange={e => setProfileForm({ ...profileForm, phone_no: e.target.value })}
+                        placeholder="+91 98765 43210"
                       />
                     </div>
                   </div>
@@ -1744,7 +1976,11 @@ const SchoolDashboard = ({ user, onLogout }) => {
                       <div className="sd-pw-row-title">Change Password</div>
                       <div className="sd-pw-row-sub">Update your password to stay secure</div>
                     </div>
-                    <button type="button" className="sd-btn-outline" onClick={() => setShowPwModal(true)}>
+                    <button type="button" className="sd-btn-outline" onClick={() => {
+                      setPwForm({ current_password: '', new_password: '', confirm_password: '' });
+                      setPwModalError('');
+                      setShowPwModal(true);
+                    }}>
                       Update
                     </button>
                   </div>
@@ -1805,7 +2041,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">School</label>
-                  <input className="sd-form-input" type="text" value={profileForm.school_name || 'Default Seed School'} disabled />
+                  <input className="sd-form-input" type="text" value={profileForm.school_name || ''} disabled />
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Qualification</label>
@@ -1813,28 +2049,25 @@ const SchoolDashboard = ({ user, onLogout }) => {
                     onChange={e => setTeacherForm({...teacherForm, qualification:e.target.value})}/>
                 </div>
                 <div className="sd-form-group">
-                  <label className="sd-form-label">Assign Classes</label>
-                  <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.5rem', background: '#fff' }}>
+                  <label className="sd-form-label">Assign Class</label>
+                  <select
+                    className="sd-form-input"
+                    value={teacherForm.assigned_class_ids && teacherForm.assigned_class_ids.length > 0 ? teacherForm.assigned_class_ids[0] : ''}
+                    onChange={e => {
+                      const selectedId = e.target.value;
+                      setTeacherForm({
+                        ...teacherForm,
+                        assigned_class_ids: selectedId ? [parseInt(selectedId)] : []
+                      });
+                    }}
+                  >
+                    <option value="">-- Select Class --</option>
                     {classes.map(c => (
-                      <label key={c.class_id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', fontSize: '0.85rem', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={teacherForm.assigned_class_ids?.includes(c.class_id)}
-                          onChange={e => {
-                            const checked = e.target.checked;
-                            const currentIds = teacherForm.assigned_class_ids || [];
-                            if (checked) {
-                              setTeacherForm({ ...teacherForm, assigned_class_ids: [...currentIds, c.class_id] });
-                            } else {
-                              setTeacherForm({ ...teacherForm, assigned_class_ids: currentIds.filter(id => id !== c.class_id) });
-                            }
-                          }}
-                        />
-                        <span>{c.class_name} ({c.grade_name || ''})</span>
-                      </label>
+                      <option key={c.class_id} value={c.class_id}>
+                        {c.class_name} {c.grade_name ? `(${c.grade_name})` : ''}
+                      </option>
                     ))}
-                    {classes.length === 0 && <span style={{ color: '#9ca3af', fontSize: '0.85rem', fontStyle: 'italic' }}>No classes available</span>}
-                  </div>
+                  </select>
                 </div>
 
                 <label className="sd-checkbox-label">
@@ -1885,13 +2118,13 @@ const SchoolDashboard = ({ user, onLogout }) => {
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">School</label>
-                  <input className="sd-form-input" type="text" value={profileForm.school_name || 'Default Seed School'} disabled />
+                  <input className="sd-form-input" type="text" value={profileForm.school_name || ''} disabled />
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Grade Level</label>
                   <select className="sd-form-input" value={classForm.grade}
                     onChange={e => setClassForm({...classForm, grade:e.target.value})} required>
-                    {defaultGradesList.map(g => (
+                    {grades.map(g => (
                       <option key={g.id} value={g.id}>{g.grade_name}</option>
                     ))}
                   </select>
@@ -1902,28 +2135,25 @@ const SchoolDashboard = ({ user, onLogout }) => {
                     onChange={e => setClassForm({...classForm, academic_year:e.target.value})} required/>
                 </div>
                 <div className="sd-form-group">
-                  <label className="sd-form-label">Assign Teachers</label>
-                  <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.5rem', background: '#fff' }}>
+                  <label className="sd-form-label">Assign Teacher</label>
+                  <select
+                    className="sd-form-input"
+                    value={classForm.assigned_teacher_ids && classForm.assigned_teacher_ids.length > 0 ? classForm.assigned_teacher_ids[0] : ''}
+                    onChange={e => {
+                      const selectedId = e.target.value;
+                      setClassForm({
+                        ...classForm,
+                        assigned_teacher_ids: selectedId ? [parseInt(selectedId)] : []
+                      });
+                    }}
+                  >
+                    <option value="">-- Select Teacher --</option>
                     {teachers.map(t => (
-                      <label key={t.teacher_id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', fontSize: '0.85rem', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={classForm.assigned_teacher_ids?.includes(t.teacher_id)}
-                          onChange={e => {
-                            const checked = e.target.checked;
-                            const currentIds = classForm.assigned_teacher_ids || [];
-                            if (checked) {
-                              setClassForm({ ...classForm, assigned_teacher_ids: [...currentIds, t.teacher_id] });
-                            } else {
-                              setClassForm({ ...classForm, assigned_teacher_ids: currentIds.filter(id => id !== t.teacher_id) });
-                            }
-                          }}
-                        />
-                        <span>{t.full_name || t.username}</span>
-                      </label>
+                      <option key={t.teacher_id} value={t.teacher_id}>
+                        {t.full_name || t.username}
+                      </option>
                     ))}
-                    {teachers.length === 0 && <span style={{ color: '#9ca3af', fontSize: '0.85rem', fontStyle: 'italic' }}>No teachers available</span>}
-                  </div>
+                  </select>
                 </div>
                 <label className="sd-checkbox-label">
                   <input type="checkbox" checked={classForm.is_active}
@@ -1951,37 +2181,93 @@ const SchoolDashboard = ({ user, onLogout }) => {
               <span className="sd-modal-title">Change Password</span>
               <button className="sd-modal-close" onClick={() => setShowPwModal(false)}><FiX/></button>
             </div>
+
             <form className="sd-modal-form" onSubmit={async e => {
               e.preventDefault();
-              if (!profileForm.current_password) { setErrorMsg('Current password required.'); return; }
+              setPwModalError('');
+              if (!pwForm.current_password) { setPwModalError('Current password is required.'); return; }
+              if (!pwForm.new_password) { setPwModalError('New password is required.'); return; }
+              if (!pwForm.confirm_password) { setPwModalError('Confirm password is required.'); return; }
+              if (pwForm.new_password.length < 6) { setPwModalError('New password must be at least 6 characters.'); return; }
+
               setActionLoading(true);
               try {
                 const res = await apiFetch('/api/users/change-password/', {
                   method:'POST',
-                  body: JSON.stringify({ old_password: profileForm.current_password, new_password: profileForm.password })
+                  body: JSON.stringify({ old_password: pwForm.current_password, new_password: pwForm.new_password, confirm_password: pwForm.confirm_password })
                 });
-                const d = await res.json();
+                let d = {};
+                try { d = await res.json(); } catch { d = {}; }
                 if (res.ok) {
                   showFeedback('Password changed successfully!', null);
-                  setProfileForm(p => ({ ...p, current_password:'', password:'' }));
+                  setPwForm({ current_password:'', new_password:'', confirm_password:'' });
                   setShowPwModal(false);
                 } else {
-                  setErrorMsg(typeof d==='object' ? JSON.stringify(d) : 'Password change failed.');
+                  let msg = 'Current password is incorrect.';
+                  if (d) {
+                    if (d.confirm_password) {
+                      msg = Array.isArray(d.confirm_password) ? d.confirm_password.join(' ') : String(d.confirm_password);
+                    } else if (d.new_password) {
+                      msg = Array.isArray(d.new_password) ? d.new_password.join(' ') : String(d.new_password);
+                    } else if (d.old_password) {
+                      const raw = Array.isArray(d.old_password) ? d.old_password.join(' ') : String(d.old_password);
+                      msg = (raw.toLowerCase().includes('incorrect') || raw.toLowerCase().includes('wrong') || raw.toLowerCase().includes('current')) ? 'Current password is incorrect.' : raw;
+                    } else if (d.non_field_errors) {
+                      msg = Array.isArray(d.non_field_errors) ? d.non_field_errors.join(' ') : String(d.non_field_errors);
+                    } else if (d.detail) {
+                      const dt = String(d.detail);
+                      msg = (dt.toLowerCase().includes('incorrect') || dt.toLowerCase().includes('wrong')) ? 'Current password is incorrect.' : dt;
+                    } else if (d.error) {
+                      const er = String(d.error);
+                      msg = (er.toLowerCase().includes('incorrect') || er.toLowerCase().includes('wrong')) ? 'Current password is incorrect.' : er;
+                    }
+                  }
+                  setPwModalError(msg);
                 }
-              } catch { setErrorMsg('Connection error.'); }
+              } catch (err) {
+                console.error('Password change error:', err);
+                setPwModalError('Current password is incorrect.');
+              }
               finally { setActionLoading(false); }
             }}>
+              {pwModalError && (
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '8px',
+                  color: '#dc2626',
+                  fontSize: '0.84rem',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                  boxSizing: 'border-box'
+                }}>
+                  <FiAlertTriangle style={{ flexShrink: 0, color: '#ef4444', fontSize: '1rem' }} />
+                  <span style={{ lineHeight: 1.4 }}>{pwModalError}</span>
+                </div>
+              )}
               <div className="sd-form-group">
                 <label className="sd-form-label">Current Password</label>
-                <input className="sd-form-input" type="password" value={profileForm.current_password}
-                  onChange={e => setProfileForm({...profileForm, current_password:e.target.value})}
+                <input className="sd-form-input" type="password"
+                  value={pwForm.current_password}
+                  onChange={e => { setPwForm({...pwForm, current_password:e.target.value}); setPwModalError(''); }}
                   placeholder="Enter current password" required/>
               </div>
               <div className="sd-form-group">
                 <label className="sd-form-label">New Password</label>
-                <input className="sd-form-input" type="password" value={profileForm.password}
-                  onChange={e => setProfileForm({...profileForm, password:e.target.value})}
+                <input className="sd-form-input" type="password"
+                  value={pwForm.new_password}
+                  onChange={e => { setPwForm({...pwForm, new_password:e.target.value}); setPwModalError(''); }}
                   placeholder="Minimum 6 characters" required minLength={6}/>
+              </div>
+              <div className="sd-form-group">
+                <label className="sd-form-label">Confirm Password</label>
+                <input className="sd-form-input" type="password"
+                  value={pwForm.confirm_password}
+                  onChange={e => { setPwForm({...pwForm, confirm_password:e.target.value}); setPwModalError(''); }}
+                  placeholder="Confirm new password" required minLength={6}/>
               </div>
               <div className="sd-modal-footer">
                 <button type="button" className="sd-btn-cancel" onClick={() => setShowPwModal(false)}>Cancel</button>
@@ -2107,19 +2393,100 @@ const SchoolDashboard = ({ user, onLogout }) => {
 
       {/* ── Custom Delete Confirmation Modal ── */}
       {deleteConfirm.show && (
-        <div className="sd-modal-backdrop" style={{ backdropFilter: 'blur(5px)' }} onClick={() => setDeleteConfirm({ show: false, id: null, type: null })}>
-          <div className="sd-modal" style={{ maxWidth: 400, textAlign: 'center', padding: '2rem 1.5rem' }} onClick={e => e.stopPropagation()}>
-            <div style={{ color: '#ef4444', fontSize: '3rem', marginBottom: '0.75rem', display: 'flex', justifyContent: 'center' }}><FiTrash2 /></div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Are you sure?</h3>
-            <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: '1.5rem', lineHeight: 1.5 }}>
-              Do you really want to delete this {deleteConfirm.type}? This action cannot be undone.
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '1rem'
+          }}
+          onClick={() => setDeleteConfirm({ show: false, id: null, type: null })}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '360px',
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              padding: '1.75rem 1.5rem',
+              boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.3)',
+              textAlign: 'center'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Delete Symbol */}
+            <div
+              style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '50%',
+                backgroundColor: '#fee2e2',
+                color: '#ef4444',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1rem',
+                fontSize: '1.5rem'
+              }}
+            >
+              <FiTrash2 />
+            </div>
+
+            {/* Title & Warning */}
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.4rem' }}>
+              Are you sure?
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+              Do you really want to delete {deleteConfirm.isBulk ? `${deleteConfirm.count} selected ${deleteConfirm.type}` : `this ${deleteConfirm.type}`}? This action cannot be undone.
             </p>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
-              <button className="sd-btn-cancel" onClick={() => setDeleteConfirm({ show: false, id: null, type: null })}>
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button
+                type="button"
+                style={{
+                  flex: 1,
+                  padding: '0.65rem 1rem',
+                  borderRadius: '10px',
+                  backgroundColor: '#f1f5f9',
+                  color: '#475569',
+                  border: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer'
+                }}
+                onClick={() => setDeleteConfirm({ show: false, id: null, type: null })}
+              >
                 Cancel
               </button>
-              <button className="sd-btn-primary" style={{ background: '#ef4444' }} onClick={confirmDeleteAction} disabled={actionLoading}>
-                {actionLoading ? 'Deleting...' : 'Delete'}
+              <button
+                type="button"
+                style={{
+                  flex: 1,
+                  padding: '0.65rem 1rem',
+                  borderRadius: '10px',
+                  backgroundColor: '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer'
+                }}
+                onClick={confirmDeleteAction}
+                disabled={actionLoading}
+              >
+                {actionLoading ? 'Deleting...' : 'OK'}
               </button>
             </div>
           </div>

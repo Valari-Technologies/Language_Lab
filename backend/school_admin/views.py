@@ -159,6 +159,15 @@ class BulkUploadAPIView(APIView):
         # Normalize headers (lowercase and strip spaces)
         headers = [str(h).strip().lower() if h is not None else "" for h in rows[0]]
 
+        def get_val(row_dict, *keys):
+            for k in keys:
+                if k in row_dict and row_dict[k] is not None:
+                    return row_dict[k]
+            return None
+
+        def has_any(header_list, *candidates):
+            return any(c in header_list for c in candidates)
+
         if upload_type == "school":
             required_cols = ["schoolname", "email", "password", "admin name", "location"]
             for col in required_cols:
@@ -168,9 +177,9 @@ class BulkUploadAPIView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
         else:
-            if "username" not in headers or "password" not in headers:
+            if not has_any(headers, "username", "user", "roll_number", "roll number", "student_id", "student id", "user_name") or not has_any(headers, "password", "pass"):
                 return Response(
-                    {"error": "Missing required column headers. Must include 'username' and 'password'."},
+                    {"error": "Missing required column headers. Must include 'username' (or 'roll number') and 'password'."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
@@ -222,7 +231,6 @@ class BulkUploadAPIView(APIView):
 
                         # Generate username from email prefix
                         username = email.split('@')[0].strip().lower()
-                        # Clean special chars from username
                         import re
                         username = re.sub(r'[^a-zA-Z0-9_.-]', '', username)
                         if not username:
@@ -237,13 +245,8 @@ class BulkUploadAPIView(APIView):
                         if User.objects.filter(email=email).exists():
                             raise ValueError(f"A user with email '{email}' already exists.")
 
-                        # Password strength validation
-                        try:
-                            from django.contrib.auth.password_validation import validate_password
-                            validate_password(password, user=None)
-                        except Exception as ve:
-                            err_msgs = getattr(ve, "messages", [str(ve)])
-                            raise ValueError(f"Password validation failed: {', '.join(err_msgs)}")
+                        if len(password) < 4:
+                            raise ValueError("Password must be at least 4 characters long.")
 
                         # Create School
                         school_obj = School.objects.create(
@@ -267,9 +270,9 @@ class BulkUploadAPIView(APIView):
                         SchoolAdminProfile.objects.create(user=user_obj, school=school_obj)
                         created_count += 1
                     else:
-                        # Parse username and password
-                        username_val = row_data.get("username")
-                        password_val = row_data.get("password")
+                        # Flexible header value extraction
+                        username_val = get_val(row_data, "username", "user", "roll_number", "roll number", "student_id", "student id", "user_name")
+                        password_val = get_val(row_data, "password", "pass")
 
                         if username_val is None or not str(username_val).strip():
                             raise ValueError("Username is required.")
@@ -282,17 +285,15 @@ class BulkUploadAPIView(APIView):
                         if User.objects.filter(username=username).exists():
                             raise ValueError(f"Username '{username}' already exists.")
 
-                        # Password strength validation
-                        try:
-                            from django.contrib.auth.password_validation import validate_password
-                            validate_password(password, user=None)
-                        except Exception as ve:
-                            err_msgs = getattr(ve, "messages", [str(ve)])
-                            raise ValueError(f"Password validation failed: {', '.join(err_msgs)}")
+                        if len(password) < 4:
+                            raise ValueError("Password must be at least 4 characters long.")
 
                         # Extract user details
-                        email = str(row_data.get("email", "")).strip() if row_data.get("email") is not None else ""
-                        full_name = str(row_data.get("full_name", "")).strip() if row_data.get("full_name") is not None else ""
+                        email_val = get_val(row_data, "email", "email_address", "email address")
+                        email = str(email_val).strip() if email_val is not None else ""
+
+                        fullname_val = get_val(row_data, "full_name", "full name", "name", "student_name", "teacher_name")
+                        full_name = str(fullname_val).strip() if fullname_val is not None else ""
 
                         is_active_val = row_data.get("is_active")
                         if is_active_val is not None:

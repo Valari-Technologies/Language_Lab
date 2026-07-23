@@ -6,7 +6,8 @@ import {
   FiChevronDown, FiCalendar, FiBell, FiFilter,
   FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
   FiActivity, FiTrendingUp, FiClock, FiAward,
-  FiChevronLeft, FiChevronRight, FiLock, FiArrowRight, FiDownload
+  FiChevronLeft, FiChevronRight, FiLock, FiArrowRight, FiDownload, FiAlertTriangle,
+  FiEye, FiEyeOff
 } from 'react-icons/fi';
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
@@ -134,6 +135,20 @@ const TeacherDashboard = ({ user, onLogout }) => {
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg]           = useState('');
   const [successMsg, setSuccessMsg]       = useState('');
+
+  useEffect(() => {
+    if (errorMsg) {
+      const timer = setTimeout(() => setErrorMsg(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMsg]);
+
+  useEffect(() => {
+    if (successMsg) {
+      const timer = setTimeout(() => setSuccessMsg(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMsg]);
   const [searchQuery, setSearchQuery]     = useState('');
 
   /* ── Pagination ── */
@@ -141,11 +156,20 @@ const TeacherDashboard = ({ user, onLogout }) => {
   const [classPage,    setClassPage]    = useState(1);
   const PER_PAGE = 4;
 
+  /* ── Selection ── */
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  const [selectedClassIds,   setSelectedClassIds]   = useState([]);
+
+  /* ── Bulk Upload ── */
+  const [importActive,   setImportActive]   = useState(false);
+  const [uploadSummary,  setUploadSummary]  = useState(null);
+
   /* ── Modals ── */
   const [showModal,   setShowModal]   = useState(false);
   const [modalType,   setModalType]   = useState('add');
   const [editingId,   setEditingId]   = useState(null);
   const [showPwModal, setShowPwModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, type: '' });
 
   /* ── Data ── */
   const [data,     setData]     = useState(null);
@@ -164,8 +188,11 @@ const TeacherDashboard = ({ user, onLogout }) => {
   });
   const [profileForm, setProfileForm] = useState({
     username: user?.username || '', email: user?.email || '',
-    full_name: user?.full_name || '', current_password: '', password: ''
+    full_name: user?.full_name || '', phone_no: user?.phone_no || '',
+    current_password: '', password: ''
   });
+  const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
+  const [pwModalError, setPwModalError] = useState('');
 
   /* ══════════════════
      DATA LOADERS (unchanged from original)
@@ -214,12 +241,41 @@ const TeacherDashboard = ({ user, onLogout }) => {
     finally { setLoading(false); }
   };
 
+  const formatErrorMsg = (err) => {
+    if (!err) return '';
+    let msg = typeof err === 'object' ? (err.detail || err.error || err.message || JSON.stringify(err)) : String(err);
+    if (msg.startsWith('{') || msg.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(msg);
+        msg = parsed.detail || parsed.error || Object.values(parsed).flat().join(', ');
+      } catch {
+        // use raw
+      }
+    }
+    if (msg.length > 85) msg = msg.slice(0, 80) + '...';
+    return msg;
+  };
+
+  useEffect(() => {
+    if (errorMsg) {
+      const timer = setTimeout(() => setErrorMsg(''), 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMsg]);
+
+  useEffect(() => {
+    if (successMsg) {
+      const timer = setTimeout(() => setSuccessMsg(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMsg]);
+
   useEffect(() => { loadAllData(); }, []);
 
   /* ── Feedback ── */
   const showFeedback = (success, error) => {
-    if (success) { setSuccessMsg(success); setTimeout(() => setSuccessMsg(''), 4000); }
-    if (error)   { setErrorMsg(error);   setTimeout(() => setErrorMsg(''),   4000); }
+    if (success) { setSuccessMsg(success); }
+    if (error)   { setErrorMsg(formatErrorMsg(error)); }
   };
 
   /* ── Form init ── */
@@ -273,39 +329,167 @@ const TeacherDashboard = ({ user, onLogout }) => {
         if (activeSubTab === 'students') loadStudents();
         else if (activeSubTab === 'classes') loadClasses();
       } else {
-        const errorData = await res.json();
-        setErrorMsg(errorData.message || 'Action failed. Please check inputs.');
+        const errorData = await res.json().catch(() => ({}));
+        showFeedback(null, errorData.detail || errorData.error || errorData.message ||
+          Object.values(errorData).flat().join(', ') || 'Action failed. Please check inputs.');
       }
     } catch { setErrorMsg('Network error occurred.'); }
     finally { setActionLoading(false); }
   };
 
   /* ── Delete ── */
-  const handleDelete = async (id, type) => {
-    if (!window.confirm(`Are you sure you want to delete this ${type}?`)) return;
+  const openDeleteModal = (id, type) => {
+    setDeleteConfirm({ show: true, id, type });
+  };
+
+  const confirmDeleteAction = async () => {
+    if (!deleteConfirm.show) return;
+    setActionLoading(true);
     try {
+      if (deleteConfirm.isBulk) {
+        const { id: bulkType, ids, count } = deleteConfirm;
+        if (bulkType === 'bulk-students') {
+          await Promise.all(ids.map(id => apiFetch(`/api/cms/v1/students/${id}/`, { method: 'DELETE' })));
+          showFeedback(`Successfully deleted ${count} student(s).`, null);
+          setSelectedStudentIds([]);
+          await loadStudents();
+        } else if (bulkType === 'bulk-classes') {
+          await Promise.all(ids.map(id => apiFetch(`/api/cms/v1/classes/${id}/`, { method: 'DELETE' })));
+          showFeedback(`Successfully deleted ${count} class(es).`, null);
+          setSelectedClassIds([]);
+          await loadClasses();
+        }
+        setDeleteConfirm({ show: false, id: null, type: '', isBulk: false, ids: [], count: 0 });
+        return;
+      }
+      const { id, type } = deleteConfirm;
+      if (!id) return;
       const res = await apiFetch(`/api/cms/v1/${type}s/${id}/`, { method: 'DELETE' });
       if (res.ok) {
-        showFeedback(`${type} deleted successfully!`, null);
-        if (type === 'student') loadStudents();
-        else if (type === 'class') loadClasses();
-      } else { showFeedback(null, 'Delete failed.'); }
-    } catch { showFeedback(null, 'Network error.'); }
+        showFeedback(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully!`, null);
+        setDeleteConfirm({ show: false, id: null, type: '' });
+        if (type === 'student') await loadStudents();
+        else if (type === 'class') await loadClasses();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showFeedback(null, data.error || data.detail || 'Delete failed.');
+      }
+    } catch {
+      showFeedback(null, 'Network error.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  /* ── Bulk Upload ── */
+  const handleBulkUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setErrorMsg('');
+    setSuccessMsg('');
+    setUploadSummary(null);
+    setActionLoading(true);
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_type', 'student');
+
+    try {
+      const res = await apiFetch('/api/cms/v1/bulk-upload/', {
+        method: 'POST',
+        body: formData
+      });
+      const resData = await res.json();
+      if (res.ok) {
+        setUploadSummary(resData);
+        if (resData.created > 0) {
+          showFeedback(`Imported ${resData.created} student(s) successfully.`, null);
+          await loadStudents();
+        } else {
+          setErrorMsg('Bulk upload complete with 0 records imported.');
+        }
+      } else {
+        setErrorMsg(resData.error || 'Failed to process spreadsheet.');
+      }
+    } catch (err) {
+      setErrorMsg('Failed to upload file. Check connections.');
+    } finally {
+      setActionLoading(false);
+      e.target.value = '';
+    }
+  };
+
+  /* ── Selection Handlers ── */
+  const handleSelectAllStudents = (e) => {
+    if (e.target.checked) {
+      const filtered = filterList(students);
+      setSelectedStudentIds(filtered.map(s => s.student_id || s.id));
+    } else {
+      setSelectedStudentIds([]);
+    }
+  };
+
+  const handleSelectStudentRow = (id) => {
+    setSelectedStudentIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+  };
+
+  const handleSelectAllClasses = (e) => {
+    if (e.target.checked) {
+      const filtered = filterList(classes);
+      setSelectedClassIds(filtered.map(c => c.class_id || c.id));
+    } else {
+      setSelectedClassIds([]);
+    }
+  };
+
+  const handleSelectClassRow = (id) => {
+    setSelectedClassIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+  };
+
+  /* ── Bulk Delete Handlers ── */
+  const handleBulkDeleteStudents = () => {
+    if (selectedStudentIds.length === 0) return;
+    setDeleteConfirm({ show: true, id: 'bulk-students', type: 'students', isBulk: true, count: selectedStudentIds.length, ids: [...selectedStudentIds] });
+  };
+
+  const handleBulkDeleteClasses = () => {
+    if (selectedClassIds.length === 0) return;
+    setDeleteConfirm({ show: true, id: 'bulk-classes', type: 'classes', isBulk: true, count: selectedClassIds.length, ids: [...selectedClassIds] });
   };
 
   /* ── Profile update ── */
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
+    setErrorMsg('');
     setActionLoading(true);
     try {
       const res = await apiFetch('/api/users/profile/', {
-        method: 'PUT',
-        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email })
+        method: 'PATCH',
+        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no })
       });
-      if (res.ok) showFeedback('Profile updated successfully!', null);
-      else showFeedback(null, 'Failed to update profile.');
-    } catch { showFeedback(null, 'Network error.'); }
-    finally { setActionLoading(false); }
+      let resData = {};
+      try { resData = await res.json(); } catch { resData = {}; }
+      if (!res.ok) {
+        let msg = 'Failed to update profile.';
+        if (resData.email) msg = Array.isArray(resData.email) ? resData.email.join(' ') : resData.email;
+        else if (resData.phone_no) msg = Array.isArray(resData.phone_no) ? resData.phone_no.join(' ') : resData.phone_no;
+        else if (resData.full_name) msg = Array.isArray(resData.full_name) ? resData.full_name.join(' ') : resData.full_name;
+        else if (resData.detail) msg = String(resData.detail);
+        else if (resData.error) msg = String(resData.error);
+        else if (typeof resData === 'object' && Object.keys(resData).length > 0) {
+          const firstVal = Object.values(resData)[0];
+          msg = Array.isArray(firstVal) ? firstVal.join(' ') : String(firstVal);
+        }
+        setErrorMsg(msg);
+        return;
+      }
+      const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
+      try { localStorage.setItem('user', JSON.stringify(updatedUser)); } catch {}
+      showFeedback('Profile updated successfully', null);
+    } catch (err) {
+      console.error('Profile update error:', err);
+      setErrorMsg('Failed to update profile.');
+    } finally { setActionLoading(false); }
   };
 
   /* ── Filter helpers ── */
@@ -501,17 +685,19 @@ const TeacherDashboard = ({ user, onLogout }) => {
         .sd-nav-item.active svg {
           color: #006aa6 !important;
         }
+        .sd-sidebar-bottom {
+          border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+        }
         .sd-footer {
-          border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
-          z-index: 5;
+          padding: 0.35rem 0.75rem 0.75rem !important;
         }
         .sd-footer-link {
           color: rgba(255, 255, 255, 0.7) !important;
-          padding: 0.75rem 1rem !important;
-          font-size: 0.9rem !important;
+          padding: 0.6rem 1rem !important;
+          font-size: 0.88rem !important;
         }
         .sd-footer-link svg {
-          color: rgba(255, 255, 255, 0.7) !important;
+          color: inherit !important;
         }
         .sd-footer-link:hover {
           background-color: rgba(255, 255, 255, 0.05) !important;
@@ -525,10 +711,8 @@ const TeacherDashboard = ({ user, onLogout }) => {
           color: #f87171 !important;
         }
         .sd-user-card {
-          border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
-          background: rgba(255, 255, 255, 0.01) !important;
-          padding: 1.1rem 1.25rem !important;
-          z-index: 5;
+          background: transparent !important;
+          padding: 0.9rem 1.1rem !important;
         }
         .sd-user-card:hover {
           background: rgba(255, 255, 255, 0.05) !important;
@@ -692,8 +876,8 @@ const TeacherDashboard = ({ user, onLogout }) => {
           ═════════════════ */}
       <aside className={`sd-sidebar${isSidebarOpen ? ' open' : ''}`}>
         {/* Brand */}
-        <div className="sd-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-          <img src={logoIcon} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+        <div className="sd-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem 1.25rem' }}>
+          <img src={logoIcon} alt="Logo" style={{ width: '62px', height: '100px', objectFit: 'contain' }} />
           <div>
             <div className="sd-brand-name">LinguaLab</div>
             <div className="sd-brand-sub">Teacher Portal</div>
@@ -719,21 +903,20 @@ const TeacherDashboard = ({ user, onLogout }) => {
           </button>
         </nav>
 
-        {/* Footer links */}
-        <div className="sd-footer">
-          <button className="sd-footer-link danger" onClick={onLogout}><FiLogOut/><span>Logout</span></button>
-        </div>
-
-        {/* User card */}
-        <div className="sd-user-card">
-          <div className="sd-user-avatar">
-            {(user?.username || 'TE').slice(0, 2).toUpperCase()}
+        {/* Sidebar bottom: user card with logout icon */}
+        <div className="sd-sidebar-bottom">
+          <div className="sd-user-card">
+            <div className="sd-user-avatar">
+              {(user?.username || 'TE').slice(0, 2).toUpperCase()}
+            </div>
+            <div className="sd-user-meta">
+              <div className="sd-user-name">{profileForm.full_name || user?.username || 'Teacher'}</div>
+              <div className="sd-user-role">Teacher</div>
+            </div>
+            <button className="sd-logout-icon-btn" onClick={onLogout} title="Logout">
+              <FiLogOut/>
+            </button>
           </div>
-          <div className="sd-user-meta">
-            <div className="sd-user-name">{profileForm.full_name || user?.username || 'Teacher'}</div>
-            <div className="sd-user-role">Teacher</div>
-          </div>
-          <FiChevronDown className="sd-user-chevron"/>
         </div>
       </aside>
 
@@ -744,7 +927,7 @@ const TeacherDashboard = ({ user, onLogout }) => {
 
         {/* ── Top Bar ── */}
         <div className="sd-topbar">
-          <div className="sd-search">
+          {/* <div className="sd-search">
             <FiSearch/>
             <input
               type="text"
@@ -752,27 +935,30 @@ const TeacherDashboard = ({ user, onLogout }) => {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
+          </div> */}
+          <div className="sd-topbar-right" style={{ marginLeft: 'auto' }}>
+            <button className="sd-year-badge"><FiCalendar/>2024 · 2025<FiChevronDown/></button>
+            <button className="sd-icon-btn"><FiSettings/></button>
+            <button className="sd-icon-btn"><FiBell/></button>
           </div>
-          {activeSubTab === 'overview' ? (
-            <div className="sd-topbar-right">
-              <button className="sd-year-badge"><FiCalendar/>2024 · 2025<FiChevronDown/></button>
-              <button className="sd-icon-btn"><FiSettings/></button>
-              <button className="sd-icon-btn"><FiBell/></button>
-            </div>
-          ) : (
-            <div className="sd-topbar-right">
-              <button className="sd-notif-btn"><FiBell/>Notification</button>
-              <button className="sd-notif-btn"><FiHelpCircle/>Support</button>
-            </div>
-          )}
         </div>
 
         {/* ── Page Content ── */}
         <div className={`sd-content${activeSubTab === 'overview' ? ' sd-content--dashboard' : ''}`}>
 
           {/* Alerts */}
-          {successMsg && <div className="sd-alert sd-alert-success"><FiCheckCircle/>{successMsg}</div>}
-          {errorMsg   && <div className="sd-alert sd-alert-error"><FiX/>{errorMsg}</div>}
+          {successMsg && (
+            <div className="sd-alert sd-alert-success" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <FiCheckCircle/> <span>{successMsg}</span>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setSuccessMsg('')}><FiX/></button>
+            </div>
+          )}
+          {errorMsg && (
+            <div className="sd-alert sd-alert-error" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>{errorMsg}</span>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setErrorMsg('')}><FiX/></button>
+            </div>
+          )}
 
           {/* ══════════ OVERVIEW / DASHBOARD ══════════ */}
           {activeSubTab === 'overview' && (
@@ -780,7 +966,7 @@ const TeacherDashboard = ({ user, onLogout }) => {
               {/* Premium Dashboard Header Card with Background Image */}
               <div className="sd-dashboard-header-card" style={{ backgroundImage: `url(${teacherHeaderBanner})` }}>
                 <div className="sd-header-text-section">
-                  <h1>Welcome back, Teacher 01!</h1>
+                  <h1>Welcome back, { profileForm.username || user?.username || 'Teacher' }!</h1>
                   <p>Manage classes, track student progress, coordinate learning scenarios, and review academic performance.</p>
                 </div>
 
@@ -1008,44 +1194,141 @@ const TeacherDashboard = ({ user, onLogout }) => {
                     />
                   </div>
                   <div className="sd-table-actions">
-                    <button className="sd-btn-filter"><FiFilter/>Filters</button>
+                    {selectedStudentIds.length > 0 && (
+                      <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteStudents}>
+                        <FiTrash2/> Delete Selected ({selectedStudentIds.length})
+                      </button>
+                    )}
+                    <button className="sd-btn-outline" onClick={() => { setImportActive(!importActive); setUploadSummary(null); }}>
+                      Excel Import
+                    </button>
                     <button className="sd-btn-primary" onClick={openAddModal}><FiPlus/>Add Student</button>
                   </div>
                 </div>
+
+                {importActive && (
+                  <div style={{
+                    border: '2px dashed #2563eb',
+                    borderRadius: '8px',
+                    padding: '1.5rem',
+                    background: '#f8fafc',
+                    marginBottom: '1rem',
+                    textAlign: 'center'
+                  }}>
+                    <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a' }}>Bulk Excel Upload</h4>
+                    <p style={{ margin: '0 0 1rem 0', fontSize: '0.84rem', color: '#64748b' }}>
+                      Upload an <code>.xlsx</code> or <code>.xls</code> spreadsheet with at least <code>username</code> and <code>password</code> columns.<br/>
+                      Optional columns: <code>full_name</code>, <code>email</code>, <code>is_active</code>, <code>class_id</code>.
+                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', alignItems: 'center' }}>
+                      <input
+                        type="file"
+                        accept=".xlsx, .xls"
+                        onChange={handleBulkUpload}
+                        disabled={actionLoading}
+                        style={{ display: 'none' }}
+                        id="teacher-bulk-upload-student-input"
+                      />
+                      <label htmlFor="teacher-bulk-upload-student-input" className="sd-btn-primary" style={{ cursor: 'pointer' }}>
+                        {actionLoading ? 'Uploading...' : 'Choose Excel File'}
+                      </label>
+                      <button className="sd-btn-cancel" onClick={() => { setImportActive(false); setUploadSummary(null); }}>
+                        Cancel
+                      </button>
+                    </div>
+                    {uploadSummary && (
+                      <div style={{
+                        marginTop: '1.25rem',
+                        padding: '1rem',
+                        background: '#f1f5f9',
+                        borderRadius: '6px',
+                        textAlign: 'left',
+                        fontSize: '0.84rem'
+                      }}>
+                        <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Upload Result:</div>
+                        <div style={{ display: 'flex', gap: '2rem', marginBottom: '0.5rem' }}>
+                          <span style={{ color: '#16a34a', fontWeight: 600 }}>Created: {uploadSummary.created}</span>
+                          <span style={{ color: '#ef4444', fontWeight: 600 }}>Failed: {uploadSummary.failed}</span>
+                        </div>
+                        {uploadSummary.errors && uploadSummary.errors.length > 0 && (
+                          <div style={{
+                            maxHeight: '120px',
+                            overflowY: 'auto',
+                            background: '#fff',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '4px',
+                            padding: '0.5rem'
+                          }}>
+                            {uploadSummary.errors.map((err, idx) => (
+                              <div key={idx} style={{ color: '#b91c1c', marginBottom: '0.25rem' }}>
+                                Row {err.row}: {err.error}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="sd-table-wrap">
                   <table className="sd-table">
+                    <colgroup>
+                      <col style={{ width: '4%' }} />
+                      <col style={{ width: '22%' }} />
+                      <col style={{ width: '20%' }} />
+                      <col style={{ width: '31%' }} />
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '13%' }} />
+                    </colgroup>
                     <thead>
                       <tr>
+                        <th className="sd-checkbox-cell">
+                          <input
+                            type="checkbox"
+                            checked={students.length > 0 && selectedStudentIds.length === filterList(students).length}
+                            onChange={handleSelectAllStudents}
+                          />
+                        </th>
                         <th>Full Name</th>
                         <th>Username</th>
                         <th>Email Address</th>
                         <th>Status</th>
-                        <th style={{ textAlign: 'right' }}>Actions</th>
+                        <th style={{ textAlign: 'center' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {paginate(filterList(students), studentPage).map((s, i) => (
-                        <tr key={s.id || i}>
-                          <td>
-                            <span className="sd-name-cell-primary">{s.full_name || 'N/A'}</span>
-                          </td>
-                          <td>{s.username}</td>
-                          <td>{s.email || <span style={{ color:'#9ca3af', fontStyle:'italic' }}>Not provided</span>}</td>
-                          <td>
-                            <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
-                              {s.is_active ? 'Active' : 'Disabled'}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="sd-action-cell">
-                              <button className="sd-icon-action edit"   onClick={() => openEditModal(s)} title="Edit"><FiEdit2/></button>
-                              <button className="sd-icon-action delete" onClick={() => handleDelete(s.id, 'student')} title="Delete"><FiTrash2/></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                      {paginate(filterList(students), studentPage).map((s, i) => {
+                        const sid = s.student_id || s.id;
+                        return (
+                          <tr key={sid || i}>
+                            <td className="sd-checkbox-cell">
+                              <input
+                                type="checkbox"
+                                checked={selectedStudentIds.includes(sid)}
+                                onChange={() => handleSelectStudentRow(sid)}
+                              />
+                            </td>
+                            <td>
+                              <span className="sd-name-cell-primary">{s.full_name || 'N/A'}</span>
+                            </td>
+                            <td>{s.username}</td>
+                            <td>{s.email || <span style={{ color:'#9ca3af', fontStyle:'italic' }}>Not provided</span>}</td>
+                            <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
+                              <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                                {s.is_active ? 'Active' : 'Disabled'}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="sd-action-cell" style={{ justifyContent: 'center' }}>
+                                <button className="sd-icon-action edit"   onClick={() => openEditModal(s)} title="Edit"><FiEdit2/></button>
+                                <button className="sd-icon-action delete" onClick={() => openDeleteModal(sid, 'student')} title="Delete"><FiTrash2/></button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                       {filterList(students).length === 0 && (
-                        <tr><td colSpan="5" className="sd-empty-state">No students found.</td></tr>
+                        <tr><td colSpan="6" className="sd-empty-state">No students found.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -1073,46 +1356,77 @@ const TeacherDashboard = ({ user, onLogout }) => {
                     />
                   </div>
                   <div className="sd-table-actions">
-                    <button className="sd-btn-filter"><FiFilter/>Filters</button>
-                    {/* <button className="sd-btn-primary" onClick={openAddModal}><FiPlus/>Add Class</button> */}
+                    {selectedClassIds.length > 0 && (
+                      <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteClasses}>
+                        <FiTrash2/> Delete Selected ({selectedClassIds.length})
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="sd-table-wrap">
                   <table className="sd-table">
+                    <colgroup>
+                      <col style={{ width: '4%' }} />
+                      <col style={{ width: '15%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '33%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '11%' }} />
+                      <col style={{ width: '13%' }} />
+                    </colgroup>
                     <thead>
                       <tr>
+                        <th className="sd-checkbox-cell">
+                          <input
+                            type="checkbox"
+                            checked={classes.length > 0 && selectedClassIds.length === filterList(classes).length}
+                            onChange={handleSelectAllClasses}
+                          />
+                        </th>
                         <th>Class Name</th>
                         <th>Grade Level</th>
-                        
+                        <th>School Name</th>
                         <th>Academic Year</th>
                         <th>Status</th>
-                        <th style={{ textAlign: 'right' }}>Actions</th>
+                        <th style={{ textAlign: 'center' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {paginate(filterList(classes), classPage).map((c, i) => (
-                        <tr key={c.id || i}>
-                          <td>
-                            <span className="sd-name-cell-primary">{c.class_name}</span>
-                          </td>
-                          <td>{grades.find(g => g.id === c.grade)?.grade_name || c.grade || 'N/A'}</td>
-                          <td>{schools.find(s => s.school_id === c.school)?.school_name || c.school || 'N/A'}</td>
-                          <td>{c.academic_year}</td>
-                          <td>
-                            <span className={`sd-badge ${c.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
-                              {c.is_active ? 'Active' : 'Disabled'}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="sd-action-cell">
-                              <button className="sd-icon-action edit"   onClick={() => openEditModal(c)} title="Edit"><FiEdit2/></button>
-                              <button className="sd-icon-action delete" onClick={() => handleDelete(c.id, 'class')} title="Delete"><FiTrash2/></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                      {paginate(filterList(classes), classPage).map((c, i) => {
+                        const cid = c.class_id || c.id;
+                        return (
+                          <tr key={cid || i}>
+                            <td className="sd-checkbox-cell">
+                              <input
+                                type="checkbox"
+                                checked={selectedClassIds.includes(cid)}
+                                onChange={() => handleSelectClassRow(cid)}
+                              />
+                            </td>
+                            <td>
+                              <span className="sd-name-cell-primary">{c.class_name}</span>
+                            </td>
+                            <td>{grades.find(g => g.id === c.grade)?.grade_name || c.grade || 'N/A'}</td>
+                            <td style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                              {schools.find(s => s.school_id === c.school)?.school_name || c.school || 'N/A'}
+                            </td>
+                            <td>{c.academic_year}</td>
+                            <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
+                              <span className={`sd-badge ${c.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                                {c.is_active ? 'Active' : 'Disabled'}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="sd-action-cell" style={{ justifyContent: 'center' }}>
+                                <button className="sd-icon-action edit"   onClick={() => openEditModal(c)} title="Edit"><FiEdit2/></button>
+                                <button className="sd-icon-action delete" onClick={() => openDeleteModal(cid, 'class')} title="Delete"><FiTrash2/></button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                       {filterList(classes).length === 0 && (
-                        <tr><td colSpan="6" className="sd-empty-state">No classes found.</td></tr>
+                        <tr><td colSpan="7" className="sd-empty-state">No classes found.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -1245,6 +1559,13 @@ const TeacherDashboard = ({ user, onLogout }) => {
                       <label className="sd-form-label">Username</label>
                       <input className="sd-form-input" type="text" value={profileForm.username} disabled/>
                     </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Phone Number</label>
+                      <input className="sd-form-input" type="tel"
+                        value={profileForm.phone_no}
+                        onChange={e => setProfileForm({ ...profileForm, phone_no: e.target.value })}
+                        placeholder="+91 98765 43210"/>
+                    </div>
                   </div>
 
                   {/* Change password row */}
@@ -1253,7 +1574,11 @@ const TeacherDashboard = ({ user, onLogout }) => {
                       <div className="sd-pw-row-title">Change Password</div>
                       <div className="sd-pw-row-sub">Update your password to stay secure</div>
                     </div>
-                    <button type="button" className="sd-btn-outline" onClick={() => setShowPwModal(true)}>Update</button>
+                    <button type="button" className="sd-btn-outline" onClick={() => {
+                      setPwForm({ current_password: '', new_password: '', confirm_password: '' });
+                      setPwModalError('');
+                      setShowPwModal(true);
+                    }}>Update</button>
                   </div>
 
 
@@ -1378,36 +1703,93 @@ const TeacherDashboard = ({ user, onLogout }) => {
               <span className="sd-modal-title">Change Password</span>
               <button className="sd-modal-close" onClick={() => setShowPwModal(false)}><FiX/></button>
             </div>
+
             <form className="sd-modal-form" onSubmit={async e => {
               e.preventDefault();
+              setPwModalError('');
+              if (!pwForm.current_password) { setPwModalError('Current password is required.'); return; }
+              if (!pwForm.new_password) { setPwModalError('New password is required.'); return; }
+              if (!pwForm.confirm_password) { setPwModalError('Confirm password is required.'); return; }
+              if (pwForm.new_password.length < 6) { setPwModalError('New password must be at least 6 characters.'); return; }
+
               setActionLoading(true);
               try {
                 const res = await apiFetch('/api/users/change-password/', {
                   method: 'POST',
-                  body: JSON.stringify({ old_password: profileForm.current_password, new_password: profileForm.password })
+                  body: JSON.stringify({ old_password: pwForm.current_password, new_password: pwForm.new_password, confirm_password: pwForm.confirm_password })
                 });
+                let d = {};
+                try { d = await res.json(); } catch { d = {}; }
                 if (res.ok) {
                   showFeedback('Password changed successfully!', null);
-                  setProfileForm(p => ({ ...p, current_password: '', password: '' }));
+                  setPwForm({ current_password: '', new_password: '', confirm_password: '' });
                   setShowPwModal(false);
                 } else {
-                  const d = await res.json();
-                  showFeedback(null, d.error || 'Password change failed.');
+                  let msg = 'Current password is incorrect.';
+                  if (d) {
+                    if (d.confirm_password) {
+                      msg = Array.isArray(d.confirm_password) ? d.confirm_password.join(' ') : String(d.confirm_password);
+                    } else if (d.new_password) {
+                      msg = Array.isArray(d.new_password) ? d.new_password.join(' ') : String(d.new_password);
+                    } else if (d.old_password) {
+                      const raw = Array.isArray(d.old_password) ? d.old_password.join(' ') : String(d.old_password);
+                      msg = (raw.toLowerCase().includes('incorrect') || raw.toLowerCase().includes('wrong') || raw.toLowerCase().includes('current')) ? 'Current password is incorrect.' : raw;
+                    } else if (d.non_field_errors) {
+                      msg = Array.isArray(d.non_field_errors) ? d.non_field_errors.join(' ') : String(d.non_field_errors);
+                    } else if (d.detail) {
+                      const dt = String(d.detail);
+                      msg = (dt.toLowerCase().includes('incorrect') || dt.toLowerCase().includes('wrong')) ? 'Current password is incorrect.' : dt;
+                    } else if (d.error) {
+                      const er = String(d.error);
+                      msg = (er.toLowerCase().includes('incorrect') || er.toLowerCase().includes('wrong')) ? 'Current password is incorrect.' : er;
+                    }
+                  }
+                  setPwModalError(msg);
                 }
-              } catch { showFeedback(null, 'Network error.'); }
+              } catch (err) {
+                console.error('Password change error:', err);
+                setPwModalError('Current password is incorrect.');
+              }
               finally { setActionLoading(false); }
             }}>
+              {pwModalError && (
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '8px',
+                  color: '#dc2626',
+                  fontSize: '0.84rem',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                  boxSizing: 'border-box'
+                }}>
+                  <FiAlertTriangle style={{ flexShrink: 0, color: '#ef4444', fontSize: '1rem' }} />
+                  <span style={{ lineHeight: 1.4 }}>{pwModalError}</span>
+                </div>
+              )}
               <div className="sd-form-group">
                 <label className="sd-form-label">Current Password</label>
-                <input className="sd-form-input" type="password" value={profileForm.current_password}
-                  onChange={e => setProfileForm({ ...profileForm, current_password: e.target.value })}
+                <input className="sd-form-input" type="password"
+                  value={pwForm.current_password}
+                  onChange={e => { setPwForm({ ...pwForm, current_password: e.target.value }); setPwModalError(''); }}
                   placeholder="Enter current password" required/>
               </div>
               <div className="sd-form-group">
                 <label className="sd-form-label">New Password</label>
-                <input className="sd-form-input" type="password" value={profileForm.password}
-                  onChange={e => setProfileForm({ ...profileForm, password: e.target.value })}
+                <input className="sd-form-input" type="password"
+                  value={pwForm.new_password}
+                  onChange={e => { setPwForm({ ...pwForm, new_password: e.target.value }); setPwModalError(''); }}
                   placeholder="Minimum 6 characters" required minLength={6}/>
+              </div>
+              <div className="sd-form-group">
+                <label className="sd-form-label">Confirm Password</label>
+                <input className="sd-form-input" type="password"
+                  value={pwForm.confirm_password}
+                  onChange={e => { setPwForm({ ...pwForm, confirm_password: e.target.value }); setPwModalError(''); }}
+                  placeholder="Confirm new password" required minLength={6}/>
               </div>
               <div className="sd-modal-footer">
                 <button type="button" className="sd-btn-cancel" onClick={() => setShowPwModal(false)}>Cancel</button>
@@ -1416,6 +1798,108 @@ const TeacherDashboard = ({ user, onLogout }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Centered Blurred Delete Confirmation Modal ── */}
+      {deleteConfirm.show && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '1rem'
+          }}
+          onClick={() => setDeleteConfirm({ show: false, id: null, type: '' })}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '360px',
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              padding: '1.75rem 1.5rem',
+              boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.3)',
+              textAlign: 'center'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Delete Symbol */}
+            <div
+              style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '50%',
+                backgroundColor: '#fee2e2',
+                color: '#ef4444',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1rem',
+                fontSize: '1.5rem'
+              }}
+            >
+              <FiTrash2 />
+            </div>
+
+            {/* Title & Warning */}
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.4rem' }}>
+              Are you sure?
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+              Are you sure you want to delete {deleteConfirm.isBulk ? `${deleteConfirm.count} selected ${deleteConfirm.type}` : `this ${deleteConfirm.type}`}? This action cannot be undone.
+            </p>
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button
+                type="button"
+                style={{
+                  flex: 1,
+                  padding: '0.65rem 1rem',
+                  borderRadius: '10px',
+                  backgroundColor: '#f1f5f9',
+                  color: '#475569',
+                  border: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer'
+                }}
+                onClick={() => setDeleteConfirm({ show: false, id: null, type: '' })}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                style={{
+                  flex: 1,
+                  padding: '0.65rem 1rem',
+                  borderRadius: '10px',
+                  backgroundColor: '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer'
+                }}
+                onClick={confirmDeleteAction}
+                disabled={actionLoading}
+              >
+                {actionLoading ? 'Deleting...' : 'OK'}
+              </button>
+            </div>
           </div>
         </div>
       )}

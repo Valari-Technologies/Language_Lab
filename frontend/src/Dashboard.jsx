@@ -6,13 +6,132 @@ import {
   FiChevronDown, FiCalendar, FiBell, FiFilter,
   FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
   FiActivity, FiTrendingUp, FiAward, FiLock,
-  FiChevronLeft, FiChevronRight, FiEye, FiList,
-  FiCornerDownRight, FiXCircle, FiMoreVertical, FiDownload
+  FiChevronLeft, FiChevronRight, FiEye, FiEyeOff, FiList,
+  FiCornerDownRight, FiXCircle, FiMoreVertical, FiDownload, FiAlertTriangle, FiKey
 } from 'react-icons/fi';
 import './Dashboard.css';
 import { apiFetch } from './api';
 import dashboardHeaderBanner from './assets/1.jpeg';
 import logoIcon from './assets/icon.png';
+
+const INDIAN_STATES_AND_CITIES = {
+  "Tamil Nadu": [
+    "Chennai", "Coimbatore", "Madurai", "Tirunelveli", "Salem", "Tiruchirappalli (Trichy)",
+    "Tiruppur", "Erode", "Vellore", "Thanjavur", "Tuticorin (Thoothukudi)", "Dindigul",
+    "Nagercoil", "Kanchipuram", "Karur", "Cuddalore", "Kumbakonam", "Neyveli"
+  ],
+  "Karnataka": [
+    "Bangalore (Bengaluru)", "Mysore (Mysuru)", "Hubli-Dharwad", "Mangalore (Mangaluru)",
+    "Belgaum (Belagavi)", "Gulbarga (Kalaburagi)", "Davangere", "Bellary (Ballari)",
+    "Shimoga (Shivamogga)", "Tumkur (Tumakuru)", "Udupi"
+  ],
+  "Kerala": [
+    "Thiruvananthapuram (Trivandrum)", "Kochi (Cochin)", "Kozhikode (Calicut)",
+    "Thrissur", "Kollam", "Kannur", "Alappuzha", "Kottayam", "Palakkad", "Malappuram"
+  ],
+  "Telangana": [
+    "Hyderabad", "Warangal", "Nizamabad", "Karimnagar", "Khammam", "Ramagundam", "Mahbubnagar"
+  ],
+  "Andhra Pradesh": [
+    "Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Kurnool", "Rajahmundry",
+    "Tirupati", "Kakinada", "Kadapa", "Anantapur"
+  ],
+  "Maharashtra": [
+    "Mumbai", "Pune", "Nagpur", "Thane", "Pimpri-Chinchwad", "Nashik", "Kalyan-Dombivli",
+    "Vasai-Virar", "Aurangabad", "Navi Mumbai", "Solapur", "Mira-Bhayandar", "Amravati", "Nanded", "Kolhapur"
+  ],
+  "Delhi (UT)": [
+    "Central Delhi", "East Delhi", "New Delhi", "North Delhi", "North East Delhi",
+    "North West Delhi", "South Delhi", "South East Delhi", "South West Delhi", "West Delhi"
+  ],
+  "Gujarat": [
+    "Ahmedabad", "Surat", "Vadodara (Baroda)", "Rajkot", "Bhavnagar", "Jamnagar",
+    "Junagadh", "Gandhinagar", "Anand", "Navsari", "Morbi"
+  ],
+  "West Bengal": [
+    "Kolkata", "Howrah", "Durgapur", "Asansol", "Siliguri", "Bardhaman", "Malda",
+    "Kharagpur", "Haldia"
+  ],
+  "Uttar Pradesh": [
+    "Lucknow", "Kanpur", "Ghaziabad", "Agra", "Varanasi", "Meerut", "Prayagraj (Allahabad)",
+    "Noida", "Bareilly", "Aligarh", "Moradabad", "Saharanpur", "Gorakhpur", "Jhansi"
+  ],
+  "Rajasthan": [
+    "Jaipur", "Jodhpur", "Kota", "Bikaner", "Ajmer", "Udaipur", "Bhilwara",
+    "Alwar", "Sikar", "Bharatpur"
+  ],
+  "Punjab": [
+    "Ludhiana", "Amritsar", "Jalandhar", "Patiala", "Bathinda", "Mohali",
+    "Pathankot", "Hoshiarpur"
+  ],
+  "Haryana": [
+    "Gurugram (Gurgaon)", "Faridabad", "Panipat", "Ambala", "Yamunanagar", "Rohtak",
+    "Hisar", "Karnal", "Panchkula"
+  ],
+  "Madhya Pradesh": [
+    "Indore", "Bhopal", "Jabalpur", "Gwalior", "Ujjain", "Sagar", "Dewas", "Satna", "Ratlam"
+  ],
+  "Bihar": [
+    "Patna", "Gaya", "Bhagalpur", "Muzaffarpur", "Purnia", "Darbhanga", "Bihar Sharif", "Arrah"
+  ],
+  "Odisha": [
+    "Bhubaneswar", "Cuttack", "Rourkela", "Berhampur", "Sambalpur", "Puri", "Balasore"
+  ],
+  "Assam": [
+    "Guwahati", "Silchar", "Dibrugarh", "Jorhat", "Nagaon", "Tinsukia", "Tezpur"
+  ],
+  "Goa": [
+    "Panaji (Panjim)", "Margao", "Vasco da Gama", "Mapusa", "Ponda"
+  ],
+  "Puducherry (UT)": [
+    "Puducherry", "Karaikal", "Mahe", "Yanam"
+  ],
+  "Chandigarh (UT)": [
+    "Chandigarh"
+  ],
+  "Jammu & Kashmir (UT)": [
+    "Srinagar", "Jammu", "Anantnag", "Baramulla", "Udhampur"
+  ],
+  "Uttarakhand": [
+    "Dehradun", "Haridwar", "Roorkee", "Haldwani", "Rishikesh", "Kashipur"
+  ],
+  "Himachal Pradesh": [
+    "Shimla", "Dharamshala", "Mandi", "Solan", "Baddi", "Kullu"
+  ],
+  "Jharkhand": [
+    "Ranchi", "Jamshedpur", "Dhanbad", "Bokaro Steel City", "Hazaribagh", "Deoghar"
+  ],
+  "Chhattisgarh": [
+    "Raipur", "Bhilai", "Bilaspur", "Korba", "Rajnandgaon", "Durg"
+  ],
+  "Tripura": [
+    "Agartala"
+  ],
+  "Meghalaya": [
+    "Shillong", "Tura"
+  ],
+  "Manipur": [
+    "Imphal"
+  ],
+  "Nagaland": [
+    "Dimapur", "Kohima"
+  ],
+  "Arunachal Pradesh": [
+    "Itanagar"
+  ],
+  "Mizoram": [
+    "Aizawl"
+  ],
+  "Sikkim": [
+    "Gangtok"
+  ],
+  "Ladakh (UT)": [
+    "Leh", "Kargil"
+  ],
+  "Andaman & Nicobar (UT)": [
+    "Port Blair"
+  ]
+};
 
 /* ─── SVG Donut Chart helper ─── */
 const MultiDonutChart = ({ total = 124, activeCount = 78, expiringCount = 28, expiredCount = 18 }) => {
@@ -306,24 +425,33 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   const [publishContents, setPublishContents] = useState([]);
   const [schoolAdmins, setSchoolAdmins] = useState([]);
   const [teachers, setTeachers] = useState([]);
+  const [students, setStudents] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({ total_schools: 0, total_school_admins: 0, total_publish_contents: 0, total_grades: 0 });
   const [previewExperience, setPreviewExperience] = useState(null);
   const [subPage, setSubPage] = useState('overview');
   const [schoolSubTab, setSchoolSubTab] = useState('schools-list');
   const [isAddingSchool, setIsAddingSchool] = useState(false);
   const [newSchoolForm, setNewSchoolForm] = useState({
-    school_name: '', school_code: '', address: '', city: '', state: '', pincode: '',
+    school_name: '', phone: '', address: '', city: '', state: '', pincode: '',
     admin_name: '', email: '', password: ''
   });
+
+  const generateSchoolAdminPassword = (name) => {
+    const clean = (name || 'Admin').trim().replace(/[^a-zA-Z]/g, '');
+    const prefix = (clean.length >= 3 ? clean.slice(0, 3) : (clean + 'adm').slice(0, 3)).toLowerCase();
+    const capitalized = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+    const digits = Math.floor(1000 + Math.random() * 9000);
+    return `${capitalized}@${digits}!`;
+  };
   
   /* ── Forms ── */
-  const [profileForm, setProfileForm] = useState({ username: user?.username || '', email: user?.email || '', full_name: user?.full_name || '', current_password: '', password: '' });
+  const [profileForm, setProfileForm] = useState({ username: user?.username || '', email: user?.email || '', full_name: user?.full_name || '', phone_no: user?.phone_no || '', current_password: '', password: '' });
   const [schoolForm, setSchoolForm] = useState({ school_name: '', address: '', phone: '', email: '', logo: '', is_active: true });
   const [publishForm, setPublishForm] = useState({ release_name: '', grade: '', total_experiences: 0, status: 'DRAFT', export_file: '', checksum: '' });
   const [gradeForm, setGradeForm] = useState({ grade_name: '', description: '', sort_order: 1 });
   const [experienceForm, setExperienceForm] = useState({ grade: '', title: '', description: '', objective: '', estimated_duration: 15, difficulty: 'MEDIUM', status: 'DRAFT', thumbnail: '' });
   const [experienceBuilderForm, setExperienceBuilderForm] = useState({ experience: '', block_type: 'VIDEO', title: '', content: '', media_url: '', display_order: 1, settings: '{}' });
-  const [schoolAdminForm, setSchoolAdminForm] = useState({ username: '', email: '', full_name: '', is_active: true, school: '', password: '' });
+  const [schoolAdminForm, setSchoolAdminForm] = useState({ username: '', email: '', full_name: '', is_active: true, school: '', password: '', role: 'school-admins' });
   const [teacherForm, setTeacherForm] = useState({ username: '', full_name: '', email: '', is_active: true, school: '', qualification: '', experience_years: 0, password: '' });
 
   /* ── Filter overrides for nested navigation ── */
@@ -332,14 +460,36 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
 
   /* ── Loading & error feedback ── */
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  useEffect(() => {
+    if (errorMsg) {
+      const timer = setTimeout(() => setErrorMsg(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMsg]);
+
+  useEffect(() => {
+    if (successMsg) {
+      const timer = setTimeout(() => setSuccessMsg(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMsg]);
+
+  /* ── Selection State ── */
+  const [selectedSchoolIds, setSelectedSchoolIds] = useState([]);
+  const [selectedUserIds,   setSelectedUserIds]   = useState([]);
 
   /* ── Modal management ── */
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState('add');
   const [editingId, setEditingId] = useState(null);
   const [showPwModal, setShowPwModal] = useState(false);
+  const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
+  const [pwModalError, setPwModalError] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, type: '' });
 
   /* ══════════════════════════════════
      DATA LOADERS (unchanged from original)
@@ -367,10 +517,10 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
 
   const handlePreviewExperience = async (experience) => {
     try {
-      const res = await apiFetch(`/api/cms/v1/experience-builders/?experience=${experience.id}`);
+      const res = await apiFetch(`/api/v1/content/preview/${experience.id}/`);
       if (res.ok) {
         const data = await res.json();
-        setPreviewExperience({ ...experience, steps: data.results || data });
+        setPreviewExperience({ ...experience, steps: data.payload?.activities || data.results || [] });
       } else {
         setPreviewExperience({ ...experience, steps: [] });
       }
@@ -389,14 +539,14 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
 
   const loadExperiences = async () => {
     try {
-      const res = await apiFetch('/api/cms/v1/experiences/');
+      const res = await apiFetch('/api/v1/content/experiences/');
       if (res.ok) { const data = await res.json(); setExperiences(data.results || data); }
     } catch (e) { console.error('Failed to load experiences', e); }
   };
 
   const loadExperienceBuilders = async () => {
     try {
-      const res = await apiFetch('/api/cms/v1/experience-builders/');
+      const res = await apiFetch('/api/v1/content/experiences/');
       if (res.ok) { const data = await res.json(); setExperienceBuilders(data.results || data); }
     } catch (e) { console.error('Failed to load experience builders', e); }
   };
@@ -415,18 +565,98 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
     } catch (e) { console.error('Failed to load teachers', e); }
   };
 
+  const loadStudents = async () => {
+    try {
+      const res = await apiFetch('/api/cms/v1/students/');
+      if (res.ok) { const data = await res.json(); setStudents(data.results || data); }
+    } catch (e) { console.error('Failed to load students', e); }
+  };
+
+  const formatErrorMsg = (err) => {
+    if (!err) return '';
+    let msg = typeof err === 'object' ? (err.detail || err.error || err.message || JSON.stringify(err)) : String(err);
+    if (msg.startsWith('{') || msg.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(msg);
+        msg = parsed.detail || parsed.error || Object.values(parsed).flat().join(', ');
+      } catch {
+        // use raw
+      }
+    }
+    if (msg.length > 85) msg = msg.slice(0, 80) + '...';
+    return msg;
+  };
+
+  useEffect(() => {
+    if (errorMsg) {
+      const timer = setTimeout(() => setErrorMsg(''), 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMsg]);
+
+  useEffect(() => {
+    if (successMsg) {
+      const timer = setTimeout(() => setSuccessMsg(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMsg]);
+
+  /* ── Selection Handlers ── */
+  const handleSelectAllSchools = (e) => {
+    if (e.target.checked) {
+      const filtered = filterList(schools);
+      setSelectedSchoolIds(filtered.map(s => s.school_id || s.id));
+    } else {
+      setSelectedSchoolIds([]);
+    }
+  };
+
+  const handleSelectSchoolRow = (id) => {
+    setSelectedSchoolIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+  };
+
+  const handleSelectAllUsers = (e) => {
+    if (e.target.checked) {
+      const filtered = filterList(getMergedUsers()).filter(u => {
+        if (selectedRoleFilter && u.role !== selectedRoleFilter) return false;
+        if (selectedStatusFilter) {
+          const wantActive = selectedStatusFilter === 'active';
+          if (u.is_active !== wantActive) return false;
+        }
+        return true;
+      });
+      setSelectedUserIds(filtered.map(u => u.id).filter(id => id !== 'super-admin-row'));
+    } else {
+      setSelectedUserIds([]);
+    }
+  };
+
+  const handleSelectUserRow = (id) => {
+    if (id === 'super-admin-row') return;
+    setSelectedUserIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+  };
+
+  /* ── Bulk Delete Handlers ── */
+  const handleBulkDeleteSchools = () => {
+    if (selectedSchoolIds.length === 0) return;
+    setDeleteConfirm({ show: true, id: 'bulk-schools', type: 'schools', isBulk: true, count: selectedSchoolIds.length, ids: [...selectedSchoolIds] });
+  };
+
+  const handleBulkDeleteUsers = () => {
+    if (selectedUserIds.length === 0) return;
+    setDeleteConfirm({ show: true, id: 'bulk-users', type: 'users', isBulk: true, count: selectedUserIds.length, ids: [...selectedUserIds] });
+  };
+
   const loadAllData = async () => {
     setLoading(true);
-    setErrorMsg('');
     try {
-      await Promise.all([
+      await Promise.allSettled([
         loadSchools(), loadPublishContents(), loadDashboardStats(),
         loadGrades(), loadExperiences(), loadExperienceBuilders(),
-        loadSchoolAdmins(), loadTeachers(),
+        loadSchoolAdmins(), loadTeachers(), loadStudents(),
       ]);
     } catch (e) {
       console.error('Failed to load data from backend server.', e);
-      setErrorMsg('Failed to load data from backend server.');
     } finally {
       setLoading(false);
     }
@@ -435,8 +665,8 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   useEffect(() => { loadAllData(); }, []);
 
   const showFeedback = (success, error) => {
-    if (success) { setSuccessMsg(success); setTimeout(() => setSuccessMsg(''), 4000); }
-    if (error)   { setErrorMsg(error);   setTimeout(() => setErrorMsg(''),   4000); }
+    if (success) { setSuccessMsg(success); }
+    if (error)   { setErrorMsg(formatErrorMsg(error)); }
   };
 
   /* ── Form Clean/Init ── */
@@ -484,8 +714,9 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
       setSchoolAdminForm(entity ? {
         username: entity.username || '', email: entity.email || '', full_name: entity.full_name || '',
         is_active: entity.is_active !== undefined ? entity.is_active : true,
-        school: entity.school_id || entity.school || (schools[0]?.school_id || ''), password: ''
-      } : { username: '', email: '', full_name: '', is_active: true, school: schools[0]?.school_id || '', password: '' });
+        school: entity.school_id || entity.school || (schools[0]?.school_id || ''), password: '',
+        role: entity.role || 'school-admins'
+      } : { username: '', email: '', full_name: '', is_active: true, school: schools[0]?.school_id || '', password: '', role: 'school-admins' });
     }
   };
 
@@ -502,8 +733,10 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
     e.preventDefault();
     setErrorMsg('');
     let body = {};
-    const targetTab = activeTab === 'users-roles' ? 'school-admins' : (activeTab === 'reports' ? 'publish-contents' : activeTab);
-    let url = `/api/cms/v1/${targetTab}/`;
+    const targetTab = activeTab === 'users-roles' ? (schoolAdminForm.role || 'school-admins') : (activeTab === 'reports' ? 'publish-contents' : activeTab);
+    let url = (targetTab === 'experiences' || targetTab === 'experience-builders')
+      ? '/api/v1/content/experiences/'
+      : `/api/cms/v1/${targetTab}/`;
     if (modalType === 'edit') url += `${editingId}/`;
 
     try {
@@ -522,6 +755,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         body = { ...experienceBuilderForm, experience: parseInt(experienceBuilderForm.experience), settings: settingsJson };
       } else if (activeTab === 'school-admins' || activeTab === 'users-roles') {
         body = { ...schoolAdminForm, school: parseInt(schoolAdminForm.school, 10) };
+        delete body.role;
         if (modalType === 'edit') delete body.password;
       }
 
@@ -536,7 +770,12 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         else if (targetTab === 'grades') await loadGrades();
         else if (targetTab === 'experiences') await loadExperiences();
         else if (targetTab === 'experience-builders') await loadExperienceBuilders();
-        else if (targetTab === 'school-admins') { await loadSchoolAdmins(); await loadDashboardStats(); }
+        else if (targetTab === 'school-admins' || targetTab === 'teachers' || targetTab === 'students') {
+          await loadSchoolAdmins();
+          await loadTeachers();
+          await loadStudents();
+          await loadDashboardStats();
+        }
       } else {
         const errorDetail = typeof resData === 'object' ? JSON.stringify(resData) : resData;
         setErrorMsg(`Error: ${errorDetail}`);
@@ -548,52 +787,101 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   };
 
   /* ── Delete Handler ── */
-  const handleDelete = async (id) => {
-    if (!window.confirm(`Are you sure you want to delete this?`)) return;
+  const openDeleteModal = (id, type = 'item') => {
+    setDeleteConfirm({ show: true, id, type });
+  };
+
+  const confirmDeleteAction = async () => {
+    if (!deleteConfirm.show) return;
     setErrorMsg('');
-    const targetTab = activeTab === 'users-roles' ? 'school-admins' : (activeTab === 'reports' ? 'publish-contents' : activeTab);
-    const url = `/api/cms/v1/${targetTab}/${id}/`;
+    setLoading(true);
     try {
+      if (deleteConfirm.isBulk) {
+        const { id: bulkType, ids, count } = deleteConfirm;
+        if (bulkType === 'bulk-schools') {
+          await Promise.all(ids.map(id => apiFetch(`/api/cms/v1/schools/${id}/`, { method: 'DELETE' })));
+          showFeedback(`Successfully deleted ${count} school(s).`, null);
+          setSelectedSchoolIds([]);
+          await loadSchools();
+          await loadDashboardStats();
+        } else if (bulkType === 'bulk-users') {
+          await Promise.all(ids.map(async id => {
+            const isTeacher = teachers.some(t => t.teacher_id === id);
+            const isStudent = students.some(s => s.student_id === id);
+            const path = isTeacher ? 'teachers' : isStudent ? 'students' : 'school-admins';
+            return apiFetch(`/api/cms/v1/${path}/${id}/`, { method: 'DELETE' });
+          }));
+          showFeedback(`Successfully deleted ${count} user(s).`, null);
+          setSelectedUserIds([]);
+          await loadSchoolAdmins();
+          await loadTeachers();
+        }
+        setDeleteConfirm({ show: false, id: null, type: '', isBulk: false, ids: [], count: 0 });
+        return;
+      }
+      const { id } = deleteConfirm;
+      if (!id) return;
+      let targetTab = activeTab === 'reports' ? 'publish-contents' : activeTab;
+      if (activeTab === 'users-roles') {
+        targetTab = deleteConfirm.type === 'teacher' ? 'teachers' : deleteConfirm.type === 'student' ? 'students' : 'school-admins';
+      }
+      const url = (targetTab === 'experiences' || targetTab === 'experience-builders')
+        ? `/api/v1/content/experiences/${id}/`
+        : `/api/cms/v1/${targetTab}/${id}/`;
       const res = await apiFetch(url, { method: 'DELETE' });
-      const resData = await res.json();
+      const resData = await res.json().catch(() => ({}));
       if (res.ok) {
         showFeedback(resData.message || 'Deleted successfully', null);
+        setDeleteConfirm({ show: false, id: null, type: '' });
         if (targetTab === 'schools') { await loadSchools(); await loadDashboardStats(); }
         else if (targetTab === 'publish-contents') { await loadPublishContents(); await loadDashboardStats(); }
         else if (targetTab === 'grades') await loadGrades();
         else if (targetTab === 'experiences') await loadExperiences();
         else if (targetTab === 'experience-builders') await loadExperienceBuilders();
-        else if (targetTab === 'school-admins') { await loadSchoolAdmins(); await loadDashboardStats(); }
-      } else { setErrorMsg(resData.message || 'Failed to delete record.'); }
+        else if (targetTab === 'school-admins' || targetTab === 'teachers' || targetTab === 'students') {
+          await loadSchoolAdmins();
+          await loadTeachers();
+          await loadStudents();
+          await loadDashboardStats();
+        }
+      } else { setErrorMsg(resData.message || resData.error || resData.detail || 'Failed to delete record.'); }
     } catch (err) { setErrorMsg('Error communicating with backend.'); console.error(err); }
+    finally { setLoading(false); }
   };
 
   /* ── Profile settings handler ── */
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setErrorMsg('');
-    if (profileForm.password && !profileForm.current_password) {
-      setErrorMsg('Enter your current password to set a new one.');
-      return;
-    }
+    setActionLoading(true);
     try {
       const res = await apiFetch('/api/users/profile/', {
-        method: 'PUT',
-        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email })
+        method: 'PATCH',
+        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no })
       });
-      const resData = await res.json();
-      if (!res.ok) { setErrorMsg(typeof resData === 'object' ? JSON.stringify(resData) : 'Failed to update profile.'); return; }
-      if (profileForm.password) {
-        const pwRes = await apiFetch('/api/users/change-password/', {
-          method: 'POST',
-          body: JSON.stringify({ old_password: profileForm.current_password, new_password: profileForm.password })
-        });
-        const pwData = await pwRes.json();
-        if (!pwRes.ok) { setErrorMsg(typeof pwData === 'object' ? JSON.stringify(pwData) : 'Profile saved, but password change failed.'); return; }
+      let resData = {};
+      try { resData = await res.json(); } catch { resData = {}; }
+      if (!res.ok) {
+        let msg = 'Failed to update profile.';
+        if (resData.email) msg = Array.isArray(resData.email) ? resData.email.join(' ') : resData.email;
+        else if (resData.phone_no) msg = Array.isArray(resData.phone_no) ? resData.phone_no.join(' ') : resData.phone_no;
+        else if (resData.full_name) msg = Array.isArray(resData.full_name) ? resData.full_name.join(' ') : resData.full_name;
+        else if (resData.detail) msg = String(resData.detail);
+        else if (resData.error) msg = String(resData.error);
+        else if (typeof resData === 'object' && Object.keys(resData).length > 0) {
+          const firstVal = Object.values(resData)[0];
+          msg = Array.isArray(firstVal) ? firstVal.join(' ') : String(firstVal);
+        }
+        setErrorMsg(msg);
+        return;
       }
-      setProfileForm({ ...profileForm, current_password: '', password: '' });
+      const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
+      try { localStorage.setItem('user', JSON.stringify(updatedUser)); } catch {}
       showFeedback('Profile updated successfully', null);
-    } catch { setErrorMsg('Error connecting to backend.'); }
+    } catch (err) {
+      console.error('Profile update error:', err);
+      setErrorMsg('Failed to update profile.');
+    } finally { setActionLoading(false); }
   };
 
   /* ── Custom School & Admin Creator ── */
@@ -605,7 +893,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
       const schoolPayload = {
         school_name: newSchoolForm.school_name,
         address: `${newSchoolForm.address}, ${newSchoolForm.city}, ${newSchoolForm.state} - ${newSchoolForm.pincode}`,
-        phone: newSchoolForm.mobile || '0000000000',
+        phone: newSchoolForm.phone || '0000000000',
         email: newSchoolForm.email || 'school@example.com',
         logo: '',
         is_active: true
@@ -615,21 +903,34 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         method: 'POST',
         body: JSON.stringify(schoolPayload)
       });
-      const sData = await sRes.json();
+      let sData = {};
+      try { sData = await sRes.json(); } catch { sData = {}; }
+
       if (!sRes.ok) {
-        setErrorMsg(sData.message || 'Failed to create school');
+        let msg = 'Failed to create school.';
+        if (sData.school_name) msg = Array.isArray(sData.school_name) ? sData.school_name.join(' ') : sData.school_name;
+        else if (sData.detail) msg = String(sData.detail);
+        else if (sData.error) msg = String(sData.error);
+        else if (typeof sData === 'object' && Object.keys(sData).length > 0) {
+          const firstVal = Object.values(sData)[0];
+          msg = Array.isArray(firstVal) ? firstVal.join(' ') : String(firstVal);
+        }
+        setErrorMsg(msg);
         setLoading(false);
         return;
       }
 
-      const createdSchoolId = sData.school_id || sData.id;
+      const schoolObj = sData.data || sData;
+      const createdSchoolId = schoolObj.school_id || schoolObj.id || sData.school_id || sData.id;
+      const adminPassword = generateSchoolAdminPassword(newSchoolForm.admin_name);
+      const exactAdminUsername = (newSchoolForm.admin_name || 'admin').trim();
 
       const adminPayload = {
-        username: newSchoolForm.email ? newSchoolForm.email.split('@')[0] : `admin_${Date.now()}`,
+        username: exactAdminUsername,
         email: newSchoolForm.email,
-        full_name: newSchoolForm.admin_name,
+        full_name: exactAdminUsername,
         school: createdSchoolId,
-        password: newSchoolForm.password || 'SchoolAdmin123!',
+        password: adminPassword,
         is_active: true
       };
 
@@ -637,41 +938,41 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         method: 'POST',
         body: JSON.stringify(adminPayload)
       });
+      let aData = {};
+      try { aData = await aRes.json(); } catch { aData = {}; }
 
       if (aRes.ok) {
-        showFeedback('School and School Admin created successfully!', null);
+        showFeedback(`School and School Admin created successfully! Login credentials have been sent to ${newSchoolForm.email}.`, null);
         setIsAddingSchool(false);
         setNewSchoolForm({
-          school_name: '', school_code: '', address: '', city: '', state: '', pincode: '',
+          school_name: '', phone: '', address: '', city: '', state: '', pincode: '',
           admin_name: '', email: '', password: ''
         });
         await loadSchools();
         await loadSchoolAdmins();
       } else {
-        const aData = await aRes.json();
-        setErrorMsg(aData.message || 'School was created, but Admin account failed to register.');
+        let msg = 'Failed to create school admin.';
+        if (aData.email) msg = Array.isArray(aData.email) ? aData.email.join(' ') : aData.email;
+        else if (aData.username) msg = Array.isArray(aData.username) ? aData.username.join(' ') : aData.username;
+        else if (aData.password) msg = Array.isArray(aData.password) ? aData.password.join(' ') : aData.password;
+        else if (aData.detail) msg = String(aData.detail);
+        else if (aData.error) msg = String(aData.error);
+        else if (typeof aData === 'object' && Object.keys(aData).length > 0) {
+          const firstVal = Object.values(aData)[0];
+          msg = Array.isArray(firstVal) ? firstVal.join(' ') : String(firstVal);
+        }
+        setErrorMsg(msg);
       }
     } catch (err) {
-      setErrorMsg('Failed to connect to backend.');
-      console.error(err);
+      console.error('Error adding school:', err);
+      setErrorMsg(formatErrorMsg(err?.message || 'Failed to create school. Please try again.'));
     } finally {
       setLoading(false);
     }
   };
 
-  /* ── Users & Roles List Merger ── */
   const getMergedUsers = () => {
     const list = [];
-    // Add current super admin
-    list.push({
-      id: 'super-admin-row',
-      full_name: profileForm.full_name || 'Super Admin',
-      username: user?.username || 'superadmin',
-      email: user?.email || 'superadmin@englishlab.com',
-      role: 'Super Admin',
-      school_name: 'Global',
-      is_active: true
-    });
     // Add School Admins
     schoolAdmins.forEach(sa => {
       list.push({
@@ -696,6 +997,19 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         school_name: t.school_name || `School ID: ${t.school}`,
         is_active: t.is_active,
         school_id: t.school
+      });
+    });
+    // Add Students
+    students.forEach(s => {
+      list.push({
+        id: s.student_id,
+        full_name: s.full_name || s.username,
+        username: s.username,
+        email: s.email,
+        role: 'Student',
+        school_name: s.school_name || `School ID: ${s.school}`,
+        is_active: s.is_active,
+        school_id: s.school
       });
     });
     return list;
@@ -757,8 +1071,8 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
           SIDEBAR
           ═════════════════ */}
       <aside className={`sd-sidebar${isSidebarOpen ? ' open' : ''}`}>
-        <div className="sd-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-          <img src={logoIcon} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+        <div className="sd-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem 1.25rem' }}>
+          <img src={logoIcon} alt="Logo" style={{ width: '62px', height: '100px', objectFit: 'contain' }} />
           <div>
             <div className="sd-brand-name">LinguaLab</div>
             <div className="sd-brand-sub">Admin Portal</div>
@@ -782,25 +1096,24 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
             <FiFileText/><span>Reports</span>
           </button>
           <button className={`sd-nav-item${activeTab === 'profile' ? ' active' : ''}`} onClick={() => goTo('profile')}>
-            <FiSettings/><span>System Settings</span>
+            <FiUser/><span>Profile Settings</span>
           </button>
         </nav>
 
-        {/* Footer links */}
-        <div className="sd-footer">
-          <button className="sd-footer-link danger" onClick={onLogout}><FiLogOut/><span>Logout</span></button>
-        </div>
-
-        {/* User card */}
-        <div className="sd-user-card">
-          <div className="sd-user-avatar">
-            {(user?.username || 'AD').slice(0, 2).toUpperCase()}
+        {/* Sidebar bottom: user card with logout icon */}
+        <div className="sd-sidebar-bottom">
+          <div className="sd-user-card">
+            <div className="sd-user-avatar">
+              {(user?.username || 'AD').slice(0, 2).toUpperCase()}
+            </div>
+            <div className="sd-user-meta">
+              <div className="sd-user-name">{user?.username || 'Super Admin'}</div>
+              <div className="sd-user-role">Super Admin</div>
+            </div>
+            <button className="sd-logout-icon-btn" onClick={onLogout} title="Logout">
+              <FiLogOut/>
+            </button>
           </div>
-          <div className="sd-user-meta">
-            <div className="sd-user-name">{user?.username || 'Super Admin'}</div>
-            <div className="sd-user-role">Location</div>
-          </div>
-          <FiChevronDown className="sd-user-chevron"/>
         </div>
       </aside>
 
@@ -810,7 +1123,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
       <main className="sd-main">
         {/* ── Top Bar ── */}
         <div className="sd-topbar">
-          <div className="sd-search">
+          {/* <div className="sd-search">
             <FiSearch/>
             <input
               type="text"
@@ -818,8 +1131,8 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
-          </div>
-          <div className="sd-topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          </div> */}
+          <div className="sd-topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}>
             <button className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.5rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
               <FiCalendar/> May 15 - Jun 13, 2025 <FiChevronDown/>
             </button>
@@ -832,8 +1145,18 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         <div className={`sd-content${activeTab === 'dashboard' ? ' sd-content--dashboard' : ''}`}>
 
           {/* Alerts */}
-          {successMsg && <div className="sd-alert sd-alert-success"><FiCheckCircle/>{successMsg}</div>}
-          {errorMsg   && <div className="sd-alert sd-alert-error"><FiX/>{errorMsg}</div>}
+          {successMsg && (
+            <div className="sd-alert sd-alert-success" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <FiCheckCircle/> <span>{successMsg}</span>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setSuccessMsg('')}><FiX/></button>
+            </div>
+          )}
+          {errorMsg && (
+            <div className="sd-alert sd-alert-error" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>{errorMsg}</span>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setErrorMsg('')}><FiX/></button>
+            </div>
+          )}
 
           {/* ══════════ OVERVIEW / DASHBOARD TAB ══════════ */}
           {activeTab === 'dashboard' && (
@@ -841,7 +1164,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
               {/* Premium Dashboard Header Card with Background Image */}
               <div className="sd-dashboard-header-card" style={{ backgroundImage: `url(${dashboardHeaderBanner})`, position: 'relative' }}>
                 <div className="sd-header-text-section" style={{ maxWidth: '50%' }}>
-                  <h1>Welcome back, Super Admin!</h1>
+                   <h1>Welcome back, { profileForm.username || user?.username || 'Super Admin' }!</h1>
                   <p>Monitor schools, track student engagement, analyze subscriptions, and make data-driven decisions from one unified dashboard.</p>
                 </div>
 
@@ -1069,22 +1392,13 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
           {activeTab === 'users-roles' && (
             <>
               <div className="sd-page-header">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '1rem' }}>
-                  <div>
-                    <h1 className="sd-page-title">Users &amp; Roles</h1>
-                    <p className="sd-page-sub">Manage platform users and their roles.</p>
-                  </div>
-                  <button className="sd-btn-primary" onClick={handleOpenAdd}><FiPlus/>Add User</button>
+                <div>
+                  <h1 className="sd-page-title">Users &amp; Roles</h1>
+                  <p className="sd-page-sub">Manage platform users and their roles.</p>
                 </div>
               </div>
 
               <div className="sd-card" style={{ padding: '1.25rem 1.5rem' }}>
-                {/* Tabs inside card */}
-                <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', marginBottom: '1.25rem', gap: '1.5rem' }}>
-                  <button style={{ paddingBottom: '0.75rem', borderBottom: '2.5px solid #6366f1', background: 'none', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, color: '#4f46e5', fontSize: '0.85rem' }}>Users</button>
-                  <button style={{ paddingBottom: '0.75rem', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, color: '#64748b', fontSize: '0.85rem' }}>Roles &amp; Permissions</button>
-                </div>
-
                 {/* Filters toolbar */}
                 <div className="sd-table-toolbar">
                   <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', flex: 1 }}>
@@ -1100,9 +1414,9 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                     <select className="sd-btn-filter" style={{ border: '1.5px solid #e8edf5', background: '#fff', fontSize: '0.8rem', fontWeight: 500 }}
                       value={selectedRoleFilter} onChange={e => { setSelectedRoleFilter(e.target.value); setUsersPage(1); }}>
                       <option value="">All Roles</option>
-                      <option value="Super Admin">Super Admin</option>
                       <option value="School Admin">School Admin</option>
                       <option value="Teacher">Teacher</option>
+                      <option value="Student">Student</option>
                     </select>
                     <select className="sd-btn-filter" style={{ border: '1.5px solid #e8edf5', background: '#fff', fontSize: '0.8rem', fontWeight: 500 }}
                       value={selectedStatusFilter} onChange={e => { setSelectedStatusFilter(e.target.value); setUsersPage(1); }}>
@@ -1111,20 +1425,45 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                       <option value="inactive">Inactive</option>
                     </select>
                   </div>
-                  <button className="sd-btn-filter"><FiFilter/>Filter</button>
+                  <div className="sd-table-actions" style={{ display: 'flex', gap: '0.65rem' }}>
+                    {selectedUserIds.length > 0 && (
+                      <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteUsers}>
+                        <FiTrash2/> Delete Selected ({selectedUserIds.length})
+                      </button>
+                    )}
+                    <button className="sd-btn-primary" onClick={handleOpenAdd}>
+                      <FiPlus/> Add User
+                    </button>
+                  </div>
                 </div>
 
                 {/* Users Table */}
                 <div className="sd-table-wrap">
                   <table className="sd-table">
+                    <colgroup>
+                      <col style={{ width: '4%' }} />
+                      <col style={{ width: '22%' }} />
+                      <col style={{ width: '24%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '20%' }} />
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '14%' }} />
+                    </colgroup>
                     <thead>
                       <tr>
+                        <th className="sd-checkbox-cell">
+                          <input
+                            type="checkbox"
+                            checked={getMergedUsers().length > 0 && selectedUserIds.length > 0}
+                            onChange={handleSelectAllUsers}
+                          />
+                        </th>
                         <th>Name</th>
                         <th>Email</th>
                         <th>Role</th>
                         <th>School / Scope</th>
                         <th>Status</th>
-                        <th style={{ textAlign: 'right' }}>Actions</th>
+                        <th style={{ textAlign: 'center' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1135,32 +1474,43 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                           if (u.is_active !== wantActive) return false;
                         }
                         return true;
-                      }), usersPage).map((u, i) => (
-                        <tr key={u.id || i}>
-                          <td style={{ fontWeight: 600, color: '#1e293b' }}>{u.full_name}</td>
-                          <td>{u.email}</td>
-                          <td>{u.role}</td>
-                          <td>{u.school_name}</td>
-                          <td>
-                            <span className={`sd-badge ${u.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
-                              {u.is_active ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="sd-action-cell">
-                              <button className="sd-icon-action" title="View"><FiEye/></button>
+                      }), usersPage).map((u, i) => {
+                        const uid = u.id || i;
+                        return (
+                          <tr key={uid}>
+                            <td className="sd-checkbox-cell">
                               {u.id !== 'super-admin-row' && (
-                                <>
-                                  <button className="sd-icon-action edit" onClick={() => handleOpenEdit(saFromMerged(u))} title="Edit"><FiEdit2/></button>
-                                  <button className="sd-icon-action delete" onClick={() => handleDelete(u.id)} title="Delete"><FiTrash2/></button>
-                                </>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedUserIds.includes(u.id)}
+                                  onChange={() => handleSelectUserRow(u.id)}
+                                />
                               )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td style={{ fontWeight: 600, color: '#1e293b' }}>{u.full_name}</td>
+                            <td>{u.email}</td>
+                            <td>{u.role}</td>
+                            <td>{u.school_name}</td>
+                            <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
+                              <span className={`sd-badge ${u.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                                {u.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="sd-action-cell" style={{ justifyContent: 'center' }}>
+                                {u.id !== 'super-admin-row' && (
+                                  <>
+                                    <button className="sd-icon-action edit" onClick={() => handleOpenEdit(saFromMerged(u))} title="Edit"><FiEdit2/></button>
+                                    <button className="sd-icon-action delete" onClick={() => openDeleteModal(u.id, 'school admin')} title="Delete"><FiTrash2/></button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                       {filterList(getMergedUsers()).length === 0 && (
-                        <tr><td colSpan="6" className="sd-empty-state">No users found.</td></tr>
+                        <tr><td colSpan="7" className="sd-empty-state">No users found.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -1215,9 +1565,9 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                               value={newSchoolForm.school_name} onChange={e => setNewSchoolForm({ ...newSchoolForm, school_name: e.target.value })}/>
                           </div>
                           <div className="sd-form-group">
-                            <label className="sd-form-label">School Code <span style={{ color: '#ef4444' }}>*</span></label>
-                            <input className="sd-form-input" type="text" placeholder="Enter unique code" required
-                              value={newSchoolForm.school_code} onChange={e => setNewSchoolForm({ ...newSchoolForm, school_code: e.target.value })}/>
+                            <label className="sd-form-label">Phone Number <span style={{ color: '#ef4444' }}>*</span></label>
+                            <input className="sd-form-input" type="text" placeholder="Enter phone number" required
+                              value={newSchoolForm.phone || ''} onChange={e => setNewSchoolForm({ ...newSchoolForm, phone: e.target.value })}/>
                           </div>
                           <div className="sd-form-group" style={{ gridColumn: 'span 2' }}>
                             <label className="sd-form-label">Address <span style={{ color: '#ef4444' }}>*</span></label>
@@ -1225,26 +1575,42 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                               value={newSchoolForm.address} onChange={e => setNewSchoolForm({ ...newSchoolForm, address: e.target.value })}/>
                           </div>
                           <div className="sd-form-group">
-                            <label className="sd-form-label">City <span style={{ color: '#ef4444' }}>*</span></label>
-                            <select className="sd-form-input" required value={newSchoolForm.city} onChange={e => setNewSchoolForm({ ...newSchoolForm, city: e.target.value })}>
-                              <option value="">Select city</option>
-                              <option value="Chennai">Chennai</option>
-                              <option value="Coimbatore">Coimbatore</option>
-                              <option value="Madurai">Madurai</option>
-                              <option value="Salem">Salem</option>
-                              <option value="Bangalore">Bangalore</option>
-                              <option value="Hyderabad">Hyderabad</option>
-                              <option value="Trichy">Trichy</option>
+                            <label className="sd-form-label">State <span style={{ color: '#ef4444' }}>*</span></label>
+                            <select
+                              className="sd-form-input"
+                              required
+                              value={newSchoolForm.state}
+                              onChange={e => {
+                                const selectedState = e.target.value;
+                                const availableCities = INDIAN_STATES_AND_CITIES[selectedState] || [];
+                                setNewSchoolForm(prev => ({
+                                  ...prev,
+                                  state: selectedState,
+                                  city: availableCities[0] || ''
+                                }));
+                              }}
+                            >
+                              <option value="">Select state</option>
+                              {Object.keys(INDIAN_STATES_AND_CITIES).map(st => (
+                                <option key={st} value={st}>{st}</option>
+                              ))}
                             </select>
                           </div>
                           <div className="sd-form-group">
-                            <label className="sd-form-label">State <span style={{ color: '#ef4444' }}>*</span></label>
-                            <select className="sd-form-input" required value={newSchoolForm.state} onChange={e => setNewSchoolForm({ ...newSchoolForm, state: e.target.value })}>
-                              <option value="">Select state</option>
-                              <option value="Tamil Nadu">Tamil Nadu</option>
-                              <option value="Karnataka">Karnataka</option>
-                              <option value="Telangana">Telangana</option>
-                              <option value="Kerala">Kerala</option>
+                            <label className="sd-form-label">City <span style={{ color: '#ef4444' }}>*</span></label>
+                            <select
+                              className="sd-form-input"
+                              required
+                              value={newSchoolForm.city}
+                              onChange={e => setNewSchoolForm({ ...newSchoolForm, city: e.target.value })}
+                            >
+                              <option value="">Select city</option>
+                              {(newSchoolForm.state && INDIAN_STATES_AND_CITIES[newSchoolForm.state]
+                                ? INDIAN_STATES_AND_CITIES[newSchoolForm.state]
+                                : Object.values(INDIAN_STATES_AND_CITIES).flat()
+                              ).map(ct => (
+                                <option key={ct} value={ct}>{ct}</option>
+                              ))}
                             </select>
                           </div>
                           <div className="sd-form-group">
@@ -1258,22 +1624,23 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                       {/* School Admin Information Card */}
                       <div className="sd-card" style={{ padding: '1.5rem 2rem' }}>
                         <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.25rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>School Admin Information</h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
                           <div className="sd-form-group">
                             <label className="sd-form-label">Admin Name <span style={{ color: '#ef4444' }}>*</span></label>
                             <input className="sd-form-input" type="text" placeholder="Enter admin name" required
-                              value={newSchoolForm.admin_name} onChange={e => setNewSchoolForm({ ...newSchoolForm, admin_name: e.target.value })}/>
+                              value={newSchoolForm.admin_name}
+                              onChange={e => setNewSchoolForm({ ...newSchoolForm, admin_name: e.target.value })}
+                            />
                           </div>
                           <div className="sd-form-group">
-                            <label className="sd-form-label">Email <span style={{ color: '#ef4444' }}>*</span></label>
+                            <label className="sd-form-label">Email Address <span style={{ color: '#ef4444' }}>*</span></label>
                             <input className="sd-form-input" type="email" placeholder="Enter email address" required
                               value={newSchoolForm.email} onChange={e => setNewSchoolForm({ ...newSchoolForm, email: e.target.value })}/>
                           </div>
-                          <div className="sd-form-group">
-                            <label className="sd-form-label">Password <span style={{ color: '#ef4444' }}>*</span></label>
-                            <input className="sd-form-input" type="password" placeholder="Enter password" required
-                              value={newSchoolForm.password || ''} onChange={e => setNewSchoolForm({ ...newSchoolForm, password: e.target.value })}/>
-                          </div>
+                        </div>
+                        <div style={{ marginTop: '1.25rem', fontSize: '0.82rem', color: '#475569', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.45rem', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                          <FiCheckCircle style={{ color: '#16a34a', flexShrink: 0, fontSize: '1rem' }}/>
+                          <span>Account credentials will be automatically generated and sent to {newSchoolForm.email ? <strong style={{ color: '#4f46e5' }}>{newSchoolForm.email}</strong> : 'the School Admin email'}.</span>
                         </div>
                       </div>
 
@@ -1309,51 +1676,80 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                         />
                       </div>
                       <div className="sd-table-actions">
-                        <button className="sd-btn-filter"><FiFilter/>Filters</button>
+                        {selectedSchoolIds.length > 0 && (
+                          <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteSchools}>
+                            <FiTrash2/> Delete Selected ({selectedSchoolIds.length})
+                          </button>
+                        )}
                         <button className="sd-btn-primary" onClick={() => setIsAddingSchool(true)}><FiPlus/>Add School</button>
                       </div>
                     </div>
 
                     <div className="sd-table-wrap">
                       <table className="sd-table">
+                        <colgroup>
+                          <col style={{ width: '4%' }} />
+                          <col style={{ width: '22%' }} />
+                          <col style={{ width: '16%' }} />
+                          <col style={{ width: '20%' }} />
+                          <col style={{ width: '10%' }} />
+                          <col style={{ width: '10%' }} />
+                          <col style={{ width: '10%' }} />
+                          <col style={{ width: '8%' }} />
+                        </colgroup>
                         <thead>
                           <tr>
+                            <th className="sd-checkbox-cell">
+                              <input
+                                type="checkbox"
+                                checked={schools.length > 0 && selectedSchoolIds.length === filterList(schools).length}
+                                onChange={handleSelectAllSchools}
+                              />
+                            </th>
                             <th>SCHOOL NAME</th>
                             <th>ADMIN NAME</th>
                             <th>EMAIL</th>
                             <th>TEACHERS</th>
                             <th>STUDENTS</th>
                             <th>LOCATION</th>
-                            <th style={{ textAlign: 'right' }}>ACTIONS</th>
+                            <th style={{ textAlign: 'center' }}>ACTIONS</th>
                           </tr>
                         </thead>
                         <tbody>
                           {paginate(filterList(schools), schoolsPage).map((s, i) => {
+                            const sid = s.school_id || s.id;
                             const admin = schoolAdmins.find(sa => sa.school === s.school_id || sa.school_id === s.school_id);
                             const adminName = admin ? (admin.full_name || admin.username) : (s.admin_name || 'N/A');
                             const adminEmail = admin ? admin.email : (s.email || 'admin@example.com');
                             const teachersCount = teachers.filter(t => t.school === s.school_id || t.school_id === s.school_id).length;
-                            const studentCount = s.school_id ? (s.school_id * 127 + 288) % 1500 : 0;
+                            const studentCount = 0;
 
                             return (
-                              <tr key={s.school_id || i}>
+                              <tr key={sid || i}>
+                                <td className="sd-checkbox-cell">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedSchoolIds.includes(sid)}
+                                    onChange={() => handleSelectSchoolRow(sid)}
+                                  />
+                                </td>
                                 <td style={{ fontWeight: 600, color: '#1e293b' }}>{s.school_name}</td>
                                 <td>{adminName}</td>
                                 <td>{adminEmail}</td>
                                 <td>{teachersCount}</td>
-                                <td>{studentCount || '—'}</td>
+                                <td>{studentCount}</td>
                                 <td>{s.address || s.city || 'N/A'}</td>
                                 <td>
-                                  <div className="sd-action-cell">
+                                  <div className="sd-action-cell" style={{ justifyContent: 'center' }}>
                                     <button className="sd-icon-action edit" onClick={() => handleOpenEdit(s)} title="Edit"><FiEdit2/></button>
-                                    <button className="sd-icon-action delete" onClick={() => handleDelete(s.school_id || s.id)} title="Delete"><FiTrash2/></button>
+                                    <button className="sd-icon-action delete" onClick={() => openDeleteModal(sid, 'school')} title="Delete"><FiTrash2/></button>
                                   </div>
                                 </td>
                               </tr>
                             );
                           })}
                           {filterList(schools).length === 0 && (
-                            <tr><td colSpan="7" className="sd-empty-state">No schools found.</td></tr>
+                            <tr><td colSpan="8" className="sd-empty-state">No schools found.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -1656,12 +2052,11 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                               <td>{p.schools}</td>
                               <td>{p.price}</td>
                               <td>{p.feat}</td>
-                              <td>
+                               <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
                                 <span className={`sd-badge ${p.active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>Active</span>
                               </td>
                               <td>
                                 <div className="sd-action-cell">
-                                  <button className="sd-icon-action" title="View"><FiEye/></button>
                                   <button className="sd-icon-action edit" title="Edit"><FiEdit2/></button>
                                 </div>
                               </td>
@@ -1774,12 +2169,9 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
           {activeTab === 'reports' && (
             <>
               <div className="sd-page-header">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '1rem' }}>
-                  <div>
-                    <h1 className="sd-page-title">Reports &amp; Releases</h1>
-                    <p className="sd-page-sub">Release publish history, package checksums, and grade release files.</p>
-                  </div>
-                  <button className="sd-btn-primary" onClick={handleOpenAdd}><FiPlus/>Add Release</button>
+                <div>
+                  <h1 className="sd-page-title">Reports &amp; Releases</h1>
+                  <p className="sd-page-sub">Release publish history, package checksums, and grade release files.</p>
                 </div>
               </div>
 
@@ -1793,6 +2185,11 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                       value={searchQuery}
                       onChange={e => { setSearchQuery(e.target.value); setPublishPage(1); }}
                     />
+                  </div>
+                  <div className="sd-table-actions">
+                    <button className="sd-btn-primary" onClick={handleOpenAdd}>
+                      <FiPlus/> Add Release
+                    </button>
                   </div>
                 </div>
                 <div className="sd-table-wrap">
@@ -1814,11 +2211,11 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                           <td style={{ fontWeight: 600, color: '#1e293b' }}>{p.release_name}</td>
                           <td>{p.grade_name || p.grade}</td>
                           <td>{p.total_experiences}</td>
-                          <td>
-                            <span className={`sd-badge ${p.status === 'PUBLISHED' ? 'sd-badge-published' : 'sd-badge-draft'}`}>
-                              {p.status}
-                            </span>
-                          </td>
+                          <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
+                             <span className={`sd-badge ${p.status === 'PUBLISHED' ? 'sd-badge-published' : 'sd-badge-draft'}`}>
+                               {p.status}
+                             </span>
+                           </td>
                           <td style={{ color: '#6b7280', fontSize: '0.75rem' }}>{p.checksum || 'N/A'}</td>
                           <td>
                             {p.export_file ? (
@@ -1832,7 +2229,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                           <td>
                             <div className="sd-action-cell">
                               <button className="sd-icon-action edit" onClick={() => handleOpenEdit(p)} title="Edit"><FiEdit2/></button>
-                              <button className="sd-icon-action delete" onClick={() => handleDelete(p.publish_id || p.id)} title="Delete"><FiTrash2/></button>
+                              <button className="sd-icon-action delete" onClick={() => openDeleteModal(p.publish_id || p.id, 'publish log')} title="Delete"><FiTrash2/></button>
                             </div>
                           </td>
                         </tr>
@@ -1852,7 +2249,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
           {activeTab === 'profile' && (
             <>
               <div className="sd-page-header">
-                <h1 className="sd-page-title">System Settings</h1>
+                <h1 className="sd-page-title">Profile Settings</h1>
                 <p className="sd-page-sub">View and update your administrator account details.</p>
               </div>
 
@@ -1862,7 +2259,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                     <div className="sd-profile-section-title">
                       <FiUser/>Personal Details
                     </div>
-                    <span className="sd-verified-badge"><FiCheckCircle/>Verified Admin</span>
+          
                   </div>
 
                   <div className="sd-form-row">
@@ -1886,6 +2283,13 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                       <label className="sd-form-label">Username</label>
                       <input className="sd-form-input" type="text" value={profileForm.username} disabled/>
                     </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Phone Number</label>
+                      <input className="sd-form-input" type="tel"
+                        value={profileForm.phone_no}
+                        onChange={e => setProfileForm({ ...profileForm, phone_no: e.target.value })}
+                        placeholder="+91 98765 43210"/>
+                    </div>
                   </div>
 
                   {/* Change password row */}
@@ -1894,11 +2298,17 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                       <div className="sd-pw-row-title">Change Password</div>
                       <div className="sd-pw-row-sub">Update your password to stay secure</div>
                     </div>
-                    <button type="button" className="sd-btn-outline" onClick={() => setShowPwModal(true)}>Update</button>
+                    <button type="button" className="sd-btn-outline" onClick={() => {
+                      setPwForm({ current_password: '', new_password: '', confirm_password: '' });
+                      setPwModalError('');
+                      setShowPwModal(true);
+                    }}>Update</button>
                   </div>
 
                   <div className="sd-profile-save-row">
-                    <button type="submit" className="sd-btn-primary">Save Changes</button>
+                    <button type="submit" className="sd-btn-primary" disabled={actionLoading}>
+                      {actionLoading ? 'Saving...' : 'Save Changes'}
+                    </button>
                   </div>
                 </div>
               </form>
@@ -1954,7 +2364,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                           <td>
                             <div className="sd-action-cell">
                               <button className="sd-icon-action edit" onClick={() => handleOpenEdit(g)} title="Edit"><FiEdit2/></button>
-                              <button className="sd-icon-action delete" onClick={() => handleDelete(g.id)} title="Delete"><FiTrash2/></button>
+                              <button className="sd-icon-action delete" onClick={() => openDeleteModal(g.id, 'grade')} title="Delete"><FiTrash2/></button>
                             </div>
                           </td>
                         </tr>
@@ -2017,15 +2427,15 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                     <tbody>
                       {paginate(filterList(experiences).filter(ex => !selectedGradeFilter || ex.grade?.id === parseInt(selectedGradeFilter) || ex.grade === parseInt(selectedGradeFilter)), experiencesPage).map((ex, i) => (
                         <tr key={ex.id || i}>
-                          <td><span className="sd-badge sd-badge-active" style={{ background: '#e0f2fe', color: '#0369a1' }}>{ex.grade_name || `Grade ID: ${ex.grade}`}</span></td>
+                          <td style={{ overflow: 'visible', textOverflow: 'clip' }}><span className="sd-badge sd-badge-active" style={{ background: '#e0f2fe', color: '#0369a1' }}>{ex.grade_name || `Grade ID: ${ex.grade}`}</span></td>
                           <td style={{ fontWeight: 600 }}>{ex.title}</td>
                           <td>{ex.estimated_duration} mins</td>
-                          <td>
+                          <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
                             <span className={`sd-badge ${ex.difficulty === 'EASY' ? 'sd-badge-active' : ex.difficulty === 'HARD' ? 'sd-badge-leave' : 'sd-badge-review'}`}>
                               {ex.difficulty}
                             </span>
                           </td>
-                          <td>
+                          <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
                             <span className={`sd-badge ${ex.status === 'PUBLISHED' ? 'sd-badge-published' : ex.status === 'REVIEW' ? 'sd-badge-review' : 'sd-badge-draft'}`}>
                               {ex.status}
                             </span>
@@ -2039,7 +2449,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                             <div className="sd-action-cell">
                               <button className="sd-icon-action edit" onClick={() => handlePreviewExperience(ex)} title="Preview"><FiBookOpen style={{ color:'#3b82f6' }}/></button>
                               <button className="sd-icon-action edit" onClick={() => handleOpenEdit(ex)} title="Edit"><FiEdit2/></button>
-                              <button className="sd-icon-action delete" onClick={() => handleDelete(ex.id)} title="Delete"><FiTrash2/></button>
+                              <button className="sd-icon-action delete" onClick={() => openDeleteModal(ex.id, 'experience')} title="Delete"><FiTrash2/></button>
                             </div>
                           </td>
                         </tr>
@@ -2210,6 +2620,14 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                   <input className="sd-form-input" type="email" required value={schoolAdminForm.email} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, email: e.target.value })}/>
                 </div>
                 <div className="sd-form-group">
+                  <label className="sd-form-label">Select Role *</label>
+                  <select className="sd-form-input" required disabled={modalType === 'edit'} value={schoolAdminForm.role || 'school-admins'} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, role: e.target.value })}>
+                    <option value="school-admins">School Admin</option>
+                    <option value="teachers">Teacher</option>
+                    <option value="students">Student</option>
+                  </select>
+                </div>
+                <div className="sd-form-group">
                   <label className="sd-form-label">School Scope *</label>
                   <select className="sd-form-input" required value={schoolAdminForm.school} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, school: e.target.value })}>
                     <option value="">Select School</option>
@@ -2239,35 +2657,99 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
               <span className="sd-modal-title">Change Password</span>
               <button className="sd-modal-close" onClick={() => setShowPwModal(false)}><FiX/></button>
             </div>
+
             <form className="sd-modal-form" onSubmit={async e => {
               e.preventDefault();
-              if (!profileForm.current_password) { setErrorMsg('Current password required.'); return; }
+              setPwModalError('');
+              if (!pwForm.current_password) { setPwModalError('Current password is required.'); return; }
+              if (!pwForm.new_password) { setPwModalError('New password is required.'); return; }
+              if (!pwForm.confirm_password) { setPwModalError('Confirm password is required.'); return; }
+              if (pwForm.new_password.length < 6) { setPwModalError('New password must be at least 6 characters.'); return; }
+
+              setActionLoading(true);
               try {
                 const res = await apiFetch('/api/users/change-password/', {
                   method: 'POST',
-                  body: JSON.stringify({ old_password: profileForm.current_password, new_password: profileForm.password })
+                  body: JSON.stringify({ old_password: pwForm.current_password, new_password: pwForm.new_password, confirm_password: pwForm.confirm_password })
                 });
+                let d = {};
+                try { d = await res.json(); } catch { d = {}; }
                 if (res.ok) {
                   showFeedback('Password changed successfully!', null);
-                  setProfileForm(p => ({ ...p, current_password: '', password: '' }));
+                  setPwForm({ current_password: '', new_password: '', confirm_password: '' });
                   setShowPwModal(false);
                 } else {
-                  const d = await res.json();
-                  setErrorMsg(typeof d === 'object' ? JSON.stringify(d) : 'Password change failed.');
+                  let msg = 'Current password is incorrect.';
+                  if (d) {
+                    if (d.confirm_password) {
+                      msg = Array.isArray(d.confirm_password) ? d.confirm_password.join(' ') : String(d.confirm_password);
+                    } else if (d.new_password) {
+                      msg = Array.isArray(d.new_password) ? d.new_password.join(' ') : String(d.new_password);
+                    } else if (d.old_password) {
+                      const raw = Array.isArray(d.old_password) ? d.old_password.join(' ') : String(d.old_password);
+                      msg = (raw.toLowerCase().includes('incorrect') || raw.toLowerCase().includes('wrong') || raw.toLowerCase().includes('current')) ? 'Current password is incorrect.' : raw;
+                    } else if (d.non_field_errors) {
+                      msg = Array.isArray(d.non_field_errors) ? d.non_field_errors.join(' ') : String(d.non_field_errors);
+                    } else if (d.detail) {
+                      const dt = String(d.detail);
+                      msg = (dt.toLowerCase().includes('incorrect') || dt.toLowerCase().includes('wrong')) ? 'Current password is incorrect.' : dt;
+                    } else if (d.error) {
+                      const er = String(d.error);
+                      msg = (er.toLowerCase().includes('incorrect') || er.toLowerCase().includes('wrong')) ? 'Current password is incorrect.' : er;
+                    }
+                  }
+                  setPwModalError(msg);
                 }
-              } catch { setErrorMsg('Connection error.'); }
+              } catch (err) {
+                console.error('Password change error:', err);
+                setPwModalError('Current password is incorrect.');
+              }
+              finally { setActionLoading(false); }
             }}>
+              {pwModalError && (
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '8px',
+                  color: '#dc2626',
+                  fontSize: '0.84rem',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                  boxSizing: 'border-box'
+                }}>
+                  <FiAlertTriangle style={{ flexShrink: 0, color: '#ef4444', fontSize: '1rem' }} />
+                  <span style={{ lineHeight: 1.4 }}>{pwModalError}</span>
+                </div>
+              )}
               <div className="sd-form-group">
                 <label className="sd-form-label">Current Password</label>
-                <input className="sd-form-input" type="password" value={profileForm.current_password} onChange={e => setProfileForm({ ...profileForm, current_password: e.target.value })} placeholder="Enter current password" required/>
+                <input className="sd-form-input" type="password"
+                  value={pwForm.current_password}
+                  onChange={e => { setPwForm({ ...pwForm, current_password: e.target.value }); setPwModalError(''); }}
+                  placeholder="Enter current password" required/>
               </div>
               <div className="sd-form-group">
                 <label className="sd-form-label">New Password</label>
-                <input className="sd-form-input" type="password" value={profileForm.password} onChange={e => setProfileForm({ ...profileForm, password: e.target.value })} placeholder="Minimum 6 characters" required minLength={6}/>
+                <input className="sd-form-input" type="password"
+                  value={pwForm.new_password}
+                  onChange={e => { setPwForm({ ...pwForm, new_password: e.target.value }); setPwModalError(''); }}
+                  placeholder="Minimum 6 characters" required minLength={6}/>
+              </div>
+              <div className="sd-form-group">
+                <label className="sd-form-label">Confirm Password</label>
+                <input className="sd-form-input" type="password"
+                  value={pwForm.confirm_password}
+                  onChange={e => { setPwForm({ ...pwForm, confirm_password: e.target.value }); setPwModalError(''); }}
+                  placeholder="Confirm new password" required minLength={6}/>
               </div>
               <div className="sd-modal-footer">
                 <button type="button" className="sd-btn-cancel" onClick={() => setShowPwModal(false)}>Cancel</button>
-                <button type="submit" className="sd-btn-save">Update Password</button>
+                <button type="submit" className="sd-btn-save" disabled={actionLoading}>
+                  {actionLoading ? 'Updating...' : 'Update Password'}
+                </button>
               </div>
             </form>
           </div>
@@ -2306,6 +2788,108 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
         </div>
       )}
 
+      {/* ── Centered Blurred Delete Confirmation Modal ── */}
+      {deleteConfirm.show && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '1rem'
+          }}
+          onClick={() => setDeleteConfirm({ show: false, id: null, type: '' })}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '360px',
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              padding: '1.75rem 1.5rem',
+              boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.3)',
+              textAlign: 'center'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Delete Symbol */}
+            <div
+              style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '50%',
+                backgroundColor: '#fee2e2',
+                color: '#ef4444',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1rem',
+                fontSize: '1.5rem'
+              }}
+            >
+              <FiTrash2 />
+            </div>
+
+            {/* Title & Warning */}
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.4rem' }}>
+              Are you sure?
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+              Are you sure you want to delete {deleteConfirm.isBulk ? `${deleteConfirm.count} selected ${deleteConfirm.type}` : `this ${deleteConfirm.type}`}? This action cannot be undone.
+            </p>
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button
+                type="button"
+                style={{
+                  flex: 1,
+                  padding: '0.65rem 1rem',
+                  borderRadius: '10px',
+                  backgroundColor: '#f1f5f9',
+                  color: '#475569',
+                  border: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer'
+                }}
+                onClick={() => setDeleteConfirm({ show: false, id: null, type: '' })}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                style={{
+                  flex: 1,
+                  padding: '0.65rem 1rem',
+                  borderRadius: '10px',
+                  backgroundColor: '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer'
+                }}
+                onClick={confirmDeleteAction}
+                disabled={loading}
+              >
+                {loading ? 'Deleting...' : 'OK'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
@@ -2318,7 +2902,8 @@ const saFromMerged = (mUser) => {
     full_name: mUser.full_name,
     email: mUser.email,
     is_active: mUser.is_active,
-    school: mUser.school_id
+    school: mUser.school_id,
+    role: mUser.role === 'Teacher' ? 'teachers' : mUser.role === 'Student' ? 'students' : 'school-admins'
   };
 };
 

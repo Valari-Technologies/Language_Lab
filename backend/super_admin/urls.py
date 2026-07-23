@@ -6,6 +6,7 @@ from .views import (
     SchoolViewSet,
     DashboardStatsAPIView,
     SchoolAdminViewSet,
+    PublishContentViewSet,
 )
 
 
@@ -14,6 +15,7 @@ router = DefaultRouter()
 router.register(r"grades", GradeViewSet, basename="grade")
 router.register(r"schools", SchoolViewSet, basename="school")
 router.register(r"school-admins", SchoolAdminViewSet, basename="school-admin")
+router.register(r"publish-contents", PublishContentViewSet, basename="publish-contents")
 
 
 urlpatterns = [

@@ -34,6 +34,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
+        ret["id"] = instance.student_id
         if instance.user:
             ret["username"] = instance.user.username
             ret["email"] = instance.user.email

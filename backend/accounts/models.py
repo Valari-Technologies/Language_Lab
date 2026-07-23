@@ -22,6 +22,13 @@ class User(AbstractUser):
         null=True
     )
 
+    phone_no = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Contact phone number"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     assignments = models.ManyToManyField(
@@ -36,3 +43,19 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
+
+
+class PasswordResetOTP(models.Model):
+    email = models.EmailField()
+    otp_code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_verified = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "Password Reset OTP"
+        verbose_name_plural = "Password Reset OTPs"
+
+    def __str__(self):
+        return f"{self.email} - {self.otp_code}"
+

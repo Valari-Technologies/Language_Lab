@@ -8,12 +8,24 @@ from .views import (
     TeacherDashboardAPIView,
     ProfileAPIView,
     ChangePasswordAPIView,
+    ForgotPasswordAPIView,
+    ResetPasswordAPIView,
+    VerifyOTPAPIView,
+    GoogleLoginAPIView,
 )
 
 urlpatterns = [
     # Unified Login Endpoint
     path("auth/login/", LoginAPIView.as_view(), name="login"),
+    path("auth/google-login/", GoogleLoginAPIView.as_view(), name="google-login"),
     path("auth/logout/", LogoutAPIView.as_view(), name="logout"),
+
+    # Forgot / Reset Password Endpoints
+    path("auth/forgot-password/", ForgotPasswordAPIView.as_view(), name="forgot-password"),
+    path("auth/reset-password/", ResetPasswordAPIView.as_view(), name="reset-password"),
+    path("auth/verify-otp/", VerifyOTPAPIView.as_view(), name="verify-otp"),
+
+
 
     # Protected Role Dashboards
     path("school/dashboard/", SchoolDashboardAPIView.as_view(), name="school_dashboard"),

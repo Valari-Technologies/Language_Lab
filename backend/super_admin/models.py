@@ -75,3 +75,22 @@ class SchoolAdminProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.school.school_name}"
+
+
+class PublishContent(models.Model):
+    publish_id = models.AutoField(primary_key=True)
+    release_name = models.CharField(max_length=150)
+    grade = models.ForeignKey(Grade, on_delete=models.CASCADE)
+    total_experiences = models.IntegerField(default=0)
+    status = models.CharField(max_length=50, default="DRAFT")
+    export_file = models.CharField(max_length=255, null=True, blank=True)
+    checksum = models.CharField(max_length=64, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "cms_publishcontent"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.release_name

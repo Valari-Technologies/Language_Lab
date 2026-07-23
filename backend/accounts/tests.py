@@ -85,6 +85,14 @@ class RoleBasedLoginTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["user"]["role"], "TEACHER")
 
+    def test_login_by_email_success(self):
+        url = reverse("login")
+        data = {"username": "teacher@example.com", "password": "password123"}
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["user"]["role"], "TEACHER")
+        self.assertEqual(response.data["user"]["username"], "teacher")
+
     def test_login_student_success(self):
         url = reverse("login")
         data = {"username": "student", "password": "password123"}
@@ -435,3 +443,137 @@ class CMSSchoolAdminAndTeacherTests(TestCase):
         t = Teacher.objects.get(user=user)
         self.assertEqual(t.qualification, "Ph.D. in Linguistics")
         self.assertEqual(t.experience_years, 10)
+
+
+from accounts.models import PasswordResetOTP
+from django.core import mail
+from django.utils import timezone
+from datetime import timedelta
+
+
+class ForgotPasswordTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="reset_test_user",
+            password="testpassword123",
+            email="reset_test@example.com",
+            role="TEACHER",
+            full_name="Reset Test User"
+        )
+        self.forgot_url = reverse("forgot-password")
+        self.reset_url = reverse("reset-password")
+
+    def test_forgot_password_email_not_found(self):
+        data = {"email": "nonexistent@example.com"}
+        response = self.client.post(self.forgot_url, data, content_type="application/json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("No active user found", response.data["message"])
+
+    def test_forgot_password_success(self):
+        # Empty outbox
+        mail.outbox = []
+        data = {"email": "reset_test@example.com"}
+        response = self.client.post(self.forgot_url, data, content_type="application/json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("successfully", response.data["message"])
+
+        # Check DB
+        otp_record = PasswordResetOTP.objects.filter(email="reset_test@example.com").first()
+        self.assertIsNotNone(otp_record)
+        self.assertEqual(len(otp_record.otp_code), 6)
+        self.assertFalse(otp_record.is_verified)
+
+        # Check email sent
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["reset_test@example.com"])
+        self.assertIn(otp_record.otp_code, mail.outbox[0].body)
+
+    def test_reset_password_invalid_otp(self):
+        # Create OTP
+        PasswordResetOTP.objects.create(
+            email="reset_test@example.com",
+            otp_code="123456",
+            expires_at=timezone.now() + timedelta(minutes=10)
+        )
+        data = {
+            "email": "reset_test@example.com",
+            "otp_code": "000000",
+            "new_password": "newpassword123",
+            "confirm_password": "newpassword123"
+        }
+        response = self.client.post(self.reset_url, data, content_type="application/json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Invalid or expired OTP", response.data["message"])
+
+    def test_reset_password_expired_otp(self):
+        # Create expired OTP
+        PasswordResetOTP.objects.create(
+            email="reset_test@example.com",
+            otp_code="123456",
+            expires_at=timezone.now() - timedelta(minutes=1)
+        )
+        data = {
+            "email": "reset_test@example.com",
+            "otp_code": "123456",
+            "new_password": "newpassword123",
+            "confirm_password": "newpassword123"
+        }
+        response = self.client.post(self.reset_url, data, content_type="application/json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Invalid or expired OTP", response.data["message"])
+
+    def test_reset_password_mismatched_passwords(self):
+        data = {
+            "email": "reset_test@example.com",
+            "otp_code": "123456",
+            "new_password": "newpassword123",
+            "confirm_password": "differentpassword"
+        }
+        response = self.client.post(self.reset_url, data, content_type="application/json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reset_password_success(self):
+        # Create valid OTP
+        otp_record = PasswordResetOTP.objects.create(
+            email="reset_test@example.com",
+            otp_code="123456",
+            expires_at=timezone.now() + timedelta(minutes=10)
+        )
+        data = {
+            "email": "reset_test@example.com",
+            "otp_code": "123456",
+            "new_password": "newpassword123",
+            "confirm_password": "newpassword123"
+        }
+        response = self.client.post(self.reset_url, data, content_type="application/json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("successfully", response.data["message"])
+
+        # Check DB
+        otp_record.refresh_from_db()
+        self.assertTrue(otp_record.is_verified)
+
+        # Check password reset
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("newpassword123"))
+
+    def test_verify_otp_valid(self):
+        PasswordResetOTP.objects.create(
+            email="reset_test@example.com",
+            otp_code="654321",
+            expires_at=timezone.now() + timedelta(minutes=10)
+        )
+        url = reverse("verify-otp")
+        data = {"email": "reset_test@example.com", "otp_code": "654321"}
+        response = self.client.post(url, data, content_type="application/json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["valid"])
+
+    def test_verify_otp_invalid(self):
+        url = reverse("verify-otp")
+        data = {"email": "reset_test@example.com", "otp_code": "000000"}
+        response = self.client.post(url, data, content_type="application/json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["valid"])
+
+

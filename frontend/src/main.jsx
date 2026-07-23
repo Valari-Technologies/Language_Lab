@@ -79,11 +79,9 @@ export const App = () => {
   }, []);
 
   const handleLoginSuccess = (loggedInUser) => {
-    setUser(loggedInUser);
-
     let dest = '/login';
     if (loggedInUser.role === 'SUPER_ADMIN') {
-      dest = '/dashboard/grades';
+      dest = '/dashboard/dashboard';
     } else if (loggedInUser.role === 'CONTENT_CREATOR') {
       dest = '/content-studio';
     } else if (loggedInUser.role === 'SCHOOL_ADMIN') {
@@ -94,6 +92,7 @@ export const App = () => {
 
     window.history.pushState({}, '', dest);
     setCurrentPath(dest);
+    setUser(loggedInUser);
   };
 
   const handleLogout = () => {
@@ -115,6 +114,18 @@ export const App = () => {
     }
 
     if (user) {
+      let defaultDest = '/login';
+      if (user.role === 'SUPER_ADMIN') defaultDest = '/dashboard/dashboard';
+      else if (user.role === 'CONTENT_CREATOR') defaultDest = '/content-studio';
+      else if (user.role === 'SCHOOL_ADMIN') defaultDest = '/school-dashboard';
+      else if (user.role === 'TEACHER') defaultDest = '/teacher-dashboard';
+
+      if (currentPath === '/login' || currentPath === '/') {
+        window.history.replaceState({}, '', defaultDest);
+        setCurrentPath(defaultDest);
+        return;
+      }
+
       let isAllowed = false;
       if (user.role === 'SUPER_ADMIN') {
         isAllowed = currentPath.startsWith('/dashboard') || currentPath.startsWith('/content-studio');
@@ -127,7 +138,8 @@ export const App = () => {
       }
 
       if (!isAllowed) {
-        handleLogout();
+        window.history.replaceState({}, '', defaultDest);
+        setCurrentPath(defaultDest);
       }
     } else {
       if (!token || !storedUser) {

@@ -195,7 +195,7 @@ class BulkUploadAPITests(TestCase):
         self.assertIn("Only .xlsx and .xls are supported", response_ext.data["error"])
 
         # 2. Missing username or password header
-        invalid_headers_file = create_mock_excel(["user", "pass"], [["u1", "p1"]])
+        invalid_headers_file = create_mock_excel(["invalid_header", "invalid_pass"], [["u1", "p1"]])
         invalid_headers_file.name = "data.xlsx"
         response_hdr = self.client.post(
             self.url,
@@ -203,7 +203,7 @@ class BulkUploadAPITests(TestCase):
             HTTP_AUTHORIZATION=f"Bearer {self.token_admin_a}"
         )
         self.assertEqual(response_hdr.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Must include 'username' and 'password'", response_hdr.data["error"])
+        self.assertIn("Must include 'username'", response_hdr.data["error"])
 
     def test_school_tenant_isolation_enforcement(self):
         # School Admin A tries to link a new teacher to Class B (which belongs to School B)

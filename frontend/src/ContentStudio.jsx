@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { apiFetch } from './api';
 import { 
   FiGrid, FiBookOpen, FiActivity, FiMonitor, FiFileText, 
   FiCheckCircle, FiDownload, FiSettings, FiHelpCircle, FiLogOut, 
   FiSearch, FiPlus, FiEdit2, FiTrash2, FiX, FiMenu, 
-  FiChevronDown, FiCalendar, FiBell, FiFilter, FiEye, 
+  FiChevronDown, FiCalendar, FiBell, FiFilter, FiEye, FiEyeOff,
   FiAlertTriangle, FiFolder, FiImage, FiSend, FiPlusCircle, 
   FiArrowLeft, FiSmartphone, FiTablet, FiInfo, FiUpload,
   FiPlay, FiCheck, FiFolderPlus, FiShare2, FiHelpCircle as FiQuestion,
@@ -23,22 +23,68 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
   const [selectedExperience, setSelectedExperience] = useState('At the Restaurant');
   const [selectedActivity, setSelectedActivity] = useState('Dialogue with Waiter');
 
+  // Backend Integration States
+  const [experiences, setExperiences] = useState([]);
+  const [mediaAssets, setMediaAssets] = useState([]);
+  const [dashboardSummary, setDashboardSummary] = useState(null);
+
+  const loadExperiencesData = async () => {
+    try {
+      const res = await apiFetch('/api/v1/content/experiences/');
+      if (res.ok) {
+        const data = await res.json();
+        setExperiences(data.results || data);
+      }
+    } catch (e) {
+      console.error('Failed to load experiences in Content Studio', e);
+    }
+  };
+
+  const loadMediaData = async () => {
+    try {
+      const res = await apiFetch('/api/v1/content/media/');
+      if (res.ok) {
+        const data = await res.json();
+        setMediaAssets(data.results || data);
+      }
+    } catch (e) {
+      console.error('Failed to load media in Content Studio', e);
+    }
+  };
+
+  const loadSummaryData = async () => {
+    try {
+      const res = await apiFetch('/api/v1/dashboard/summary');
+      if (res.ok) {
+        setDashboardSummary(await res.json());
+      }
+    } catch (e) {
+      console.error('Failed to load dashboard summary', e);
+    }
+  };
+
+  useEffect(() => {
+    loadExperiencesData();
+    loadMediaData();
+    loadSummaryData();
+  }, []);
+
   // Profile / Password states
   const [profileForm, setProfileForm] = useState({
     username: user?.username || 'content_creator',
     email: user?.email || '',
-    full_name: user?.full_name || 'Aisha Khan'
+    full_name: user?.full_name || '',
+    phone_no: user?.phone_no || ''
   });
-  const [passwordForm, setPasswordForm] = useState({
-    current_password: '',
-    password: ''
-  });
+  const [showPwModal, setShowPwModal] = useState(false);
+  const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
+  const [pwModalError, setPwModalError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState({ text: '', type: '' });
 
   const showFeedback = (text, type = 'success') => {
     setFeedbackMsg({ text, type });
-    setTimeout(() => setFeedbackMsg({ text: '', type: '' }), 4000);
+    setTimeout(() => setFeedbackMsg({ text: '', type: '' }), 3000);
   };
 
   const handleProfileUpdate = async (e) => {
@@ -46,17 +92,31 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
     setActionLoading(true);
     try {
       const res = await apiFetch('/api/users/profile/', {
-        method: 'PUT',
-        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email })
+        method: 'PATCH',
+        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no })
       });
-      if (res.ok) {
-        showFeedback('Profile updated successfully!');
-      } else {
-        const data = await res.json();
-        showFeedback(data.error || 'Failed to update profile.', 'error');
+      let resData = {};
+      try { resData = await res.json(); } catch { resData = {}; }
+      if (!res.ok) {
+        let msg = 'Failed to update profile.';
+        if (resData.email) msg = Array.isArray(resData.email) ? resData.email.join(' ') : resData.email;
+        else if (resData.phone_no) msg = Array.isArray(resData.phone_no) ? resData.phone_no.join(' ') : resData.phone_no;
+        else if (resData.full_name) msg = Array.isArray(resData.full_name) ? resData.full_name.join(' ') : resData.full_name;
+        else if (resData.detail) msg = String(resData.detail);
+        else if (resData.error) msg = String(resData.error);
+        else if (typeof resData === 'object' && Object.keys(resData).length > 0) {
+          const firstVal = Object.values(resData)[0];
+          msg = Array.isArray(firstVal) ? firstVal.join(' ') : String(firstVal);
+        }
+        showFeedback(msg, 'error');
+        return;
       }
-    } catch {
-      showFeedback('Network error occurred.', 'error');
+      const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
+      try { localStorage.setItem('user', JSON.stringify(updatedUser)); } catch {}
+      showFeedback('Profile updated successfully');
+    } catch (err) {
+      console.error('Profile update error:', err);
+      showFeedback('Failed to update profile.', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -248,19 +308,22 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
           background-color: rgba(255, 255, 255, 0.04);
         }
         .cs-profile-card {
-          margin-top: 0.5rem;
           padding: 0.65rem 0.75rem;
-          background: rgba(255, 255, 255, 0.01);
+          background: rgba(255, 255, 255, 0.03);
           border-radius: 10px;
           display: flex;
           align-items: center;
           gap: 0.65rem;
           transition: background 0.18s;
-          cursor: pointer;
-          z-index: 5;
+          cursor: default;
         }
-        .cs-profile-card:hover {
-          background: rgba(255, 255, 255, 0.05);
+        .cs-logout-btn {
+          color: rgba(255, 255, 255, 0.4) !important;
+          background: transparent !important;
+        }
+        .cs-logout-btn:hover {
+          color: #f87171 !important;
+          background: rgba(239, 68, 68, 0.15) !important;
         }
         .cs-profile-avatar {
           width: 32px;
@@ -676,8 +739,8 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
 
       {/* ── Sidebar ── */}
       <aside className="cs-sidebar">
-        <div className="cs-brand">
-          <img src={logoIcon} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+        <div className="cs-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem 1.25rem' }}>
+          <img src={logoIcon} alt="Logo" style={{ width: '62px', height: '100px', objectFit: 'contain' }} />
           <div>
             <h2 className="cs-brand-title">LinguaLab</h2>
             <span className="cs-brand-sub">Content Studio</span>
@@ -713,15 +776,15 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
         </nav>
 
         <div className="cs-sidebar-footer">
-          <button className="cs-footer-item" onClick={onLogout} style={{ color: '#ef4444' }}><FiLogOut/>Logout</button>
-
           <div className="cs-profile-card">
-            <div className="cs-profile-avatar">CC</div>
+            <div className="cs-profile-avatar">{(user?.username || 'CC').slice(0, 2).toUpperCase()}</div>
             <div className="cs-profile-info">
-              <div className="cs-profile-name">Institute Name</div>
-              <div className="cs-profile-desc">Location</div>
+              <div className="cs-profile-name">{user?.full_name || user?.username || 'Content Creator'}</div>
+              <div className="cs-profile-desc">Content Creator</div>
             </div>
-            <FiChevronDown style={{ color: '#94a3b8' }}/>
+            <button className="sd-logout-icon-btn cs-logout-btn" onClick={onLogout} title="Logout">
+              <FiLogOut/>
+            </button>
           </div>
         </div>
       </aside>
@@ -738,7 +801,7 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
               placeholder={view === 'experiences' ? "Search experiences by title, grade, subject" : "Search experiences, activities..."} 
             />
           </div>
-          <div className="cs-header-actions">
+          <div className="cs-header-actions" style={{ marginLeft: 'auto' }}>
             <button className="cs-icon-btn">
               <FiBell />
               <span style={{ position: 'absolute', top: -4, right: -4, background: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: 'bold', width: 14, height: 14, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center' }}>3</span>
@@ -2485,18 +2548,16 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
 
           {/* ── View 9: Profile Settings ── */}
           {view === 'profile' && (
-            <div className="sd-card" style={{ maxWidth: 800, margin: '0 auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '2rem' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
-                Profile Settings
-              </h2>
-              
+            <>
+              <div className="sd-page-header">
+                <h1 className="sd-page-title">Profile Settings</h1>
+                <p className="sd-page-sub">Manage your personal information and account security.</p>
+              </div>
+
               {feedbackMsg.text && (
                 <div style={{
-                  padding: '0.75rem 1rem',
-                  borderRadius: 6,
-                  marginBottom: '1.5rem',
-                  fontSize: '0.84rem',
-                  fontWeight: 600,
+                  padding: '0.75rem 1rem', borderRadius: 8, marginBottom: '1.25rem',
+                  fontSize: '0.84rem', fontWeight: 600,
                   background: feedbackMsg.type === 'error' ? '#fef2f2' : '#f0fdf4',
                   color: feedbackMsg.type === 'error' ? '#ef4444' : '#15803d',
                   border: feedbackMsg.type === 'error' ? '1px solid #fecaca' : '1px solid #bbf7d0'
@@ -2505,59 +2566,179 @@ const ContentStudio = ({ user = { username: 'Aisha Khan', role: 'Content Creator
                 </div>
               )}
 
-              <form onSubmit={handleProfileUpdate} style={{ marginBottom: '2.5rem' }}>
-                <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1e293b', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <FiUser/> Personal Details
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                  <div className="sd-form-group">
-                    <label className="sd-form-label">Full Name</label>
-                    <input className="sd-form-input" type="text"
-                      value={profileForm.full_name}
-                      onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
-                      placeholder="Your full name" required/>
+              <form onSubmit={handleProfileUpdate}>
+                <div className="sd-profile-card">
+                  {/* Section Header */}
+                  <div className="sd-profile-section-header">
+                    <div className="sd-profile-section-title">
+                      <FiUser/> Personal Details
+                    </div>
+                    <span className="sd-verified-badge"><FiCheckCircle/>Verified Creator</span>
                   </div>
-                  <div className="sd-form-group">
-                    <label className="sd-form-label">Email Address</label>
-                    <input className="sd-form-input" type="email"
-                      value={profileForm.email}
-                      onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
-                      placeholder="your@email.com"/>
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
-                  <div className="sd-form-group">
-                    <label className="sd-form-label">Username</label>
-                    <input className="sd-form-input" type="text" value={profileForm.username} disabled style={{ background: '#f1f5f9', cursor: 'not-allowed' }}/>
-                  </div>
-                </div>
-                <button type="submit" className="cs-btn-primary" disabled={actionLoading} style={{ background: '#4f46e5', padding: '0.5rem 1.5rem', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                  {actionLoading ? 'Saving...' : 'Save Changes'}
-                </button>
-              </form>
 
-              <form onSubmit={handlePasswordUpdate} style={{ borderTop: '1px solid #e2e8f0', paddingTop: '2rem' }}>
-                <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1e293b', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <FiSettings/> Change Password
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                  {/* Full Name + Email */}
+                  <div className="sd-form-row">
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Full Name</label>
+                      <input className="sd-form-input" type="text"
+                        value={profileForm.full_name}
+                        onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
+                        placeholder="Your full name" required/>
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Email Address</label>
+                      <input className="sd-form-input" type="email"
+                        value={profileForm.email}
+                        onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
+                        placeholder="your@email.com"/>
+                    </div>
+                  </div>
+
+                  {/* Username + Phone Number */}
+                  <div className="sd-form-row">
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Username</label>
+                      <input className="sd-form-input" type="text" value={profileForm.username} disabled
+                        style={{ background: '#f1f5f9', cursor: 'not-allowed' }}/>
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Phone Number</label>
+                      <input className="sd-form-input" type="tel"
+                        value={profileForm.phone_no}
+                        onChange={e => setProfileForm({ ...profileForm, phone_no: e.target.value })}
+                        placeholder="+91 98765 43210"/>
+                    </div>
+                  </div>
+
+                  {/* Change Password Row */}
+                  <div className="sd-pw-row">
+                    <div>
+                      <div className="sd-pw-row-title">Change Password</div>
+                      <div className="sd-pw-row-sub">Update your password to stay secure</div>
+                    </div>
+                    <button type="button" className="sd-btn-outline"
+                      onClick={() => {
+                        setPwForm({ current_password: '', new_password: '', confirm_password: '' });
+                        setPwModalError('');
+                        setShowPwModal(true);
+                      }}
+                    >Update</button>
+                  </div>
+
+                  <div className="sd-profile-save-row">
+                    <button type="submit" className="sd-btn-primary" disabled={actionLoading}>
+                      {actionLoading ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </>
+          )}
+
+          {/* ── Change Password Modal ── */}
+          {showPwModal && (
+            <div className="sd-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) setShowPwModal(false); }}>
+              <div className="sd-modal" style={{ maxWidth: 420 }}>
+                <div className="sd-modal-header">
+                  <span className="sd-modal-title">Change Password</span>
+                  <button className="sd-modal-close" onClick={() => setShowPwModal(false)}><FiX/></button>
+                </div>
+
+                <form className="sd-modal-form" onSubmit={async e => {
+                  e.preventDefault();
+                  setPwModalError('');
+                  if (!pwForm.current_password) { setPwModalError('Current password is required.'); return; }
+                  if (!pwForm.new_password) { setPwModalError('New password is required.'); return; }
+                  if (!pwForm.confirm_password) { setPwModalError('Confirm password is required.'); return; }
+                  if (pwForm.new_password.length < 6) { setPwModalError('New password must be at least 6 characters.'); return; }
+
+                  setActionLoading(true);
+                  try {
+                    const res = await apiFetch('/api/users/change-password/', {
+                      method: 'POST',
+                      body: JSON.stringify({ old_password: pwForm.current_password, new_password: pwForm.new_password, confirm_password: pwForm.confirm_password })
+                    });
+                let d = {};
+                try { d = await res.json(); } catch { d = {}; }
+                if (res.ok) {
+                  showFeedback('Password changed successfully!');
+                  setPwForm({ current_password: '', new_password: '', confirm_password: '' });
+                  setShowPwModal(false);
+                } else {
+                  let msg = 'Current password is incorrect.';
+                  if (d) {
+                    if (d.confirm_password) {
+                      msg = Array.isArray(d.confirm_password) ? d.confirm_password.join(' ') : String(d.confirm_password);
+                    } else if (d.new_password) {
+                      msg = Array.isArray(d.new_password) ? d.new_password.join(' ') : String(d.new_password);
+                    } else if (d.old_password) {
+                      const raw = Array.isArray(d.old_password) ? d.old_password.join(' ') : String(d.old_password);
+                      msg = (raw.toLowerCase().includes('incorrect') || raw.toLowerCase().includes('wrong') || raw.toLowerCase().includes('current')) ? 'Current password is incorrect.' : raw;
+                    } else if (d.non_field_errors) {
+                      msg = Array.isArray(d.non_field_errors) ? d.non_field_errors.join(' ') : String(d.non_field_errors);
+                    } else if (d.detail) {
+                      const dt = String(d.detail);
+                      msg = (dt.toLowerCase().includes('incorrect') || dt.toLowerCase().includes('wrong')) ? 'Current password is incorrect.' : dt;
+                    } else if (d.error) {
+                      const er = String(d.error);
+                      msg = (er.toLowerCase().includes('incorrect') || er.toLowerCase().includes('wrong')) ? 'Current password is incorrect.' : er;
+                    }
+                  }
+                  setPwModalError(msg);
+                }
+              } catch (err) {
+                console.error('Password change error:', err);
+                setPwModalError('Current password is incorrect.');
+              }
+              finally { setActionLoading(false); }
+                }}>
+                  {pwModalError && (
+                    <div style={{
+                      padding: '0.75rem 1rem',
+                      background: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      borderRadius: '8px',
+                      color: '#dc2626',
+                      fontSize: '0.84rem',
+                      fontWeight: 500,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.6rem',
+                      boxSizing: 'border-box'
+                    }}>
+                      <FiAlertTriangle style={{ flexShrink: 0, color: '#ef4444', fontSize: '1rem' }} />
+                      <span style={{ lineHeight: 1.4 }}>{pwModalError}</span>
+                    </div>
+                  )}
                   <div className="sd-form-group">
                     <label className="sd-form-label">Current Password</label>
-                    <input className="sd-form-input" type="password" value={passwordForm.current_password}
-                      onChange={e => setPasswordForm({ ...passwordForm, current_password: e.target.value })}
+                    <input className="sd-form-input" type="password"
+                      value={pwForm.current_password}
+                      onChange={e => { setPwForm({ ...pwForm, current_password: e.target.value }); setPwModalError(''); }}
                       placeholder="Enter current password" required/>
                   </div>
                   <div className="sd-form-group">
                     <label className="sd-form-label">New Password</label>
-                    <input className="sd-form-input" type="password" value={passwordForm.password}
-                      onChange={e => setPasswordForm({ ...passwordForm, password: e.target.value })}
+                    <input className="sd-form-input" type="password"
+                      value={pwForm.new_password}
+                      onChange={e => { setPwForm({ ...pwForm, new_password: e.target.value }); setPwModalError(''); }}
                       placeholder="Minimum 6 characters" required minLength={6}/>
                   </div>
-                </div>
-                <button type="submit" className="cs-btn-primary" disabled={actionLoading} style={{ background: '#4f46e5', padding: '0.5rem 1.5rem', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
-                  {actionLoading ? 'Updating...' : 'Update Password'}
-                </button>
-              </form>
+                  <div className="sd-form-group">
+                    <label className="sd-form-label">Confirm Password</label>
+                    <input className="sd-form-input" type="password"
+                      value={pwForm.confirm_password}
+                      onChange={e => { setPwForm({ ...pwForm, confirm_password: e.target.value }); setPwModalError(''); }}
+                      placeholder="Confirm new password" required minLength={6}/>
+                  </div>
+                  <div className="sd-modal-footer">
+                    <button type="button" className="sd-btn-cancel" onClick={() => setShowPwModal(false)}>Cancel</button>
+                    <button type="submit" className="sd-btn-save" disabled={actionLoading}>
+                      {actionLoading ? 'Updating...' : 'Update Password'}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           )}
 
