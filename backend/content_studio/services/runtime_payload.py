@@ -37,11 +37,13 @@ def build_runtime_payload(experience, request=None):
         validation_status = "NOT_RUN"
 
     # 2. Assemble Experience Metadata
+    from django.utils import timezone
     experience_data = {
         "id": experience.id,
         "title": experience.title,
         "description": experience.description or "",
-        "grade": {
+        "grade": experience.grade.grade_name if experience.grade else "",
+        "grade_detail": {
             "id": experience.grade.id,
             "name": experience.grade.grade_name
         } if experience.grade else None,
@@ -50,8 +52,10 @@ def build_runtime_payload(experience, request=None):
         "difficulty": experience.difficulty,
         "estimated_duration": experience.estimated_duration,
         "learning_outcomes": [lo.text for lo in experience.learning_outcomes.all()],
+        "learningOutcomes": [lo.text for lo in experience.learning_outcomes.all()],
         "tags": experience.tags or [],
-        "thumbnail_url": resolve_absolute_url(experience.thumbnail, request) if experience.thumbnail else ""
+        "thumbnail_url": resolve_absolute_url(experience.thumbnail, request) if experience.thumbnail else "",
+        "publishedAt": experience.updated_at.isoformat() if experience.updated_at else timezone.now().isoformat()
     }
 
     # 3. Assemble Activities (ordered by display_order, excluding is_deleted=True)
@@ -126,9 +130,11 @@ def build_runtime_payload(experience, request=None):
                 "id": scr.id,
                 "title": scr.title or "",
                 "screen_type": scr.screen_type,
+                "type": scr.screen_type,
                 "display_order": scr.display_order,
                 "content": content,
-                "resolved_media": resolved_media
+                "resolved_media": resolved_media,
+                "media": resolved_media
             })
 
         activities_list.append({
@@ -140,6 +146,7 @@ def build_runtime_payload(experience, request=None):
             "estimated_duration": act.estimated_duration,
             "mastery_threshold": act.mastery_threshold,
             "display_order": act.display_order,
+            "order": act.display_order,
             "screens": screens_list
         })
 
