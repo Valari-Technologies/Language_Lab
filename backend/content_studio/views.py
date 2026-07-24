@@ -53,6 +53,20 @@ class ExperienceViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = Experience.objects.filter(is_deleted=False).select_related("grade", "created_by")
+        
+        # Exclude draft experiences that have no activities or no screens
+        # (meaning they only completed Experience Builder but not Activity/Screen Builder)
+        if self.action == "list":
+            from django.db.models import Exists, OuterRef, Q
+            from content_studio.models import Activity, Screen
+            
+            has_activities = Activity.objects.filter(experience=OuterRef("pk"))
+            has_screens = Screen.objects.filter(activity__experience=OuterRef("pk"))
+            
+            queryset = queryset.filter(
+                ~Q(status="DRAFT") | (Q(status="DRAFT") & Exists(has_activities) & Exists(has_screens))
+            )
+
         grade = self.request.query_params.get("grade")
         status_param = self.request.query_params.get("status")
         difficulty = self.request.query_params.get("difficulty")
@@ -331,7 +345,8 @@ class LearningOutcomeViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsContentCreatorOrSuperAdmin]
     queryset = LearningOutcome.objects.all()
     serializer_class = LearningOutcomeSerializer
-    http_method_names = ["patch", "delete"]
+    # Allow full CRUD: list/retrieve (GET), create (POST), update (PATCH), destroy (DELETE)
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
 
 class MediaViewSet(viewsets.ModelViewSet):
@@ -877,6 +892,70 @@ class PackageViewSet(viewsets.ViewSet):
         response["Content-Disposition"] = f'attachment; filename="{elab_filename}"'
         response["X-Checksum-SHA256"] = version.checksum or ""
         return response
+
+    def preview_json(self, request, pk=None):
+        """
+        GET /api/v1/content/packages/{packageId}/preview-json/
+
+        Opens the .elab zip archive and returns its contents (experience.json,
+        manifest.json, metadata.json) merged into a single JSON response.
+        Designed for content creator testing and inspection.
+        """
+        import os
+        import zipfile
+        import json
+
+        version = self._get_version(pk)
+        if not version:
+            return Response({"error": "Package not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        file_path = version.file_path
+        if not file_path or not os.path.exists(file_path):
+            return Response(
+                {
+                    "error": "The .elab file is missing on disk.",
+                    "db_path": file_path,
+                    "version_id": version.id,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            result = {
+                "package_meta": PublishVersionSerializer(version).data,
+                "files_in_archive": [],
+                "experience": None,
+                "manifest": None,
+                "metadata": None,
+            }
+
+            with zipfile.ZipFile(file_path, "r") as zf:
+                result["files_in_archive"] = zf.namelist()
+                for member in zf.namelist():
+                    try:
+                        data = json.loads(zf.read(member).decode("utf-8"))
+                    except (UnicodeDecodeError, json.JSONDecodeError):
+                        # Binary file – skip
+                        continue
+                    if "experience.json" in member:
+                        result["experience"] = data
+                    elif "manifest.json" in member:
+                        result["manifest"] = data
+                    elif "metadata.json" in member:
+                        result["metadata"] = data
+
+            return Response(result, status=status.HTTP_200_OK)
+
+        except zipfile.BadZipFile:
+            return Response(
+                {"error": "The .elab file on disk is corrupted or not a valid ZIP archive."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        except Exception as exc:
+            return Response(
+                {"error": f"Failed to read package: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     def regenerate(self, request, pk=None):
         """

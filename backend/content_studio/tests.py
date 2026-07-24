@@ -128,6 +128,10 @@ class ContentStudioAPITests(APITestCase):
         """Verify list endpoint filtering by grade, status, and search."""
         self.client.force_authenticate(user=self.content_creator)
 
+        # Create activity and screen for experience1 so it isn't excluded as incomplete draft
+        act = Activity.objects.create(experience=self.experience1, title="Intro Act", estimated_duration=5, display_order=1)
+        Screen.objects.create(activity=act, title="Intro Screen", screen_type=Screen.ScreenType.INFORMATION, estimated_duration=60, display_order=1)
+
         # Check search
         response = self.client.get(reverse("experience-list"), {"search": "Waiter"})
         self.assertEqual(len(response.data["results"]), 0)  # "Waiter" is not in Experience title/description

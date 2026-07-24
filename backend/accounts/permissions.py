@@ -77,7 +77,7 @@ class IsTeacherOrAdmin(BasePermission):
 
 
 class IsSuperAdminOrReadOnlyStaff(BasePermission):
-    """Super Admin: full access. School Admin / Teacher: read-only."""
+    """Super Admin: full access. School Admin / Teacher / Content Creator: read-only."""
 
     def has_permission(self, request, view):
         user = request.user
@@ -85,7 +85,7 @@ class IsSuperAdminOrReadOnlyStaff(BasePermission):
             return False
         if user.role == "SUPER_ADMIN" or user.is_superuser:
             return True
-        if request.method in SAFE_METHODS and user.role in ("SCHOOL_ADMIN", "TEACHER"):
+        if request.method in SAFE_METHODS and user.role in ("SCHOOL_ADMIN", "TEACHER", "CONTENT_CREATOR"):
             return True
         return False
 

@@ -126,6 +126,95 @@ def build_runtime_payload(experience, request=None):
                             "missing": True
                         })
             
+            # Compile elements list with backward compatibility
+            elements = content.get("elements", [])
+            if not elements:
+                elements = []
+                if scr.screen_type == 'INFORMATION':
+                    elements.append({
+                        "id": f"block-{scr.id}-dialogue",
+                        "type": "dialogue",
+                        "content": {
+                            "steps": content.get("steps") or [
+                                { "step": 1, "name": "Ben", "text": "Hi! What would you like to order?", "avatarColor": "#0ea5e9", "side": "left" },
+                                { "step": 2, "name": "Anna", "text": "I'd like a cup of coffee, please.", "avatarColor": "#ea580c", "side": "right" }
+                            ]
+                        }
+                    })
+                elif scr.screen_type == 'IMAGE':
+                    elements.append({
+                        "id": f"block-{scr.id}-image",
+                        "type": "image",
+                        "content": {
+                            "url": content.get("media_url") or "",
+                            "caption": content.get("text") or ""
+                        }
+                    })
+                elif scr.screen_type == 'VIDEO':
+                    elements.append({
+                        "id": f"block-{scr.id}-video",
+                        "type": "video",
+                        "content": {
+                            "url": content.get("media_url") or ""
+                        }
+                    })
+                elif scr.screen_type == 'SPEAKING':
+                    elements.append({
+                        "id": f"block-{scr.id}-audio",
+                        "type": "audio",
+                        "content": {
+                            "title": content.get("title") or "Listening Clip",
+                            "url": content.get("media_url") or ""
+                        }
+                    })
+                elif scr.screen_type == 'QUIZ':
+                    elements.append({
+                        "id": f"block-{scr.id}-quiz",
+                        "type": "quiz",
+                        "content": {
+                            "question": content.get("quiz_question") or "",
+                            "options": content.get("quiz_options") or ["", "", "", ""],
+                            "correctAnswerIndex": content.get("quiz_correct_index") if content.get("quiz_correct_index") is not None else 0
+                        }
+                    })
+                elif scr.screen_type == 'WRITING':
+                    elements.append({
+                        "id": f"block-{scr.id}-text",
+                        "type": "text",
+                        "content": {
+                            "text": content.get("text") or ""
+                        },
+                        "styles": {
+                            "fontFamily": content.get("font") or "Poppins",
+                            "fontSize": f"{content.get('size') or 18}px",
+                            "color": content.get("color") or "#334155",
+                            "alignment": content.get("alignment") or "Left",
+                            "fontWeight": content.get("weight") or "Regular"
+                        }
+                    })
+
+            # Resolve absolute URLs inside the elements in-place
+            import copy
+            elements = copy.deepcopy(elements)
+            for el in elements:
+                el_type = el.get("type", "")
+                el_content = el.get("content", {})
+                if el_type in ["image", "video", "audio"] and el_content:
+                    raw_url = el_content.get("url")
+                    if raw_url:
+                        # Find matching Media asset to get absolute URL
+                        if "/media/" in raw_url:
+                            filename = raw_url.split("/")[-1]
+                            media_asset = Media.objects.filter(url=raw_url).first() or Media.objects.filter(file__endswith=filename).first()
+                        else:
+                            media_asset = Media.objects.filter(url=raw_url).first()
+                            
+                        if media_asset:
+                            resolved_url = resolve_absolute_url(media_asset.file.url if media_asset.file else media_asset.url, request)
+                        else:
+                            resolved_url = resolve_absolute_url(raw_url, request)
+                        el_content["url"] = resolved_url
+            
             screens_list.append({
                 "id": scr.id,
                 "title": scr.title or "",
@@ -133,6 +222,7 @@ def build_runtime_payload(experience, request=None):
                 "type": scr.screen_type,
                 "display_order": scr.display_order,
                 "content": content,
+                "elements": elements,
                 "resolved_media": resolved_media,
                 "media": resolved_media
             })

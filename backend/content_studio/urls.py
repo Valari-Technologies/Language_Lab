@@ -43,9 +43,13 @@ urlpatterns = [
     path("content/packages/<int:pk>/download/",
          PackageViewSet.as_view({"get": "download"}),
          name="package-download"),
+    path("content/packages/<int:pk>/preview-json/",
+         PackageViewSet.as_view({"get": "preview_json"}),
+         name="package-preview-json"),
     path("content/packages/<int:pk>/regenerate/",
          PackageViewSet.as_view({"post": "regenerate"}),
          name="package-regenerate"),
+
 
     # Dashboard
     path("dashboard/summary", DashboardSummaryAPIView.as_view(), name="dashboard-summary"),
