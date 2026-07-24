@@ -7,7 +7,7 @@ import {
   FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
   FiActivity, FiTrendingUp, FiAward, FiLock,
   FiChevronLeft, FiChevronRight, FiEye, FiEyeOff, FiList,
-  FiCornerDownRight, FiXCircle, FiMoreVertical, FiDownload, FiAlertTriangle, FiKey
+  FiCornerDownRight, FiXCircle, FiMoreVertical, FiDownload, FiAlertTriangle, FiKey, FiInfo
 } from 'react-icons/fi';
 import './Dashboard.css';
 import { apiFetch } from './api';
@@ -403,6 +403,10 @@ const Pagination = ({ total, perPage = 4, page, onPage }) => {
    ═══════════════════════════════════════════════════════════ */
 const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [customAlert, setCustomAlert] = useState({ show: false, title: 'Attention', message: '', type: 'warning' });
+  const triggerAlert = (message, title = 'Attention', type = 'warning') => {
+    setCustomAlert({ show: true, title, message, type });
+  };
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('');
@@ -533,8 +537,26 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
   const loadGrades = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/grades/');
-      if (res.ok) { const data = await res.json(); setGrades(data.results || data); }
-    } catch (e) { console.error('Failed to load grades', e); }
+      if (res.ok) {
+        const data = await res.json();
+        const rawList = data.results || data;
+        const filtered = (Array.isArray(rawList) ? rawList : []).filter(g => {
+          const match = g.grade_name.match(/^Grade\s+(\d+)$/i);
+          if (match) {
+            const num = parseInt(match[1]);
+            return num >= 1 && num <= 10;
+          }
+          return false;
+        }).sort((a, b) => {
+          const numA = parseInt(a.grade_name.match(/\d+/)[0]);
+          const numB = parseInt(b.grade_name.match(/\d+/)[0]);
+          return numA - numB;
+        });
+        setGrades(filtered);
+      }
+    } catch (e) {
+      console.error('Failed to load grades', e);
+    }
   };
 
   const loadExperiences = async () => {
@@ -1796,7 +1818,7 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                     </div>
                     <div style={{ display: 'flex', gap: '0.65rem' }}>
                       <button className="sd-btn-outline" onClick={() => setSubPage('overview')}>Cancel</button>
-                      <button className="sd-btn-primary" onClick={() => { alert('Plan Created!'); setSubPage('plan-details'); }}>Next: Features</button>
+                      <button className="sd-btn-primary" onClick={() => { triggerAlert('Plan Created!', 'Success', 'success'); setSubPage('plan-details'); }}>Next: Features</button>
                     </div>
                   </div>
                 </div>
@@ -2884,6 +2906,91 @@ const Dashboard = ({ user, onLogout, activeTab, onTabChange }) => {
                 disabled={loading}
               >
                 {loading ? 'Deleting...' : 'OK'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Custom Alert Modal ── */}
+      {customAlert.show && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '1rem'
+          }}
+          onClick={() => setCustomAlert({ ...customAlert, show: false })}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '360px',
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              padding: '1.75rem 1.5rem',
+              boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.3)',
+              textAlign: 'center'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div
+              style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '50%',
+                backgroundColor: customAlert.type === 'error' ? '#fee2e2' : (customAlert.type === 'success' ? '#dcfce7' : '#fef3c7'),
+                color: customAlert.type === 'error' ? '#ef4444' : (customAlert.type === 'success' ? '#22c55e' : '#f59e0b'),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1rem',
+                fontSize: '1.5rem'
+              }}
+            >
+              {customAlert.type === 'error' && <FiX />}
+              {customAlert.type === 'success' && <FiCheckCircle />}
+              {customAlert.type === 'info' && <FiInfo />}
+              {customAlert.type === 'warning' && <FiAlertTriangle />}
+            </div>
+
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.4rem' }}>
+              {customAlert.title}
+            </h3>
+
+            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+              {customAlert.message}
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <button
+                type="button"
+                style={{
+                  flex: 1,
+                  padding: '0.65rem 1rem',
+                  borderRadius: '10px',
+                  backgroundColor: customAlert.type === 'error' ? '#ef4444' : (customAlert.type === 'success' ? '#22c55e' : '#f59e0b'),
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer'
+                }}
+                onClick={() => setCustomAlert({ ...customAlert, show: false })}
+              >
+                OK
               </button>
             </div>
           </div>

@@ -6,7 +6,7 @@ import {
   FiChevronDown, FiCalendar, FiBell, FiFilter,
   FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
   FiActivity, FiTrendingUp, FiAward, FiLock, FiChevronLeft, FiChevronRight, FiDownload,
-  FiEye, FiEyeOff, FiAlertTriangle
+  FiEye, FiEyeOff, FiAlertTriangle, FiInfo
 } from 'react-icons/fi';
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
@@ -148,6 +148,10 @@ const defaultGradesList = [
 const SchoolDashboard = ({ user, onLogout }) => {
   /* ── Navigation ── */
   const [activeSubTab, setActiveSubTab] = useState('overview');
+  const [customAlert, setCustomAlert] = useState({ show: false, title: 'Attention', message: '', type: 'warning' });
+  const triggerAlert = (message, title = 'Attention', type = 'warning') => {
+    setCustomAlert({ show: true, title, message, type });
+  };
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   /* ── UI ── */
@@ -267,7 +271,19 @@ const SchoolDashboard = ({ user, onLogout }) => {
       if (res.ok) {
         const d = await res.json();
         const resList = d.results || d;
-        if (Array.isArray(resList) && resList.length > 0) setGrades(resList);
+        const filtered = (Array.isArray(resList) ? resList : []).filter(g => {
+          const match = g.grade_name.match(/^Grade\s+(\d+)$/i);
+          if (match) {
+            const num = parseInt(match[1]);
+            return num >= 1 && num <= 10;
+          }
+          return false;
+        }).sort((a, b) => {
+          const numA = parseInt(a.grade_name.match(/\d+/)[0]);
+          const numB = parseInt(b.grade_name.match(/\d+/)[0]);
+          return numA - numB;
+        });
+        if (filtered.length > 0) setGrades(filtered);
         else setGrades(defaultGradesList);
       } else { setGrades(defaultGradesList); }
     } catch (e) { setGrades(defaultGradesList); }
@@ -668,7 +684,7 @@ const SchoolDashboard = ({ user, onLogout }) => {
         a.href = url; a.download = `report_${type}_export.csv`;
         document.body.appendChild(a); a.click(); a.remove();
         window.URL.revokeObjectURL(url);
-      } else { alert('Failed to export CSV.'); }
+      } else { triggerAlert('Failed to export CSV.', 'Export Failed', 'error'); }
     } catch (e) { console.error(e); }
   };
 
@@ -2487,6 +2503,91 @@ const SchoolDashboard = ({ user, onLogout }) => {
                 disabled={actionLoading}
               >
                 {actionLoading ? 'Deleting...' : 'OK'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Custom Alert Modal ── */}
+      {customAlert.show && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '1rem'
+          }}
+          onClick={() => setCustomAlert({ ...customAlert, show: false })}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '360px',
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              padding: '1.75rem 1.5rem',
+              boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.3)',
+              textAlign: 'center'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div
+              style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '50%',
+                backgroundColor: customAlert.type === 'error' ? '#fee2e2' : (customAlert.type === 'success' ? '#dcfce7' : '#fef3c7'),
+                color: customAlert.type === 'error' ? '#ef4444' : (customAlert.type === 'success' ? '#22c55e' : '#f59e0b'),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1rem',
+                fontSize: '1.5rem'
+              }}
+            >
+              {customAlert.type === 'error' && <FiX />}
+              {customAlert.type === 'success' && <FiCheckCircle />}
+              {customAlert.type === 'info' && <FiInfo />}
+              {customAlert.type === 'warning' && <FiAlertTriangle />}
+            </div>
+
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.4rem' }}>
+              {customAlert.title}
+            </h3>
+
+            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+              {customAlert.message}
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <button
+                type="button"
+                style={{
+                  flex: 1,
+                  padding: '0.65rem 1rem',
+                  borderRadius: '10px',
+                  backgroundColor: customAlert.type === 'error' ? '#ef4444' : (customAlert.type === 'success' ? '#22c55e' : '#f59e0b'),
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer'
+                }}
+                onClick={() => setCustomAlert({ ...customAlert, show: false })}
+              >
+                OK
               </button>
             </div>
           </div>

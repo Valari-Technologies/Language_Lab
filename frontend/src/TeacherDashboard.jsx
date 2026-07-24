@@ -214,8 +214,26 @@ const TeacherDashboard = ({ user, onLogout }) => {
   const loadGrades = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/grades/');
-      if (res.ok) { const d = await res.json(); setGrades(d.results || d); }
-    } catch (e) { console.error('Failed to load grades.', e); }
+      if (res.ok) {
+        const d = await res.json();
+        const rawList = d.results || d;
+        const filtered = (Array.isArray(rawList) ? rawList : []).filter(g => {
+          const match = g.grade_name.match(/^Grade\s+(\d+)$/i);
+          if (match) {
+            const num = parseInt(match[1]);
+            return num >= 1 && num <= 10;
+          }
+          return false;
+        }).sort((a, b) => {
+          const numA = parseInt(a.grade_name.match(/\d+/)[0]);
+          const numB = parseInt(b.grade_name.match(/\d+/)[0]);
+          return numA - numB;
+        });
+        setGrades(filtered);
+      }
+    } catch (e) {
+      console.error('Failed to load grades.', e);
+    }
   };
 
   const loadStudents = async () => {
