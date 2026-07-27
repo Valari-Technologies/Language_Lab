@@ -301,7 +301,10 @@ class BulkUploadAPIView(APIView):
                             if User.objects.filter(username=username).exists() or User.objects.filter(email=email).exists():
                                 raise ValueError(f"A user with email '{email}' already exists.")
 
-                            password = "Teacher123!"
+                            password_val = get_val(row_data, "password", "pass")
+                            if password_val is None or not str(password_val).strip():
+                                raise ValueError("Password is required for teacher.")
+                            password = str(password_val).strip()
 
                             is_active_val = row_data.get("is_active")
                             if is_active_val is not None:

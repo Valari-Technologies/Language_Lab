@@ -156,8 +156,8 @@ class BulkUploadAPITests(TestCase):
     def test_school_admin_upload_teachers_and_students_allowed(self):
         # 1. School Admin uploads teachers
         excel_file_teacher = create_mock_excel(
-            ["name", "email", "qualification"],
-            [["Teacher New One", "teacher_new_1@school.com", "M.A. English"]]
+            ["name", "email", "qualification", "password"],
+            [["Teacher New One", "teacher_new_1@school.com", "M.A. English", "SecurePass@123"]]
         )
         response_t = self.client.post(
             self.url,
@@ -208,8 +208,8 @@ class BulkUploadAPITests(TestCase):
     def test_school_tenant_isolation_enforcement(self):
         # School Admin A tries to link a new teacher to Class B (which belongs to School B)
         excel_file = create_mock_excel(
-            ["name", "email", "class_id"],
-            [["Teacher Isolated", "t_isolated_1@edu.com", self.class_b.class_id]]
+            ["name", "email", "class_id", "password"],
+            [["Teacher Isolated", "t_isolated_1@edu.com", self.class_b.class_id, "SecurePass@123"]]
         )
         excel_file.name = "data.xlsx"
         response = self.client.post(
@@ -234,12 +234,12 @@ class BulkUploadAPITests(TestCase):
         # Row 4: Missing email field (Fails)
         # Row 5: Valid
         excel_file = create_mock_excel(
-            ["name", "email"],
+            ["name", "email", "password"],
             [
-                ["Teacher Valid 1", "t_valid_1@edu.com"],
-                ["Teacher Duplicate", "t_duplicate@edu.com"],
-                ["Teacher Missing Email", ""],
-                ["Teacher Valid 2", "t_valid_2@edu.com"]
+                ["Teacher Valid 1", "t_valid_1@edu.com", "SecurePass@123"],
+                ["Teacher Duplicate", "t_duplicate@edu.com", "SecurePass@123"],
+                ["Teacher Missing Email", "", ""],
+                ["Teacher Valid 2", "t_valid_2@edu.com", "SecurePass@123"]
             ]
         )
         excel_file.name = "data.xlsx"
@@ -263,7 +263,7 @@ class BulkUploadAPITests(TestCase):
 
     def test_super_admin_bypass_and_school_id_requirement(self):
         # 1. Super Admin upload without school_id (Fails)
-        excel_file = create_mock_excel(["name", "email"], [["Super Teacher", "t_super_1@edu.com"]])
+        excel_file = create_mock_excel(["name", "email", "password"], [["Super Teacher", "t_super_1@edu.com", "SecurePass@123"]])
         excel_file.name = "data.xlsx"
         response_fail = self.client.post(
             self.url,

@@ -10,6 +10,8 @@ User = get_user_model()
 
 class TeacherSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)
+    username = serializers.CharField(required=False)
+    password = serializers.CharField(write_only=True, required=False)
     full_name = serializers.CharField(required=True)
     is_active = serializers.BooleanField(required=False, default=True)
     school_name = serializers.CharField(source='school.school_name', read_only=True)
@@ -18,7 +20,7 @@ class TeacherSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Teacher
-        fields = ['teacher_id', 'user', 'email', 'full_name', 'is_active', 'school', 'school_name', 'qualification', 'assigned_classes', 'assigned_class_ids']
+        fields = ['teacher_id', 'user', 'username', 'password', 'email', 'full_name', 'is_active', 'school', 'school_name', 'qualification', 'assigned_classes', 'assigned_class_ids']
         extra_kwargs = {'user': {'read_only': True}}
 
     def get_assigned_classes(self, obj):
@@ -36,10 +38,12 @@ class TeacherSerializer(serializers.ModelSerializer):
             'assigned_class_ids': list(TeacherClass.objects.filter(teacher=instance).values_list('class_obj_id', flat=True))
         }
         if instance.user:
+            ret['username'] = instance.user.username
             ret['email'] = instance.user.email
             ret['full_name'] = instance.user.full_name
             ret['is_active'] = instance.user.is_active
         else:
+            ret['username'] = ''
             ret['email'] = ''
             ret['full_name'] = ''
             ret['is_active'] = False
@@ -48,12 +52,18 @@ class TeacherSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         request = self.context.get("request")
         email = attrs.get("email")
+        username = attrs.get("username")
         
         if not self.instance:
             if not email:
                 raise serializers.ValidationError({"email": "Email is required for creation."})
+            if not username:
+                username = email
+                attrs["username"] = username
             # Check unique username/email
-            if User.objects.filter(username=email).exists() or User.objects.filter(email=email).exists():
+            if User.objects.filter(username=username).exists():
+                raise serializers.ValidationError({"username": "A user with that username already exists."})
+            if User.objects.filter(email=email).exists():
                 raise serializers.ValidationError({"email": "A user with that email already exists."})
             
             if request and request.user.role == "SCHOOL_ADMIN":
@@ -62,10 +72,13 @@ class TeacherSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError("Your account is not linked to a school.")
                 attrs["school"] = admin_school
         else:
-            # Updating: check email uniqueness if it changed
+            # Updating: check email/username uniqueness if it changed
             if email and email != self.instance.user.email:
-                if User.objects.filter(username=email).exists() or User.objects.filter(email=email).exists():
+                if User.objects.filter(email=email).exists():
                     raise serializers.ValidationError({"email": "A user with that email already exists."})
+            if username and username != self.instance.user.username:
+                if User.objects.filter(username=username).exists():
+                    raise serializers.ValidationError({"username": "A user with that username already exists."})
 
         if request and request.user.role == "SCHOOL_ADMIN":
             admin_school = get_user_school(request.user)
@@ -76,14 +89,15 @@ class TeacherSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         assigned_class_ids = validated_data.pop('assigned_class_ids', None)
         email = validated_data.pop('email')
+        username = validated_data.pop('username', email)
+        password = validated_data.pop('password', 'Teacher123!')
         full_name = validated_data.pop('full_name', '')
         is_active = validated_data.pop('is_active', True)
 
         with transaction.atomic():
-            # Automatically set username to email and password to Teacher123!
             user = User.objects.create_user(
-                username=email,
-                password="Teacher123!",
+                username=username,
+                password=password,
                 email=email,
                 full_name=full_name,
                 role=User.Role.TEACHER,
@@ -99,6 +113,8 @@ class TeacherSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         assigned_class_ids = validated_data.pop('assigned_class_ids', None)
         email = validated_data.pop('email', None)
+        username = validated_data.pop('username', None)
+        password = validated_data.pop('password', None)
         full_name = validated_data.pop('full_name', None)
         is_active = validated_data.pop('is_active', None)
 
@@ -107,7 +123,10 @@ class TeacherSerializer(serializers.ModelSerializer):
             if user:
                 if email is not None:
                     user.email = email
-                    user.username = email  # Keep username in sync with email
+                if username is not None and str(username).strip():
+                    user.username = username
+                if password is not None and str(password).strip():
+                    user.set_password(password)
                 if full_name is not None:
                     user.full_name = full_name
                 if is_active is not None:
