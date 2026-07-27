@@ -77,6 +77,8 @@ class LoginAPIView(APIView):
             "username": user.username,
             "full_name": user.full_name,
             "email": user.email,
+            "phone_no": user.phone_no,
+            "profile_picture": user.profile_picture,
             "role": user.role,
             "school_id": school_obj.school_id if school_obj else None,
             "school_name": school_obj.school_name if school_obj else "",
