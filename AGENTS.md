@@ -33,6 +33,7 @@
 - Preserve working modules; do not redesign, re-architect, or add new business modules unless asked.
 - Never overstate completion; if untested or uncertain, say so.
 - Never hand-edit historical migration files.
+- NEVER execute Git commands that modify or reset files (e.g., git pull, git checkout, git reset, git restore) without the user's explicit permission.
 
 ## 4. NAMING STANDARD
 - "Scenario" -> "Experience"
