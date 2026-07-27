@@ -49,7 +49,7 @@ const resolveMediaUrl = (url) => {
 /* ═══════════════════════════════════════════════════════════
    CONTENT STUDIO COMPONENT
    ═══════════════════════════════════════════════════════════ */
-function ContentStudio({ user, onLogout }) {
+function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUser }) {
   // Views: dashboard, experiences, experience-builder, activity-builder, screen-builder, preview, media, publish, profile
   const [view, setView] = useState('dashboard');
   const [selectedExperience, setSelectedExperience] = useState(null);
@@ -314,7 +314,7 @@ function ContentStudio({ user, onLogout }) {
         return;
       }
       const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
-      try { localStorage.setItem('user', JSON.stringify(updatedUser)); } catch { }
+      if (onUpdateUser) onUpdateUser(updatedUser);
       setCurrentUserState(updatedUser);
       showFeedback('Profile updated successfully');
     } catch (err) {
@@ -341,7 +341,7 @@ function ContentStudio({ user, onLogout }) {
       if (res.ok) {
         const updatedUser = { ...currentUserState, profile_picture: resData.profile_picture };
         setCurrentUserState(updatedUser);
-        localStorage.setItem('user', JSON.stringify(updatedUser));
+        if (onUpdateUser) onUpdateUser(updatedUser);
         showFeedback('Profile picture updated successfully!');
       } else {
         showFeedback(resData.error || 'Failed to upload profile picture.', 'error');

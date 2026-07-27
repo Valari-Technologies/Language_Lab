@@ -426,6 +426,11 @@ export const App = () => {
     setUser(loggedInUser);
   };
 
+  const handleUpdateUser = (updatedUser) => {
+    setUser(updatedUser);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
@@ -502,6 +507,7 @@ export const App = () => {
               onLogout={handleLogout}
               activeTab={activeTab}
               onTabChange={handleTabChange}
+              onUpdateUser={handleUpdateUser}
             />
           )}
           {(user.role === 'CONTENT_CREATOR' || user.role === 'SUPER_ADMIN') && currentPath.startsWith('/content-studio') && (
@@ -510,18 +516,21 @@ export const App = () => {
               onLogout={handleLogout}
               currentPath={currentPath}
               setCurrentPath={setCurrentPath}
+              onUpdateUser={handleUpdateUser}
             />
           )}
           {user.role === 'SCHOOL_ADMIN' && currentPath.startsWith('/school-dashboard') && (
             <SchoolDashboard
               user={user}
               onLogout={handleLogout}
+              onUpdateUser={handleUpdateUser}
             />
           )}
           {user.role === 'TEACHER' && currentPath.startsWith('/teacher-dashboard') && (
             <TeacherDashboard
               user={user}
               onLogout={handleLogout}
+              onUpdateUser={handleUpdateUser}
             />
           )}
           {user.role === 'STUDENT' && currentPath.startsWith('/student') && (

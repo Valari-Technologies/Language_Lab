@@ -401,7 +401,7 @@ const Pagination = ({ total, perPage = 4, page, onPage }) => {
 /* ═══════════════════════════════════════════════════════════
    MAIN COMPONENT
    ═══════════════════════════════════════════════════════════ */
-const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange }) => {
+const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateUser }) => {
   const [user, setUser] = useState(propUser);
   useEffect(() => {
     setUser(propUser);
@@ -488,7 +488,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange }) => {
         const data = await res.json();
         const updatedUser = { ...user, profile_picture: data.profile_picture };
         setUser(updatedUser);
-        localStorage.setItem('user', JSON.stringify(updatedUser));
+        if (onUpdateUser) onUpdateUser(updatedUser);
         showFeedback('Profile picture updated successfully!', null);
       } else {
         const d = await res.json();
@@ -973,7 +973,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange }) => {
         return;
       }
       const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
-      try { localStorage.setItem('user', JSON.stringify(updatedUser)); } catch {}
+      if (onUpdateUser) onUpdateUser(updatedUser);
       showFeedback('Profile updated successfully', null);
     } catch (err) {
       console.error('Profile update error:', err);

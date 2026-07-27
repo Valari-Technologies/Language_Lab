@@ -145,7 +145,7 @@ const defaultGradesList = [
 /* ═══════════════════════════════════════════════════════════
    MAIN COMPONENT
    ═══════════════════════════════════════════════════════════ */
-const SchoolDashboard = ({ user: propUser, onLogout }) => {
+const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [user, setUser] = useState(propUser);
   useEffect(() => {
     setUser(propUser);
@@ -185,7 +185,7 @@ const SchoolDashboard = ({ user: propUser, onLogout }) => {
         const data = await res.json();
         const updatedUser = { ...user, profile_picture: data.profile_picture };
         setUser(updatedUser);
-        localStorage.setItem('user', JSON.stringify(updatedUser));
+        if (onUpdateUser) onUpdateUser(updatedUser);
         setSuccessMsg('');
         showFeedback('Profile picture updated successfully!', null);
       } else {
@@ -802,7 +802,7 @@ const SchoolDashboard = ({ user: propUser, onLogout }) => {
         return;
       }
       const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
-      try { localStorage.setItem('user', JSON.stringify(updatedUser)); } catch {}
+      if (onUpdateUser) onUpdateUser(updatedUser);
       showFeedback('Profile updated successfully', null);
     } catch (err) {
       console.error('Profile update error:', err);
