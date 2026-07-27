@@ -52,6 +52,7 @@ const resolveMediaUrl = (url) => {
 function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUser }) {
   // Views: dashboard, experiences, experience-builder, activity-builder, screen-builder, preview, media, publish, profile
   const [view, setView] = useState('dashboard');
+  const [isNewExperience, setIsNewExperience] = useState(false);
   const [selectedExperience, setSelectedExperience] = useState(null);
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [selectedScreen, setSelectedScreen] = useState(null);
@@ -183,7 +184,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           const match = g.grade_name.match(/^Grade\s+(\d+)$/i);
           if (match) {
             const num = parseInt(match[1]);
-            return num >= 1 && num <= 10;
+            return num >= 3 && num <= 8;
           }
           return false;
         }).sort((a, b) => {
@@ -384,7 +385,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     title: '',
     description: '',
     grade: '',
-    subject: 'Speaking & Listening',
+    subject: [],
     language: 'English',
     difficulty: 'Medium',
     duration: 15,
@@ -395,7 +396,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     title: '',
     description: '',
     objective: '',
-    skills: ['Speaking', 'Listening'],
+    skills: [],
     duration: 5,
     mastery: 80
   });
@@ -441,14 +442,22 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       const res = await apiFetch(`/api/v1/content/experiences/${expId}/`);
       if (res.ok) {
         const data = await res.json();
+        // Parse subject from backend (may be string or array) into array
+        const rawSubject = data.subject || '';
+        let subjectArray = [];
+        if (Array.isArray(rawSubject)) {
+          subjectArray = rawSubject;
+        } else if (typeof rawSubject === 'string' && rawSubject) {
+          subjectArray = rawSubject.split(/,\s*|\s*&\s*/).map(s => s.trim()).filter(Boolean);
+        }
         setSelectedExperience(data);
         setExperienceForm({
           id: data.id,
           title: data.title,
           description: data.description || '',
           grade: data.grade || '',
-          subject: data.subject || '',
-          language: data.language || '',
+          subject: subjectArray,
+          language: data.language || 'English',
           difficulty: data.difficulty || 'Medium',
           duration: data.estimated_duration || 0,
           tags: data.tags || [],
@@ -457,9 +466,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         setActivities(data.activities || []);
         const rawOutcomes = data.learning_outcomes || [];
         setLearningOutcomes(rawOutcomes);
-        // Convert to plain text for the textarea — support both {text}, {description} and raw strings
-        const textStr = rawOutcomes.map(o => (typeof o === 'string' ? o : (o.text || o.description || ''))).join('\n');
+        // Convert to plain text — support {text}, {description}, {outcome}, raw strings
+        const textStr = rawOutcomes.map(o => {
+          if (typeof o === 'string') return o;
+          return o.text || o.description || o.outcome || o.name || '';
+        }).filter(Boolean).join('\n');
         setOutcomesText(textStr);
+        setIsNewExperience(false);
         if (changeViewToBuilder) {
           setView('experience-builder');
         }
@@ -484,7 +497,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         title: experienceForm.title,
         description: experienceForm.description || '',
         grade: parseInt(experienceForm.grade) || null,
-        subject: experienceForm.subject || 'Speaking & Listening',
+        subject: Array.isArray(experienceForm.subject) ? experienceForm.subject.join(', ') : (experienceForm.subject || ''),
         language: experienceForm.language || 'English',
         difficulty: diff,
         estimated_duration: parseInt(experienceForm.duration) || 15,
@@ -2877,7 +2890,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               {/* Premium Dashboard Header Card with Background Image */}
               <div className="sd-dashboard-header-card" style={{ backgroundImage: `url(${contentCreatorHeaderBanner})`, position: 'relative' }}>
                 <div className="sd-header-text-section" style={{ maxWidth: '60%' }}>
-                  <h1>{getGreeting()}, Aisha!</h1>
+                  <h1>{getGreeting()}, {currentUserState?.full_name || currentUserState?.username || user?.full_name || user?.username || 'Creator'}!</h1>
                   <p>Empowering Better Learning Experiences.<br />Create, organize, and publish engaging educational content with ease.</p>
                 </div>
               </div>
@@ -3090,12 +3103,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       className="cs-btn-primary"
                       style={{ background: '#0b57d0', color: '#ffffff', fontWeight: 600, fontSize: '0.82rem', padding: '0.55rem 1.25rem', borderRadius: '8px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
                       onClick={() => {
+                        setIsNewExperience(true);
                         setSelectedExperience(null);
                         setExperienceForm({
                           title: '',
                           description: '',
                           grade: '',
-                          subject: 'Speaking & Listening',
+                          subject: [],
                           language: 'English',
                           difficulty: 'Medium',
                           duration: 15,
@@ -3225,20 +3239,31 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           {/* ───────────────── VIEW 3: EXPERIENCE BUILDER (Image 3) ───────────────── */}
           {view === 'experience-builder' && (
             <>
-              {/* Top breadcrumb navigation */}
+              {/* Top header - breadcrumb only for new experience */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <button className="cs-icon-btn" onClick={() => setView('experiences')}><FiArrowLeft /></button>
+                  {isNewExperience && (
+                    <button className="cs-icon-btn" onClick={() => setView('experiences')}><FiArrowLeft /></button>
+                  )}
                   <div>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                      <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Experience Library</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Experience Builder</span>
+                    {isNewExperience && (
+                      <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                        <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Experience Library</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Experience Builder</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: isNewExperience ? '4px' : 0 }}>
+                      <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>
+                        {isNewExperience ? 'New Experience' : 'Experience Builder'}
+                      </h1>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '4px' }}>
-                      <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>{experienceForm.title}</h1>
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                      {gradesList.find(g => String(g.id) === String(experienceForm.grade))?.grade_name || `Grade ${experienceForm.grade}`} · {experienceForm.subject} · {experienceForm.difficulty} · Estimated Duration: {experienceForm.duration} min
-                    </div>
+                    {experienceForm.grade && Array.isArray(experienceForm.subject) && experienceForm.subject.length > 0 && (
+                      <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                        {gradesList.find(g => String(g.id) === String(experienceForm.grade))?.grade_name}
+                        {` · ${experienceForm.subject.join(' & ')}`}
+                        {experienceForm.difficulty ? ` · ${experienceForm.difficulty}` : ''}
+                        {experienceForm.duration ? ` · Est. ${experienceForm.duration} min` : ''}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -3246,7 +3271,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     onClick={async () => {
                       await handleSaveExperience();
                       setSelectedActivity(null);
-                      setActivityForm({ title: '', description: '', objective: '', skills: ['Speaking', 'Listening'], duration: 5, mastery: 80 });
+                      const defaultSkills = Array.isArray(experienceForm.subject) && experienceForm.subject.length > 0
+                        ? [...experienceForm.subject]
+                        : [];
+                      setActivityForm({ title: '', description: '', objective: '', skills: defaultSkills, duration: 5, mastery: 80 });
                       setView('activity-builder');
                     }}
                     style={{
@@ -3310,7 +3338,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div className="cs-form-group">
                       <label className="cs-form-label">Grade <span style={{ color: '#ef4444' }}>*</span></label>
                       <select className="cs-form-input" value={experienceForm.grade}
@@ -3322,36 +3350,27 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           ))
                         ) : (
                           <>
-                            <option value="38">Grade 1</option>
-                            <option value="39">Grade 2</option>
                             <option value="40">Grade 3</option>
                             <option value="41">Grade 4</option>
                             <option value="42">Grade 5</option>
                             <option value="17">Grade 6</option>
                             <option value="43">Grade 7</option>
                             <option value="44">Grade 8</option>
-                            <option value="30">Grade 9</option>
-                            <option value="45">Grade 10</option>
                           </>
                         )}
                       </select>
                     </div>
                     <div className="cs-form-group">
-                      <label className="cs-form-label">Subject <span style={{ color: '#ef4444' }}>*</span></label>
-                      <select className="cs-form-input" value={experienceForm.subject}
-                        onChange={e => setExperienceForm({ ...experienceForm, subject: e.target.value })}>
-                        <option value="Speaking & Listening">Speaking & Listening</option>
-                        <option value="Reading">Reading</option>
-                        <option value="Writing">Writing</option>
-                      </select>
-                    </div>
-                    <div className="cs-form-group">
                       <label className="cs-form-label">Language</label>
-                      <select className="cs-form-input" value={experienceForm.language}
-                        onChange={e => setExperienceForm({ ...experienceForm, language: e.target.value })}>
-                        <option value="English">English</option>
-                        <option value="Spanish">Spanish</option>
-                      </select>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: '0.5rem',
+                        padding: '0.45rem 0.75rem',
+                        background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px',
+                        fontSize: '0.82rem', color: '#374151', fontWeight: 600, height: '36px'
+                      }}>
+                        🌐 English
+                        <FiLock style={{ marginLeft: 'auto', color: '#94a3b8', fontSize: '0.75rem' }} />
+                      </div>
                     </div>
                     <div className="cs-form-group">
                       <label className="cs-form-label">Difficulty <span style={{ color: '#ef4444' }}>*</span></label>
@@ -3367,17 +3386,58 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <input className="cs-form-input" type="number" value={experienceForm.duration}
                         onChange={e => setExperienceForm({ ...experienceForm, duration: parseInt(e.target.value) || 0 })} />
                     </div>
-                    <div className="cs-form-group">
-
-                      <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: 4 }}>
-                        {experienceForm.tags && experienceForm.tags.map(t => (
-                          <span key={t} style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-                            {t} <span style={{ cursor: 'pointer', fontWeight: 'bold' }}>×</span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
                   </div>
+
+                  {/* Subject Checkboxes — full width row */}
+                  <div className="cs-form-group">
+                    <label className="cs-form-label">Subject <span style={{ color: '#ef4444' }}>*</span></label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.4rem' }}>
+                      {['Speak', 'Listen', 'Read', 'Write', 'Grammar', 'Vocabulary', 'Phonetics'].map(skill => {
+                        const isChecked = Array.isArray(experienceForm.subject) && experienceForm.subject.includes(skill);
+                        return (
+                          <label
+                            key={skill}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                              cursor: 'pointer', fontSize: '0.82rem',
+                              padding: '5px 14px', borderRadius: '20px',
+                              border: isChecked ? '1.5px solid #0b57d0' : '1.5px solid #e2e8f0',
+                              background: isChecked ? '#e0f2fe' : '#f8fafc',
+                              color: isChecked ? '#0369a1' : '#374151',
+                              fontWeight: isChecked ? 600 : 400,
+                              transition: 'all 0.15s', userSelect: 'none'
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={e => {
+                                const current = Array.isArray(experienceForm.subject) ? experienceForm.subject : [];
+                                if (e.target.checked) {
+                                  setExperienceForm({ ...experienceForm, subject: [...current, skill] });
+                                } else {
+                                  setExperienceForm({ ...experienceForm, subject: current.filter(s => s !== skill) });
+                                }
+                              }}
+                              style={{ display: 'none' }}
+                            />
+                            {isChecked && <FiCheck style={{ fontSize: '0.75rem', color: '#0b57d0' }} />}
+                            {skill}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {Array.isArray(experienceForm.subject) && experienceForm.subject.length === 0 && (
+                      <div style={{ fontSize: '0.72rem', color: '#f59e0b', marginTop: '0.35rem' }}>
+                        Please select at least one subject skill.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="cs-form-group" style={{ display: 'none' }}>
+                    {/* tags hidden placeholder */}
+                  </div>
+
 
                   {/* Learning outcomes - simple textarea */}
                   <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
@@ -3411,35 +3471,48 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           {/* ───────────────── VIEW 4: ACTIVITY BUILDER (Image 4) ───────────────── */}
           {view === 'activity-builder' && (
             <>
-              {/* Top breadcrumbs */}
+              {/* Activity Builder header — breadcrumb only when experience is saved */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <button className="cs-icon-btn" onClick={() => setView('experience-builder')}><FiArrowLeft /></button>
+                  {selectedExperience?.id && (
+                    <button className="cs-icon-btn" onClick={() => setView('experience-builder')}><FiArrowLeft /></button>
+                  )}
                   <div>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                      <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Experience Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>Experience Builder</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Activity Builder</span>
+                    {selectedExperience?.id && (
+                      <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                        <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Experience Library</span> &nbsp;&gt;&nbsp;
+                        <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>Experience Builder</span> &nbsp;&gt;&nbsp;
+                        <span style={{ fontWeight: 600 }}>Activity Builder</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: selectedExperience?.id ? '4px' : 0 }}>
+                      <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>Activity Builder</h1>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '4px' }}>
-                      <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>{activityForm.title}</h1>
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                      {gradesList.find(g => String(g.id) === String(selectedExperience?.grade_id || selectedExperience?.grade))?.grade_name || 'Grade 4'} · {selectedExperience?.subject || 'Speaking & Listening'} · {selectedExperience?.difficulty || 'Medium'} · Estimated Duration: {activityForm.duration} min
-                    </div>
+                    {(activityForm.title || selectedExperience) && (
+                      <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                        {activityForm.title && <span>{activityForm.title} · </span>}
+                        {gradesList.find(g => String(g.id) === String(selectedExperience?.grade_id || selectedExperience?.grade))?.grade_name || ''}
+                        {selectedExperience?.subject ? ` · ${Array.isArray(experienceForm.subject) && experienceForm.subject.length > 0 ? experienceForm.subject.join(' & ') : selectedExperience.subject}` : ''}
+                        {selectedExperience?.difficulty ? ` · ${selectedExperience.difficulty}` : ''}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-                  <button
-                    onClick={() => setView('experience-builder')}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '5px',
-                      background: '#ffffff', color: '#374151',
-                      border: '1px solid #d1d5db', borderRadius: '10px',
-                      padding: '0.5rem 1rem', fontWeight: 600, fontSize: '0.82rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <span style={{ fontSize: '1rem' }}>←</span>&nbsp; Back to Experience
-                  </button>
+                  {selectedExperience?.id && (
+                    <button
+                      onClick={() => setView('experience-builder')}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '5px',
+                        background: '#ffffff', color: '#374151',
+                        border: '1px solid #d1d5db', borderRadius: '10px',
+                        padding: '0.5rem 1rem', fontWeight: 600, fontSize: '0.82rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <span style={{ fontSize: '1rem' }}>←</span>&nbsp; Back to Experience
+                    </button>
+                  )}
                   <button
                     onClick={handleSaveActivity}
                     style={{
@@ -3466,14 +3539,31 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         <input className="cs-form-input" type="text" value={activityForm.title}
                           onChange={e => setActivityForm({ ...activityForm, title: e.target.value })} />
                       </div>
-                      <div className="cs-form-group">
+                      <div className="cs-form-group" style={{ gridColumn: '1 / -1' }}>
                         <label className="cs-form-label">Skills</label>
-                        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: 4 }}>
-                          {activityForm.skills.map(s => (
-                            <span key={s} style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '0.72rem', padding: '0.15rem 0.45rem', borderRadius: 4 }}>
-                              {s}
-                            </span>
-                          ))}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.4rem' }}>
+                          {(() => {
+                            const displaySkills = Array.isArray(experienceForm.subject) && experienceForm.subject.length > 0
+                              ? experienceForm.subject
+                              : (Array.isArray(activityForm.skills) && activityForm.skills.length > 0 ? activityForm.skills : []);
+                            if (displaySkills.length === 0) {
+                              return <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic' }}>Select subjects in Experience Builder to set skills.</span>;
+                            }
+                            return displaySkills.map(skill => (
+                              <span
+                                key={skill}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                                  fontSize: '0.82rem', padding: '4px 12px', borderRadius: '20px',
+                                  border: '1.5px solid #0b57d0',
+                                  background: '#e0f2fe', color: '#0369a1', fontWeight: 600
+                                }}
+                              >
+                                <FiCheck style={{ fontSize: '0.72rem', color: '#0b57d0' }} />
+                                {skill}
+                              </span>
+                            ));
+                          })()}
                         </div>
                       </div>
                       <div className="cs-form-group">
@@ -3516,7 +3606,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', background: '#fff', cursor: 'pointer', fontWeight: 600 }}
                         onClick={() => {
                           setSelectedActivity(null);
-                          setActivityForm({ title: '', description: '', objective: '', skills: ['Speaking', 'Listening'], duration: 5, mastery: 80 });
+                          const defaultSkills = Array.isArray(experienceForm.subject) && experienceForm.subject.length > 0
+                            ? [...experienceForm.subject]
+                            : [];
+                          setActivityForm({ title: '', description: '', objective: '', skills: defaultSkills, duration: 5, mastery: 80 });
                           setScreens([]);
                         }}
                       >

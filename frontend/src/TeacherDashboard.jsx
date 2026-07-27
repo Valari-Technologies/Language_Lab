@@ -7,7 +7,7 @@ import {
   FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
   FiActivity, FiTrendingUp, FiClock, FiAward,
   FiChevronLeft, FiChevronRight, FiLock, FiArrowRight, FiDownload, FiAlertTriangle,
-  FiEye, FiEyeOff, FiUpload, FiRefreshCw
+  FiEye, FiEyeOff, FiUpload, FiRefreshCw, FiMoreVertical
 } from 'react-icons/fi';
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
@@ -219,6 +219,12 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [grades,   setGrades]   = useState([]);
 
   /* ── Forms ── */
+  const [selectedClassCrudDetail, setSelectedClassCrudDetail] = useState(null);
+  const [showClassCrudDetailModal, setShowClassCrudDetailModal] = useState(false);
+  const [selectedStudentCrudDetail, setSelectedStudentCrudDetail] = useState(null);
+  const [showStudentCrudDetailModal, setShowStudentCrudDetailModal] = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState(null); // { id, type }
+
   const [studentForm, setStudentForm] = useState({
     username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', is_active: true
   });
@@ -314,7 +320,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   }, []);
 
   useEffect(() => {
-    const handler = () => setShowNotifDropdown(false);
+    const handler = () => {
+      setShowNotifDropdown(false);
+      setActiveDropdown(null);
+    };
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
   }, []);
@@ -412,7 +421,13 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     if (activeSubTab === 'students') {
       endpoint = modalType === 'add' ? '/api/cms/v1/students/' : `/api/cms/v1/students/${editingId}/`;
       payload = { ...studentForm, role: 'STUDENT' };
-      if (modalType === 'edit' && !payload.password) delete payload.password;
+      if (modalType === 'add') {
+        if (!payload.username) payload.username = payload.roll_no;
+        if (!payload.password) payload.password = payload.roll_no;
+        if (!payload.email) payload.email = `${payload.roll_no}@school.com`;
+      } else if (modalType === 'edit' && !payload.password) {
+        delete payload.password;
+      }
     } else if (activeSubTab === 'classes') {
       endpoint = modalType === 'add' ? '/api/cms/v1/classes/' : `/api/cms/v1/classes/${editingId}/`;
       payload = { ...classForm };
@@ -460,12 +475,13 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       }
       const { id, type } = deleteConfirm;
       if (!id) return;
-      const res = await apiFetch(`/api/cms/v1/${type}s/${id}/`, { method: 'DELETE' });
+      const cleanType = type.endsWith('s') ? type.slice(0, -1) : type;
+      const res = await apiFetch(`/api/cms/v1/${cleanType}s/${id}/`, { method: 'DELETE' });
       if (res.ok) {
-        showFeedback(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully!`, null);
+        showFeedback(`${cleanType.charAt(0).toUpperCase() + cleanType.slice(1)} deleted successfully!`, null);
         setDeleteConfirm({ show: false, id: null, type: '' });
-        if (type === 'student') await loadStudents();
-        else if (type === 'class') await loadClasses();
+        if (cleanType === 'student') await loadStudents();
+        else if (cleanType === 'class') await loadClasses();
       } else {
         const data = await res.json().catch(() => ({}));
         showFeedback(null, data.error || data.detail || 'Delete failed.');
@@ -551,6 +567,30 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const handleBulkDeleteClasses = () => {
     if (selectedClassIds.length === 0) return;
     setDeleteConfirm({ show: true, id: 'bulk-classes', type: 'classes', isBulk: true, count: selectedClassIds.length, ids: [...selectedClassIds] });
+  };
+
+  const toggleActiveStatus = async (id, currentStatus, type) => {
+    setActionLoading(true);
+    setErrorMsg('');
+    try {
+      const url = `/api/cms/v1/${type}/${id}/`;
+      const res = await apiFetch(url, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: !currentStatus })
+      });
+      if (res.ok) {
+        showFeedback('Status updated successfully.', null);
+        if (type === 'students') { await loadStudents(); }
+      } else {
+        const resData = await res.json().catch(() => ({}));
+        setErrorMsg(resData.detail || 'Failed to update status.');
+      }
+    } catch (e) {
+      console.error(e);
+      setErrorMsg('Network error while updating status.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   /* ── Profile update ── */
@@ -1015,7 +1055,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               )}
             </div>
             <div className="sd-user-meta">
-              <div className="sd-user-name">{profileForm.full_name || user?.username || 'Teacher'}</div>
+              <div className="sd-user-name">{profileForm.full_name || user?.full_name || user?.username || 'Teacher'}</div>
               <div className="sd-user-role">Teacher</div>
             </div>
             <button className="sd-logout-icon-btn" onClick={onLogout} title="Logout">
@@ -1107,7 +1147,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               {/* Premium Dashboard Header Card with Background Image */}
               <div className="sd-dashboard-header-card" style={{ backgroundImage: `url(${teacherHeaderBanner})` }}>
                 <div className="sd-header-text-section">
-                  <h1>{getGreeting()}, { profileForm.username || user?.username || 'Teacher' }!</h1>
+                   <h1>{getGreeting()}, {profileForm.full_name || profileForm.username || user?.full_name || user?.username || 'Teacher'}!</h1>
                   <p>Manage classes, track student progress, coordinate learning scenarios, and review academic performance.</p>
                 </div>
 
@@ -1411,16 +1451,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                   </div>
                 )}
                 <div className="sd-table-wrap">
-                  <table className="sd-table">
-                    <colgroup>
-                      <col style={{ width: '4%' }} />
-                      <col style={{ width: '23%' }} />
-                      <col style={{ width: '15%' }} />
-                      <col style={{ width: '15%' }} />
-                      <col style={{ width: '15%' }} />
-                      <col style={{ width: '13%' }} />
-                      <col style={{ width: '15%' }} />
-                    </colgroup>
+                  <table className="sd-table" style={{ tableLayout: 'auto' }}>
                     <thead>
                       <tr>
                         <th className="sd-checkbox-cell">
@@ -1435,7 +1466,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <th>Grade</th>
                         <th>Section</th>
                         <th>Status</th>
-                        <th style={{ textAlign: 'center' }}>Actions</th>
+                        <th style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1461,14 +1492,129 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                 {s.is_active ? 'Active' : 'Inactive'}
                               </span>
                             </td>
-                            <td>
-                              <div className="sd-action-cell" style={{ justifyContent: 'center' }}>
-                                <button className="sd-icon-action edit"   onClick={() => openEditModal(s)} title="Edit">
-                                  <FiEdit2/>
+                            <td style={{ overflow: 'visible' }}>
+                              <div style={{ position: 'relative', display: 'inline-block' }}>
+                                <button
+                                  className="sd-action-trigger"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveDropdown(
+                                      activeDropdown && activeDropdown.id === sid
+                                        ? null
+                                        : { id: sid, type: 'students' }
+                                    );
+                                  }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: '6px',
+                                    cursor: 'pointer',
+                                    borderRadius: '4px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#64748b'
+                                  }}
+                                >
+                                  <FiMoreVertical style={{ fontSize: '1.1rem' }} />
                                 </button>
-                                <button className="sd-icon-action delete" onClick={() => openDeleteModal(sid, 'students', s.full_name || s.username)} title="Delete">
-                                  <FiTrash2/>
-                                </button>
+                                {activeDropdown && activeDropdown.id === sid && activeDropdown.type === 'students' && (
+                                  <div
+                                    className="sd-action-menu"
+                                    style={{
+                                      position: 'absolute',
+                                      right: 0,
+                                      top: '100%',
+                                      background: '#ffffff',
+                                      border: '1px solid #e2e8f0',
+                                      borderRadius: '8px',
+                                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                                      zIndex: 100,
+                                      minWidth: '130px',
+                                      padding: '0.4rem 0'
+                                    }}
+                                  >
+                                    <button
+                                      className="sd-menu-item"
+                                      onClick={() => {
+                                        setSelectedStudentCrudDetail(s);
+                                        setShowStudentCrudDetailModal(true);
+                                      }}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        width: '100%',
+                                        padding: '0.5rem 1rem',
+                                        border: 'none',
+                                        background: 'none',
+                                        textAlign: 'left',
+                                        fontSize: '0.85rem',
+                                        color: '#0f172a',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      <FiEye style={{ color: '#0284c7' }} /> View
+                                    </button>
+                                    <button
+                                      className="sd-menu-item"
+                                      onClick={() => openEditModal(s)}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        width: '100%',
+                                        padding: '0.5rem 1rem',
+                                        border: 'none',
+                                        background: 'none',
+                                        textAlign: 'left',
+                                        fontSize: '0.85rem',
+                                        color: '#0f172a',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      <FiEdit2 style={{ color: '#4f46e5' }} /> Edit
+                                    </button>
+                                    <button
+                                      className="sd-menu-item"
+                                      onClick={() => toggleActiveStatus(sid, s.is_active, 'students')}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        width: '100%',
+                                        padding: '0.5rem 1rem',
+                                        border: 'none',
+                                        background: 'none',
+                                        textAlign: 'left',
+                                        fontSize: '0.85rem',
+                                        color: s.is_active ? '#ef4444' : '#16a34a',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      <FiLock /> {s.is_active ? 'Block' : 'Unblock'}
+                                    </button>
+                                    <button
+                                      className="sd-menu-item"
+                                      onClick={() => openDeleteModal(sid, 'students', s.full_name || s.username)}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        width: '100%',
+                                        padding: '0.5rem 1rem',
+                                        border: 'none',
+                                        background: 'none',
+                                        textAlign: 'left',
+                                        fontSize: '0.85rem',
+                                        color: '#dc2626',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      <FiTrash2 /> Delete
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -1511,31 +1657,15 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                   </div>
                 </div>
                 <div className="sd-table-wrap">
-                  <table className="sd-table">
-                    <colgroup>
-                      <col style={{ width: '4%' }} />
-                      <col style={{ width: '15%' }} />
-                      <col style={{ width: '12%' }} />
-                      <col style={{ width: '33%' }} />
-                      <col style={{ width: '12%' }} />
-                      <col style={{ width: '11%' }} />
-                      <col style={{ width: '13%' }} />
-                    </colgroup>
+                  <table className="sd-table" style={{ tableLayout: 'auto' }}>
                     <thead>
                       <tr>
-                        <th className="sd-checkbox-cell">
-                          <input
-                            type="checkbox"
-                            checked={classes.length > 0 && selectedClassIds.length === filterList(classes).length}
-                            onChange={handleSelectAllClasses}
-                          />
-                        </th>
                         <th>Class Name</th>
                         <th>Grade Level</th>
                         <th>School Name</th>
                         <th>Academic Year</th>
                         <th>Status</th>
-                        <th style={{ textAlign: 'center' }}>Actions</th>
+                        <th style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1543,13 +1673,6 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         const cid = c.class_id || c.id;
                         return (
                           <tr key={cid || i}>
-                            <td className="sd-checkbox-cell">
-                              <input
-                                type="checkbox"
-                                checked={selectedClassIds.includes(cid)}
-                                onChange={() => handleSelectClassRow(cid)}
-                              />
-                            </td>
                             <td>
                               <span className="sd-name-cell-primary">{c.class_name}</span>
                             </td>
@@ -1560,13 +1683,14 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             <td>{c.academic_year}</td>
                             <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
                               <span className={`sd-badge ${c.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
-                                {c.is_active ? 'Active' : 'Disabled'}
+                                {c.is_active ? 'Active' : 'Inactive'}
                               </span>
                             </td>
                             <td>
                               <div className="sd-action-cell" style={{ justifyContent: 'center' }}>
-                                <button className="sd-icon-action edit"   onClick={() => openEditModal(c)} title="Edit"><FiEdit2/></button>
-                                <button className="sd-icon-action delete" onClick={() => openDeleteModal(cid, 'class')} title="Delete"><FiTrash2/></button>
+                                <button className="sd-icon-action view" style={{ color: '#0b75b3' }} onClick={() => { setSelectedClassCrudDetail(c); setShowClassCrudDetailModal(true); }} title="View">
+                                  <FiEye/>
+                                </button>
                               </div>
                             </td>
                           </tr>
@@ -1876,8 +2000,17 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div className="sd-form-row">
                   <div className="sd-form-group">
                     <label className="sd-form-label">Grade *</label>
-                    <input className="sd-form-input" type="text" value={studentForm.grade}
-                      onChange={e => setStudentForm({ ...studentForm, grade: e.target.value })} required placeholder="e.g. Grade 10"/>
+                    <select
+                      className="sd-form-input"
+                      value={studentForm.grade}
+                      onChange={e => setStudentForm({ ...studentForm, grade: e.target.value })}
+                      required
+                    >
+                      <option value="">-- Select Grade ──</option>
+                      {[3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                        <option key={num} value={num}>Grade {num}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="sd-form-group">
                     <label className="sd-form-label">Section *</label>
@@ -1885,13 +2018,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       onChange={e => setStudentForm({ ...studentForm, section: e.target.value })} required placeholder="e.g. A"/>
                   </div>
                 </div>
-                {modalType === 'edit' && (
-                  <div className="sd-form-group">
-                    <label className="sd-form-label">Email</label>
-                    <input className="sd-form-input" type="email" value={studentForm.email}
-                      onChange={e => setStudentForm({ ...studentForm, email: e.target.value })}/>
-                  </div>
-                )}
+
                 <label className="sd-checkbox-label" style={{marginTop:'0.5rem'}}>
                   <input type="checkbox" checked={studentForm.is_active}
                     onChange={e => setStudentForm({ ...studentForm, is_active: e.target.checked })}/>
@@ -2162,6 +2289,83 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         </div>
       )}
 
+      {/* ── Class CRUD Detail Modal ── */}
+      {showClassCrudDetailModal && selectedClassCrudDetail && (
+        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowClassCrudDetailModal(false); }}>
+          <div className="sd-modal" style={{ maxWidth:500 }}>
+            <div className="sd-modal-header">
+              <span className="sd-modal-title">Class Details</span>
+              <button className="sd-modal-close" onClick={() => setShowClassCrudDetailModal(false)}><FiX/></button>
+            </div>
+            <div style={{ padding: '1rem', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Class Name:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.class_name || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Grade Level:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{grades.find(g => g.id === selectedClassCrudDetail.grade)?.grade_name || selectedClassCrudDetail.grade || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>School Name:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{schools.find(s => s.school_id === selectedClassCrudDetail.school)?.school_name || selectedClassCrudDetail.school || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Academic Year:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.academic_year || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Status:</span>
+                <span>
+                  <span className={`sd-badge ${selectedClassCrudDetail.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                    {selectedClassCrudDetail.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div className="sd-modal-footer">
+              <button className="sd-btn-cancel" onClick={() => setShowClassCrudDetailModal(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* ── Student CRUD Detail Modal ── */}
+      {showStudentCrudDetailModal && selectedStudentCrudDetail && (
+        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowStudentCrudDetailModal(false); }}>
+          <div className="sd-modal" style={{ maxWidth:500 }}>
+            <div className="sd-modal-header">
+              <span className="sd-modal-title">Student Details</span>
+              <button className="sd-modal-close" onClick={() => setShowStudentCrudDetailModal(false)}><FiX/></button>
+            </div>
+            <div style={{ padding: '1.5rem', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem', alignItems: 'center' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Full Name:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.full_name || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Roll No:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.roll_no || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Grade Level:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.grade || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Section:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.section || 'N/A'}</span>
+
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Username:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.username || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Status:</span>
+                <span>
+                  <span className={`sd-badge ${selectedStudentCrudDetail.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                    {selectedStudentCrudDetail.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div className="sd-modal-footer">
+              <button className="sd-btn-cancel" onClick={() => setShowStudentCrudDetailModal(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Help & Support Modal ── */}
       {showHelpModal && (

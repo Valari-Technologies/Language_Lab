@@ -597,7 +597,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           const match = g.grade_name.match(/^Grade\s+(\d+)$/i);
           if (match) {
             const num = parseInt(match[1]);
-            return num >= 1 && num <= 10;
+            return num >= 3 && num <= 8;
           }
           return false;
         }).sort((a, b) => {
@@ -882,6 +882,33 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     } catch (err) {
       setErrorMsg('Failed to process request. Make sure form data is correct.');
       console.error(err);
+    }
+  };
+
+  const toggleActiveStatus = async (id, currentStatus, type) => {
+    setActionLoading(true);
+    setErrorMsg('');
+    try {
+      const url = `/api/cms/v1/${type}/${id}/`;
+      const res = await apiFetch(url, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: !currentStatus })
+      });
+      if (res.ok) {
+        showFeedback('Status updated successfully.', null);
+        if (type === 'schools') { await loadSchools(); await loadDashboardStats(); }
+        else if (type === 'school-admins') { await loadSchoolAdmins(); }
+        else if (type === 'teachers') { await loadTeachers(); }
+        else if (type === 'students') { await loadStudents(); }
+      } else {
+        const resData = await res.json().catch(() => ({}));
+        setErrorMsg(resData.detail || 'Failed to update status.');
+      }
+    } catch (e) {
+      console.error(e);
+      setErrorMsg('Network error while updating status.');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -1199,7 +1226,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             <FiGrid/><span>Dashboard</span>
           </button>
           <button className={`sd-nav-item${activeTab === 'schools' ? ' active' : ''}`} onClick={() => goTo('schools')}>
-            <FiGrid/><span>Manage Schools</span>
+            <FiBookOpen/><span>Manage Schools</span>
           </button>
           <button className={`sd-nav-item${activeTab === 'subscriptions' ? ' active' : ''}`} onClick={() => goTo('subscriptions')}>
             <FiCheckCircle/><span>Subscriptions</span>
@@ -1224,7 +1251,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               )}
             </div>
             <div className="sd-user-meta">
-              <div className="sd-user-name">{user?.username || 'Super Admin'}</div>
+              <div className="sd-user-name">{profileForm.full_name || user?.full_name || user?.username || 'Super Admin'}</div>
               <div className="sd-user-role">Super Admin</div>
             </div>
             <button className="sd-logout-icon-btn" onClick={onLogout} title="Logout">
@@ -1355,7 +1382,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               {/* Premium Dashboard Header Card with Background Image */}
               <div className="sd-dashboard-header-card" style={{ backgroundImage: `url(${dashboardHeaderBanner})`, position: 'relative' }}>
                 <div className="sd-header-text-section" style={{ maxWidth: '50%' }}>
-                   <h1>{getGreeting()}, { profileForm.username || user?.username || 'Super Admin' }!</h1>
+                   <h1>{getGreeting()}, {profileForm.full_name || profileForm.username || user?.full_name || user?.username || 'Super Admin'}!</h1>
                   <p>Monitor schools, track student engagement, analyze subscriptions, and make data-driven decisions from one unified dashboard.</p>
                 </div>
 
@@ -1407,17 +1434,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     chart: <MiniLineChart color="#8b5cf6" fillGradId="subGrad" points={[0, 0, 0, 0, 0]} />
                   },
                 ].map((s, i) => (
-                  <div className="sd-stat-card sd-stat-card--horizontal" key={i}>
-                    <div className="sd-stat-card-left">
-                      <div className="sd-stat-icon" style={{ background: s.bg, color: s.color, marginBottom: '0.15rem' }}>{s.icon}</div>
-                      <div className="sd-stat-label">{s.label}</div>
-                      <div className="sd-stat-value">{s.value}</div>
-                      <span className="sd-stat-trend" style={{ background: s.trendBg, color: s.trendColor, padding: '1px 6px', borderRadius: '12px', fontSize: '0.64rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', marginTop: '0.2rem', width: 'fit-content' }}>
-                        {s.trend}
-                      </span>
+                  <div className="sd-stat-card sd-stat-card--horizontal" key={i} style={{ alignItems: 'center' }}>
+                    <div className="sd-stat-card-left" style={{ gap: '0.45rem' }}>
+                      <div className="sd-stat-label" style={{ fontSize: '0.78rem', color: '#64748b' }}>{s.label}</div>
+                      <div className="sd-stat-value" style={{ fontSize: '2rem', marginTop: 0 }}>{s.value}</div>
                     </div>
                     <div className="sd-stat-card-right">
-                      {s.chart}
+                      <div className="sd-stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
                     </div>
                   </div>
                 ))}
@@ -1784,6 +1807,28 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                             }}
                                           >
                                             <FiEdit2 style={{ fontSize: '0.95rem' }} /> Edit
+                                          </button>
+                                          <button
+                                            type="button"
+                                            style={{
+                                              padding: '8px 12px',
+                                              textAlign: 'left',
+                                              background: 'none',
+                                              border: 'none',
+                                              fontSize: '0.85rem',
+                                              color: '#334155',
+                                              cursor: 'pointer',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '8px',
+                                              width: '100%'
+                                            }}
+                                            onClick={() => {
+                                              setActiveDropdown(null);
+                                              toggleActiveStatus(sid, isSchoolActive, 'schools');
+                                            }}
+                                          >
+                                            <FiLock style={{ fontSize: '0.95rem' }} /> {isSchoolActive ? 'Block' : 'Unblock'}
                                           </button>
                                           <div style={{ height: '1px', backgroundColor: '#e2e8f0', margin: '4px 0' }}></div>
                                           <button
@@ -2217,77 +2262,31 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             </>
           )}
 
-          {/* ══════════ REPORTS TAB (Publish contents list) ══════════ */}
+          {/* ══════════ REPORTS TAB ══════════ */}
           {activeTab === 'reports' && (
             <>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>Academic Performance &amp; Reports</h1>
+                <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' }}>Overall assessment scores, average scores, student evaluations, and workload reports.</p>
+              </div>
 
-
-              <div className="sd-card" style={{ padding: '1.25rem 1.5rem' }}>
-                <div className="sd-table-toolbar">
-                  <div className="sd-table-search">
-                    <FiSearch/>
-                    <input
-                      type="text"
-                      placeholder="Search releases..."
-                      value={searchQuery}
-                      onChange={e => { setSearchQuery(e.target.value); setPublishPage(1); }}
-                    />
-                  </div>
-                  <div className="sd-table-actions">
-                    <button className="sd-btn-primary" onClick={handleOpenAdd}>
-                      <FiPlus/> Add Release
-                    </button>
-                  </div>
-                </div>
-                <div className="sd-table-wrap">
-                  <table className="sd-table">
-                    <thead>
-                      <tr>
-                        <th>Release Name</th>
-                        <th>Grade</th>
-                        <th>Total Experiences</th>
-                        <th>Status</th>
-                        <th>Checksum</th>
-                        <th>Package</th>
-                        <th style={{ textAlign: 'right' }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginate(filterList(publishContents), publishPage).map((p, i) => (
-                        <tr key={p.publish_id || i}>
-                          <td style={{ fontWeight: 600, color: '#1e293b' }}>{p.release_name}</td>
-                          <td>{p.grade_name || p.grade}</td>
-                          <td>{p.total_experiences}</td>
-                          <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
-                             <span className={`sd-badge ${p.status === 'PUBLISHED' ? 'sd-badge-published' : 'sd-badge-draft'}`}>
-                               {p.status}
-                             </span>
-                           </td>
-                          <td style={{ color: '#6b7280', fontSize: '0.75rem' }}>{p.checksum || 'N/A'}</td>
-                          <td>
-                            {p.export_file ? (
-                              <a href={p.export_file} target="_blank" rel="noopener noreferrer" className="btn-link" style={{ color: '#6366f1', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
-                                <FiFileText/> Download
-                              </a>
-                            ) : (
-                              <span style={{ color: '#9ca3af' }}>No package</span>
-                            )}
-                          </td>
-                          <td>
-                            <div className="sd-action-cell">
-                              <button className="sd-icon-action edit" onClick={() => handleOpenEdit(p)} title="Edit"><FiEdit2/></button>
-                              <button className="sd-icon-action delete" onClick={() => openDeleteModal(p.publish_id || p.id, 'publish log')} title="Delete"><FiTrash2/></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                      {filterList(publishContents).length === 0 && (
-                        <tr><td colSpan="7" className="sd-empty-state">No release logs found.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                <Pagination total={filterList(publishContents).length} perPage={PER_PAGE} page={publishPage} onPage={setPublishPage}/>
+              <div className="sd-card" style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                padding: '5rem 2rem', 
+                textAlign: 'center',
+                background: '#ffffff',
+                borderRadius: '16px',
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+              }}>
+                <FiFileText style={{ fontSize: '3.5rem', color: '#94a3b8', marginBottom: '1.5rem' }} />
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b', marginBottom: '0.5rem' }}>No assessment data synced yet</h3>
+                <p style={{ fontSize: '0.88rem', color: '#64748b', maxWidth: '420px', margin: 0, lineHeight: 1.6 }}>
+                  Data will appear here once the Electron LMS runs its monthly sync sequence.
+                </p>
               </div>
             </>
           )}

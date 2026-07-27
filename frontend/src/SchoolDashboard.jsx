@@ -6,7 +6,7 @@ import {
   FiChevronDown, FiCalendar, FiBell, FiFilter,
   FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
   FiActivity, FiTrendingUp, FiAward, FiLock, FiChevronLeft, FiChevronRight, FiDownload,
-  FiEye, FiEyeOff, FiAlertTriangle, FiInfo, FiUpload, FiRefreshCw
+  FiEye, FiEyeOff, FiAlertTriangle, FiInfo, FiUpload, FiRefreshCw, FiMoreVertical
 } from 'react-icons/fi';
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
@@ -130,16 +130,12 @@ const Pagination = ({ total, perPage = 4, page, onPage }) => {
 };
 
 const defaultGradesList = [
-  { id: 1, grade_name: 'Grade 1' },
-  { id: 2, grade_name: 'Grade 2' },
   { id: 3, grade_name: 'Grade 3' },
   { id: 4, grade_name: 'Grade 4' },
   { id: 5, grade_name: 'Grade 5' },
   { id: 6, grade_name: 'Grade 6' },
   { id: 7, grade_name: 'Grade 7' },
   { id: 8, grade_name: 'Grade 8' },
-  { id: 9, grade_name: 'Grade 9' },
-  { id: 10, grade_name: 'Grade 10' }
 ];
 
 /* ═══════════════════════════════════════════════════════════
@@ -262,9 +258,18 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [showClassDetailModal,    setShowClassDetailModal]    = useState(false);
   const [showStudentDetailModal,  setShowStudentDetailModal]  = useState(false);
 
+  const [selectedTeacherDetail, setSelectedTeacherDetail] = useState(null);
+  const [showTeacherDetailModal, setShowTeacherDetailModal] = useState(false);
+  const [selectedStudentCrudDetail, setSelectedStudentCrudDetail] = useState(null);
+  const [showStudentCrudDetailModal, setShowStudentCrudDetailModal] = useState(false);
+  const [selectedClassCrudDetail, setSelectedClassCrudDetail] = useState(null);
+  const [showClassCrudDetailModal, setShowClassCrudDetailModal] = useState(false);
+
+  const [activeDropdown, setActiveDropdown] = useState(null); // { id, type }
+
   /* ── Forms ── */
   const [teacherForm, setTeacherForm] = useState({
-    email:'', full_name:'', is_active:true, school:'', qualification:'', assigned_class_ids: []
+    username: '', password: '', email:'', full_name:'', is_active:true, school:'', qualification:'', assigned_class_ids: []
   });
   const [studentForm, setStudentForm] = useState({
     username:'', password:'', email:'', full_name:'', roll_no:'', grade:'', section:'', is_active:true
@@ -323,7 +328,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           const match = g.grade_name.match(/^Grade\s+(\d+)$/i);
           if (match) {
             const num = parseInt(match[1]);
-            return num >= 1 && num <= 10;
+            return num >= 3 && num <= 8;
           }
           return false;
         }).sort((a, b) => {
@@ -409,9 +414,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     return () => clearInterval(timer);
   }, []);
 
-  /* ── Dismiss notification dropdown on outside click ── */
+  /* ── Dismiss notification and action dropdown on outside click ── */
   useEffect(() => {
-    const handler = () => setShowNotifDropdown(false);
+    const handler = () => {
+      setShowNotifDropdown(false);
+      setActiveDropdown(null);
+    };
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
   }, []);
@@ -495,12 +503,15 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     const defaultSchool = getSelectedSchoolId();
     if (tab === 'teachers') {
       setTeacherForm(entity ? {
-        email: entity.email || '', full_name: entity.full_name || '',
+        username: entity.username || '',
+        password: '',
+        email: entity.email || '',
+        full_name: entity.full_name || '',
         is_active: entity.is_active !== undefined ? entity.is_active : true,
         school: entity.school || defaultSchool,
         qualification: entity.qualification || '',
         assigned_class_ids: entity.assigned_class_ids || []
-      } : { email:'', full_name:'', is_active:true,
+      } : { username: '', password: '', email:'', full_name:'', is_active:true,
             school: defaultSchool, qualification:'', assigned_class_ids: [] });
     } else if (tab === 'students') {
       setStudentForm(entity ? {
@@ -547,9 +558,18 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     try {
       if (activeSubTab === 'teachers') {
         body = { ...teacherForm, school: parseInt(teacherForm.school) };
+        if (modalType === 'edit' && !body.password) {
+          delete body.password;
+        }
       } else if (activeSubTab === 'students') {
         body = { ...studentForm };
-        if (modalType === 'edit' && !body.password) delete body.password;
+        if (modalType === 'add') {
+          if (!body.username) body.username = body.roll_no;
+          if (!body.password) body.password = body.roll_no;
+          if (!body.email) body.email = `${body.roll_no}@school.com`;
+        } else if (modalType === 'edit' && !body.password) {
+          delete body.password;
+        }
       } else if (activeSubTab === 'classes') {
         body = { ...classForm, school: parseInt(classForm.school), grade: parseInt(classForm.grade) };
       }
@@ -762,6 +782,33 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         window.URL.revokeObjectURL(url);
       } else { triggerAlert('Failed to export CSV.', 'Export Failed', 'error'); }
     } catch (e) { console.error(e); }
+  };
+
+  const toggleActiveStatus = async (id, currentStatus, type) => {
+    setActionLoading(true);
+    setErrorMsg('');
+    try {
+      const url = `/api/cms/v1/${type}/${id}/`;
+      const res = await apiFetch(url, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: !currentStatus })
+      });
+      if (res.ok) {
+        showFeedback('Status updated successfully.', null);
+        if (type === 'teachers') { await loadTeachers(); }
+        else if (type === 'students') { await loadStudents(); }
+        else if (type === 'classes') { await loadClasses(); }
+        await loadDashboardData();
+      } else {
+        const resData = await res.json().catch(() => ({}));
+        setErrorMsg(resData.detail || 'Failed to update status.');
+      }
+    } catch (e) {
+      console.error(e);
+      setErrorMsg('Network error while updating status.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   /* ── Announcement ── */
@@ -1072,7 +1119,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               )}
             </div>
             <div className="sd-user-meta">
-              <div className="sd-user-name">{profileForm.full_name || user?.username || 'School Admin'}</div>
+              <div className="sd-user-name">{profileForm.full_name || user?.full_name || user?.username || 'School Admin'}</div>
               <div className="sd-user-role">School Admin</div>
             </div>
             <button className="sd-logout-icon-btn" onClick={onLogout} title="Logout">
@@ -1097,8 +1144,9 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                activeSubTab === 'classes' ? 'Class Management' :
                activeSubTab === 'experiences' ? 'Experience Library' :
                activeSubTab === 'reports' ? 'Reports & Analytics' :
-               activeSubTab === 'profile' ? 'Profile Settings' : 'School Admin Portal'}
-            </h2>
+               activeSubTab === 'profile' ? 'Profile Settings' : 'Dashboard Overview'
+               }
+           </h2>
           </div>
           <div className="sd-topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}>
             <div className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.5rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600 }}>
@@ -1157,7 +1205,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               {/* Premium Dashboard Header Card with Background Image */}
               <div className="sd-dashboard-header-card" style={{ backgroundImage: `url(${teacherHeaderBanner})`, position: 'relative' }}>
                 <div className="sd-header-text-section" style={{ maxWidth: '50%' }}>
-                  <h1>{getGreeting()}, { profileForm.username || user?.username || 'School Admin' }!</h1>
+                  <h1>{getGreeting()}, {profileForm.full_name || profileForm.username || user?.full_name || user?.username || 'School Admin'}!</h1>
                   <p>Manage teachers, track student progress, monitor classes, and coordinate academic resources.</p>
                 </div>
 
@@ -1371,7 +1419,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a' }}>Bulk Excel Upload</h4>
                     <p style={{ margin: '0 0 1rem 0', fontSize: '0.84rem', color: '#64748b' }}>
                       Upload an <code>.xlsx</code> or <code>.xls</code> spreadsheet.<br/>
-                      <strong style={{ color: '#ef4444' }}>Mandatory fields:</strong> <code>name</code>, <code>email</code>.<br/>
+                      <strong style={{ color: '#ef4444' }}>Mandatory fields:</strong> <code>name</code>, <code>email</code>, <code>password</code>.<br/>
                       Optional fields: <code>qualification</code>, <code>is_active</code>.
                     </p>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', alignItems: 'center' }}>
@@ -1429,8 +1477,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <colgroup>
                       <col style={{ width: '4%' }} />
                       <col style={{ width: '28%' }} />
-                      <col style={{ width: '16%' }} />
                       <col style={{ width: '26%' }} />
+                      <col style={{ width: '16%' }} />
                       <col style={{ width: '12%' }} />
                       <col style={{ width: '14%' }} />
                     </colgroup>
@@ -1444,8 +1492,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           />
                         </th>
                         <th>Name</th>
-                        <th>Qualification</th>
                         <th>Assigned Classes</th>
+                        <th>Qualification</th>
                         <th>Status</th>
                         <th style={{ textAlign:'center' }}>Actions</th>
                       </tr>
@@ -1466,21 +1514,154 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               <span className="sd-name-cell-primary">{t.full_name || t.username || 'N/A'}</span>
                               <span className="sd-name-cell-email">{t.email}</span>
                             </td>
-                            <td>{t.qualification || 'N/A'}</td>
                             <td>
                               <span style={{ fontSize:'0.82rem', color:'#374151' }}>
                                 {t.assigned_classes || <span style={{ color:'#9ca3af', fontStyle:'italic' }}>Unassigned</span>}
                               </span>
                             </td>
+                            <td>{t.qualification || 'N/A'}</td>
                             <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
-                              <span className={`sd-badge ${t.is_active ? 'sd-badge-active' : 'sd-badge-leave'}`}>
-                                {t.is_active ? 'Active' : 'On Leave'}
+                              <span className={`sd-badge ${t.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                                {t.is_active ? 'Active' : 'Inactive'}
                               </span>
                             </td>
-                            <td>
-                              <div className="sd-action-cell" style={{ justifyContent:'center' }}>
-                                <button className="sd-icon-action edit" onClick={() => handleOpenEdit(t)} title="Edit"><FiEdit2/></button>
-                                <button className="sd-icon-action delete" onClick={() => handleDelete(tid)} title="Delete"><FiTrash2/></button>
+                            <td style={{ overflow: 'visible' }}>
+                              <div className="sd-action-cell" style={{ justifyContent: 'center', overflow: 'visible' }}>
+                                <div className="sd-action-dropdown-container" style={{ position: 'relative', display: 'inline-block' }}>
+                                  <button
+                                    type="button"
+                                    className="sd-action-dots-btn"
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                      padding: '4px 8px',
+                                      fontSize: '1.2rem',
+                                      color: '#64748b',
+                                      borderRadius: '50%',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      transition: 'background-color 0.15s'
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveDropdown(activeDropdown?.id === tid && activeDropdown?.type === 'teacher' ? null : { id: tid, type: 'teacher' });
+                                    }}
+                                  >
+                                    <FiMoreVertical />
+                                  </button>
+                                  {activeDropdown?.id === tid && activeDropdown?.type === 'teacher' && (
+                                    <div
+                                      style={{
+                                        position: 'absolute',
+                                        right: 0,
+                                        top: '100%',
+                                        backgroundColor: '#ffffff',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '8px',
+                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+                                        zIndex: 100,
+                                        minWidth: '120px',
+                                        padding: '4px 0',
+                                        display: 'flex',
+                                        flexDirection: 'column'
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <button
+                                        type="button"
+                                        style={{
+                                          padding: '8px 12px',
+                                          textAlign: 'left',
+                                          background: 'none',
+                                          border: 'none',
+                                          fontSize: '0.85rem',
+                                          color: '#334155',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '8px',
+                                          width: '100%'
+                                        }}
+                                        onClick={() => {
+                                          setActiveDropdown(null);
+                                          setSelectedTeacherDetail(t);
+                                          setShowTeacherDetailModal(true);
+                                        }}
+                                      >
+                                        <FiEye style={{ fontSize: '0.95rem' }} /> View
+                                      </button>
+                                      <button
+                                        type="button"
+                                        style={{
+                                          padding: '8px 12px',
+                                          textAlign: 'left',
+                                          background: 'none',
+                                          border: 'none',
+                                          fontSize: '0.85rem',
+                                          color: '#334155',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '8px',
+                                          width: '100%'
+                                        }}
+                                        onClick={() => {
+                                          setActiveDropdown(null);
+                                          handleOpenEdit(t);
+                                        }}
+                                      >
+                                        <FiEdit2 style={{ fontSize: '0.95rem' }} /> Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        style={{
+                                          padding: '8px 12px',
+                                          textAlign: 'left',
+                                          background: 'none',
+                                          border: 'none',
+                                          fontSize: '0.85rem',
+                                          color: '#334155',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '8px',
+                                          width: '100%'
+                                        }}
+                                        onClick={() => {
+                                          setActiveDropdown(null);
+                                          toggleActiveStatus(tid, t.is_active, 'teachers');
+                                        }}
+                                      >
+                                        <FiLock style={{ fontSize: '0.95rem' }} /> {t.is_active ? 'Block' : 'Unblock'}
+                                      </button>
+                                      <div style={{ height: '1px', backgroundColor: '#e2e8f0', margin: '4px 0' }}></div>
+                                      <button
+                                        type="button"
+                                        style={{
+                                          padding: '8px 12px',
+                                          textAlign: 'left',
+                                          background: 'none',
+                                          border: 'none',
+                                          fontSize: '0.85rem',
+                                          color: '#ef4444',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '8px',
+                                          width: '100%'
+                                        }}
+                                        onClick={() => {
+                                          setActiveDropdown(null);
+                                          handleDelete(tid);
+                                        }}
+                                      >
+                                        <FiTrash2 style={{ fontSize: '0.95rem' }} /> Delete
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </td>
                           </tr>
@@ -1647,14 +1828,143 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                 {s.is_active ? 'Active' : 'Inactive'}
                               </span>
                             </td>
-                            <td>
-                              <div className="sd-action-cell" style={{ justifyContent:'center' }}>
-                                <button className="sd-icon-action edit" onClick={() => handleOpenEdit(s)} title="Edit">
-                                  <FiEdit2/>
-                                </button>
-                                <button className="sd-icon-action delete" onClick={() => handleOpenDelete(sid, 'students', s.full_name || s.username)} title="Delete">
-                                  <FiTrash2/>
-                                </button>
+                            <td style={{ overflow: 'visible' }}>
+                              <div className="sd-action-cell" style={{ justifyContent: 'center', overflow: 'visible' }}>
+                                <div className="sd-action-dropdown-container" style={{ position: 'relative', display: 'inline-block' }}>
+                                  <button
+                                    type="button"
+                                    className="sd-action-dots-btn"
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                      padding: '4px 8px',
+                                      fontSize: '1.2rem',
+                                      color: '#64748b',
+                                      borderRadius: '50%',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      transition: 'background-color 0.15s'
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveDropdown(activeDropdown?.id === sid && activeDropdown?.type === 'student' ? null : { id: sid, type: 'student' });
+                                    }}
+                                  >
+                                    <FiMoreVertical />
+                                  </button>
+                                  {activeDropdown?.id === sid && activeDropdown?.type === 'student' && (
+                                    <div
+                                      style={{
+                                        position: 'absolute',
+                                        right: 0,
+                                        top: '100%',
+                                        backgroundColor: '#ffffff',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '8px',
+                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+                                        zIndex: 100,
+                                        minWidth: '120px',
+                                        padding: '4px 0',
+                                        display: 'flex',
+                                        flexDirection: 'column'
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <button
+                                        type="button"
+                                        style={{
+                                          padding: '8px 12px',
+                                          textAlign: 'left',
+                                          background: 'none',
+                                          border: 'none',
+                                          fontSize: '0.85rem',
+                                          color: '#334155',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '8px',
+                                          width: '100%'
+                                        }}
+                                        onClick={() => {
+                                          setActiveDropdown(null);
+                                          setSelectedStudentCrudDetail(s);
+                                          setShowStudentCrudDetailModal(true);
+                                        }}
+                                      >
+                                        <FiEye style={{ fontSize: '0.95rem' }} /> View
+                                      </button>
+                                      <button
+                                        type="button"
+                                        style={{
+                                          padding: '8px 12px',
+                                          textAlign: 'left',
+                                          background: 'none',
+                                          border: 'none',
+                                          fontSize: '0.85rem',
+                                          color: '#334155',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '8px',
+                                          width: '100%'
+                                        }}
+                                        onClick={() => {
+                                          setActiveDropdown(null);
+                                          handleOpenEdit(s);
+                                        }}
+                                      >
+                                        <FiEdit2 style={{ fontSize: '0.95rem' }} /> Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        style={{
+                                          padding: '8px 12px',
+                                          textAlign: 'left',
+                                          background: 'none',
+                                          border: 'none',
+                                          fontSize: '0.85rem',
+                                          color: '#334155',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '8px',
+                                          width: '100%'
+                                        }}
+                                        onClick={() => {
+                                          setActiveDropdown(null);
+                                          toggleActiveStatus(sid, s.is_active, 'students');
+                                        }}
+                                      >
+                                        <FiLock style={{ fontSize: '0.95rem' }} /> {s.is_active ? 'Block' : 'Unblock'}
+                                      </button>
+                                      <div style={{ height: '1px', backgroundColor: '#e2e8f0', margin: '4px 0' }}></div>
+                                      <button
+                                        type="button"
+                                        style={{
+                                          padding: '8px 12px',
+                                          textAlign: 'left',
+                                          background: 'none',
+                                          border: 'none',
+                                          fontSize: '0.85rem',
+                                          color: '#ef4444',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '8px',
+                                          width: '100%'
+                                        }}
+                                        onClick={() => {
+                                          setActiveDropdown(null);
+                                          handleDelete(sid);
+                                        }}
+                                      >
+                                        <FiTrash2 style={{ fontSize: '0.95rem' }} /> Delete
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </td>
                           </tr>
@@ -1706,9 +2016,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <col style={{ width: '4%' }} />
                       <col style={{ width: '26%' }} />
                       <col style={{ width: '16%' }} />
-                      <col style={{ width: '26%' }} />
-                      <col style={{ width: '14%' }} />
-                      <col style={{ width: '14%' }} />
+                      <col style={{ width: '24%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '8%' }} />
                     </colgroup>
                     <thead>
                       <tr>
@@ -1723,6 +2034,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <th>Grade Level</th>
                         <th>Assigned Teachers</th>
                         <th>Academic Year</th>
+                        <th>Status</th>
                         <th style={{ textAlign:'center' }}>Actions</th>
                       </tr>
                     </thead>
@@ -1745,10 +2057,148 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             <td>{c.grade_name || 'N/A'}</td>
                             <td>{c.teacher_name || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Unassigned</span>}</td>
                             <td>{c.academic_year}</td>
-                            <td>
-                              <div className="sd-action-cell" style={{ justifyContent:'center' }}>
-                                <button className="sd-icon-action edit" onClick={() => handleOpenEdit(c)} title="Edit"><FiEdit2/></button>
-                                <button className="sd-icon-action delete" onClick={() => handleDelete(cid)} title="Delete"><FiTrash2/></button>
+                            <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
+                              <span className={`sd-badge ${c.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                                {c.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td style={{ overflow: 'visible' }}>
+                              <div className="sd-action-cell" style={{ justifyContent: 'center', overflow: 'visible' }}>
+                                <div className="sd-action-dropdown-container" style={{ position: 'relative', display: 'inline-block' }}>
+                                  <button
+                                    type="button"
+                                    className="sd-action-dots-btn"
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                      padding: '4px 8px',
+                                      fontSize: '1.2rem',
+                                      color: '#64748b',
+                                      borderRadius: '50%',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      transition: 'background-color 0.15s'
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveDropdown(activeDropdown?.id === cid && activeDropdown?.type === 'class' ? null : { id: cid, type: 'class' });
+                                    }}
+                                  >
+                                    <FiMoreVertical />
+                                  </button>
+                                  {activeDropdown?.id === cid && activeDropdown?.type === 'class' && (
+                                    <div
+                                      style={{
+                                        position: 'absolute',
+                                        right: 0,
+                                        top: '100%',
+                                        backgroundColor: '#ffffff',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '8px',
+                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+                                        zIndex: 100,
+                                        minWidth: '120px',
+                                        padding: '4px 0',
+                                        display: 'flex',
+                                        flexDirection: 'column'
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <button
+                                        type="button"
+                                        style={{
+                                          padding: '8px 12px',
+                                          textAlign: 'left',
+                                          background: 'none',
+                                          border: 'none',
+                                          fontSize: '0.85rem',
+                                          color: '#334155',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '8px',
+                                          width: '100%'
+                                        }}
+                                        onClick={() => {
+                                          setActiveDropdown(null);
+                                          setSelectedClassCrudDetail(c);
+                                          setShowClassCrudDetailModal(true);
+                                        }}
+                                      >
+                                        <FiEye style={{ fontSize: '0.95rem' }} /> View
+                                      </button>
+                                      <button
+                                        type="button"
+                                        style={{
+                                          padding: '8px 12px',
+                                          textAlign: 'left',
+                                          background: 'none',
+                                          border: 'none',
+                                          fontSize: '0.85rem',
+                                          color: '#334155',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '8px',
+                                          width: '100%'
+                                        }}
+                                        onClick={() => {
+                                          setActiveDropdown(null);
+                                          handleOpenEdit(c);
+                                        }}
+                                      >
+                                        <FiEdit2 style={{ fontSize: '0.95rem' }} /> Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        style={{
+                                          padding: '8px 12px',
+                                          textAlign: 'left',
+                                          background: 'none',
+                                          border: 'none',
+                                          fontSize: '0.85rem',
+                                          color: '#334155',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '8px',
+                                          width: '100%'
+                                        }}
+                                        onClick={() => {
+                                          setActiveDropdown(null);
+                                          toggleActiveStatus(cid, c.is_active, 'classes');
+                                        }}
+                                      >
+                                        <FiLock style={{ fontSize: '0.95rem' }} /> {c.is_active ? 'Block' : 'Unblock'}
+                                      </button>
+                                      <div style={{ height: '1px', backgroundColor: '#e2e8f0', margin: '4px 0' }}></div>
+                                      <button
+                                        type="button"
+                                        style={{
+                                          padding: '8px 12px',
+                                          textAlign: 'left',
+                                          background: 'none',
+                                          border: 'none',
+                                          fontSize: '0.85rem',
+                                          color: '#ef4444',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '8px',
+                                          width: '100%'
+                                        }}
+                                        onClick={() => {
+                                          setActiveDropdown(null);
+                                          handleDelete(cid);
+                                        }}
+                                      >
+                                        <FiTrash2 style={{ fontSize: '0.95rem' }} /> Delete
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </td>
                           </tr>
@@ -2223,9 +2673,19 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               {/* Teacher fields */}
               {activeSubTab === 'teachers' && (<>
                 <div className="sd-form-group">
-                  <label className="sd-form-label">Full Name</label>
+                  <label className="sd-form-label">Full Name *</label>
                   <input className="sd-form-input" type="text" value={teacherForm.full_name}
-                    onChange={e => setTeacherForm({...teacherForm, full_name:e.target.value})} required/>
+                    onChange={e => setTeacherForm({...teacherForm, full_name:e.target.value})} required placeholder="e.g. John Doe"/>
+                </div>
+                <div className="sd-form-group">
+                  <label className="sd-form-label">Username *</label>
+                  <input className="sd-form-input" type="text" value={teacherForm.username}
+                    onChange={e => setTeacherForm({...teacherForm, username:e.target.value})} required placeholder="e.g. johndoe"/>
+                </div>
+                <div className="sd-form-group">
+                  <label className="sd-form-label">Password {modalType === 'add' ? '*' : '(Leave blank to keep unchanged)'}</label>
+                  <input className="sd-form-input" type="password" value={teacherForm.password}
+                    onChange={e => setTeacherForm({...teacherForm, password:e.target.value})} required={modalType === 'add'} placeholder="Minimum 6 characters"/>
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Email</label>
@@ -2283,8 +2743,17 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div className="sd-form-row">
                   <div className="sd-form-group">
                     <label className="sd-form-label">Grade *</label>
-                    <input className="sd-form-input" type="text" value={studentForm.grade}
-                      onChange={e => setStudentForm({...studentForm, grade:e.target.value})} required placeholder="e.g. Grade 10"/>
+                    <select
+                      className="sd-form-input"
+                      value={studentForm.grade}
+                      onChange={e => setStudentForm({...studentForm, grade:e.target.value})}
+                      required
+                    >
+                      <option value="">-- Select Grade ──</option>
+                      {[3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                        <option key={num} value={num}>Grade {num}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="sd-form-group">
                     <label className="sd-form-label">Section *</label>
@@ -2589,6 +3058,120 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             </div>
             <div className="sd-modal-footer">
               <button className="sd-btn-cancel" onClick={() => setShowStudentDetailModal(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Teacher Detail Modal ── */}
+      {showTeacherDetailModal && selectedTeacherDetail && (
+        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowTeacherDetailModal(false); }}>
+          <div className="sd-modal" style={{ maxWidth:500 }}>
+            <div className="sd-modal-header">
+              <span className="sd-modal-title">Teacher Profile Details</span>
+              <button className="sd-modal-close" onClick={() => setShowTeacherDetailModal(false)}><FiX/></button>
+            </div>
+            <div style={{ padding: '1rem', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Full Name:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedTeacherDetail.full_name || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Email Address:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedTeacherDetail.email || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Qualification:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedTeacherDetail.qualification || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Assigned Classes:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedTeacherDetail.assigned_classes || 'Unassigned'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Status:</span>
+                <span>
+                  <span className={`sd-badge ${selectedTeacherDetail.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                    {selectedTeacherDetail.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div className="sd-modal-footer">
+              <button className="sd-btn-cancel" onClick={() => setShowTeacherDetailModal(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Student CRUD Detail Modal ── */}
+      {showStudentCrudDetailModal && selectedStudentCrudDetail && (
+        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowStudentCrudDetailModal(false); }}>
+          <div className="sd-modal" style={{ maxWidth:500 }}>
+            <div className="sd-modal-header">
+              <span className="sd-modal-title">Student Profile Details</span>
+              <button className="sd-modal-close" onClick={() => setShowStudentCrudDetailModal(false)}><FiX/></button>
+            </div>
+            <div style={{ padding: '1rem', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Full Name:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.full_name || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Roll Number:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.roll_no || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Grade Level:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.grade || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Section:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.section || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Email Address:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.email || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Status:</span>
+                <span>
+                  <span className={`sd-badge ${selectedStudentCrudDetail.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                    {selectedStudentCrudDetail.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div className="sd-modal-footer">
+              <button className="sd-btn-cancel" onClick={() => setShowStudentCrudDetailModal(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Class CRUD Detail Modal ── */}
+      {showClassCrudDetailModal && selectedClassCrudDetail && (
+        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowClassCrudDetailModal(false); }}>
+          <div className="sd-modal" style={{ maxWidth:500 }}>
+            <div className="sd-modal-header">
+              <span className="sd-modal-title">Class Details</span>
+              <button className="sd-modal-close" onClick={() => setShowClassCrudDetailModal(false)}><FiX/></button>
+            </div>
+            <div style={{ padding: '1rem', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Class Name:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.class_name || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Grade Level:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.grade_name || `Grade ID: ${selectedClassCrudDetail.grade}`}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Assigned Teachers:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.teacher_name || 'Unassigned'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Academic Year:</span>
+                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.academic_year || 'N/A'}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Status:</span>
+                <span>
+                  <span className={`sd-badge ${selectedClassCrudDetail.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                    {selectedClassCrudDetail.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div className="sd-modal-footer">
+              <button className="sd-btn-cancel" onClick={() => setShowClassCrudDetailModal(false)}>Close</button>
             </div>
           </div>
         </div>
