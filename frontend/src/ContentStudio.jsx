@@ -9,11 +9,13 @@ import {
   FiAlertTriangle, FiFolder, FiImage, FiSend, FiPlusCircle,
   FiArrowLeft, FiSmartphone, FiTablet, FiInfo, FiUpload,
   FiPlay, FiCheck, FiFolderPlus, FiShare2, FiHelpCircle as FiQuestion,
-  FiUser, FiClock, FiMoreVertical, FiVolume2, FiMic, FiCopy, FiColumns
+  FiUser, FiClock, FiMoreVertical, FiVolume2, FiMic, FiCopy, FiColumns,
+  FiMove, FiEdit, FiGitCommit, FiList, FiLayers, FiType, FiLock, FiRefreshCw
 } from 'react-icons/fi';
 import './Dashboard.css';
 import contentCreatorHeaderBanner from './assets/3.jpeg';
 import logoIcon from './assets/icon.png';
+import ReportsAnalytics from './ReportsAnalytics';
 
 const incrementVersion = (versionStr) => {
   if (!versionStr) return "1.0.0";
@@ -71,6 +73,13 @@ function ContentStudio({ user, onLogout }) {
   const [publishStatus, setPublishStatus] = useState(null);
   const [publishHistory, setPublishHistory] = useState([]);
   const [validationReport, setValidationReport] = useState(null);
+
+  // Experience Assignment state
+  const [assignSchools, setAssignSchools] = useState([]);
+  const [assignGrades, setAssignGrades] = useState([]);
+  const [assignHistory, setAssignHistory] = useState([]);
+  const [targetSchoolId, setTargetSchoolId] = useState('');
+  const [targetGradeId, setTargetGradeId] = useState('');
 
   // Filter states for Experience Library
   const [filterGrade, setFilterGrade] = useState('');
@@ -199,6 +208,47 @@ function ContentStudio({ user, onLogout }) {
     loadGrades();
   }, []);
 
+  /* ── Clock ticker ── */
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  /* ── Sync profileForm state with user prop updates ── */
+  useEffect(() => {
+    if (user) {
+      setProfileForm({
+        username: user.username || 'content_creator',
+        email: user.email || '',
+        full_name: user.full_name || '',
+        phone_no: user.phone_no || ''
+      });
+      setCurrentUserState(user);
+    }
+  }, [user]);
+
+  /* ── Dismiss notification dropdown on outside click ── */
+  useEffect(() => {
+    const handler = () => setShowNotifDropdown(false);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, []);
+
+  const formatDateTime = (date) => {
+    return date.toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true
+    });
+  };
+
+  const getGreeting = () => {
+    const hrs = new Date().getHours();
+    if (hrs >= 5  && hrs < 12) return 'Good morning';
+    if (hrs >= 12 && hrs < 17) return 'Good afternoon';
+    if (hrs >= 17 && hrs < 22) return 'Good evening';
+    return 'Good night';
+  };
+
   useEffect(() => {
     loadExperiencesData();
   }, [filterGrade, filterSubject, filterDifficulty, filterStatus, filterTag]);
@@ -265,12 +315,42 @@ function ContentStudio({ user, onLogout }) {
       }
       const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
       try { localStorage.setItem('user', JSON.stringify(updatedUser)); } catch { }
+      setCurrentUserState(updatedUser);
       showFeedback('Profile updated successfully');
     } catch (err) {
       console.error('Profile update error:', err);
       showFeedback('Failed to update profile.', 'error');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('avatar', file);
+    setAvatarUploading(true);
+    try {
+      const res = await apiFetch('/api/users/profile/avatar/', {
+        method: 'POST',
+        body: formData
+      });
+      let resData = {};
+      try { resData = await res.json(); } catch { resData = {}; }
+      if (res.ok) {
+        const updatedUser = { ...currentUserState, profile_picture: resData.profile_picture };
+        setCurrentUserState(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        showFeedback('Profile picture updated successfully!');
+      } else {
+        showFeedback(resData.error || 'Failed to upload profile picture.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showFeedback('Upload error: ' + err.message, 'error');
+    } finally {
+      setAvatarUploading(false);
     }
   };
 
@@ -346,6 +426,14 @@ function ContentStudio({ user, onLogout }) {
 
   const [previewScreenNum, setPreviewScreenNum] = useState(3);
   const [selectedAnswer, setSelectedAnswer] = useState('B');
+  const [flippedCards, setFlippedCards] = useState({});
+  const [blankAnswers, setBlankAnswers] = useState({});
+  const [dragDropSelections, setDragDropSelections] = useState({});
+  const [currentTime, setCurrentTime]             = useState(new Date());
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [showHelpModal,     setShowHelpModal]     = useState(false);
+  const [currentUserState,  setCurrentUserState]  = useState(user);
+  const [avatarUploading,   setAvatarUploading]   = useState(false);
 
   const loadExperienceDetail = async (expObjOrId, changeViewToBuilder = false) => {
     const expId = typeof expObjOrId === 'object' ? expObjOrId.id : expObjOrId;
@@ -590,48 +678,8 @@ function ContentStudio({ user, onLogout }) {
         setSelectedActivity(data);
         showFeedback('Activity saved successfully');
         loadExperienceDetail(selectedExperience.id);
-
-        const activeScreens = data.screens || [];
-        if (activeScreens.length === 0) {
-          try {
-            const screenRes = await apiFetch('/api/v1/content/screens/', {
-              method: 'POST',
-              body: JSON.stringify({
-                activity: data.id,
-                title: 'Screen 1',
-                screen_type: 'INFORMATION',
-                content: {
-                  text: 'Welcome to this screen!',
-                  title: 'Screen 1',
-                  tag: 'H1',
-                  font: 'Poppins',
-                  weight: 'Bold',
-                  size: 48,
-                  color: '#1F2937',
-                  alignment: 'Center',
-                  steps: [
-                    { step: 1, name: 'Ben', text: 'Hi! What would you like to order?' },
-                    { step: 2, name: 'Anna', text: "I'd like a cup of coffee, please." }
-                  ]
-                },
-                estimated_duration: 60
-              })
-            });
-            if (screenRes.ok) {
-              const newScreen = await screenRes.json();
-              loadScreenDetail(newScreen);
-            } else {
-              setScreens([]);
-              setView('activity-builder');
-            }
-          } catch (e) {
-            console.error("Auto screen creation failed", e);
-            setScreens([]);
-            setView('activity-builder');
-          }
-        } else {
-          loadScreenDetail(activeScreens[0]);
-        }
+        setScreens(data.screens || []);
+        setView('activity-builder');
       } else {
         const errData = await res.json().catch(() => ({}));
         showFeedback(extractErrorMessage(errData, 'Failed to save activity'), 'error');
@@ -835,6 +883,58 @@ function ContentStudio({ user, onLogout }) {
     } else if (type.toLowerCase() === 'voice_recorder' || type.toLowerCase() === 'voice recorder') {
       newBlock.type = 'voice_recorder';
       newBlock.content = { prompt: 'Please record your response.' };
+    } else if (type.toLowerCase() === 'drag_drop' || type.toLowerCase() === 'drag and drop' || type.toLowerCase() === 'drag_and_drop') {
+      newBlock.type = 'drag_drop';
+      newBlock.content = {
+        question: 'Drag the correct words to their destinations.',
+        pairs: [
+          { id: 'pair-1', source: 'Apple', target: 'Fruit' },
+          { id: 'pair-2', source: 'Carrot', target: 'Vegetable' }
+        ]
+      };
+    } else if (type.toLowerCase() === 'fill_blank' || type.toLowerCase() === 'fill in blanks' || type.toLowerCase() === 'fill_in_blanks') {
+      newBlock.type = 'fill_blank';
+      newBlock.content = {
+        question: 'Complete the sentence by filling in the blanks.',
+        text: 'The quick brown [fox] jumps over the lazy [dog].'
+      };
+    } else if (type.toLowerCase() === 'match_items' || type.toLowerCase() === 'match items') {
+      newBlock.type = 'match_items';
+      newBlock.content = {
+        question: 'Match the items in Column A with Column B.',
+        pairs: [
+          { id: 'match-1', left: 'Dog', right: 'Bark' },
+          { id: 'match-2', left: 'Cat', right: 'Meow' }
+        ]
+      };
+    } else if (type.toLowerCase() === 'sequence' || type.toLowerCase() === 'sequence / order') {
+      newBlock.type = 'sequence';
+      newBlock.content = {
+        question: 'Arrange the items in the correct order.',
+        items: ['Step 1: Get out of bed', 'Step 2: Brush your teeth', 'Step 3: Eat breakfast']
+      };
+    } else if (type.toLowerCase() === 'flashcard') {
+      newBlock.type = 'flashcard';
+      newBlock.content = {
+        cards: [
+          { id: 'card-1', front: 'Hello', back: 'Greeting in English' },
+          { id: 'card-2', front: 'Bonjour', back: 'Greeting in French' }
+        ]
+      };
+    } else if (type.toLowerCase() === 'sentence_builder' || type.toLowerCase() === 'sentence builder') {
+      newBlock.type = 'sentence_builder';
+      newBlock.content = {
+        question: 'Reorder the words to make a correct sentence.',
+        sentence: 'Learning English is fun and easy',
+        words: ['Learning', 'English', 'is', 'fun', 'and', 'easy']
+      };
+    } else if (type.toLowerCase() === 'word_search' || type.toLowerCase() === 'word search / crossword') {
+      newBlock.type = 'word_search';
+      newBlock.content = {
+        question: 'Find the hidden words in the grid.',
+        words: ['DASHBOARD', 'STUDIO', 'TEACHER'],
+        gridSize: 8
+      };
     }
 
     const updatedElements = [...(screenForm.elements || []), newBlock];
@@ -843,7 +943,7 @@ function ContentStudio({ user, onLogout }) {
       elements: updatedElements
     }));
     setSelectedBlockId(newBlock.id);
-    showFeedback(`Added ${type} block`);
+    showFeedback(`Added ${type.replace('_', ' ')} block`);
   };
 
   const handleDropBlock = (type, slot) => {
@@ -883,6 +983,58 @@ function ContentStudio({ user, onLogout }) {
     } else if (type.toLowerCase() === 'voice_recorder' || type.toLowerCase() === 'voice recorder') {
       newBlock.type = 'voice_recorder';
       newBlock.content = { prompt: 'Please record your response.' };
+    } else if (type.toLowerCase() === 'drag_drop' || type.toLowerCase() === 'drag and drop' || type.toLowerCase() === 'drag_and_drop') {
+      newBlock.type = 'drag_drop';
+      newBlock.content = {
+        question: 'Drag the correct words to their destinations.',
+        pairs: [
+          { id: 'pair-1', source: 'Apple', target: 'Fruit' },
+          { id: 'pair-2', source: 'Carrot', target: 'Vegetable' }
+        ]
+      };
+    } else if (type.toLowerCase() === 'fill_blank' || type.toLowerCase() === 'fill in blanks' || type.toLowerCase() === 'fill_in_blanks') {
+      newBlock.type = 'fill_blank';
+      newBlock.content = {
+        question: 'Complete the sentence by filling in the blanks.',
+        text: 'The quick brown [fox] jumps over the lazy [dog].'
+      };
+    } else if (type.toLowerCase() === 'match_items' || type.toLowerCase() === 'match items') {
+      newBlock.type = 'match_items';
+      newBlock.content = {
+        question: 'Match the items in Column A with Column B.',
+        pairs: [
+          { id: 'match-1', left: 'Dog', right: 'Bark' },
+          { id: 'match-2', left: 'Cat', right: 'Meow' }
+        ]
+      };
+    } else if (type.toLowerCase() === 'sequence' || type.toLowerCase() === 'sequence / order') {
+      newBlock.type = 'sequence';
+      newBlock.content = {
+        question: 'Arrange the items in the correct order.',
+        items: ['Step 1: Get out of bed', 'Step 2: Brush your teeth', 'Step 3: Eat breakfast']
+      };
+    } else if (type.toLowerCase() === 'flashcard') {
+      newBlock.type = 'flashcard';
+      newBlock.content = {
+        cards: [
+          { id: 'card-1', front: 'Hello', back: 'Greeting in English' },
+          { id: 'card-2', front: 'Bonjour', back: 'Greeting in French' }
+        ]
+      };
+    } else if (type.toLowerCase() === 'sentence_builder' || type.toLowerCase() === 'sentence builder') {
+      newBlock.type = 'sentence_builder';
+      newBlock.content = {
+        question: 'Reorder the words to make a correct sentence.',
+        sentence: 'Learning English is fun and easy',
+        words: ['Learning', 'English', 'is', 'fun', 'and', 'easy']
+      };
+    } else if (type.toLowerCase() === 'word_search' || type.toLowerCase() === 'word search / crossword') {
+      newBlock.type = 'word_search';
+      newBlock.content = {
+        question: 'Find the hidden words in the grid.',
+        words: ['DASHBOARD', 'STUDIO', 'TEACHER'],
+        gridSize: 8
+      };
     }
 
     const updatedElements = [...(screenForm.elements || []), newBlock];
@@ -891,7 +1043,7 @@ function ContentStudio({ user, onLogout }) {
       elements: updatedElements
     }));
     setSelectedBlockId(newBlock.id);
-    showFeedback(`Added ${type} block`);
+    showFeedback(`Added ${type.replace('_', ' ')} block`);
   };
 
   const handleDropOnSlot = (e, slot) => {
@@ -1193,6 +1345,182 @@ function ContentStudio({ user, onLogout }) {
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#b45309' }}>Speaking Practice Module</div>
               <div style={{ fontSize: '0.68rem', color: '#b45309', marginTop: '2px' }}>{block.content?.prompt || 'Record your response.'}</div>
+            </div>
+          </div>
+        )}
+
+        {block.type === 'drag_drop' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af' }}>
+              Drag & Drop: {block.content?.question || 'Match items by dragging'}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
+              <span style={{ fontSize: '0.65rem', fontWeight: 600, color: '#475569' }}>Sources (Draggable):</span>
+              {(block.content?.pairs || []).map((p, pIdx) => (
+                <span key={pIdx} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '20px', padding: '2px 8px', fontSize: '0.68rem', fontWeight: 600, color: '#1e293b', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <FiMove style={{ fontSize: '0.65rem', color: '#94a3b8' }} /> {p.source || `Item ${pIdx + 1}`}
+                </span>
+              ))}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
+              <span style={{ fontSize: '0.65rem', fontWeight: 600, color: '#475569' }}>Targets (Dropzones):</span>
+              {(block.content?.pairs || []).map((p, pIdx) => (
+                <span key={pIdx} style={{ background: '#f8fafc', border: '1px dashed #3b82f6', borderRadius: '6px', padding: '2px 8px', fontSize: '0.68rem', fontWeight: 600, color: '#3b82f6' }}>
+                  [{p.target || `Zone ${pIdx + 1}`}]
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {block.type === 'fill_blank' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #a7f3d0', background: '#ecfdf5', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46' }}>
+              Fill in the Blanks: {block.content?.question || 'Complete the text template'}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#374151', background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '0.5rem', lineHeight: 1.6 }}>
+              {(() => {
+                const text = block.content?.text || '';
+                const parts = text.split(/(\[[^\]]+\])/);
+                return parts.map((part, pIdx) => {
+                  if (part.startsWith('[') && part.endsWith(']')) {
+                    const word = part.slice(1, -1);
+                    return (
+                      <input
+                        key={pIdx}
+                        type="text"
+                        disabled
+                        placeholder={word}
+                        style={{
+                          width: `${Math.max(word.length * 8 + 12, 50)}px`,
+                          height: '18px',
+                          border: 'none',
+                          borderBottom: '2px solid #059669',
+                          background: '#f0fdf4',
+                          textAlign: 'center',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          color: '#059669',
+                          margin: '0 4px',
+                          outline: 'none',
+                          padding: 0
+                        }}
+                      />
+                    );
+                  }
+                  return <span key={pIdx}>{part}</span>;
+                });
+              })()}
+            </div>
+          </div>
+        )}
+
+        {block.type === 'match_items' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #e9d5ff', background: '#f3e8ff', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#6b21a8' }}>
+              Match Items: {block.content?.question || 'Pair Column A with Column B'}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.25rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#7c3aed', textTransform: 'uppercase' }}>Column A</span>
+                {(block.content?.pairs || []).map((p, pIdx) => (
+                  <div key={pIdx} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '0.7rem', fontWeight: 600, color: '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>{p.left || `Item ${pIdx + 1}`}</span>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#7c3aed' }}></span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#7c3aed', textTransform: 'uppercase' }}>Column B</span>
+                {(block.content?.pairs || []).map((p, pIdx) => (
+                  <div key={pIdx} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '0.7rem', fontWeight: 600, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#7c3aed' }}></span>
+                    <span>{p.right || `Match ${pIdx + 1}`}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {block.type === 'sequence' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#92400e' }}>
+              Sequence / Order: {block.content?.question || 'Reorder steps to solve'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.25rem' }}>
+              {(block.content?.items || []).map((item, iIdx) => (
+                <div key={iIdx} style={{ background: '#ffffff', border: '1px solid #fef3c7', borderRadius: '6px', padding: '6px 8px', fontSize: '0.72rem', fontWeight: 600, color: '#451a03', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <FiList style={{ color: '#d97706', fontSize: '0.8rem' }} />
+                  <span style={{ background: '#fef3c7', color: '#b45309', borderRadius: '4px', padding: '1px 5px', fontSize: '0.62rem', fontWeight: 800 }}>{iIdx + 1}</span>
+                  <span>{item || `Step description ${iIdx + 1}`}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {block.type === 'flashcard' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fce7f3', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#9d174d' }}>
+              Flashcard Cards Deck
+            </div>
+            <div style={{ display: 'flex', gap: '0.65rem', overflowX: 'auto', paddingBottom: '0.25rem', marginTop: '0.25rem' }}>
+              {(block.content?.cards || []).map((card, cIdx) => (
+                <div key={cIdx} style={{ flexShrink: 0, width: '120px', height: '80px', background: '#ffffff', border: '1px solid #fbcfe8', borderRadius: '10px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 2px 4px rgba(157, 23, 77, 0.05)' }}>
+                  <div style={{ flex: 1, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid #fce7f3', textAlign: 'center' }}>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9d174d' }}>{card.front || 'Front'}</span>
+                  </div>
+                  <div style={{ background: '#fdf2f8', padding: '4px 6px', fontSize: '0.58rem', color: '#64748b', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={card.back}>
+                    {card.back || 'Back description'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {block.type === 'sentence_builder' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #b3e5fc', background: '#e1f5fe', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0277bd' }}>
+              Sentence Builder: {block.content?.question || 'Order the scattered words'}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', background: '#ffffff', border: '1px solid #b3e5fc', borderRadius: '8px', padding: '0.6rem', marginTop: '0.25rem' }}>
+              {(block.content?.words || []).map((word, wIdx) => (
+                <span key={wIdx} style={{ background: '#f1f5f9', border: '1px dashed #0284c7', borderRadius: '6px', padding: '2px 8px', fontSize: '0.7rem', fontWeight: 600, color: '#0284c7' }}>
+                  {word}
+                </span>
+              ))}
+            </div>
+            <div style={{ fontSize: '0.62rem', color: '#64748b', fontStyle: 'italic' }}>
+              Target: "{block.content?.sentence || 'No sentence typed'}"
+            </div>
+          </div>
+        )}
+
+        {block.type === 'word_search' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #c7d2fe', background: '#e0e7ff', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#3730a3' }}>
+              Word Search Puzzle: {block.content?.question || 'Find all hidden words'}
+            </div>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '0.25rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 18px)', gap: '2px', background: '#ffffff', padding: '4px', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
+                {['A', 'B', 'C', 'D', 'E', 'S', 'F', 'G', 'H', 'I', 'T', 'J', 'K', 'L', 'M', 'O'].map((char, charIdx) => (
+                  <div key={charIdx} style={{ width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 700, color: '#4f46e5', background: '#f5f3ff', borderRadius: '2px' }}>
+                    {char}
+                  </div>
+                ))}
+              </div>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#4f46e5', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>Hidden Words</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                  {(block.content?.words || []).map((w, wIdx) => (
+                    <span key={wIdx} style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '4px', padding: '1px 4px', fontSize: '0.62rem', fontWeight: 600, color: '#4f46e5' }}>
+                      {w}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1746,8 +2074,19 @@ function ContentStudio({ user, onLogout }) {
       if (resVal.ok) {
         setValidationReport(await resVal.json());
       }
+      // Load assignment options
+      const resAssign = await apiFetch(`/api/v1/content/assignment-options/`);
+      if (resAssign.ok) {
+        const assignData = await resAssign.json();
+        setAssignSchools(assignData.schools || []);
+        setAssignGrades(assignData.grades || []);
+        const expAssignments = (assignData.assignments || []).filter(
+          a => String(a.experience_ref) === String(experienceId)
+        );
+        setAssignHistory(expAssignments);
+      }
     } catch (e) {
-      console.error('Failed to load publish status, history or validation report', e);
+      console.error('Failed to load publish status, history, validation or assignment data', e);
     }
   };
 
@@ -1781,6 +2120,42 @@ function ContentStudio({ user, onLogout }) {
     } catch (err) {
       console.error(err);
       showFeedback('Network error occurred during packaging', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAssignExperience = async () => {
+    if (!selectedExperience || !selectedExperience.id) {
+      triggerAlert("No active experience selected.", "No Experience Selected", "warning");
+      return;
+    }
+    if (!targetSchoolId) {
+      triggerAlert("Please select a target school.", "School Required", "warning");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const res = await apiFetch(`/api/v1/content/assign-experience/`, {
+        method: 'POST',
+        body: JSON.stringify({
+          experience_id: selectedExperience.id,
+          school_id: targetSchoolId,
+          grade_id: targetGradeId || null
+        })
+      });
+      if (res.ok) {
+        showFeedback("Experience assigned successfully!");
+        setTargetSchoolId('');
+        setTargetGradeId('');
+        loadPublishData(selectedExperience.id);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showFeedback(data.error || "Failed to assign experience.", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showFeedback("Failed to assign experience due to a network error.", "error");
     } finally {
       setActionLoading(false);
     }
@@ -2398,6 +2773,7 @@ function ContentStudio({ user, onLogout }) {
             { key: 'preview', label: 'Runtime Preview', icon: <FiPlay /> },
             { key: 'media', label: 'Media Library', icon: <FiImage /> },
             { key: 'publish', label: 'Publish Center', icon: <FiDownload /> },
+            { key: 'reports', label: 'Sync Reports', icon: <FiFileText /> },
             { key: 'profile', label: 'Profile Settings', icon: <FiUser /> },
           ].map(item => (
             <button
@@ -2419,9 +2795,15 @@ function ContentStudio({ user, onLogout }) {
 
         <div className="cs-sidebar-footer">
           <div className="cs-profile-card">
-            <div className="cs-profile-avatar">{(user?.username || 'CC').slice(0, 2).toUpperCase()}</div>
+            <div className="cs-profile-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              {currentUserState?.profile_picture ? (
+                <img src={resolveMediaUrl(currentUserState.profile_picture)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
+              ) : (
+                (currentUserState?.username || 'CC').slice(0, 2).toUpperCase()
+              )}
+            </div>
             <div className="cs-profile-info">
-              <div className="cs-profile-name">{user?.full_name || user?.username || 'Content Creator'}</div>
+              <div className="cs-profile-name">{currentUserState?.full_name || currentUserState?.username || 'Content Creator'}</div>
               <div className="cs-profile-desc">Content Creator</div>
             </div>
             <button className="sd-logout-icon-btn cs-logout-btn" onClick={onLogout} title="Logout">
@@ -2443,12 +2825,46 @@ function ContentStudio({ user, onLogout }) {
               placeholder={view === 'experiences' ? "Search experiences by title, grade, subject" : "Search experiences, activities..."}
             />
           </div>
-          <div className="cs-header-actions" style={{ marginLeft: 'auto' }}>
-            <button className="cs-icon-btn">
-              <FiBell />
-              <span style={{ position: 'absolute', top: -4, right: -4, background: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: 'bold', width: 14, height: 14, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center' }}>3</span>
-            </button>
-            <button className="cs-icon-btn"><FiHelpCircle /></button>
+          <div className="cs-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}>
+            <div className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.5rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600 }}>
+              <FiCalendar/> {formatDateTime(currentTime)}
+            </div>
+
+            <div style={{ position: 'relative' }}>
+              <button className="sd-icon-btn" style={{ position: 'relative' }} onClick={(e) => { e.stopPropagation(); setShowNotifDropdown(!showNotifDropdown); }}>
+                <FiBell/>
+                {notifications.some(n => !(n.read || n.is_read)) && (
+                  <span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' }} />
+                )}
+              </button>
+              {showNotifDropdown && (
+                <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: '8px', width: '300px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', zIndex: 1000, padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>Notifications</span>
+                    <button style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }} onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true, is_read: true })))}>Mark all read</button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
+                    {notifications.length === 0 ? (
+                      <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>No new notifications.</div>
+                    ) : (
+                      notifications.map(n => {
+                        const text = n.text || n.message || 'Notification';
+                        const time = n.time || (n.created_at ? new Date(n.created_at).toLocaleTimeString() : 'Recently');
+                        const read = n.read !== undefined ? n.read : n.is_read;
+                        return (
+                          <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: read ? 'transparent' : '#f0fdf4', borderLeft: read ? 'none' : '3px solid #22c55e', display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
+                            <span style={{ fontSize: '0.8rem', color: '#334155' }}>{text}</span>
+                            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{time}</span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button className="sd-icon-btn" onClick={() => setShowHelpModal(true)} title="Help & Support"><FiHelpCircle/></button>
           </div>
         </header>
 
@@ -2461,7 +2877,7 @@ function ContentStudio({ user, onLogout }) {
               {/* Premium Dashboard Header Card with Background Image */}
               <div className="sd-dashboard-header-card" style={{ backgroundImage: `url(${contentCreatorHeaderBanner})`, position: 'relative' }}>
                 <div className="sd-header-text-section" style={{ maxWidth: '60%' }}>
-                  <h1>Welcome back, Aisha!</h1>
+                  <h1>{getGreeting()}, Aisha!</h1>
                   <p>Empowering Better Learning Experiences.<br />Create, organize, and publish engaging educational content with ease.</p>
                 </div>
               </div>
@@ -2494,45 +2910,6 @@ function ContentStudio({ user, onLogout }) {
               {/* Main Grid row */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '1.25rem' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                  {/* Quick Actions Card */}
-                  <div className="cs-card">
-                    <div className="cs-card-header" style={{ marginBottom: '1.25rem' }}>
-                      <h3 className="cs-card-title">Quick Actions</h3>
-                      <button className="cs-btn-outline" style={{ padding: '0.25rem 0.6rem', fontSize: '0.72rem' }}>View All</button>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', textAlign: 'center' }}>
-                      {[
-                        {
-                          label: 'New Experience', desc: 'Create a new lesson', icon: <FiPlusCircle style={{ fontSize: '1.5rem', color: '#0284c7' }} />, bg: '#e0f2fe', action: () => {
-                            setSelectedExperience(null);
-                            setExperienceForm({
-                              title: '',
-                              description: '',
-                              grade: '',
-                              subject: 'Speaking & Listening',
-                              language: 'English',
-                              difficulty: 'Medium',
-                              duration: 15,
-                              tags: []
-                            });
-                            setView('experience-builder');
-                          }
-                        },
-                        { label: 'Experience Library', desc: 'Manage your content', icon: <FiFolder style={{ fontSize: '1.5rem', color: '#16a34a' }} />, bg: '#dcfce7', action: () => setView('experiences') },
-                        { label: 'Media Library', desc: 'Upload assets', icon: <FiImage style={{ fontSize: '1.5rem', color: '#7c3aed' }} />, bg: '#f3e8ff', action: () => setView('media') },
-                        { label: 'Publish Center', desc: 'Go live with content', icon: <FiSend style={{ fontSize: '1.5rem', color: '#ea580c' }} />, bg: '#ffedd5', action: () => setView('publish') },
-                      ].map((qa, idx) => (
-                        <div key={idx} onClick={qa.action} className="cs-quick-action-card">
-                          <div style={{ background: qa.bg, padding: '0.6rem', borderRadius: '50%', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.5rem auto' }}>
-                            {qa.icon}
-                          </div>
-                          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>{qa.label}</div>
-                          <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>{qa.desc}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
                   {/* Recent Experiences Card */}
                   <div className="cs-card">
                     <div className="cs-card-header">
@@ -2608,29 +2985,6 @@ function ContentStudio({ user, onLogout }) {
                             </div>
                           );
                         })
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Notifications Card */}
-                  <div className="cs-card">
-                    <div className="cs-card-header">
-                      <h3 className="cs-card-title">Notifications</h3>
-                      <button className="cs-btn-outline" style={{ padding: '0.25rem 0.6rem', fontSize: '0.72rem' }}>View All</button>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                      {notifications.length === 0 ? (
-                        <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>No new notifications.</div>
-                      ) : (
-                        notifications.map((notif, idx) => (
-                          <div key={idx} style={{ display: 'flex', gap: '0.65rem', padding: '0.75rem', borderRadius: '8px', background: '#fee2e2', color: '#b91c1c', alignItems: 'center' }}>
-                            <div style={{ fontSize: '1.1rem', display: 'flex' }}><FiAlertTriangle /></div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: '0.78rem', fontWeight: 600 }}>{notif.message}</div>
-                              <div style={{ fontSize: '0.68rem', opacity: 0.8, marginTop: '2px' }}>{new Date(notif.created_at).toLocaleDateString()}</div>
-                            </div>
-                          </div>
-                        ))
                       )}
                     </div>
                   </div>
@@ -2877,12 +3231,10 @@ function ContentStudio({ user, onLogout }) {
                   <button className="cs-icon-btn" onClick={() => setView('experiences')}><FiArrowLeft /></button>
                   <div>
                     <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                      Experience Library &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Experience Builder</span>
+                      <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Experience Library</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Experience Builder</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '4px' }}>
                       <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>{experienceForm.title}</h1>
-                      <button className="cs-icon-btn" style={{ fontSize: '0.85rem' }}><FiEdit2 /></button>
-                      <span className="cs-badge cs-badge-draft">Draft</span>
                     </div>
                     <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
                       {gradesList.find(g => String(g.id) === String(experienceForm.grade))?.grade_name || `Grade ${experienceForm.grade}`} · {experienceForm.subject} · {experienceForm.difficulty} · Estimated Duration: {experienceForm.duration} min
@@ -3065,12 +3417,10 @@ function ContentStudio({ user, onLogout }) {
                   <button className="cs-icon-btn" onClick={() => setView('experience-builder')}><FiArrowLeft /></button>
                   <div>
                     <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                      Experience Library &nbsp;&gt;&nbsp; Experience Builder &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Activity Builder</span>
+                      <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Experience Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>Experience Builder</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Activity Builder</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '4px' }}>
                       <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>{activityForm.title}</h1>
-                      <button className="cs-icon-btn" style={{ fontSize: '0.85rem' }}><FiEdit2 /></button>
-                      <span className="cs-badge cs-badge-draft">Draft</span>
                     </div>
                     <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
                       {gradesList.find(g => String(g.id) === String(selectedExperience?.grade_id || selectedExperience?.grade))?.grade_name || 'Grade 4'} · {selectedExperience?.subject || 'Speaking & Listening'} · {selectedExperience?.difficulty || 'Medium'} · Estimated Duration: {activityForm.duration} min
@@ -3151,6 +3501,115 @@ function ContentStudio({ user, onLogout }) {
                           onChange={e => setActivityForm({ ...activityForm, mastery: parseInt(e.target.value) || 0 })} />
                       </div>
                     </div>
+                  </div>
+
+                  {/* Activity Timeline / Existing Activities Card */}
+                  <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
+                      <div>
+                        <h3 className="cs-card-title" style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0 }}>Activity Timeline</h3>
+                        <div className="cs-card-sub" style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>Sequence of activities within this experience</div>
+                      </div>
+                      <button
+                        type="button"
+                        className="cs-btn-outline"
+                        style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', background: '#fff', cursor: 'pointer', fontWeight: 600 }}
+                        onClick={() => {
+                          setSelectedActivity(null);
+                          setActivityForm({ title: '', description: '', objective: '', skills: ['Speaking', 'Listening'], duration: 5, mastery: 80 });
+                          setScreens([]);
+                        }}
+                      >
+                        + Add New Activity
+                      </button>
+                    </div>
+
+                    {activities.length === 0 ? (
+                      <div style={{ fontSize: '0.78rem', color: '#64748b', textAlign: 'center', padding: '1.5rem', border: '1.5px dashed #cbd5e1', borderRadius: '8px' }}>
+                        No activities added yet. Save the current form above to add your first activity.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        {activities.map((act, index) => {
+                          const isSelected = selectedActivity?.id === act.id;
+                          return (
+                            <div
+                              key={act.id || index}
+                              onClick={() => loadActivityDetail(act)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '1rem',
+                                padding: '0.75rem 1rem',
+                                borderRadius: '10px',
+                                border: isSelected ? '1.5px solid #0b57d0' : '1px solid #e2e8f0',
+                                background: isSelected ? '#f0f9ff' : '#ffffff',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s'
+                              }}
+                            >
+                              {/* Reorder Arrows */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }} onClick={e => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveActivity(index, -1)}
+                                  disabled={index === 0}
+                                  style={{ background: 'none', border: 'none', cursor: index === 0 ? 'not-allowed' : 'pointer', color: index === 0 ? '#cbd5e1' : '#64748b', padding: '2px', display: 'flex' }}
+                                >
+                                  <FiChevronUp />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveActivity(index, 1)}
+                                  disabled={index === activities.length - 1}
+                                  style={{ background: 'none', border: 'none', cursor: index === activities.length - 1 ? 'not-allowed' : 'pointer', color: index === activities.length - 1 ? '#cbd5e1' : '#64748b', padding: '2px', display: 'flex' }}
+                                >
+                                  <FiChevronDown />
+                                </button>
+                              </div>
+
+                              {/* Index badge */}
+                              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: isSelected ? '#0b57d0' : '#f1f5f9', color: isSelected ? '#ffffff' : '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.82rem' }}>
+                                {index + 1}
+                              </div>
+
+                              {/* Info */}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>{act.title}</span>
+                                  <span style={{ fontSize: '0.7rem', color: '#64748b' }}>({act.estimated_duration || 5} min)</span>
+                                </div>
+                                <p style={{ fontSize: '0.72rem', color: '#64748b', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {act.learning_objective || act.description || 'No objective set.'}
+                                </p>
+                              </div>
+
+                              {/* Actions */}
+                              <div style={{ display: 'flex', gap: '0.25rem' }} onClick={e => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  className="cs-icon-btn"
+                                  onClick={() => loadActivityDetail(act)}
+                                  title="Edit Activity"
+                                  style={{ padding: '4px' }}
+                                >
+                                  <FiEdit2 />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="cs-icon-btn"
+                                  onClick={() => handleDeleteActivity(act.id)}
+                                  title="Delete Activity"
+                                  style={{ padding: '4px', color: '#ef4444' }}
+                                >
+                                  <FiTrash2 />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -3261,7 +3720,7 @@ function ContentStudio({ user, onLogout }) {
                   </button>
                   <div>
                     <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                      All Experiences &nbsp;&gt;&nbsp; {selectedExperience?.title || 'Experience Builder'} &nbsp;&gt;&nbsp; {selectedActivity?.title || 'Activity Builder'} &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Screen Editor</span>
+                      <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Experience Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Experience Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('activity-builder')}>{selectedActivity?.title || 'Activity Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Screen Editor</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '4px' }}>
                       <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>{screenForm.title || 'Untitled Screen'}</h1>
@@ -3360,44 +3819,73 @@ function ContentStudio({ user, onLogout }) {
                     <p style={{ fontSize: '0.68rem', color: '#64748b', margin: 0 }}>Append layout blocks to canvas</p>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                     {[
-                      { type: 'Heading', desc: 'Main titles or section headers', icon: <FiFileText style={{ color: '#0b57d0' }} />, bg: '#e0f2fe' },
-                      { type: 'Text', desc: 'Standard paragraphs of text', icon: <FiFileText style={{ color: '#64748b' }} />, bg: '#f1f5f9' },
-                      { type: 'Image', desc: 'Display pictures and illustrations', icon: <FiImage style={{ color: '#16a34a' }} />, bg: '#dcfce7' },
-                      { type: 'Audio', desc: 'Voice instructions or speech files', icon: <FiVolume2 style={{ color: '#0ea5e9' }} />, bg: '#e0f9ff' },
-                      { type: 'Video', desc: 'Play embedded video presentations', icon: <FiMonitor style={{ color: '#7c3aed' }} />, bg: '#f3e8ff' },
-                      { type: 'Dialogue', desc: 'Interactive character chat bubbles', icon: <FiActivity style={{ color: '#db2777' }} />, bg: '#fce7f3' },
-                      { type: 'Quiz', desc: 'Interactive MCQ quiz question', icon: <FiCheckCircle style={{ color: '#ea580c' }} />, bg: '#ffedd5' },
-                      { type: 'Voice_Recorder', desc: 'Speaking practice recording input', icon: <FiMic style={{ color: '#d97706' }} />, bg: '#fef3c7' },
-                    ].map(tmpl => (
-                      <div
-                        key={tmpl.type}
-                        onClick={() => handleAddBlock(tmpl.type)}
-                        draggable={true}
-                        onDragStart={e => {
-                          e.dataTransfer.setData("text/plain", `type:${tmpl.type}`);
-                          e.dataTransfer.effectAllowed = "move";
-                        }}
-                        className="cs-block-palette-item"
-                        style={{
-                          border: '1px solid #e2e8f0',
-                          borderRadius: '10px',
-                          padding: '0.75rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          gap: '0.75rem',
-                          alignItems: 'center',
-                          background: '#ffffff',
-                          transition: 'all 0.15s'
-                        }}
-                      >
-                        <div style={{ background: tmpl.bg, padding: '0.45rem', borderRadius: '8px', display: 'flex' }}>
-                          {tmpl.icon}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e293b' }}>{tmpl.type.replace('_', ' ')}</div>
-                          <div style={{ fontSize: '0.62rem', color: '#64748b', marginTop: '1px' }}>{tmpl.desc}</div>
+                      {
+                        title: "Presentation & Media",
+                        items: [
+                          { type: 'Heading', desc: 'Main titles or section headers', icon: <FiFileText style={{ color: '#0b57d0' }} />, bg: '#e0f2fe' },
+                          { type: 'Text', desc: 'Standard paragraphs of text', icon: <FiFileText style={{ color: '#64748b' }} />, bg: '#f1f5f9' },
+                          { type: 'Image', desc: 'Display pictures and illustrations', icon: <FiImage style={{ color: '#16a34a' }} />, bg: '#dcfce7' },
+                          { type: 'Audio', desc: 'Voice instructions or speech files', icon: <FiVolume2 style={{ color: '#0ea5e9' }} />, bg: '#e0f9ff' },
+                          { type: 'Video', desc: 'Play embedded video presentations', icon: <FiMonitor style={{ color: '#7c3aed' }} />, bg: '#f3e8ff' },
+                          { type: 'Dialogue', desc: 'Interactive character chat bubbles', icon: <FiActivity style={{ color: '#db2777' }} />, bg: '#fce7f3' }
+                        ]
+                      },
+                      {
+                        title: "Assessment Blocks",
+                        items: [
+                          { type: 'Quiz', desc: 'Interactive MCQ quiz question', icon: <FiCheckCircle style={{ color: '#ea580c' }} />, bg: '#ffedd5' },
+                          { type: 'Voice_Recorder', desc: 'Speaking practice recording input', icon: <FiMic style={{ color: '#d97706' }} />, bg: '#fef3c7' },
+                          { type: 'Drag_Drop', desc: 'Drag items to correct targets', icon: <FiMove style={{ color: '#2563eb' }} />, bg: '#dbeafe' },
+                          { type: 'Fill_Blank', desc: 'Fill in missing words in text', icon: <FiEdit style={{ color: '#059669' }} />, bg: '#d1fae5' },
+                          { type: 'Match_Items', desc: 'Pair items in Column A & B', icon: <FiGitCommit style={{ color: '#7c3aed' }} />, bg: '#f3e8ff' },
+                          { type: 'Sequence', desc: 'Reorder items sequentially', icon: <FiList style={{ color: '#b45309' }} />, bg: '#fef3c7' }
+                        ]
+                      },
+                      {
+                        title: "Gamification Blocks",
+                        items: [
+                          { type: 'Flashcard', desc: 'Flip cards for front & back', icon: <FiLayers style={{ color: '#db2777' }} />, bg: '#fce7f3' },
+                          { type: 'Sentence_Builder', desc: 'Build sentences with word badges', icon: <FiType style={{ color: '#0284c7' }} />, bg: '#e0f2fe' },
+                          { type: 'Word_Search', desc: 'Simulated letter-grid puzzle', icon: <FiGrid style={{ color: '#4f46e5' }} />, bg: '#e0e7ff' }
+                        ]
+                      }
+                    ].map(cat => (
+                      <div key={cat.title} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px', borderBottom: '1px solid #f1f5f9', paddingBottom: '2px' }}>{cat.title}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {cat.items.map(tmpl => (
+                            <div
+                              key={tmpl.type}
+                              onClick={() => handleAddBlock(tmpl.type)}
+                              draggable={true}
+                              onDragStart={e => {
+                                e.dataTransfer.setData("text/plain", `type:${tmpl.type}`);
+                                e.dataTransfer.effectAllowed = "move";
+                              }}
+                              className="cs-block-palette-item"
+                              style={{
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '10px',
+                                padding: '0.6rem 0.75rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                gap: '0.65rem',
+                                alignItems: 'center',
+                                background: '#ffffff',
+                                transition: 'all 0.15s'
+                              }}
+                            >
+                              <div style={{ background: tmpl.bg, padding: '0.35rem', borderRadius: '8px', display: 'flex' }}>
+                                {tmpl.icon}
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e293b' }}>{tmpl.type.replace('_', ' ')}</div>
+                                <div style={{ fontSize: '0.58rem', color: '#64748b', marginTop: '1px', lineHeight: '1.2' }}>{tmpl.desc}</div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     ))}
@@ -4023,9 +4511,228 @@ function ContentStudio({ user, onLogout }) {
                             />
                           </div>
                         )}
+
+                        {/* BLOCK TYPE: DRAG DROP */}
+                        {selectedBlock.type === 'drag_drop' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Drag & Drop Settings</span>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question Instruction</label>
+                              <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }}
+                                value={selectedBlock.content?.question || ''}
+                                onChange={e => handleUpdateBlockContent('question', e.target.value)}
+                                placeholder="e.g. Drag the correct label to matching container" />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Match Pairs</span>
+                              <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
+                                onClick={() => { const pairs = [...(selectedBlock.content?.pairs || [])]; pairs.push({ id: `pair-${Date.now()}`, source: 'New Item', target: 'New Destination' }); handleUpdateBlockContent('pairs', pairs); }}>
+                                + Add Pair
+                              </button>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '200px', overflowY: 'auto' }}>
+                              {(selectedBlock.content?.pairs || []).map((p, pIdx) => (
+                                <div key={p.id || pIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b' }}>Pair #{pIdx + 1}</span>
+                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                                      onClick={() => { const pairs = (selectedBlock.content.pairs || []).filter((_, i) => i !== pIdx); handleUpdateBlockContent('pairs', pairs); }}>
+                                      <FiTrash2 style={{ fontSize: '0.72rem' }} /></button>
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
+                                    <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Source (Drag)" value={p.source}
+                                      onChange={e => { const pairs = [...selectedBlock.content.pairs]; pairs[pIdx].source = e.target.value; handleUpdateBlockContent('pairs', pairs); }} />
+                                    <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Target (Drop)" value={p.target}
+                                      onChange={e => { const pairs = [...selectedBlock.content.pairs]; pairs[pIdx].target = e.target.value; handleUpdateBlockContent('pairs', pairs); }} />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* BLOCK TYPE: FILL BLANK */}
+                        {selectedBlock.type === 'fill_blank' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Fill in Blanks Config</span>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question Instruction</label>
+                              <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
+                                onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Complete the sentences with correct terms" />
+                            </div>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Text Template (Use [ ] for blanks)</label>
+                              <textarea className="cs-form-input" style={{ minHeight: '80px', fontSize: '0.75rem', lineHeight: 1.4 }} value={selectedBlock.content?.text || ''}
+                                onChange={e => handleUpdateBlockContent('text', e.target.value)} placeholder="e.g. The quick brown [fox] jumps over the lazy [dog]." />
+                              <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '4px', lineHeight: 1.3 }}>
+                                Wrap correct answers in square brackets. Users will see empty input boxes.
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* BLOCK TYPE: MATCH ITEMS */}
+                        {selectedBlock.type === 'match_items' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Match Column Pairs</span>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question Instruction</label>
+                              <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
+                                onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Match left side options with correct right answers" />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Match Pairs</span>
+                              <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
+                                onClick={() => { const pairs = [...(selectedBlock.content?.pairs || [])]; pairs.push({ id: `match-${Date.now()}`, left: 'Left Option', right: 'Right Match' }); handleUpdateBlockContent('pairs', pairs); }}>
+                                + Add Match
+                              </button>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '200px', overflowY: 'auto' }}>
+                              {(selectedBlock.content?.pairs || []).map((p, pIdx) => (
+                                <div key={p.id || pIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b' }}>Pair #{pIdx + 1}</span>
+                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                                      onClick={() => { const pairs = (selectedBlock.content.pairs || []).filter((_, i) => i !== pIdx); handleUpdateBlockContent('pairs', pairs); }}>
+                                      <FiTrash2 style={{ fontSize: '0.72rem' }} /></button>
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
+                                    <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Column A (Left)" value={p.left}
+                                      onChange={e => { const pairs = [...selectedBlock.content.pairs]; pairs[pIdx].left = e.target.value; handleUpdateBlockContent('pairs', pairs); }} />
+                                    <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Column B (Right)" value={p.right}
+                                      onChange={e => { const pairs = [...selectedBlock.content.pairs]; pairs[pIdx].right = e.target.value; handleUpdateBlockContent('pairs', pairs); }} />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* BLOCK TYPE: SEQUENCE */}
+                        {selectedBlock.type === 'sequence' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Ordering / Sequence Config</span>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question Instruction</label>
+                              <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
+                                onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Sort the steps in correct chronological order" />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Sequence Steps</span>
+                              <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
+                                onClick={() => { const items = [...(selectedBlock.content?.items || [])]; items.push('New step text...'); handleUpdateBlockContent('items', items); }}>
+                                + Add Step
+                              </button>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', maxHeight: '200px', overflowY: 'auto' }}>
+                              {(selectedBlock.content?.items || []).map((item, iIdx) => (
+                                <div key={iIdx} style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                                  <span style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#64748b', minWidth: '14px' }}>{iIdx + 1}:</span>
+                                  <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem', flex: 1 }} type="text" value={item}
+                                    onChange={e => { const items = [...selectedBlock.content.items]; items[iIdx] = e.target.value; handleUpdateBlockContent('items', items); }} placeholder="Enter step details..." />
+                                  <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                                    onClick={() => { const items = (selectedBlock.content.items || []).filter((_, i) => i !== iIdx); handleUpdateBlockContent('items', items); }}>
+                                    <FiTrash2 style={{ fontSize: '0.72rem' }} /></button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* BLOCK TYPE: FLASHCARD */}
+                        {selectedBlock.type === 'flashcard' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Flashcard Deck Configuration</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Flashcards List</span>
+                              <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
+                                onClick={() => { const cards = [...(selectedBlock.content?.cards || [])]; cards.push({ id: `card-${Date.now()}`, front: 'Front word', back: 'Back definition or context' }); handleUpdateBlockContent('cards', cards); }}>
+                                + Add Card
+                              </button>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '240px', overflowY: 'auto' }}>
+                              {(selectedBlock.content?.cards || []).map((card, cIdx) => (
+                                <div key={card.id || cIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b' }}>Card #{cIdx + 1}</span>
+                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                                      onClick={() => { const cards = (selectedBlock.content.cards || []).filter((_, i) => i !== cIdx); handleUpdateBlockContent('cards', cards); }}>
+                                      <FiTrash2 style={{ fontSize: '0.72rem' }} /></button>
+                                  </div>
+                                  <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Front Text (Question/Word)" value={card.front}
+                                    onChange={e => { const cards = [...selectedBlock.content.cards]; cards[cIdx].front = e.target.value; handleUpdateBlockContent('cards', cards); }} />
+                                  <textarea className="cs-form-input" style={{ minHeight: '36px', fontSize: '0.72rem', lineHeight: 1.3 }} placeholder="Back Text (Answer/Meaning)" value={card.back}
+                                    onChange={e => { const cards = [...selectedBlock.content.cards]; cards[cIdx].back = e.target.value; handleUpdateBlockContent('cards', cards); }} />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* BLOCK TYPE: SENTENCE BUILDER */}
+                        {selectedBlock.type === 'sentence_builder' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Sentence Builder Config</span>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question Instruction</label>
+                              <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
+                                onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Reorder words to form a correct sentence" />
+                            </div>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Full Target Sentence</label>
+                              <input className="cs-form-input" style={{ height: '28px', fontSize: '0.78rem' }} type="text" value={selectedBlock.content?.sentence || ''}
+                                onChange={e => {
+                                  const text = e.target.value;
+                                  const splitWords = text.trim() ? text.split(' ').filter(w => w.length > 0) : [];
+                                  handleUpdateBlockMultipleContent({ sentence: text, words: splitWords });
+                                }} placeholder="Learning English is fun and easy" />
+                            </div>
+                            {selectedBlock.content?.words?.length > 0 && (
+                              <div style={{ background: '#f8fafc', padding: '0.5rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '4px' }}>Scrambled Words Preview:</span>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                                  {selectedBlock.content.words.map((w, wIdx) => (
+                                    <span key={wIdx} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '2px 6px', fontSize: '0.65rem', fontWeight: 600, color: '#334155' }}>{w}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* BLOCK TYPE: WORD SEARCH */}
+                        {selectedBlock.type === 'word_search' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Word Search Configuration</span>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question Instruction</label>
+                              <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
+                                onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Find all educational terms in the puzzle" />
+                            </div>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Grid Dimensions Size</label>
+                              <select className="cs-form-input" style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
+                                value={selectedBlock.content?.gridSize || 8}
+                                onChange={e => handleUpdateBlockContent('gridSize', parseInt(e.target.value))}>
+                                <option value={6}>6 x 6 grid</option>
+                                <option value={8}>8 x 8 grid</option>
+                                <option value={10}>10 x 10 grid</option>
+                                <option value={12}>12 x 12 grid</option>
+                              </select>
+                            </div>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Words List (Comma Separated)</label>
+                              <input className="cs-form-input" style={{ height: '28px', fontSize: '0.78rem' }} type="text"
+                                value={selectedBlock.content?.words?.join(', ') || ''}
+                                onChange={e => { const list = e.target.value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean); handleUpdateBlockContent('words', list); }}
+                                placeholder="e.g. DASHBOARD, STUDIO, TEACHER" />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
+
 
                 </div>
 
@@ -4479,6 +5186,309 @@ function ContentStudio({ user, onLogout }) {
                                     </div>
                                   );
                                 })()}
+
+                                {/* DRAG & DROP BLOCK */}
+                                {block.type === 'drag_drop' && (() => {
+                                  const list = block.content?.pairs || [];
+                                  const question = block.content?.question || 'Match items by dragging';
+                                  return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#eff6ff', padding: '1rem', borderRadius: '12px', border: '1px solid #bfdbfe', marginTop: '0.5rem' }}>
+                                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e40af' }}>
+                                        🔀 {question}
+                                      </div>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                        {list.map((pair, pIdx) => {
+                                          const selected = dragDropSelections[`${block.id}_${pair.id || pIdx}`] || '';
+                                          return (
+                                            <div key={pair.id || pIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.72rem' }}>
+                                              <span style={{ fontWeight: 600, color: '#1e293b' }}>{pair.source || pair.left}</span>
+                                              <select
+                                                value={selected}
+                                                onChange={(e) => {
+                                                  const val = e.target.value;
+                                                  setDragDropSelections(prev => ({
+                                                    ...prev,
+                                                    [`${block.id}_${pair.id || pIdx}`]: val
+                                                  }));
+                                                }}
+                                                style={{ padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.7rem', color: '#1e293b', outline: 'none' }}
+                                              >
+                                                <option value="">Select match...</option>
+                                                {list.map((p, idx) => (
+                                                  <option key={idx} value={p.target || p.right}>{p.target || p.right}</option>
+                                                ))}
+                                              </select>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* FILL IN BLANKS BLOCK */}
+                                {(['fill_blank', 'fill_blanks'].includes(block.type)) && (() => {
+                                  const text = block.content?.text || 'Type the blanks [blank1]';
+                                  const question = block.content?.question || 'Fill in the missing words';
+                                  const parts = text.split(/(\[.*?\])/g);
+                                  
+                                  return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#f0fdfa', padding: '1rem', borderRadius: '12px', border: '1px solid #ccfbf1', marginTop: '0.5rem' }}>
+                                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f766e' }}>
+                                        ✏️ {question}
+                                      </div>
+                                      <div style={{ fontSize: '0.78rem', lineHeight: 1.8, color: '#1e293b', background: '#ffffff', padding: '0.75rem', borderRadius: '8px', border: '1px solid #ccfbf1' }}>
+                                        {parts.map((part, pIdx) => {
+                                          if (part.startsWith('[') && part.endsWith(']')) {
+                                            const key = `${block.id}-${pIdx}`;
+                                            const ans = blankAnswers[key] || '';
+                                            return (
+                                              <input
+                                                key={pIdx}
+                                                type="text"
+                                                value={ans}
+                                                onChange={(e) => {
+                                                  const val = e.target.value;
+                                                  setBlankAnswers(prev => ({
+                                                    ...prev,
+                                                    [key]: val
+                                                  }));
+                                                }}
+                                                placeholder="..."
+                                                style={{ width: '80px', borderBottom: '2px solid #0d9488', borderTop: 'none', borderLeft: 'none', borderRight: 'none', textAlign: 'center', fontWeight: 700, color: '#0f766e', outline: 'none', padding: '0 4px', margin: '0 4px', fontSize: '0.75rem' }}
+                                              />
+                                            );
+                                          }
+                                          return <span key={pIdx}>{part}</span>;
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* MATCH ITEMS BLOCK */}
+                                {block.type === 'match_items' && (() => {
+                                  const pairs = block.content?.pairs || [];
+                                  const question = block.content?.question || 'Match the columns';
+                                  return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#fdf2f8', padding: '1rem', borderRadius: '12px', border: '1px solid #fbcfe8', marginTop: '0.5rem' }}>
+                                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#9d174d' }}>
+                                        🔗 {question}
+                                      </div>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                        {pairs.map((pair, pIdx) => {
+                                          const selected = dragDropSelections[`${block.id}_${pair.id || pIdx}`] || '';
+                                          return (
+                                            <div key={pair.id || pIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #fbcfe8', fontSize: '0.72rem' }}>
+                                              <span style={{ fontWeight: 600, color: '#9d174d' }}>{pair.left}</span>
+                                              <select
+                                                value={selected}
+                                                onChange={(e) => {
+                                                  const val = e.target.value;
+                                                  setDragDropSelections(prev => ({
+                                                    ...prev,
+                                                    [`${block.id}_${pair.id || pIdx}`]: val
+                                                  }));
+                                                }}
+                                                style={{ padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #fbcfe8', fontSize: '0.7rem', color: '#9d174d', outline: 'none' }}
+                                              >
+                                                <option value="">Select match...</option>
+                                                {pairs.map((p, idx) => (
+                                                  <option key={idx} value={p.right}>{p.right}</option>
+                                                ))}
+                                              </select>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* SEQUENCE BLOCK */}
+                                {block.type === 'sequence' && (() => {
+                                  const items = block.content?.items || [];
+                                  const question = block.content?.question || 'Sort items in correct sequence';
+                                  return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#fffbeb', padding: '1rem', borderRadius: '12px', border: '1px solid #fde68a', marginTop: '0.5rem' }}>
+                                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#b45309' }}>
+                                        🔢 {question}
+                                      </div>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                        {items.map((item, idx) => (
+                                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#ffffff', border: '1px solid #cbd5e1', padding: '0.55rem 0.75rem', borderRadius: '8px', fontSize: '0.72rem', color: '#1e293b' }}>
+                                            <span style={{ width: '20px', height: '20px', borderRadius: '50%', background: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.68rem' }}>
+                                              {idx + 1}
+                                            </span>
+                                            <span>{item}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* FLASHCARD BLOCK */}
+                                {block.type === 'flashcard' && (() => {
+                                  const cards = block.content?.cards || [];
+                                  return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem' }}>
+                                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#be185d', textAlign: 'center' }}>🗂️ Interactive Flashcards</div>
+                                      <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '0.5rem', width: '100%' }}>
+                                        {cards.map((card, cIdx) => {
+                                          const isFlipped = flippedCards[`${block.id}-${cIdx}`];
+                                          return (
+                                            <div
+                                              key={card.id || cIdx}
+                                              onClick={() => {
+                                                setFlippedCards(prev => ({
+                                                  ...prev,
+                                                  [`${block.id}-${cIdx}`]: !prev[`${block.id}-${cIdx}`]
+                                                }));
+                                              }}
+                                              style={{
+                                                flexShrink: 0,
+                                                width: '130px',
+                                                height: '90px',
+                                                background: isFlipped ? '#fdf2f8' : '#ffffff',
+                                                border: isFlipped ? '2px solid #ec4899' : '1px solid #cbd5e1',
+                                                borderRadius: '12px',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                padding: '0.5rem',
+                                                textAlign: 'center',
+                                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                                                transition: 'all 0.2s'
+                                              }}
+                                            >
+                                              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isFlipped ? '#be185d' : '#1e293b' }}>
+                                                {isFlipped ? card.back : card.front}
+                                              </span>
+                                              <span style={{ fontSize: '0.55rem', color: '#94a3b8', marginTop: '8px' }}>
+                                                {isFlipped ? 'Show front' : 'Click to flip'}
+                                              </span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* SENTENCE BUILDER BLOCK */}
+                                {block.type === 'sentence_builder' && (() => {
+                                  const question = block.content?.question || 'Reorder the words to make a correct sentence.';
+                                  const words = block.content?.words || [];
+                                  const selection = dragDropSelections[block.id] || [];
+                                  
+                                  return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#ecfeff', padding: '1rem', borderRadius: '12px', border: '1px solid #a5f3fc', marginTop: '0.5rem' }}>
+                                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0891b2' }}>
+                                        🧩 {question}
+                                      </div>
+                                      
+                                      <div style={{ minHeight: '38px', padding: '0.5rem', background: '#ffffff', borderRadius: '8px', border: '1.5px dashed #06b6d4', display: 'flex', flexWrap: 'wrap', gap: '0.25rem', alignItems: 'center' }}>
+                                        {selection.length === 0 ? (
+                                          <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Click words below...</span>
+                                        ) : (
+                                          selection.map((word, wIdx) => (
+                                            <button
+                                              key={wIdx}
+                                              type="button"
+                                              onClick={() => {
+                                                setDragDropSelections(prev => ({
+                                                  ...prev,
+                                                  [block.id]: (prev[block.id] || []).filter((_, idx) => idx !== wIdx)
+                                                }));
+                                              }}
+                                              style={{ background: '#06b6d4', color: '#ffffff', border: 'none', borderRadius: '6px', padding: '2px 8px', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}
+                                            >
+                                              {word} ×
+                                            </button>
+                                          ))
+                                        )}
+                                      </div>
+
+                                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                                        {words.map((word, wIdx) => {
+                                          const isUsed = selection.includes(word);
+                                          return (
+                                            <button
+                                              key={wIdx}
+                                              type="button"
+                                              disabled={isUsed}
+                                              onClick={() => {
+                                                setDragDropSelections(prev => ({
+                                                  ...prev,
+                                                  [block.id]: [...(prev[block.id] || []), word]
+                                                }));
+                                              }}
+                                              style={{
+                                                background: isUsed ? '#e2e8f0' : '#ffffff',
+                                                border: '1px solid #cbd5e1',
+                                                borderRadius: '6px',
+                                                padding: '3px 8px',
+                                                fontSize: '0.7rem',
+                                                fontWeight: 600,
+                                                color: isUsed ? '#94a3b8' : '#0891b2',
+                                                cursor: isUsed ? 'default' : 'pointer'
+                                              }}
+                                            >
+                                              {word}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* WORD SEARCH / CROSSWORD BLOCK */}
+                                {(['word_search', 'crossword'].includes(block.type)) && (() => {
+                                  const question = block.content?.question || 'Word Search Puzzle';
+                                  const grid = [
+                                    ['L', 'A', 'N', 'G', 'U', 'A', 'G', 'E'],
+                                    ['E', 'X', 'P', 'E', 'R', 'I', 'E', 'N'],
+                                    ['A', 'C', 'T', 'I', 'V', 'I', 'T', 'Y'],
+                                    ['S', 'C', 'R', 'E', 'E', 'N', 'P', 'C']
+                                  ];
+                                  return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#faf5ff', padding: '1rem', borderRadius: '12px', border: '1px solid #f3e8ff', marginTop: '0.5rem' }}>
+                                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#6b21a8' }}>
+                                        🔍 {question}
+                                      </div>
+                                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '4px', maxWidth: '240px', margin: '0 auto', background: '#f3e8ff', padding: '4px', borderRadius: '8px' }}>
+                                        {grid.flatMap((row, rIdx) => row.map((char, cIdx) => (
+                                          <div
+                                            key={`${rIdx}-${cIdx}`}
+                                            style={{
+                                              aspectRatio: '1',
+                                              background: '#ffffff',
+                                              borderRadius: '4px',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                              fontSize: '0.68rem',
+                                              fontWeight: 800,
+                                              color: '#6b21a8',
+                                              border: '1px solid #cbd5e1',
+                                              cursor: 'pointer'
+                                            }}
+                                            onClick={(e) => {
+                                              const currBg = e.currentTarget.style.backgroundColor;
+                                              e.currentTarget.style.backgroundColor = currBg === 'rgb(216, 180, 254)' ? '#ffffff' : '#d8b4fe';
+                                            }}
+                                          >
+                                            {char}
+                                          </div>
+                                        )))}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             );
                           })
@@ -4740,7 +5750,7 @@ function ContentStudio({ user, onLogout }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
                 <div>
                   <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                    Experience Library &nbsp;&gt;&nbsp; {selectedExperience?.title || 'Experience'} &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Publish Center</span>
+                    <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Experience Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Experience'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Publish Center</span>
                   </div>
                   <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: 8, color: '#0f172a' }}>
                     Publish Center
@@ -5021,99 +6031,260 @@ function ContentStudio({ user, onLogout }) {
                       </div>
                     </div>
                   </div>
+
+                  {/* Card 5: Assign Experience to School/Grade */}
+                  <div className="cs-card" style={{ marginTop: '1.25rem' }}>
+                    <h3 style={{ fontSize: '0.85rem', fontWeight: 700, borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', margin: '0 0 0.75rem 0', color: '#0f172a' }}>
+                      Assign Experience to Tenant School
+                    </h3>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>Select School <span style={{ color: '#ef4444' }}>*</span></label>
+                        <select
+                          value={targetSchoolId}
+                          onChange={e => setTargetSchoolId(e.target.value)}
+                          style={{ width: '100%', height: '36px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.78rem', padding: '0 0.5rem', background: '#fff' }}
+                        >
+                          <option value="">-- Choose School --</option>
+                          {assignSchools.map(s => (
+                            <option key={s.school_id} value={s.school_id}>{s.school_name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>Select Target Grade (Optional)</label>
+                        <select
+                          value={targetGradeId}
+                          onChange={e => setTargetGradeId(e.target.value)}
+                          style={{ width: '100%', height: '36px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.78rem', padding: '0 0.5rem', background: '#fff' }}
+                        >
+                          <option value="">-- Choose Grade --</option>
+                          {assignGrades.map(g => (
+                            <option key={g.id} value={g.id}>{g.grade_name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <button
+                        onClick={handleAssignExperience}
+                        disabled={actionLoading}
+                        style={{
+                          width: '100%',
+                          height: '36px',
+                          borderRadius: '8px',
+                          background: '#4f46e5',
+                          color: '#ffffff',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          border: 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginTop: '0.5rem',
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        {actionLoading ? 'Assigning...' : 'Assign Experience'}
+                      </button>
+
+                      {assignHistory.length > 0 && (
+                        <div style={{ borderTop: '1px solid #f1f5f9', marginTop: '0.75rem', paddingTop: '0.75rem' }}>
+                          <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155', margin: '0 0 0.5rem 0' }}>Current Assignments</h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', maxHeight: '140px', overflowY: 'auto' }}>
+                            {assignHistory.map(a => (
+                              <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '0.7rem' }}>
+                                <span style={{ fontWeight: 600 }}>{a.school__school_name}</span>
+                                <span style={{ color: '#64748b' }}>{a.grade__grade_name || 'All Grades'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                    </div>
+                  </div>
                 </div>
 
               </div>
             </>
           )}
 
+          {/* ── View 10: Sync Reports & Analytics ── */}
+          {view === 'reports' && (
+            <div style={{ padding: '0.5rem', width: '100%', margin: '0 auto' }}>
+              <ReportsAnalytics />
+            </div>
+          )}
+
           {/* ── View 9: Profile Settings ── */}
           {view === 'profile' && (
-            <>
-              <div className="sd-page-header">
-                <h1 className="sd-page-title">Profile Settings</h1>
-                <p className="sd-page-sub">Manage your personal information and account security.</p>
+            <div style={{ padding: '0.5rem', width: '100%', maxWidth: '1100px', margin: '0 auto' }}>
+              <div className="sd-page-header" style={{ marginBottom: '2rem' }}>
+                <h1 className="sd-page-title" style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a' }}>Profile Settings</h1>
+                <p className="sd-page-sub" style={{ fontSize: '0.88rem', color: '#64748b', marginTop: '4px' }}>Manage your personal details and authentication options</p>
               </div>
 
               {feedbackMsg.text && (
                 <div style={{
-                  padding: '0.75rem 1rem', borderRadius: 8, marginBottom: '1.25rem',
-                  fontSize: '0.84rem', fontWeight: 600,
+                  padding: '0.85rem 1.25rem', borderRadius: '12px', marginBottom: '1.5rem',
+                  fontSize: '0.85rem', fontWeight: 600,
                   background: feedbackMsg.type === 'error' ? '#fef2f2' : '#f0fdf4',
                   color: feedbackMsg.type === 'error' ? '#ef4444' : '#15803d',
-                  border: feedbackMsg.type === 'error' ? '1px solid #fecaca' : '1px solid #bbf7d0'
+                  border: feedbackMsg.type === 'error' ? '1px solid #fecaca' : '1px solid #bbf7d0',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
                 }}>
-                  {feedbackMsg.text}
+                  <span>{feedbackMsg.type === 'error' ? '⚠️' : '✅'}</span>
+                  <span>{feedbackMsg.text}</span>
                 </div>
               )}
 
-              <form onSubmit={handleProfileUpdate}>
-                <div className="sd-profile-card">
-                  {/* Section Header */}
-                  <div className="sd-profile-section-header">
-                    <div className="sd-profile-section-title">
-                      <FiUser /> Personal Details
+              <form onSubmit={handleProfileUpdate} style={{ width: '100%' }}>
+                <div style={{ display: 'flex', flexDirection: 'row', gap: '2rem', flexWrap: 'wrap', alignItems: 'stretch' }}>
+                  {/* Left Column: Avatar & Summary Card */}
+                  <div style={{ background: '#ffffff', borderRadius: '16px', padding: '2rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '300px', flexShrink: 0, position: 'relative' }}>
+                    {avatarUploading && (
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(4px)', borderRadius: '16px', zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <FiRefreshCw className="spin-anim" style={{ color: '#0b75b3', fontSize: '1.5rem' }} />
+                      </div>
+                    )}
+                    <div 
+                      style={{ position: 'relative', margin: '0.5rem 0', cursor: 'pointer' }}
+                      onClick={() => document.getElementById('profile-avatar-input').click()}
+                    >
+                      <div style={{ width: '96px', height: '96px', borderRadius: '50%', border: '4px solid #eff6ff', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(11, 117, 179, 0.2)', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {currentUserState?.profile_picture ? (
+                          <img src={resolveMediaUrl(currentUserState.profile_picture)} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <div style={{ width: '100%', height: '100%', background: '#0b75b3', color: '#fff', fontWeight: 800, fontSize: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {(currentUserState?.username || 'CC').slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div 
+                        style={{ position: 'absolute', bottom: 0, right: 0, background: '#0b75b3', color: '#fff', padding: '0.45rem', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: '2px solid #fff', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="Upload Photo"
+                      >
+                        <FiUpload />
+                      </div>
                     </div>
 
+                    <input 
+                      type="file" 
+                      id="profile-avatar-input" 
+                      style={{ display: 'none' }} 
+                      accept="image/*" 
+                      onChange={handleAvatarChange}
+                    />
+                    
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: '1rem 0 0.25rem 0' }}>
+                      {profileForm.full_name || currentUserState?.username || 'Content Creator'}
+                    </h3>
+                    
+                    <div style={{ marginTop: '0.35rem', display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#e0f2fe', color: '#0369a1', borderRadius: '9999px', padding: '0.25rem 0.75rem', fontSize: '0.72rem', fontWeight: 700 }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#0284c7' }}></span>
+                      <span>Content Creator</span>
+                    </div>
+
+                    <div style={{ width: '100%', borderTop: '1px solid #f1f5f9', margin: '1.5rem 0' }}></div>
+
+                    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', padding: '0.75rem 1rem', background: '#f0f9ff', color: '#0369a1', borderRadius: '8px', border: 'none', fontWeight: 700, fontSize: '0.82rem', textAlign: 'left' }}>
+                        <FiUser style={{ fontSize: '1rem' }} />
+                        <span>Account Details</span>
+                      </div>
+                      
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setPwForm({ current_password: '', new_password: '', confirm_password: '' });
+                          setPwModalError('');
+                          setShowPwModal(true);
+                        }} 
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', padding: '0.75rem 1rem', background: 'transparent', color: '#475569', borderRadius: '8px', border: 'none', fontWeight: 500, fontSize: '0.82rem', textAlign: 'left', cursor: 'pointer', transition: 'background 0.15s' }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <FiLock style={{ fontSize: '1rem', color: '#94a3b8' }} />
+                        <span>Security & Password</span>
+                      </button>
+                      
+                      <button 
+                        type="button" 
+                        onClick={onLogout} 
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', padding: '0.75rem 1rem', background: 'transparent', color: '#ef4444', borderRadius: '8px', border: 'none', fontWeight: 600, fontSize: '0.82rem', textAlign: 'left', cursor: 'pointer', marginTop: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}
+                      >
+                        <FiLogOut style={{ fontSize: '1rem' }} />
+                        <span>Log Out</span>
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Full Name + Email */}
-                  <div className="sd-form-row">
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Full Name</label>
-                      <input className="sd-form-input" type="text"
-                        value={profileForm.full_name}
-                        onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
-                        placeholder="Your full name" required />
+                  {/* Right Column: Edit Form Details Card */}
+                  <div style={{ background: '#ffffff', borderRadius: '16px', padding: '2rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: 1, minWidth: '320px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem' }}>
+                      <FiUser style={{ color: '#0b75b3', fontSize: '1.25rem' }} />
+                      <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>Personal Information</span>
                     </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Email Address</label>
-                      <input className="sd-form-input" type="email"
-                        value={profileForm.email}
-                        onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
-                        placeholder="your@email.com" />
-                    </div>
-                  </div>
 
-                  {/* Username + Phone Number */}
-                  <div className="sd-form-row">
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Username</label>
-                      <input className="sd-form-input" type="text" value={profileForm.username} disabled
-                        style={{ background: '#f1f5f9', cursor: 'not-allowed' }} />
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
+                      <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Full Name</label>
+                        <input className="sd-form-input" type="text"
+                          value={profileForm.full_name}
+                          onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
+                          placeholder="Your full name" required 
+                          style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
+                          onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
+                          onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
+                        />
+                      </div>
+                      <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Email Address</label>
+                        <input className="sd-form-input" type="email"
+                          value={profileForm.email}
+                          onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
+                          placeholder="your@email.com" 
+                          style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
+                          onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
+                          onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
+                        />
+                      </div>
                     </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Phone Number</label>
-                      <input className="sd-form-input" type="tel"
-                        value={profileForm.phone_no}
-                        onChange={e => setProfileForm({ ...profileForm, phone_no: e.target.value })}
-                        placeholder="+91 98765 43210" />
-                    </div>
-                  </div>
 
-                  {/* Change Password Row */}
-                  <div className="sd-pw-row">
-                    <div>
-                      <div className="sd-pw-row-title">Change Password</div>
-                      <div className="sd-pw-row-sub">Update your password to stay secure</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
+                      <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Username</label>
+                        <input className="sd-form-input" type="text" value={currentUserState?.username || 'content_creator'} disabled
+                          style={{ width: '100%', height: '42px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} />
+                      </div>
+                      <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Phone Number</label>
+                        <input className="sd-form-input" type="tel"
+                          value={profileForm.phone_no}
+                          onChange={e => setProfileForm({ ...profileForm, phone_no: e.target.value })}
+                          placeholder="+91 98765 43210" 
+                          style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
+                          onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
+                          onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
+                        />
+                      </div>
                     </div>
-                    <button type="button" className="sd-btn-outline"
-                      onClick={() => {
-                        setPwForm({ current_password: '', new_password: '', confirm_password: '' });
-                        setPwModalError('');
-                        setShowPwModal(true);
-                      }}
-                    >Update</button>
-                  </div>
 
-                  <div className="sd-profile-save-row">
-                    <button type="submit" className="sd-btn-primary" disabled={actionLoading}>
-                      {actionLoading ? 'Saving...' : 'Save Changes'}
-                    </button>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '1.5rem', marginTop: '1.5rem' }}>
+                      <button type="submit" className="sd-btn-primary" disabled={actionLoading} style={{ padding: '0.75rem 2rem', background: '#0b75b3', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', transition: 'background 0.2s', boxShadow: '0 4px 6px -1px rgba(11, 117, 179, 0.2)' }}>
+                        {actionLoading ? 'Saving...' : 'Save Changes'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </form>
-            </>
+            </div>
           )}
 
           {/* ── Change Password Modal ── */}
@@ -5535,6 +6706,35 @@ function ContentStudio({ user, onLogout }) {
 
         </div>
       </div>
+
+      {/* ── Help & Support Modal ── */}
+      {showHelpModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowHelpModal(false)}>
+          <div style={{ background: '#ffffff', borderRadius: '16px', padding: '2rem', width: '480px', maxWidth: '90vw', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>Help & Support</h2>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '1.25rem' }} onClick={() => setShowHelpModal(false)}><FiX/></button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {[
+                { icon: '📧', title: 'Email Support', desc: 'support@languagelab.edu', action: 'mailto:support@languagelab.edu' },
+                { icon: '📚', title: 'Documentation', desc: 'Browse our knowledge base and guides', action: '#' },
+                { icon: '💬', title: 'Live Chat', desc: 'Chat with our support team', action: '#' },
+              ].map((item, idx) => (
+                <a key={idx} href={item.action} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', textDecoration: 'none', color: '#334155', transition: 'background 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}>
+                  <span style={{ fontSize: '1.5rem' }}>{item.icon}</span>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{item.title}</div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{item.desc}</div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
