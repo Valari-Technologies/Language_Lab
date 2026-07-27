@@ -14,6 +14,8 @@ from .views import (
     DashboardRecentExperiencesAPIView,
     DashboardRecentActivityAPIView,
     DashboardNotificationsAPIView,
+    ExperienceAssignAPIView,
+    LMSAssignmentOptionsAPIView,
 )
 
 router = DefaultRouter()
@@ -56,4 +58,10 @@ urlpatterns = [
     path("dashboard/recent-experiences", DashboardRecentExperiencesAPIView.as_view(), name="dashboard-recent-experiences"),
     path("dashboard/recent-activity", DashboardRecentActivityAPIView.as_view(), name="dashboard-recent-activity"),
     path("dashboard/notifications", DashboardNotificationsAPIView.as_view(), name="dashboard-notifications"),
+
+    # Assignment mapping
+    path("content/assign-experience/", ExperienceAssignAPIView.as_view(), name="assign-experience"),
+    path("content/assign-experience", ExperienceAssignAPIView.as_view()),
+    path("content/assignment-options/", LMSAssignmentOptionsAPIView.as_view(), name="assignment-options"),
+    path("content/assignment-options", LMSAssignmentOptionsAPIView.as_view()),
 ]

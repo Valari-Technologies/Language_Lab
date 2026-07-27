@@ -50,26 +50,45 @@ class AssetCollector:
     writing experience.json, and computing checksums for collected assets.
     """
 
-    def collect_assets(self, payload, pkg_dir):
+    def collect_assets(self, payload, pkg_dir, runtime_contract=None):
         """
         Collects physical media assets into pkg_dir/assets/, rewrites URLs,
-        writes experience.json into pkg_dir, and returns:
-        (rewritten_payload, file_list, experience_json_checksum)
+        and writes experience.json into pkg_dir.
+
+        Args:
+            payload:          Old preview_payload dict (used for asset discovery via
+                              resolved_media / media_id fields).
+            pkg_dir:          Absolute path to the package staging directory.
+            runtime_contract: Optional. If provided this dict (from runtime_contact.py)
+                              is written as experience.json after URL rewriting.
+                              If None, the raw rewritten payload is written instead.
+
+        Returns:
+            (rewritten_payload, file_list, experience_json_checksum)
         """
         assets_pkg_dir = os.path.join(pkg_dir, "assets")
         media_file_map = {}  # old_url → relative_package_path
         file_list = []       # manifest file entries
 
+        # ── Asset Discovery ────────────────────────────────────────────
+        # Inspect the old preview_payload for resolved_media (snake_case).
+        # The new runtime_contract uses resolvedMedia (camelCase) — we check
+        # both keys so this works whether called with the old payload alone or
+        # alongside a runtime_contract.
         for act in payload.get("activities", []):
             for scr in act.get("screens", []):
-                for rm in scr.get("resolved_media", []):
+                # Support both old snake_case and new camelCase key names
+                resolved_list = scr.get("resolved_media") or scr.get("resolvedMedia") or []
+                for rm in resolved_list:
                     if rm.get("missing") or not rm.get("url"):
                         continue
                     old_url = rm["url"]
+                    if old_url in media_file_map:
+                        continue  # already processed this URL
                     media_type = rm.get("type", "IMAGE")
                     subfolder = _media_type_subfolder(media_type)
 
-                    # Find the Media DB object to get physical file
+                    # Find the Media DB object to get the physical file path
                     media_id = rm.get("media_id")
                     try:
                         media_obj = Media.objects.get(id=media_id)
@@ -96,11 +115,21 @@ class AssetCollector:
                     
                     media_file_map[old_url] = rel_path
 
-        # Rewrite payload URLs to relative paths
+        # ── experience.json ─────────────────────────────────────────────
+        # If a runtime_contract (from runtime_contact.py) is provided, rewrite
+        # its URLs and write it as experience.json. This is the Runtime v1.0
+        # JSON that the Electron runtime will read.
+        # If no contract is provided, fall back to the rewritten preview_payload.
+        if runtime_contract is not None:
+            output_payload = _rewrite_payload_media_urls(runtime_contract, media_file_map)
+        else:
+            output_payload = _rewrite_payload_media_urls(payload, media_file_map)
+
+        # Rewrite the raw payload for backward-compatible return value
         rewritten_payload = _rewrite_payload_media_urls(payload, media_file_map)
 
         # Write experience.json at package root
-        experience_json_bytes = _json.dumps(rewritten_payload, indent=2, ensure_ascii=False).encode("utf-8")
+        experience_json_bytes = _json.dumps(output_payload, indent=2, ensure_ascii=False).encode("utf-8")
         experience_json_path = os.path.join(pkg_dir, "experience.json")
         with open(experience_json_path, "wb") as f:
             f.write(experience_json_bytes)

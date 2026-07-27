@@ -47,6 +47,7 @@ class School(models.Model):
     phone = models.CharField(max_length=20)
     email = models.CharField(max_length=100)
     logo = models.CharField(max_length=255, null=True, blank=True)
+    school_code = models.CharField(max_length=50, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

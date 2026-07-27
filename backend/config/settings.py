@@ -183,6 +183,8 @@ else:
 MEDIA_URL = config("MEDIA_URL", default="/media/")
 MEDIA_ROOT = config("MEDIA_ROOT", default=str(BASE_DIR / "media"))
 
-# Published .elab packages (Phase 7)
-# Override via PACKAGES_ROOT env var to point at an external volume in production.
 PACKAGES_ROOT = config("PACKAGES_ROOT", default=str(BASE_DIR / "media" / "packages"))
+
+# Google OAuth Settings
+GOOGLE_CLIENT_ID = config("GOOGLE_CLIENT_ID", default="")
+GOOGLE_CLIENT_SECRET = config("GOOGLE_CLIENT_SECRET", default="")

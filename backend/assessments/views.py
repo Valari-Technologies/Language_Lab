@@ -589,7 +589,14 @@ class ReportsStudentDetailAPIView(APIView):
     serializer_class = StudentReportSerializer
 
     def get(self, request, student_id):
+        from teacher.models import Student
         student_user = User.objects.filter(id=student_id, role="STUDENT").first()
+        if not student_user:
+            # Fallback to matching by student_id
+            student_profile = Student.objects.filter(student_id=student_id).select_related("user").first()
+            if student_profile:
+                student_user = student_profile.user
+        
         if not student_user:
             return Response({"message": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
         

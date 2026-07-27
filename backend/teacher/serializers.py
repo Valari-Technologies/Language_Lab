@@ -13,6 +13,9 @@ class StudentSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False)
     email = serializers.EmailField(required=False)
     full_name = serializers.CharField(required=False)
+    roll_no = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    grade = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    section = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     is_active = serializers.BooleanField(required=False, default=True)
     school_name = serializers.CharField(source="school.school_name", read_only=True)
     school = serializers.PrimaryKeyRelatedField(queryset=School.objects.all(), required=False, allow_null=True)
@@ -26,6 +29,9 @@ class StudentSerializer(serializers.ModelSerializer):
             "password",
             "email",
             "full_name",
+            "roll_no",
+            "grade",
+            "section",
             "is_active",
             "school",
             "school_name",
@@ -46,13 +52,27 @@ class StudentSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         request = self.context.get("request")
         if not self.instance:
-            if "username" not in attrs:
-                raise serializers.ValidationError({"username": "Username is required for creation."})
-            if "password" not in attrs:
-                raise serializers.ValidationError({"password": "Password is required for creation."})
-            if User.objects.filter(username=attrs["username"]).exists():
-                raise serializers.ValidationError({"username": "A user with that username already exists."})
-            validate_password(attrs["password"])
+            # Student login credential IS the roll number.
+            # username = roll_no, default password = roll_no.
+            roll_no = attrs.get("roll_no", "").strip()
+            if not roll_no:
+                raise serializers.ValidationError({"roll_no": "Roll No is required to create a student account."})
+
+            # Use roll_no as the username (login credential).
+            # If a duplicate exists (e.g. same roll_no in another school), append a suffix.
+            username = roll_no
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{roll_no}_{counter}"
+                counter += 1
+            attrs["username"] = username
+
+            # Default password = roll_no so the student can log in immediately.
+            attrs["password"] = roll_no
+
+            # Auto-generate a placeholder email.
+            attrs["email"] = f"{username}@languagelab.com"
+
             if request and request.user.role in ["SCHOOL_ADMIN", "TEACHER"]:
                 admin_school = get_user_school(request.user)
                 if not admin_school:

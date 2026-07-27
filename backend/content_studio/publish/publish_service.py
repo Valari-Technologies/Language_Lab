@@ -4,6 +4,7 @@ from django.db import transaction
 
 from content_studio.models import PublishedPackage, PublishVersion
 from content_studio.validation_engine import run_validation_engine
+from content_studio.services.runtime_contact import build_runtime_experience
 
 from .experience_builder import ExperienceBuilder
 from .asset_collector import AssetCollector
@@ -62,8 +63,12 @@ class PublishService:
         if report_data["status"] == "FAILED":
             raise ValueError(("VALIDATION_FAILED", report_data))
 
-        # STEP 2: ASSEMBLE — call ExperienceBuilder to construct payload
-        payload = self.experience_builder.build_payload(experience)
+        # STEP 2: ASSEMBLE — call ExperienceBuilder to build the preview_payload
+        preview_payload = self.experience_builder.build_payload(experience)
+
+        # STEP 2b: RUNTIME CONTRACT — convert preview_payload into the
+        # EnglishLab Runtime v1.0 contract (experience.json written to .elab).
+        runtime_contract = build_runtime_experience(experience, preview_payload)
 
         # STEP 3: RECORD RESOLUTION — resolve PublishedPackage and PublishVersion check
         package, _ = PublishedPackage.objects.get_or_create(
@@ -104,8 +109,11 @@ class PublishService:
         tmp_elab_path = None
 
         try:
-            # STEP 4: ASSETS & PAYLOAD REWRITE — collect physical media assets into assets/, write experience.json
-            rewritten_payload, file_list, experience_json_checksum = self.asset_collector.collect_assets(payload, pkg_dir)
+            # STEP 4: ASSETS & PAYLOAD REWRITE — collect physical media assets into assets/,
+            # write the Runtime v1.0 contract as experience.json
+            rewritten_payload, file_list, experience_json_checksum = self.asset_collector.collect_assets(
+                preview_payload, pkg_dir, runtime_contract=runtime_contract
+            )
 
             # STEP 5: METADATA — write metadata.json at package root
             metadata_dict, metadata_json_checksum, metadata_json_size = self.metadata_builder.build_metadata(

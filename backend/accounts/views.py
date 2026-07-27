@@ -426,32 +426,165 @@ class GoogleLoginAPIView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get("email")
-        if not email:
-            return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+        token = request.data.get("token")
+        code = request.data.get("code")
+
+        if not token and not code:
+            return Response({"error": "Google ID Token or Authorization code is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        from google.oauth2 import id_token
+        from google.auth.transport import requests as google_requests
+        from django.conf import settings
+
+        try:
+            if code:
+                # Exchange auth code for ID Token using Flow
+                from google_auth_oauthlib.flow import Flow
+                flow = Flow.from_client_config(
+                    client_config={
+                        "web": {
+                            "client_id": settings.GOOGLE_CLIENT_ID,
+                            "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                            "token_uri": "https://oauth2.googleapis.com/token",
+                        }
+                    },
+                    scopes=[
+                        "https://www.googleapis.com/auth/userinfo.profile",
+                        "https://www.googleapis.com/auth/userinfo.email",
+                        "openid"
+                    ],
+                    redirect_uri="postmessage"
+                )
+                flow.fetch_token(code=code)
+                id_token_jwt = flow.credentials.id_token
+            else:
+                id_token_jwt = token
+
+            if not id_token_jwt:
+                return Response({"error": "Failed to retrieve Google ID Token"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Verify the ID Token securely using Google client libraries
+            idinfo = id_token.verify_oauth2_token(
+                id_token_jwt,
+                google_requests.Request(),
+                settings.GOOGLE_CLIENT_ID
+            )
+
+            # Verify token issuer
+            if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
+                raise ValueError('Wrong issuer.')
+
+            # Extract user attributes
+            email = idinfo.get('email')
+            google_id = idinfo.get('sub')
+            name = idinfo.get('name', '')
+            picture = idinfo.get('picture', '')
+
+            if not email:
+                return Response({"error": "Email is required but not provided by Google account"}, status=status.HTTP_400_BAD_REQUEST)
+
+        except ValueError as e:
+            return Response({"error": f"Invalid Google token: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": f"Token verification failed: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
         from django.contrib.auth import get_user_model
         User = get_user_model()
-        user = User.objects.filter(email__iexact=email).first()
 
+        # Check existing user by Google ID
+        user = User.objects.filter(google_id=google_id).first()
+
+        # Or fallback by matching Email address
         if not user:
+            user = User.objects.filter(email__iexact=email).first()
+            if user:
+                user.google_id = google_id
+                if picture and not user.profile_picture:
+                    user.profile_picture = picture
+                user.save(update_fields=['google_id', 'profile_picture'])
+
+        # Register new student user dynamically
+        if not user:
+            base_username = email.split('@')[0]
+            username = base_username
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{base_username}{counter}"
+                counter += 1
+
+            user = User.objects.create(
+                username=username,
+                email=email,
+                full_name=name or username,
+                google_id=google_id,
+                profile_picture=picture,
+                role=User.Role.STUDENT
+            )
+            user.set_unusable_password()
+            user.save()
+
+        if not user.is_active:
             return Response(
-                {"message": f"Google account '{email}' is not registered in the system. Please create an account first."},
-                status=status.HTTP_404_NOT_FOUND
+                {"message": "This account has been deactivated."},
+                status=status.HTTP_403_FORBIDDEN
             )
 
         refresh = RefreshToken.for_user(user)
+
+        school_obj = get_user_school(user)
+        user_payload = {
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.full_name or user.username,
+            "email": user.email,
+            "role": user.role,
+            "profile_picture": user.profile_picture,
+            "school_id": school_obj.school_id if school_obj else None,
+            "school_name": school_obj.school_name if school_obj else "",
+        }
+
         return Response({
-            "refresh": str(refresh),
+            "message": "Login successful",
             "access": str(refresh.access_token),
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "full_name": getattr(user, "full_name", user.username),
-                "role": user.role,
-                "school_id": get_user_school_id(user),
-            }
+            "refresh": str(refresh),
+            "user": user_payload,
+        }, status=status.HTTP_200_OK)
+
+
+class ProfileAvatarUploadAPIView(APIView):
+    """
+    POST /api/users/profile/avatar/
+    Uploads a new avatar/profile photo and saves it locally, updating the user.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        import os
+        import uuid
+        from django.core.files.storage import default_storage
+        from django.utils.text import get_valid_filename
+
+        avatar_file = request.FILES.get("avatar")
+        if not avatar_file:
+            return Response({"error": "No avatar file provided."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        ext = os.path.splitext(avatar_file.name)[1].lower()
+        if ext not in [".jpg", ".jpeg", ".png", ".webp", ".gif"]:
+            return Response({"error": "Unsupported image format. Allowed formats: PNG, JPG, JPEG, WEBP, GIF."}, status=status.HTTP_400_BAD_REQUEST)
+
+        safe_name = get_valid_filename(f"avatar_{uuid.uuid4().hex[:10]}{ext}")
+        saved_path = default_storage.save(f"avatars/{safe_name}", avatar_file)
+        
+        url = request.build_absolute_uri(default_storage.url(saved_path))
+        
+        user = request.user
+        user.profile_picture = url
+        user.save(update_fields=["profile_picture"])
+
+        return Response({
+            "message": "Avatar uploaded successfully.",
+            "profile_picture": url
         }, status=status.HTTP_200_OK)
 
 

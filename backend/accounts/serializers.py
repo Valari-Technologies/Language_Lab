@@ -55,7 +55,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("id", "username", "email", "full_name", "phone_no", "role", "school_name")
+        fields = ("id", "username", "email", "full_name", "phone_no", "role", "school_name", "profile_picture")
         read_only_fields = ("id", "username", "role", "school_name")
 
     def get_school_name(self, obj):

@@ -176,12 +176,26 @@ class BulkUploadAPIView(APIView):
                         {"error": f"Missing required column header: '{col}'."},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-        else:
-            if not has_any(headers, "username", "user", "roll_number", "roll number", "student_id", "student id", "user_name") or not has_any(headers, "password", "pass"):
+        elif upload_type == "teacher":
+            if not has_any(headers, "name", "fullname", "full_name", "full name", "teacher_name", "teacher name"):
                 return Response(
-                    {"error": "Missing required column headers. Must include 'username' (or 'roll number') and 'password'."},
+                    {"error": "Missing required column header: 'name' or 'fullname' for teacher imports."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            if "email" not in headers:
+                return Response(
+                    {"error": "Missing required column header: 'email' for teacher imports."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        elif upload_type == "student":
+            if not has_any(headers, "fullname", "full_name", "full name", "name", "student_name"):
+                return Response({"error": "Missing required column header: 'fullname'."}, status=status.HTTP_400_BAD_REQUEST)
+            if not has_any(headers, "rollno", "roll_no", "roll_number", "roll number"):
+                return Response({"error": "Missing required column header: 'rollno'."}, status=status.HTTP_400_BAD_REQUEST)
+            if not has_any(headers, "grade", "grade_name", "grade name"):
+                return Response({"error": "Missing required column header: 'grade'."}, status=status.HTTP_400_BAD_REQUEST)
+            if not has_any(headers, "section", "class_section", "class section"):
+                return Response({"error": "Missing required column header: 'section'."}, status=status.HTTP_400_BAD_REQUEST)
 
         # 6. Row Ingestion Processing
         User = get_user_model()
@@ -270,42 +284,34 @@ class BulkUploadAPIView(APIView):
                         SchoolAdminProfile.objects.create(user=user_obj, school=school_obj)
                         created_count += 1
                     else:
-                        # Flexible header value extraction
-                        username_val = get_val(row_data, "username", "user", "roll_number", "roll number", "student_id", "student id", "user_name")
-                        password_val = get_val(row_data, "password", "pass")
-
-                        if username_val is None or not str(username_val).strip():
-                            raise ValueError("Username is required.")
-                        if password_val is None or not str(password_val).strip():
-                            raise ValueError("Password is required.")
-
-                        username = str(username_val).strip()
-                        password = str(password_val).strip()
-
-                        if User.objects.filter(username=username).exists():
-                            raise ValueError(f"Username '{username}' already exists.")
-
-                        if len(password) < 4:
-                            raise ValueError("Password must be at least 4 characters long.")
-
-                        # Extract user details
-                        email_val = get_val(row_data, "email", "email_address", "email address")
-                        email = str(email_val).strip() if email_val is not None else ""
-
-                        fullname_val = get_val(row_data, "full_name", "full name", "name", "student_name", "teacher_name")
-                        full_name = str(fullname_val).strip() if fullname_val is not None else ""
-
-                        is_active_val = row_data.get("is_active")
-                        if is_active_val is not None:
-                            if isinstance(is_active_val, str):
-                                is_active = is_active_val.strip().lower() in ["true", "1", "yes", "active"]
-                            else:
-                                is_active = bool(is_active_val)
-                        else:
-                            is_active = True
-
-                        # Upload Logic
                         if upload_type == "teacher":
+                            # Flexible header value extraction
+                            email_val = get_val(row_data, "email", "email_address", "email address")
+                            fullname_val = get_val(row_data, "name", "full_name", "full name", "fullname", "teacher_name", "teacher name")
+
+                            if email_val is None or not str(email_val).strip():
+                                raise ValueError("Email is required for teacher.")
+                            if fullname_val is None or not str(fullname_val).strip():
+                                raise ValueError("Name is required for teacher.")
+
+                            email = str(email_val).strip()
+                            full_name = str(fullname_val).strip()
+                            username = email
+
+                            if User.objects.filter(username=username).exists() or User.objects.filter(email=email).exists():
+                                raise ValueError(f"A user with email '{email}' already exists.")
+
+                            password = "Teacher123!"
+
+                            is_active_val = row_data.get("is_active")
+                            if is_active_val is not None:
+                                if isinstance(is_active_val, str):
+                                    is_active = is_active_val.strip().lower() in ["true", "1", "yes", "active"]
+                                else:
+                                    is_active = bool(is_active_val)
+                            else:
+                                is_active = True
+
                             qualification = str(row_data.get("qualification", "")).strip() if row_data.get("qualification") is not None else ""
                             
                             exp_val = row_data.get("experience_years")
@@ -371,29 +377,64 @@ class BulkUploadAPIView(APIView):
                                 TeacherClass.objects.get_or_create(teacher=teacher, class_obj=cls)
 
                         elif upload_type == "student":
-                            # Validate Relational fields
-                            class_id_val = row_data.get("class_id")
-                            grade_id_val = row_data.get("grade_id")
+                            fullname_val = get_val(row_data, "fullname", "full_name", "full name", "name", "student_name")
+                            rollno_val = get_val(row_data, "rollno", "roll_no", "roll_number", "roll number", "student_id", "student id")
+                            grade_val = get_val(row_data, "grade", "grade_name", "grade name")
+                            section_val = get_val(row_data, "section", "class_section", "class section")
 
-                            if class_id_val is not None:
-                                try:
-                                    class_id = int(class_id_val)
-                                    if not Class.objects.filter(class_id=class_id, school=school).exists():
-                                        raise ValueError(f"Class with ID {class_id} does not exist or does not belong to this school.")
-                                except ValueError as ve:
-                                    if "does not exist" in str(ve):
-                                        raise ve
-                                    raise ValueError(f"Invalid class_id: '{class_id_val}' must be an integer.")
+                            if not fullname_val or not str(fullname_val).strip():
+                                raise ValueError("fullname is required.")
+                            if not rollno_val or not str(rollno_val).strip():
+                                raise ValueError("rollno is required.")
+                            if not grade_val or not str(grade_val).strip():
+                                raise ValueError("grade is required.")
+                            if not section_val or not str(section_val).strip():
+                                raise ValueError("section is required.")
 
-                            if grade_id_val is not None:
-                                try:
-                                    grade_id = int(grade_id_val)
-                                    if not Grade.objects.filter(pk=grade_id).exists():
-                                        raise ValueError(f"Grade with ID {grade_id} does not exist.")
-                                except ValueError as ve:
-                                    if "does not exist" in str(ve):
-                                        raise ve
-                                    raise ValueError(f"Invalid grade_id: '{grade_id_val}' must be an integer.")
+                            full_name = str(fullname_val).strip()
+                            roll_no = str(rollno_val).strip()
+                            grade = str(grade_val).strip()
+                            section = str(section_val).strip()
+
+                            username_val = get_val(row_data, "username", "user", "user_name")
+                            if username_val and str(username_val).strip():
+                                username = str(username_val).strip()
+                            else:
+                                # Auto generate username
+                                base = "".join(c for c in full_name if c.isalnum()).lower()
+                                if not base:
+                                    base = "student"
+                                base = f"{base}_{roll_no}"
+                                username = base
+                                suffix = 1
+                                while User.objects.filter(username=username).exists():
+                                    username = f"{base}_{suffix}"
+                                    suffix += 1
+
+                            if User.objects.filter(username=username).exists():
+                                raise ValueError(f"Username '{username}' already exists.")
+
+                            password_val = get_val(row_data, "password", "pass")
+                            if password_val and str(password_val).strip():
+                                password = str(password_val).strip()
+                            else:
+                                import uuid
+                                password = str(uuid.uuid4())[:12]
+
+                            email_val = get_val(row_data, "email", "email_address", "email address")
+                            if email_val and str(email_val).strip():
+                                email = str(email_val).strip()
+                            else:
+                                email = f"{username}@languagelab.com"
+
+                            is_active_val = row_data.get("is_active")
+                            if is_active_val is not None:
+                                if isinstance(is_active_val, str):
+                                    is_active = is_active_val.strip().lower() in ["true", "1", "yes", "active"]
+                                else:
+                                    is_active = bool(is_active_val)
+                            else:
+                                is_active = True
 
                             # Create Django auth user
                             new_user = User.objects.create_user(
@@ -408,7 +449,10 @@ class BulkUploadAPIView(APIView):
                             # Create Student profile record
                             Student.objects.create(
                                 user=new_user,
-                                school=school
+                                school=school,
+                                roll_no=roll_no,
+                                grade=grade,
+                                section=section
                             )
 
                         created_count += 1

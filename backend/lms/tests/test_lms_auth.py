@@ -9,7 +9,6 @@ from super_admin.models import School, Grade
 from school_admin.models import Class
 from teacher.models import Student
 
-
 class LMSRollNumberAuthTests(TestCase):
     """
     Unit tests for LMS passwordless Roll Number Authentication ingestion endpoint (`POST /api/lms/login`).
@@ -382,5 +381,3 @@ class LMSSyncAPITests(TestCase):
         # Verify attempt status updated to COMPLETED
         att = StudentAttempt.objects.get(lms_attempt_id="LMS-SYNC-999")
         self.assertEqual(att.status, "COMPLETED")
-
-

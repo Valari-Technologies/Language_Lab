@@ -12,6 +12,7 @@ from .views import (
     ResetPasswordAPIView,
     VerifyOTPAPIView,
     GoogleLoginAPIView,
+    ProfileAvatarUploadAPIView,
 )
 
 urlpatterns = [
@@ -40,5 +41,6 @@ urlpatterns = [
 
     # Logged-in user's own profile & password
     path("users/profile/", ProfileAPIView.as_view(), name="user-profile"),
+    path("users/profile/avatar/", ProfileAvatarUploadAPIView.as_view(), name="user-profile-avatar"),
     path("users/change-password/", ChangePasswordAPIView.as_view(), name="change-password"),
 ]

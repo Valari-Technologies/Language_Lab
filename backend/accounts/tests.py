@@ -372,7 +372,6 @@ class CMSSchoolAdminAndTeacherTests(TestCase):
         data = {
             "school": self.school.school_id,
             "qualification": "M.A. English literature",
-            "experience_years": 5,
             "full_name": "Updated Teacher Name",
             "email": "updatedteacher@testschool.edu",
             "is_active": False
@@ -385,7 +384,6 @@ class CMSSchoolAdminAndTeacherTests(TestCase):
         # Verify teacher fields updated
         self.teacher.refresh_from_db()
         self.assertEqual(self.teacher.qualification, "M.A. English literature")
-        self.assertEqual(self.teacher.experience_years, 5)
 
         # Verify linked user fields updated
         self.teacher_user.refresh_from_db()
@@ -422,27 +420,23 @@ class CMSSchoolAdminAndTeacherTests(TestCase):
     def test_create_teacher_profile(self):
         url = "/api/cms/v1/teachers/"
         data = {
-            "username": "new_teacher_user",
-            "password": "newpassword123",
             "email": "newteacher@school.edu",
             "full_name": "New Teacher Name",
             "is_active": True,
             "school": self.school.school_id,
             "qualification": "Ph.D. in Linguistics",
-            "experience_years": 10
         }
         response = self.client.post(
             url, data, content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {self.token}"
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertTrue(User.objects.filter(username="new_teacher_user").exists())
-        user = User.objects.get(username="new_teacher_user")
-        self.assertTrue(user.check_password("newpassword123"))
+        self.assertTrue(User.objects.filter(username="newteacher@school.edu").exists())
+        user = User.objects.get(username="newteacher@school.edu")
+        self.assertTrue(user.check_password("Teacher123!"))
         self.assertEqual(user.role, "TEACHER")
         self.assertTrue(Teacher.objects.filter(user=user).exists())
         t = Teacher.objects.get(user=user)
         self.assertEqual(t.qualification, "Ph.D. in Linguistics")
-        self.assertEqual(t.experience_years, 10)
 
 
 from accounts.models import PasswordResetOTP

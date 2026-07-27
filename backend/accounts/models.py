@@ -29,6 +29,19 @@ class User(AbstractUser):
         help_text="Contact phone number"
     )
 
+    google_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        unique=True
+    )
+
+    profile_picture = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     assignments = models.ManyToManyField(
