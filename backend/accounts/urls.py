@@ -13,6 +13,7 @@ from .views import (
     VerifyOTPAPIView,
     GoogleLoginAPIView,
     ProfileAvatarUploadAPIView,
+    TokenRefreshAPIView,
 )
 
 urlpatterns = [
@@ -33,7 +34,7 @@ urlpatterns = [
     path("teacher/dashboard/", TeacherDashboardAPIView.as_view(), name="teacher_dashboard"),
 
     # Authentication & JWT Actions
-    path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("auth/refresh/", TokenRefreshAPIView.as_view(), name="token_refresh"),
     path("auth/verify/", TokenVerifyView.as_view(), name="token_verify"),
 
     # User Registration

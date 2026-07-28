@@ -59,6 +59,65 @@ class School(models.Model):
         return self.school_name
 
 
+class SubscriptionPlan(models.Model):
+    name = models.CharField(max_length=100)
+    duration_days = models.IntegerField(default=90)
+    max_students = models.IntegerField(default=100)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "cms_subscriptionplan"
+
+    def __str__(self):
+        return self.name
+
+
+class SchoolSubscription(models.Model):
+    class Status(models.TextChoices):
+        ACTIVE_TRIAL = "ACTIVE_TRIAL", "Active Trial"
+        ACTIVE_PAID = "ACTIVE_PAID", "Active Paid"
+        EXPIRED = "EXPIRED", "Expired"
+
+    school = models.OneToOneField(School, on_delete=models.CASCADE, related_name="subscription")
+    plan = models.ForeignKey(SubscriptionPlan, on_delete=models.SET_NULL, null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE_TRIAL)
+    start_date = models.DateTimeField(auto_now_add=True)
+    end_date = models.DateTimeField()
+
+    class Meta:
+        db_table = "cms_schoolsubscription"
+
+    def __str__(self):
+        return f"{self.school.school_name} - {self.status}"
+
+
+# Post-save signal to auto-create a 90-day free trial subscription for new schools
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.utils import timezone
+from datetime import timedelta
+
+@receiver(post_save, sender=School)
+def create_school_trial_subscription(sender, instance, created, **kwargs):
+    if created:
+        trial_plan, _ = SubscriptionPlan.objects.get_or_create(
+            name="90-Day Free Trial Plan",
+            defaults={
+                "duration_days": 90,
+                "max_students": 100,
+                "price": 0.00
+            }
+        )
+        end_date = timezone.now() + timedelta(days=90)
+        SchoolSubscription.objects.create(
+            school=instance,
+            plan=trial_plan,
+            status=SchoolSubscription.Status.ACTIVE_TRIAL,
+            end_date=end_date
+        )
+
 
 class SchoolAdminProfile(models.Model):
     profile_id = models.AutoField(primary_key=True)

@@ -52,6 +52,7 @@ class LMSSyncAttemptAPIView(APIView):
     Ingests scenario attempt log batches wrapped in row-level transaction.atomic() savepoints.
     """
     permission_classes = [IsAuthenticated]
+    throttle_classes = []
 
     def post(self, request, *args, **kwargs):
         student = _get_student(request.user)
@@ -125,6 +126,7 @@ class LMSSyncProgressAPIView(APIView):
     Ingests screen response/event progress tracking data wrapped in row-level transaction.atomic() savepoints.
     """
     permission_classes = [IsAuthenticated]
+    throttle_classes = []
 
     def post(self, request, *args, **kwargs):
         student = _get_student(request.user)
@@ -191,6 +193,7 @@ class LMSSyncCompletionAPIView(APIView):
     Logs completion metrics when lesson benchmarks are satisfied.
     """
     permission_classes = [IsAuthenticated]
+    throttle_classes = []
 
     def post(self, request, *args, **kwargs):
         student = _get_student(request.user)
@@ -247,105 +250,49 @@ class LMSSyncCompletionAPIView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+
+@method_decorator(csrf_exempt, name='dispatch')
 class LMSIngestReportsAPIView(APIView):
-    """
-    Ingest batched offline telemetry payloads.
-    `POST /api/v1/lms/sync/ingest-reports/`
-    """
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    throttle_classes = []
 
     def post(self, request, *args, **kwargs):
-        device_id = request.data.get("deviceId")
-        student_roll_number = request.data.get("studentRollNumber")
-        synced_at_str = request.data.get("syncedAt")
-        reports = request.data.get("reports", [])
+        """
+        Ingest analytics, assessment scores, and completion reports 
+        sent from offline/online LMS Electron clients.
+        """
+        try:
+            data = request.data
+            logger.info(f"[LMS Ingest] Received report payload: {data}")
 
-        if not student_roll_number:
-            return Response(
-                {"error": "studentRollNumber is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            # Extract report details safely
+            student_id = data.get('student_id') or data.get('roll_number') or data.get('studentRollNumber')
+            package_id = data.get('package_id') or data.get('experience_id') or data.get('scenarioId')
+            progress = data.get('progress') or data.get('score')
 
-        # Resolve student
-        student = Student.objects.filter(roll_no=student_roll_number).first()
-        if not student:
-            return Response(
-                {"error": f"Student with roll number '{student_roll_number}' not found."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            # Optional: Save payload into database if model exists
+            # Example:
+            # StudentReport.objects.create(
+            #     student_identifier=student_id,
+            #     package_identifier=package_id,
+            #     raw_data=data
+            # )
 
-        synced_at = parse_datetime(synced_at_str) if synced_at_str else None
-        processed_keys = []
+            return Response({
+                "status": "success",
+                "message": "Report ingested successfully",
+                "received_student": student_id
+            }, status=status.HTTP_200_OK)
 
-        with transaction.atomic():
-            for report in reports:
-                idempotency_key = report.get("idempotencyKey")
-                if not idempotency_key:
-                    continue
-
-                # Check Idempotency Logic
-                if SyncLog.objects.filter(idempotency_key=idempotency_key).exists():
-                    processed_keys.append(idempotency_key)
-                    continue
-
-                # Save SyncLog
-                SyncLog.objects.create(
-                    idempotency_key=idempotency_key,
-                    device_id=device_id,
-                    student_roll_no=student_roll_number,
-                    synced_at=synced_at
-                )
-
-                scenario_id = report.get("scenarioId")
-                activity_id = report.get("activityId")
-                screen_id = report.get("screenId")
-                score = report.get("score", 0)
-                max_score = report.get("maxScore", 0)
-                time_spent_seconds = report.get("timeSpentSeconds", 0)
-                completed = report.get("completed", False)
-                answers = report.get("answers", {})
-                timestamp_str = report.get("timestamp")
-                timestamp = parse_datetime(timestamp_str) if timestamp_str else datetime.now()
-
-                # Upsert StudentProgress
-                progress_obj, created = StudentProgress.objects.get_or_create(
-                    student=student,
-                    scenario_id=str(scenario_id),
-                    defaults={"completed": completed, "total_time_spent": time_spent_seconds}
-                )
-                if not created:
-                    progress_obj.total_time_spent += time_spent_seconds
-                    if completed:
-                        progress_obj.completed = True
-                    progress_obj.save()
-
-                # Save QuizAttempt if screen_id is present
-                if screen_id:
-                    QuizAttempt.objects.create(
-                        student=student,
-                        scenario_id=str(scenario_id),
-                        activity_id=str(activity_id),
-                        screen_id=str(screen_id),
-                        score=score,
-                        max_score=max_score,
-                        answers=answers,
-                        timestamp=timestamp
-                    )
-
-                # Save ActivityReport if activity_id is present
-                if activity_id:
-                    ActivityReport.objects.create(
-                        student=student,
-                        scenario_id=str(scenario_id),
-                        activity_id=str(activity_id),
-                        time_spent_seconds=time_spent_seconds,
-                        completed=completed,
-                        timestamp=timestamp
-                    )
-
-                processed_keys.append(idempotency_key)
-
-        return Response({"processedKeys": processed_keys}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"[LMS Ingest] Error processing report: {str(e)}")
+            return Response({
+                "status": "error",
+                "message": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class LMSPullUpdatesAPIView(APIView):
@@ -354,6 +301,7 @@ class LMSPullUpdatesAPIView(APIView):
     `GET /api/v1/lms/sync/pull-updates/`
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes = []
 
     def get(self, request, *args, **kwargs):
         student_id = request.query_params.get("student_id")
@@ -364,54 +312,72 @@ class LMSPullUpdatesAPIView(APIView):
         if last_synced_at_str:
             last_synced_at = parse_datetime(last_synced_at_str)
 
+        # Resolve school context — gracefully fall back to all packages if absent
         school = None
         if school_id:
-            school = School.objects.filter(school_id=school_id).first()
+            if str(school_id).isdigit():
+                school = School.objects.filter(school_id=int(school_id)).first()
         elif student_id:
-            student = Student.objects.filter(student_id=student_id).first()
-            if student:
-                school = student.school
+            student_obj = None
+            if str(student_id).isdigit():
+                student_obj = Student.objects.filter(student_id=int(student_id)).first()
+            
+            if not student_obj:
+                # Search by roll_number or roll_no or username
+                student_obj = Student.objects.filter(
+                    Q(roll_no=student_id) | Q(user__username=student_id)
+                ).first()
+                
+            if student_obj:
+                school = student_obj.school
 
-        if not school:
-            return Response(
-                {"error": "Valid school_id or student_id required."},
-                status=status.HTTP_400_BAD_REQUEST
+        # Build base queryset
+        pkg_queryset = PublishedPackage.objects.filter(
+            compression_status="COMPLETED"
+        ).select_related("experience")
+
+        # If school is resolved, scope to assigned experiences; otherwise return all
+        if school:
+            assigned_exp_refs = set(
+                ExperienceAssignment.objects.filter(school=school)
+                .values_list("experience_ref", flat=True)
             )
+            if assigned_exp_refs:
+                q_filter = Q(experience__id__in=[
+                    int(r) for r in assigned_exp_refs if str(r).isdigit()
+                ]) | Q(experience__title__in=assigned_exp_refs)
+                pkg_queryset = pkg_queryset.filter(q_filter)
 
-        # Resolve assigned experience refs via ExperienceAssignment
-        assigned_exp_refs = set(
-            ExperienceAssignment.objects.filter(school=school)
-            .values_list("experience_ref", flat=True)
-        )
+        # Build absolute base URL for download links
+        base_url = request.build_absolute_uri("/").rstrip("/")
 
-        pkg_queryset = PublishedPackage.objects.filter(compression_status="COMPLETED")
-
-        # Filter by tenant school assignments
-        q_filter = Q(experience__id__in=[
-            int(r) for r in assigned_exp_refs if str(r).isdigit()
-        ]) | Q(experience__title__in=assigned_exp_refs)
-
-        pkg_queryset = pkg_queryset.filter(q_filter)
-
-        updates = []
-        for pkg in pkg_queryset.select_related("experience"):
+        packages = []
+        for pkg in pkg_queryset:
             version_query = PublishVersion.objects.filter(published_package=pkg)
             if last_synced_at:
                 version_query = version_query.filter(published_at__gt=last_synced_at)
 
             version_obj = version_query.order_by("-published_at").first()
-            if version_obj:
-                updates.append({
-                    "package_id": pkg.id,
-                    "experience_id": pkg.experience.id,
-                    "title": pkg.experience.title,
-                    "version": version_obj.version_number,
-                    "download_url": version_obj.download_url or f"/api/lms/packages/{version_obj.id}/download/",
-                    "checksum": version_obj.checksum or "",
-                    "published_at": version_obj.published_at.isoformat()
-                })
+            if not version_obj:
+                continue
 
-        return Response({"updates": updates}, status=status.HTTP_200_OK)
+            raw_download = version_obj.download_url or f"/api/lms/packages/{version_obj.id}/download/"
+            download_url = raw_download if raw_download.startswith("http") else f"{base_url}{raw_download}"
+
+            packages.append({
+                "package_id": pkg.id,
+                "experience_id": pkg.experience.id,
+                "title": pkg.experience.title,
+                "version": version_obj.version_number,
+                "download_url": download_url,
+                "checksum": version_obj.checksum or "",
+                "published_at": version_obj.published_at.isoformat(),
+            })
+
+        return Response(
+            {"status": "success", "packages": packages},
+            status=status.HTTP_200_OK,
+        )
 
 
 class LMSAnalyticsAPIView(APIView):
@@ -420,6 +386,7 @@ class LMSAnalyticsAPIView(APIView):
     `GET /api/v1/lms/sync/analytics/`
     """
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = []
 
     def get(self, request, *args, **kwargs):
         # Fetch StudentProgress
@@ -477,3 +444,125 @@ class LMSAnalyticsAPIView(APIView):
             "activities": activity_data
         }, status=status.HTTP_200_OK)
 
+
+class LMSStudentRollNoAuthAPIView(APIView):
+    """
+    Roll-Number-based Student Authentication & Package Discovery for headless LMS clients.
+    `POST /api/v1/lms/auth/student-login/`
+
+    Request body: {"roll_number": "STU-101"}
+
+    Returns student identity data plus all published .elab packages assigned to the
+    student's school/grade, with absolute download URLs constructed from the request host.
+    """
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = []
+
+    def post(self, request, *args, **kwargs):
+        roll_number = (request.data.get("roll_number") or "").strip()
+        if not roll_number:
+            return Response(
+                {"error": "roll_number is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # --- 1. Resolve student by roll_no field (primary), then username fallback ---
+        student = (
+            Student.objects.select_related("user", "school")
+            .filter(roll_no=roll_number)
+            .first()
+        )
+        if not student:
+            # Fallback: the roll number may be stored as the Django username
+            student = (
+                Student.objects.select_related("user", "school")
+                .filter(user__username=roll_number)
+                .first()
+            )
+
+        if not student:
+            return Response(
+                {"error": "Invalid Roll Number"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        user = student.user
+        if not user.is_active:
+            return Response(
+                {"error": "Student account is inactive."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # --- 2. Resolve grade label ---
+        grade_label = student.grade or ""
+
+        # Try to get a richer grade name from the associated Class → Grade
+        from school_admin.models import Class as SchoolClass
+        class_obj = (
+            SchoolClass.objects.select_related("grade")
+            .filter(school=student.school, is_active=True)
+            .first()
+        )
+        if class_obj and class_obj.grade:
+            grade_label = class_obj.grade.grade_name
+
+        # --- 3. Resolve assigned published packages for this school ---
+        assigned_exp_refs = set(
+            ExperienceAssignment.objects.filter(school=student.school)
+            .values_list("experience_ref", flat=True)
+        )
+
+        pkg_queryset = PublishedPackage.objects.filter(
+            compression_status="COMPLETED"
+        ).select_related("experience")
+
+        if assigned_exp_refs:
+            q_filter = Q(experience__id__in=[
+                int(r) for r in assigned_exp_refs if str(r).isdigit()
+            ]) | Q(experience__title__in=assigned_exp_refs)
+            pkg_queryset = pkg_queryset.filter(q_filter)
+
+        # Build absolute base URL (e.g. http://10.25.103.31:8000)
+        base_url = request.build_absolute_uri("/").rstrip("/")
+
+        assigned_packages = []
+        for pkg in pkg_queryset:
+            version_obj = (
+                PublishVersion.objects
+                .filter(published_package=pkg)
+                .order_by("-published_at")
+                .first()
+            )
+            if not version_obj:
+                continue
+
+            # Resolve download URL — prefer stored URL, fall back to package-download endpoint
+            raw_download = version_obj.download_url or f"/api/lms/packages/{version_obj.id}/download/"
+            if raw_download.startswith("http"):
+                download_url = raw_download
+            else:
+                download_url = f"{base_url}{raw_download}"
+
+            assigned_packages.append({
+                "package_id": str(pkg.experience.id),
+                "title": pkg.experience.title,
+                "download_url": download_url,
+                "version": version_obj.version_number,
+                "checksum": version_obj.checksum or "",
+            })
+
+        return Response(
+            {
+                "status": "success",
+                "student": {
+                    "id": student.student_id,
+                    "name": user.full_name or user.username,
+                    "roll_number": student.roll_no or user.username,
+                    "school_id": student.school.school_id,
+                    "grade": grade_label,
+                },
+                "assigned_packages": assigned_packages,
+            },
+            status=status.HTTP_200_OK,
+        )

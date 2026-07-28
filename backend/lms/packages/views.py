@@ -103,25 +103,25 @@ class LMSPackageDownloadAPIView(APIView):
     Package FileResponse Streaming API.
     `GET /api/lms/packages/{id}/download/`
     Streams compressed .elab package archive with X-Package-Checksum header.
+    Open to AllowAny so headless LMS Electron clients can download without JWT.
     """
-    permission_classes = [IsAuthenticated]
+    authentication_classes = []
+    permission_classes = []
 
     def get(self, request, pk, *args, **kwargs):
-        student = _get_student_for_user(request.user)
-        if not student:
-            return Response(
-                {"error": "Active student profile required."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         try:
-            version_obj = PublishVersion.objects.select_related("published_package", "published_package__experience").get(pk=pk)
+            version_obj = PublishVersion.objects.select_related(
+                "published_package", "published_package__experience"
+            ).get(pk=pk)
         except PublishVersion.DoesNotExist:
             return Response({"error": "Package version not found."}, status=status.HTTP_404_NOT_FOUND)
 
         file_path = version_obj.file_path
         if not file_path or not os.path.exists(file_path):
-            return Response({"error": "Package archive file missing on disk."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Package archive file not available on disk."},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
         filename = os.path.basename(file_path)
         response = FileResponse(open(file_path, "rb"), content_type="application/octet-stream")

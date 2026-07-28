@@ -84,26 +84,73 @@ class LoginAPIView(APIView):
             "school_name": school_obj.school_name if school_obj else "",
         }
 
-        return Response(
+        response = Response(
             {
                 "message": "Login successful",
                 "access": str(refresh.access_token),
-                "refresh": str(refresh),
                 "user": user_payload,
             },
             status=status.HTTP_200_OK
         )
+        # Set refresh token in httpOnly secure cookie
+        response.set_cookie(
+            key="refresh_token",
+            value=str(refresh),
+            httponly=True,
+            samesite="Strict",
+            secure=True
+        )
+        return response
+
+
+class TokenRefreshAPIView(APIView):
+    """
+    POST /api/auth/refresh/
+    Refresh JWT access token using the refresh token stored in the HttpOnly cookie.
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        refresh_token = request.COOKIES.get("refresh_token")
+        if not refresh_token:
+            return Response(
+                {"error": "Refresh token is missing from cookies."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            token = RefreshToken(refresh_token)
+            # Rotate token if configured in SIMPLE_JWT
+            new_access = str(token.access_token)
+            response_data = {"access": new_access}
+            response = Response(response_data, status=status.HTTP_200_OK)
+            # If SimpleJWT rotates refresh tokens, set the new one
+            from django.conf import settings
+            if settings.SIMPLE_JWT.get("ROTATE_REFRESH_TOKENS", False):
+                response.set_cookie(
+                    key="refresh_token",
+                    value=str(token),
+                    httponly=True,
+                    samesite="Strict",
+                    secure=True
+                )
+            return response
+        except Exception as exc:
+            return Response(
+                {"error": "Invalid or expired refresh token."},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
 
 
 class LogoutAPIView(APIView):
     """
     POST /api/auth/logout/
-    Blacklist the provided refresh token.
+    Blacklist the provided refresh token and clear the cookie.
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        refresh_token = request.data.get("refresh")
+        refresh_token = request.COOKIES.get("refresh_token") or request.data.get("refresh")
         if not refresh_token:
             return Response(
                 {"message": "Refresh token is required."},
@@ -113,8 +160,11 @@ class LogoutAPIView(APIView):
             token = RefreshToken(refresh_token)
             token.blacklist()
         except Exception as exc:
-            raise ValidationError({"refresh": "Invalid or expired refresh token."}) from exc
-        return Response({"message": "Logged out successfully"}, status=status.HTTP_200_OK)
+            pass
+        response = Response({"message": "Logged out successfully"}, status=status.HTTP_200_OK)
+        response.delete_cookie("refresh_token")
+        return response
+
 
 
 class SchoolDashboardAPIView(APIView):

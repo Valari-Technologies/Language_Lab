@@ -2750,7 +2750,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       required
                     >
                       <option value="">-- Select Grade ──</option>
-                      {[3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                      {[3, 4, 5, 6, 7, 8].map(num => (
                         <option key={num} value={num}>Grade {num}</option>
                       ))}
                     </select>

@@ -64,6 +64,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   const [activities, setActivities] = useState([]);
   const [screens, setScreens] = useState([]);
+  const [isEditingScreen, setIsEditingScreen] = useState(false);
   const [learningOutcomes, setLearningOutcomes] = useState([]);
   const [outcomesText, setOutcomesText] = useState('');
   const [gradesList, setGradesList] = useState([]);
@@ -588,7 +589,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           loadExperienceDetail(selectedExperience.id);
           if (selectedActivity?.id === id) setSelectedActivity(null);
         } else if (type === 'screen') {
-          loadActivityDetail(selectedActivity.id);
+          loadActivityDetail(selectedActivity.id, false);
           if (selectedScreen?.id === id) setSelectedScreen(null);
         } else if (type === 'outcome') {
           loadExperienceDetail(selectedExperience.id);
@@ -630,7 +631,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     });
   };
 
-  const loadActivityDetail = async (actObjOrId) => {
+  const loadActivityDetail = async (actObjOrId, shouldChangeView = true) => {
     const actId = typeof actObjOrId === 'object' ? actObjOrId.id : actObjOrId;
     try {
       const res = await apiFetch(`/api/v1/content/activities/${actId}/`);
@@ -647,7 +648,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           mastery: data.mastery_threshold || 80
         });
         setScreens(data.screens || []);
-        setView('activity-builder');
+        if (shouldChangeView) {
+          setView('activity-builder');
+        }
       } else {
         showFeedback('Failed to load activity details', 'error');
       }
@@ -691,8 +694,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         setSelectedActivity(data);
         showFeedback('Activity saved successfully');
         loadExperienceDetail(selectedExperience.id);
-        setScreens(data.screens || []);
-        setView('activity-builder');
+        const activityScreens = data.screens || [];
+        setScreens(activityScreens);
+        
+        if (activityScreens.length > 0) {
+          loadScreenDetail(activityScreens[0]);
+        } else {
+          setView('screen-builder');
+          setIsEditingScreen(false);
+        }
       } else {
         const errData = await res.json().catch(() => ({}));
         showFeedback(extractErrorMessage(errData, 'Failed to save activity'), 'error');
@@ -857,6 +867,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       setSelectedBlockId(null);
     }
     setView('screen-builder');
+    setIsEditingScreen(true);
   };
 
   const handleAddBlock = (type) => {
@@ -1708,7 +1719,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           loadExperiencesData();
           setView('experiences');
         } else {
-          loadActivityDetail(selectedActivity.id);
+          loadActivityDetail(selectedActivity.id, false);
+          setIsEditingScreen(false);
         }
       } else {
         const errData = await res.json().catch(() => ({}));
@@ -1760,7 +1772,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           });
           if (res.ok) {
             showFeedback('Screen added successfully');
-            loadActivityDetail(selectedActivity.id);
+            loadActivityDetail(selectedActivity.id, false);
           } else {
             const errData = await res.json().catch(() => ({}));
             showFeedback(extractErrorMessage(errData, 'Failed to add screen'), 'error');
@@ -2092,7 +2104,20 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       if (resAssign.ok) {
         const assignData = await resAssign.json();
         setAssignSchools(assignData.schools || []);
-        setAssignGrades(assignData.grades || []);
+        const rawGrades = assignData.grades || [];
+        const filteredGrades = rawGrades.filter(g => {
+          const match = g.grade_name.match(/^Grade\s+(\d+)$/i);
+          if (match) {
+            const num = parseInt(match[1]);
+            return num >= 3 && num <= 8;
+          }
+          return false;
+        }).sort((a, b) => {
+          const numA = parseInt(a.grade_name.match(/\d+/)[0]);
+          const numB = parseInt(b.grade_name.match(/\d+/)[0]);
+          return numA - numB;
+        });
+        setAssignGrades(filteredGrades);
         const expAssignments = (assignData.assignments || []).filter(
           a => String(a.experience_ref) === String(experienceId)
         );
@@ -2795,6 +2820,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 if (item.key === 'preview') {
                   handleStartPreview();
                 } else {
+                  if (item.key === 'screen-builder') {
+                    setIsEditingScreen(false);
+                    if (selectedActivity && selectedActivity.id) {
+                      loadActivityDetail(selectedActivity.id, false);
+                    }
+                  }
                   setView(item.key);
                 }
               }}
@@ -3457,12 +3488,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '4px' }}>One outcome per line. Press Enter to add more.</div>
                   </div>
 
-                  {/* Bottom status bar */}
-                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '1rem', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.72rem', color: '#16a34a', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <FiCheckCircle /> All changes saved &nbsp;•&nbsp; <span style={{ color: '#64748b' }}>Last saved: May 20, 2025 10:42 AM</span>
-                    </span>
-                  </div>
                 </div>
               </div>
             </>
@@ -3529,8 +3554,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               </div>
 
               {/* Layout grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '1.25rem' }}>
-                {/* Left Column: Form and Timeline Table */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                {/* Full Width Column: Form and Timeline Table */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -3706,101 +3731,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
                 </div>
 
-                {/* Right Column: Screen Overview list timeline */}
-                <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <h3 className="cs-card-title">Screen Overview</h3>
-                      <div className="cs-card-sub">Total Screens: {screens.length} · Total Duration: {Math.ceil(screens.reduce((acc, scr) => acc + (scr.estimated_duration || 60), 0) / 60)} min</div>
-                    </div>
-                    <button className="cs-btn-primary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem', background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)', border: 'none', borderRadius: '8px', fontWeight: 600, color: '#fff', cursor: 'pointer' }} onClick={handleAddNewScreen}>+ Add Screen</button>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', position: 'relative', paddingLeft: '1rem', marginTop: '0.75rem' }}>
-                    {/* Timeline Line */}
-                    <div style={{ position: 'absolute', left: 23, top: 10, bottom: 10, width: 2, background: '#cbd5e1', zIndex: 1 }} />
-
-                    {screens.length === 0 ? (
-                      <div style={{ fontSize: '0.78rem', color: '#64748b', textAlign: 'center', padding: '1.5rem', zIndex: 2, border: '1.5px dashed #cbd5e1', borderRadius: '8px' }}>No screens added yet. Click "+ Add Screen" to begin.</div>
-                    ) : (
-                      screens.map((scr, idx) => (
-                        <div
-                          key={scr.id}
-                          onClick={() => loadScreenDetail(scr)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '1rem',
-                            position: 'relative',
-                            zIndex: 2,
-                            cursor: 'pointer',
-                            padding: '0.65rem 0.85rem',
-                            borderRadius: 12,
-                            background: selectedScreen?.id === scr.id ? '#f0f9ff' : '#ffffff',
-                            border: selectedScreen?.id === scr.id ? '1.5px solid #0ea5e9' : '1.5px solid #e2e8f0',
-                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
-                            transition: 'all 0.15s'
-                          }}
-                        >
-                          <div style={{
-                            width: 24,
-                            height: 24,
-                            borderRadius: '50%',
-                            background: selectedScreen?.id === scr.id ? '#0ea5e9' : '#f1f5f9',
-                            border: '1.5px solid #cbd5e1',
-                            color: selectedScreen?.id === scr.id ? '#ffffff' : '#475569',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 700,
-                            fontSize: '0.75rem',
-                            flexShrink: 0
-                          }}>
-                            {idx + 1}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{scr.title || 'Untitled Screen'}</span>
-                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                <button className="cs-icon-btn" disabled={idx === 0} onClick={(e) => { e.stopPropagation(); handleMoveScreen(idx, -1); }} title="Move Up">↑</button>
-                                <button className="cs-icon-btn" disabled={idx === screens.length - 1} onClick={(e) => { e.stopPropagation(); handleMoveScreen(idx, 1); }} title="Move Down">↓</button>
-                                <button className="cs-icon-btn" onClick={(e) => { e.stopPropagation(); handleDeleteScreen(scr.id); }} title="Delete">
-                                  <FiTrash2 style={{ color: '#ef4444', fontSize: '0.85rem' }} />
-                                </button>
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 3 }}>
-                              <span className="cs-badge" style={{
-                                background: scr.screen_type === 'INFORMATION' ? '#e0f2fe' :
-                                  scr.screen_type === 'IMAGE' ? '#dcfce7' :
-                                    scr.screen_type === 'VIDEO' ? '#f3e8ff' :
-                                      scr.screen_type === 'SPEAKING' ? '#e0f9ff' :
-                                        scr.screen_type === 'QUIZ' ? '#ffedd5' : '#f1f5f9',
-                                color: scr.screen_type === 'INFORMATION' ? '#0369a1' :
-                                  scr.screen_type === 'IMAGE' ? '#15803d' :
-                                    scr.screen_type === 'VIDEO' ? '#7c3aed' :
-                                      scr.screen_type === 'SPEAKING' ? '#0369a1' :
-                                        scr.screen_type === 'QUIZ' ? '#c2410c' : '#475569',
-                                fontSize: '0.65rem', padding: '1px 6px', borderRadius: 4, fontWeight: 600
-                              }}>{scr.screen_type}</span>
-                              <span style={{ fontSize: '0.68rem', color: '#64748b' }}>{(scr.estimated_duration || 60)}s</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 8, padding: '0.85rem', textAlign: 'center', marginTop: '1rem', fontSize: '0.72rem', color: '#64748b' }}>
-                    Use the up and down arrows (↑ / ↓) to reorder screens. The order defines the flow for learners.
-                  </div>
-                </div>
               </div>
             </>
           )}
 
           {view === 'screen-builder' && (
-            <>
+            isEditingScreen ? (
+              <>
               {/* Top navigation header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -3993,55 +3930,55 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 </div>
 
                 {/* Column 2: Center Canvas Screen Preview */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto', flex: 1 }}>
                   {/* Canvas Device Switcher Controls */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '0.5rem 1rem', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155' }}>Live Viewport Preview</span>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155' }}>Design Canvas Page</span>
                     <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
-                      <button className="cs-icon-btn" style={{ fontSize: '0.95rem', color: '#0b57d0' }} title="Desktop Mode"><FiMonitor /></button>
-                      <button className="cs-icon-btn" style={{ fontSize: '0.95rem', color: '#64748b' }} title="Tablet Mode"><FiTablet /></button>
-                      <button className="cs-icon-btn" style={{ fontSize: '0.95rem', color: '#64748b' }} title="Mobile Mode"><FiSmartphone /></button>
-                      <span style={{ fontSize: '0.72rem', color: '#cbd5e1', padding: '0 0.25rem' }}>|</span>
-                      <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>100% Fit</span>
+                      <span style={{ fontSize: '0.72rem', color: '#1e293b', fontWeight: 700 }}>Vertical Edit Mode (Full Page)</span>
                     </div>
                   </div>
 
                   {/* Main illustrated canvas container */}
-                  <div style={{ flex: 1, border: '1.5px solid #cbd5e1', background: '#f1f5f9', borderRadius: '12px', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', justifyContent: 'center', alignItems: 'center', padding: '0.5rem' }}>
+                  <div style={{ flex: 1, border: '1px solid #cbd5e1', background: '#f8fafc', borderRadius: '12px', display: 'flex', flexDirection: 'column', padding: '1.25rem', minHeight: '650px' }}>
 
-                    {/* Simulated Tablet/Mobile Frame wrapper */}
-                    <div style={{ width: '100%', height: '100%', background: '#ffffff', borderRadius: '16px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', border: '4px solid #1e293b', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
-
-                      {/* Screen Top Bar */}
-                      <div style={{ height: '24px', background: '#1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 1rem', color: '#94a3b8', fontSize: '0.6rem' }}>
-                        <span>⚡ LinguaLab Player</span>
-                        <span>10:42 AM</span>
-                      </div>
+                    {/* Desktop Aspect Ratio Container Wrapper with no vertical scrolling */}
+                    <div style={{
+                      width: '100%',
+                      minHeight: '600px',
+                      background: '#ffffff',
+                      borderRadius: '16px',
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                      border: '1px solid #cbd5e1',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      position: 'relative',
+                      padding: '1.5rem'
+                    }}>
 
                       {/* Canvas Screen Content Area */}
                       <div
                         onDragOver={e => e.preventDefault()}
                         onDrop={e => handleDropOnSlot(e, 'left')}
-                        style={{ flex: 1, padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem', overflowY: 'auto', background: '#ffffff' }}
+                        style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', background: '#ffffff' }}
                       >
 
                         {(!screenForm.elements || screenForm.elements.length === 0) ? (
                           <div
                             onDragOver={e => e.preventDefault()}
                             onDrop={e => handleDropOnSlot(e, 'left')}
-                            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed #cbd5e1', borderRadius: '12px', color: '#94a3b8', padding: '2rem', textAlign: 'center', gap: '0.5rem' }}
+                            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed #cbd5e1', borderRadius: '12px', color: '#94a3b8', padding: '3rem', textAlign: 'center', gap: '0.75rem', minHeight: '400px' }}
                           >
-                            <FiPlusCircle style={{ fontSize: '2.5rem', opacity: 0.6, color: '#0b57d0' }} />
-                            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Your Screen Canvas is Empty</span>
-                            <span style={{ fontSize: '0.68rem', maxWidth: '240px' }}>Click elements in the left panel to build your screen layout.</span>
+                            <FiPlusCircle style={{ fontSize: '3rem', opacity: 0.6, color: '#0b57d0' }} />
+                            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e293b' }}>Your Screen Canvas is Empty</span>
+                            <span style={{ fontSize: '0.75rem', maxWidth: '300px' }}>Click or drag layout elements from the left panel to build your screen.</span>
                           </div>
                         ) : screenForm.layout === '2-column' ? (
                           <div style={{
                             display: 'grid',
                             gridTemplateColumns: screenForm.columnRatio === '60-40' ? '6fr 4fr' : '1fr 1fr',
-                            gap: '1rem',
-                            height: '100%',
-                            overflow: 'hidden'
+                            gap: '1.5rem',
+                            width: '100%'
                           }}>
                             {/* Left Column Drop / Display Zone */}
                             <div
@@ -4050,18 +3987,17 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               style={{
                                 display: 'flex',
                                 flexDirection: 'column',
-                                gap: '0.75rem',
-                                overflowY: 'hidden',
-                                height: '100%',
-                                borderRight: '1px dashed #cbd5e1',
-                                paddingRight: '0.5rem'
+                                gap: '1rem',
+                                borderRight: '1.5px dashed #cbd5e1',
+                                paddingRight: '1.25rem',
+                                minHeight: '400px'
                               }}
                             >
                               {screenForm.elements.filter(block => (block.slot || 'left') === 'left').length === 0 ? (
                                 <div
                                   onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
                                   onDrop={e => handleDropOnSlot(e, 'left')}
-                                  style={{ flex: 1, border: '1.5px dashed #cbd5e1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.72rem', fontStyle: 'italic', background: '#f8fafc' }}
+                                  style={{ flex: 1, border: '1.5px dashed #cbd5e1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.78rem', fontStyle: 'italic', background: '#f8fafc', minHeight: '150px' }}
                                 >
                                   Left Column Elements
                                 </div>
@@ -4080,16 +4016,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               style={{
                                 display: 'flex',
                                 flexDirection: 'column',
-                                gap: '0.75rem',
-                                overflowY: 'hidden',
-                                height: '100%'
+                                gap: '1rem',
+                                minHeight: '400px'
                               }}
                             >
                               {screenForm.elements.filter(block => (block.slot || 'left') === 'right').length === 0 ? (
                                 <div
                                   onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
                                   onDrop={e => handleDropOnSlot(e, 'right')}
-                                  style={{ flex: 1, border: '1.5px dashed #cbd5e1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.72rem', fontStyle: 'italic', background: '#f8fafc' }}
+                                  style={{ flex: 1, border: '1.5px dashed #cbd5e1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.78rem', fontStyle: 'italic', background: '#f8fafc', minHeight: '150px' }}
                                 >
                                   Right Column Elements (Media)
                                 </div>
@@ -4105,7 +4040,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           <div
                             onDragOver={e => e.preventDefault()}
                             onDrop={e => handleDropOnSlot(e, 'left')}
-                            style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', overflowY: 'hidden', height: '100%' }}
+                            style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
                           >
                             {screenForm.elements.map((block, idx) => renderCanvasBlock(block, idx))}
                           </div>
@@ -4831,7 +4766,250 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
               </div>
             </>
-          )}
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minHeight: 'calc(100vh - 120px)' }}>
+              {/* Breadcrumbs and Top Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                    <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Experience Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Experience Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('activity-builder')}>{selectedActivity?.title || 'Activity Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Screen Builder Overview</span>
+                  </div>
+                  <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '6px 0 0 0', color: '#0f172a', letterSpacing: '-0.02em' }}>Screen Library</h1>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                  <button
+                    className="cs-btn-outline"
+                    onClick={() => setView('activity-builder')}
+                    style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '0.5rem 1rem', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', color: '#334155' }}
+                  >
+                    Back to Activity
+                  </button>
+                  <button
+                    onClick={handleAddNewScreen}
+                    disabled={!selectedActivity?.id}
+                    style={{
+                      background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
+                      color: '#ffffff', border: 'none', borderRadius: '10px',
+                      padding: '0.5rem 1.25rem', fontWeight: 700, fontSize: '0.82rem',
+                      cursor: !selectedActivity?.id ? 'not-allowed' : 'pointer',
+                      boxShadow: '0 2px 8px rgba(11,87,208,0.25)',
+                      opacity: !selectedActivity?.id ? 0.6 : 1
+                    }}
+                  >
+                    + Add New Screen
+                  </button>
+                </div>
+              </div>
+
+              {/* Main Content Body */}
+              {!selectedActivity?.id ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '3rem', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', textAlign: 'center', gap: '1rem' }}>
+                  <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d97706' }}>
+                    <FiAlertTriangle style={{ fontSize: '2rem' }} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1e293b', margin: '0 0 6px 0' }}>No Active Activity Selected</h3>
+                    <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '380px', margin: 0 }}>Please select or create an activity in the **Activity Builder** first to manage and design screens.</p>
+                  </div>
+                  <button className="cs-btn-primary" onClick={() => setView('activity-builder')} style={{ padding: '0.5rem 1.25rem', fontSize: '0.82rem', background: '#0b57d0', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>Go to Activity Builder</button>
+                </div>
+              ) : screens.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '4rem 2rem', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', textAlign: 'center', gap: '1.25rem' }}>
+                  <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6' }}>
+                    <FiMonitor style={{ fontSize: '2.5rem', opacity: 0.8 }} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#1e293b', margin: '0 0 6px 0' }}>This Activity Has No Screens Yet</h3>
+                    <p style={{ fontSize: '0.88rem', color: '#64748b', maxWidth: '340px', margin: '0 auto' }}>Design immersive, interactive screens (quizzes, dialogues, media) for your learners.</p>
+                  </div>
+                  <button
+                    onClick={handleAddNewScreen}
+                    style={{
+                      background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
+                      color: '#ffffff', border: 'none', borderRadius: '10px',
+                      padding: '0.6rem 1.5rem', fontWeight: 700, fontSize: '0.85rem',
+                      cursor: 'pointer', boxShadow: '0 4px 12px rgba(11,87,208,0.2)'
+                    }}
+                  >
+                    + Create First Screen
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {/* Activity context card */}
+                  <div style={{ background: '#f8fafc', padding: '1rem 1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <span style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', fontWeight: 700 }}>Active Activity</span>
+                      <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: '2px 0 0 0' }}>{selectedActivity.title}</h2>
+                    </div>
+                    <div style={{ display: 'flex', gap: '1.5rem' }}>
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: '0.68rem', color: '#64748b', display: 'block' }}>Total Screens</span>
+                        <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>{screens.length}</span>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: '0.68rem', color: '#64748b', display: 'block' }}>Total Duration</span>
+                        <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>{Math.ceil(screens.reduce((acc, scr) => acc + (scr.estimated_duration || 60), 0) / 60)} min</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* List of Screen Rows */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {screens.map((scr, idx) => {
+                      const elementsCount = scr.content?.elements?.length || 0;
+                      return (
+                        <div
+                          key={scr.id}
+                          onClick={() => loadScreenDetail(scr)}
+                          style={{
+                            padding: '1rem 1.25rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            cursor: 'pointer',
+                            borderRadius: '12px',
+                            border: '1.5px solid #e2e8f0',
+                            background: '#ffffff',
+                            transition: 'all 0.15s',
+                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+                            gap: '1.5rem'
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.borderColor = '#0b57d0';
+                            e.currentTarget.style.boxShadow = '0 4px 10px rgba(11,87,208,0.06)';
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.borderColor = '#e2e8f0';
+                            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.02)';
+                          }}
+                        >
+                          {/* Left section: Index and info */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '50%',
+                              background: '#f1f5f9',
+                              border: '1.5px solid #cbd5e1',
+                              color: '#475569',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: 800,
+                              fontSize: '0.85rem',
+                              flexShrink: 0
+                            }}>
+                              {idx + 1}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <h3 style={{ fontSize: '0.92rem', fontWeight: 800, color: '#1e293b', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {scr.title || 'Untitled Screen'}
+                              </h3>
+                              <div style={{ display: 'flex', gap: '8px', fontSize: '0.72rem', color: '#64748b', marginTop: '2px', alignItems: 'center' }}>
+                                <span className="cs-badge" style={{
+                                  background: scr.screen_type === 'INFORMATION' ? '#e0f2fe' :
+                                    scr.screen_type === 'IMAGE' ? '#dcfce7' :
+                                      scr.screen_type === 'VIDEO' ? '#f3e8ff' :
+                                        scr.screen_type === 'SPEAKING' ? '#e0f9ff' :
+                                          scr.screen_type === 'QUIZ' ? '#ffedd5' : '#f1f5f9',
+                                  color: scr.screen_type === 'INFORMATION' ? '#0369a1' :
+                                    scr.screen_type === 'IMAGE' ? '#15803d' :
+                                      scr.screen_type === 'VIDEO' ? '#7c3aed' :
+                                        scr.screen_type === 'SPEAKING' ? '#0891b2' :
+                                          scr.screen_type === 'QUIZ' ? '#ea580c' : '#475569',
+                                  fontSize: '0.62rem',
+                                  fontWeight: 700,
+                                  padding: '1px 6px',
+                                  borderRadius: '4px'
+                                }}>
+                                  {scr.screen_type}
+                                </span>
+                                <span>⏱️ {scr.estimated_duration || 60}s</span>
+                                <span>•</span>
+                                <span>🧱 {elementsCount} Blocks</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right section: Action Buttons */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }} onClick={e => e.stopPropagation()}>
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              <button className="cs-icon-btn" disabled={idx === 0} onClick={() => handleMoveScreen(idx, -1)} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 6px', fontSize: '0.75rem', fontWeight: 700 }} title="Move Up">↑</button>
+                              <button className="cs-icon-btn" disabled={idx === screens.length - 1} onClick={() => handleMoveScreen(idx, 1)} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 6px', fontSize: '0.75rem', fontWeight: 700 }} title="Move Down">↓</button>
+                              <button
+                                className="cs-icon-btn"
+                                onClick={() => {
+                                  triggerPrompt(
+                                    "Enter new title for this screen:",
+                                    "Rename Screen",
+                                    scr.title,
+                                    "Screen Title",
+                                    async (newTitle) => {
+                                      if (!newTitle || !newTitle.trim() || newTitle.trim() === scr.title) return;
+                                      try {
+                                        const res = await apiFetch(`/api/v1/content/screens/${scr.id}/`, {
+                                          method: 'PATCH',
+                                          body: JSON.stringify({ title: newTitle.trim() })
+                                        });
+                                        if (res.ok) {
+                                          showFeedback('Screen renamed');
+                                          loadActivityDetail(selectedActivity.id, false);
+                                        }
+                                      } catch (err) {
+                                        console.error(err);
+                                      }
+                                    }
+                                  );
+                                }}
+                                style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 6px' }}
+                                title="Rename"
+                              >
+                                <FiEdit2 style={{ color: '#475569', fontSize: '0.75rem' }} />
+                              </button>
+                              <button
+                                className="cs-icon-btn"
+                                onClick={() => handleDeleteScreen(scr.id)}
+                                style={{ background: '#fff1f2', border: '1px solid #ffe4e6', borderRadius: '6px', padding: '4px 6px' }}
+                                title="Delete"
+                              >
+                                <FiTrash2 style={{ color: '#ef4444', fontSize: '0.75rem' }} />
+                              </button>
+                            </div>
+
+                            <button
+                              onClick={() => loadScreenDetail(scr)}
+                              style={{
+                                background: '#f0fdf4',
+                                border: '1px solid #bbf7d0',
+                                color: '#166534',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                padding: '0.4rem 0.85rem',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s'
+                              }}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.background = '#dcfce7';
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.background = '#f0fdf4';
+                              }}
+                            >
+                              Edit Layout →
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        )}
 
           {/* ───────────────── VIEW 6: RUNTIME PREVIEW (Image 1 of remaining) ───────────────── */}
           {view === 'preview' && (() => {
@@ -6032,7 +6210,56 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
                 </div>
 
-                {/* RIGHT COLUMN: Validation Status & Reports */}
+              
+                
+
+                  {/* Card 5: Assign Experience to School/Grade */}
+                  <div className="cs-card" style={{ marginTop: '1.25rem' }}>
+                    <h3 style={{ fontSize: '0.85rem', fontWeight: 700, borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', margin: '0 0 0.75rem 0', color: '#0f172a' }}>
+                      Assign Experience to Tenant School
+                    </h3>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>Select School <span style={{ color: '#ef4444' }}>*</span></label>
+                        <select
+                          value={targetSchoolId}
+                          onChange={e => setTargetSchoolId(e.target.value)}
+                          style={{ width: '100%', height: '36px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.78rem', padding: '0 0.5rem', background: '#fff' }}
+                        >
+                          <option value="">-- Choose School --</option>
+                          {assignSchools.map(s => (
+                            <option key={s.school_id} value={s.school_id}>{s.school_name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      
+                      <button
+                        onClick={handleAssignExperience}
+                        disabled={actionLoading}
+                        style={{
+                          width: '100%',
+                          height: '36px',
+                          borderRadius: '8px',
+                          background: '#4f46e5',
+                          color: '#ffffff',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          border: 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginTop: '0.5rem',
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        {actionLoading ? 'Assigning...' : 'Assign Experience'}
+                      </button>
+
+
+  {/* RIGHT COLUMN: Validation Status & Reports */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   
                   {/* Card 3: Validation Check Report */}
@@ -6102,86 +6329,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     )}
                   </div>
 
-                  {/* Card 4: Compiler Status / Format preview */}
-                  <div className="cs-card" style={{ fontSize: '0.72rem' }}>
-                    <h3 style={{ fontSize: '0.85rem', fontWeight: 700, borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', margin: '0 0 0.75rem 0', color: '#0f172a' }}>
-                      Package Format Preview
-                    </h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#64748b' }}>Format:</span>
-                        <span style={{ fontWeight: 700 }}>.elab (EnglishLab ZIP Package)</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#64748b' }}>Encryption:</span>
-                        <span style={{ fontWeight: 700, color: '#16a34a' }}>Off (Clear Manifest)</span>
-                      </div>
-                      <div style={{ background: '#f8fafc', padding: '0.5rem', borderRadius: 8, border: '1px solid #e2e8f0', fontFamily: 'monospace', fontSize: '0.65rem' }}>
-                        <div style={{ color: '#0369a1', fontWeight: 'bold' }}>📁 [Package_Archive].elab</div>
-                        <div style={{ paddingLeft: '0.75rem', color: '#475569' }}>📄 manifest.json (V1 specs)</div>
-                        <div style={{ paddingLeft: '0.75rem', color: '#475569' }}>📄 experience.json (atomic payload)</div>
-                        <div style={{ paddingLeft: '0.75rem', color: '#475569' }}>📁 media / files ({mediaAssets.length})</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card 5: Assign Experience to School/Grade */}
-                  <div className="cs-card" style={{ marginTop: '1.25rem' }}>
-                    <h3 style={{ fontSize: '0.85rem', fontWeight: 700, borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', margin: '0 0 0.75rem 0', color: '#0f172a' }}>
-                      Assign Experience to Tenant School
-                    </h3>
-                    
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <label style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>Select School <span style={{ color: '#ef4444' }}>*</span></label>
-                        <select
-                          value={targetSchoolId}
-                          onChange={e => setTargetSchoolId(e.target.value)}
-                          style={{ width: '100%', height: '36px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.78rem', padding: '0 0.5rem', background: '#fff' }}
-                        >
-                          <option value="">-- Choose School --</option>
-                          {assignSchools.map(s => (
-                            <option key={s.school_id} value={s.school_id}>{s.school_name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <label style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>Select Target Grade (Optional)</label>
-                        <select
-                          value={targetGradeId}
-                          onChange={e => setTargetGradeId(e.target.value)}
-                          style={{ width: '100%', height: '36px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.78rem', padding: '0 0.5rem', background: '#fff' }}
-                        >
-                          <option value="">-- Choose Grade --</option>
-                          {assignGrades.map(g => (
-                            <option key={g.id} value={g.id}>{g.grade_name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <button
-                        onClick={handleAssignExperience}
-                        disabled={actionLoading}
-                        style={{
-                          width: '100%',
-                          height: '36px',
-                          borderRadius: '8px',
-                          background: '#4f46e5',
-                          color: '#ffffff',
-                          fontWeight: 700,
-                          fontSize: '0.8rem',
-                          border: 'none',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginTop: '0.5rem',
-                          transition: 'all 0.15s'
-                        }}
-                      >
-                        {actionLoading ? 'Assigning...' : 'Assign Experience'}
-                      </button>
+                     
 
                       {assignHistory.length > 0 && (
                         <div style={{ borderTop: '1px solid #f1f5f9', marginTop: '0.75rem', paddingTop: '0.75rem' }}>

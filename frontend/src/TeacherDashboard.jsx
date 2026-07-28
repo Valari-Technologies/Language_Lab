@@ -1162,12 +1162,11 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               {/* Stat cards */}
               <div className="sd-stat-row">
                 {[
-                  { label: 'Assigned Classes', value: statClasses, color: '#22c55e', bg: '#dcfce7', icon: <FiBookOpen />, trend: '+2%' },
-                  { label: 'Total Students', value: statStudents, color: '#3b82f6', bg: '#dbeafe', icon: <FiUsers />, trend: '+12%' },
-                  { label: 'Active Experiences', value: statExperiences, color: '#a855f7', bg: '#f3e8ff', icon: <FiFileText />, trend: '+5%' },
-                  { label: "Today's Lessons",   value: statLessons,   color: '#f97316', bg: '#ffedd5', icon: <FiClock/>,      trend: '0%'   },
-                  { label: 'Avg Student Score', value: '—',           color: '#06b6d4', bg: '#cffafe', icon: <FiAward/>,      trend: '—'    },
-                  { label: 'Completion Rate',   value: '—',           color: '#10b981', bg: '#d1fae5', icon: <FiTrendingUp/>, trend: '—'    },
+                  { label: 'Assigned Classes', value: statClasses, color: '#22c55e', bg: '#dcfce7', icon: <FiBookOpen /> },
+                  { label: 'Total Students', value: statStudents, color: '#3b82f6', bg: '#dbeafe', icon: <FiUsers /> },
+                  { label: 'Active Experiences', value: statExperiences, color: '#a855f7', bg: '#f3e8ff', icon: <FiFileText /> },
+                  { label: "Today's Lessons",   value: statLessons,   color: '#f97316', bg: '#ffedd5', icon: <FiClock/> },
+                  { label: 'Completion Rate',   value: '—',           color: '#10b981', bg: '#d1fae5', icon: <FiTrendingUp/> },
                 ].map((s, i) => (
                   <div className="sd-stat-card" key={i}>
                     <div className="sd-stat-card-icon-part" style={{ background: s.bg, color: s.color }}>
@@ -2007,7 +2006,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       required
                     >
                       <option value="">-- Select Grade ──</option>
-                      {[3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                      {[3, 4, 5, 6, 7, 8].map(num => (
                         <option key={num} value={num}>Grade {num}</option>
                       ))}
                     </select>

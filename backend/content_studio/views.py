@@ -224,7 +224,7 @@ class ActivityViewSet(viewsets.ModelViewSet):
     queryset = Activity.objects.all().prefetch_related("skills", "screens")
 
     def get_serializer_class(self):
-        if self.action == "retrieve":
+        if self.action in ["retrieve", "create", "update", "partial_update"]:
             return ActivityDetailSerializer
         return ActivitySerializer
 
@@ -847,6 +847,12 @@ class PackageViewSet(viewsets.ViewSet):
     POST /api/v1/content/packages/{packageId}/regenerate/ — re-run pipeline
     """
     permission_classes = [IsAuthenticated, IsContentCreatorOrSuperAdmin]
+
+    def get_permissions(self):
+        if self.action == "download":
+            from rest_framework import permissions
+            return [permissions.AllowAny()]
+        return super().get_permissions()
 
     def _get_version(self, package_id):
         try:
