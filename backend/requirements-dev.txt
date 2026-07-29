@@ -1,0 +1,4 @@
+# Extra dependencies for running the automated test suite (pytest-based).
+# Install with: pip install -r requirements.txt -r requirements-dev.txt
+pytest>=8.0,<9.0
+pytest-django>=4.8,<5.0
