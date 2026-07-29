@@ -41,12 +41,8 @@ const CHART_LINES = [
   { label: 'Ability',   color: '#f97316', points: [55, 35, 60, 50, 40, 70] },
   { label: 'Authority', color: '#a855f7', points: [25, 45, 35, 60, 50, 45] },
 ];
-const RECENT_ACTIVITY = [
-  { id: 1, name: 'John Doe',      color: '#6366f1', desc: 'Completed lesson on "Tenses"',  time: '10:32 AM' },
-  { id: 2, name: 'Sarah Smith',   color: '#22c55e', desc: 'Submitted vocabulary test',      time: '10:18 AM' },
-  { id: 3, name: 'Michael Brown', color: '#f97316', desc: 'Completed a speaking exercise',  time: 'Yesterday' },
-  { id: 4, name: 'Jessica White', color: '#a78bfa', desc: 'Reviewed grammar assignment',    time: '2 hours ago' },
-];
+/* Cycling avatar colors for the Student Activity list (not tied to any specific student data) */
+const ACTIVITY_AVATAR_COLORS = ['#6366f1', '#22c55e', '#f97316', '#a78bfa'];
 
 /* ─── SVG Donut Chart ─── */
 const DonutChart = ({ pct = 68 }) => {
@@ -1320,27 +1316,24 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <button className="sd-view-all" onClick={() => goTo('students')}>View All</button>
                   </div>
                   <div className="sd-activity-list">
-                    {(data?.student_rankings?.length
-                      ? data.student_rankings.slice(0, 4).map((rank, i) => ({
-                          id: i,
-                          name: rank.name,
-                          color: RECENT_ACTIVITY[i % RECENT_ACTIVITY.length].color,
-                          desc: `Score: ${rank.score} — ${rank.progress || 'Progress tracked'}`,
-                          time: `#${i + 1}`
-                        }))
-                      : RECENT_ACTIVITY
-                    ).map(act => (
-                      <div className="sd-activity-item" key={act.id}>
-                        <div className="sd-activity-avatar" style={{ background: act.color }}>
-                          {act.name.slice(0, 2).toUpperCase()}
+                    {data?.student_rankings?.length ? (
+                      data.student_rankings.slice(0, 4).map((rank, i) => (
+                        <div className="sd-activity-item" key={i}>
+                          <div className="sd-activity-avatar" style={{ background: ACTIVITY_AVATAR_COLORS[i % ACTIVITY_AVATAR_COLORS.length] }}>
+                            {rank.name.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="sd-activity-body">
+                            <div className="sd-activity-name">{rank.name}</div>
+                            <div className="sd-activity-desc">{`Score: ${rank.score} — ${rank.progress || 'Progress tracked'}`}</div>
+                          </div>
+                          <div className="sd-activity-time">{`#${i + 1}`}</div>
                         </div>
-                        <div className="sd-activity-body">
-                          <div className="sd-activity-name">{act.name}</div>
-                          <div className="sd-activity-desc">{act.desc}</div>
-                        </div>
-                        <div className="sd-activity-time">{act.time}</div>
+                      ))
+                    ) : (
+                      <div className="sd-empty-state" style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8', fontSize: '0.85rem' }}>
+                        No recent student activity yet.
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               </div>
@@ -1415,8 +1408,8 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a' }}>Bulk Excel Upload</h4>
                     <p style={{ margin: '0 0 1rem 0', fontSize: '0.84rem', color: '#64748b' }}>
                       Upload an <code>.xlsx</code> or <code>.xls</code> spreadsheet.<br/>
-                      <strong style={{ color: '#ef4444' }}>Mandatory fields:</strong> <code>fullname</code>, <code>rollno</code>, <code>grade</code>, <code>section</code>.<br/>
-                      Optional fields: <code>username</code>, <code>password</code>, <code>email</code>, <code>is_active</code>.
+                      <strong style={{ color: '#ef4444' }}>Mandatory fields:</strong> <code>fullname</code>, <code>grade</code>, <code>section</code>.<br/>
+                      Roll No is auto-generated from <code>fullname</code> (any <code>rollno</code> column is ignored). Optional fields: <code>username</code>, <code>password</code>, <code>email</code>, <code>is_active</code>.
                     </p>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', alignItems: 'center' }}>
                       <input

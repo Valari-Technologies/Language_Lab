@@ -705,9 +705,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, type: '', title: '', message: '', isConflict: false, usages: [] });
   const [customAlert, setCustomAlert] = useState({ show: false, title: 'Attention', message: '', type: 'warning' });
-  const [customPrompt, setCustomPrompt] = useState({ show: false, title: 'Input Required', message: '', value: '', placeholder: '', onConfirm: null });
+  const [customPrompt, setCustomPrompt] = useState({ show: false, title: 'Input Required', message: '', value: '', placeholder: '', onConfirm: null, error: '' });
   const triggerPrompt = (message, title = 'Input Required', defaultValue = '', placeholder = '', onConfirm = null) => {
-    setCustomPrompt({ show: true, title, message, value: defaultValue, placeholder, onConfirm });
+    setCustomPrompt({ show: true, title, message, value: defaultValue, placeholder, onConfirm, error: '' });
   };
   const triggerAlert = (message, title = 'Attention', type = 'warning') => {
     setCustomAlert({ show: true, title, message, type });
@@ -3080,6 +3080,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 }
               }}
               className={`cs-nav-item ${view === item.key ? 'active' : ''}`}
+              data-testid={`cs-nav-${item.key}`}
             >
               {item.icon}
               <span>{item.label}</span>
@@ -3109,6 +3110,27 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
       {/* ── Main Area ── */}
       <div className="cs-content-area">
+        {/* Global feedback toast — visible across every view, not just Profile */}
+        {feedbackMsg.text && (
+          <div
+            data-testid="cs-toast"
+            className={`cs-toast cs-toast-${feedbackMsg.type === 'error' ? 'error' : 'success'}`}
+            style={{
+              position: 'fixed', top: '1.25rem', right: '1.25rem', zIndex: 10000,
+              padding: '0.85rem 1.25rem', borderRadius: '12px',
+              fontSize: '0.85rem', fontWeight: 600,
+              background: feedbackMsg.type === 'error' ? '#fef2f2' : '#f0fdf4',
+              color: feedbackMsg.type === 'error' ? '#ef4444' : '#15803d',
+              border: feedbackMsg.type === 'error' ? '1px solid #fecaca' : '1px solid #bbf7d0',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              display: 'flex', alignItems: 'center', gap: '0.5rem',
+            }}
+          >
+            <span>{feedbackMsg.type === 'error' ? '⚠️' : '✅'}</span>
+            <span>{feedbackMsg.text}</span>
+          </div>
+        )}
+
         {/* Header Bar */}
         <header className="cs-header">
           <div className="cs-header-search-wrap">
@@ -3811,7 +3833,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                       <div className="cs-form-group" style={{ gridColumn: '1 / -1' }}>
                         <label className="cs-form-label">Activity Title <span style={{ color: '#ef4444' }}>*</span></label>
-                        <input className="cs-form-input" type="text" value={activityForm.title}
+                        <input className="cs-form-input" data-testid="activity-title-input" type="text" value={activityForm.title}
                           onChange={e => setActivityForm({ ...activityForm, title: e.target.value })} />
                       </div>
                       <div className="cs-form-group" style={{ gridColumn: '1 / -1' }}>
@@ -3905,6 +3927,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                             <div
                               key={act.id || index}
                               onClick={() => loadActivityDetail(act)}
+                              data-testid="activity-card"
+                              data-activity-title={act.title}
                               style={{
                                 display: 'flex',
                                 alignItems: 'center',
@@ -4449,10 +4473,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       {autoSaveStatus === 'saved' ? 'Autosaved' : autoSaveStatus === 'saving' ? 'Saving…' : 'Unsaved'}
                     </span>
                     <div className="fss-toolbar-divider" />
-                    <button className="fss-toolbar-btn" title="Save as Draft" onClick={() => { triggerAutoSave(); handleSaveScreen(false); }}>
+                    <button data-testid="save-draft-btn" className="fss-toolbar-btn" title="Save as Draft" onClick={() => { triggerAutoSave(); handleSaveScreen(false); }}>
                       <FiCheck style={{ fontSize: '0.9rem' }} /> Save Draft
                     </button>
-                    <button className="fss-toolbar-btn primary" title="Save and return" onClick={() => handleSaveScreen(true)}>
+                    <button data-testid="publish-screen-btn" className="fss-toolbar-btn primary" title="Save and return" onClick={() => handleSaveScreen(true)}>
                       <FiDownload style={{ fontSize: '0.85rem' }} /> Publish
                     </button>
                     <div className="fss-toolbar-divider" />
@@ -4470,7 +4494,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     {leftPanelCollapsed ? (
                       /* Collapsed: icon-only toolbar */
                       <div className="fss-icon-toolbar">
-                        <button className="fss-panel-toggle" title="Expand Panel (Tab)" onClick={() => setLeftPanelCollapsed(false)}>
+                        <button className="fss-panel-toggle" data-testid="expand-elements-panel-btn" title="Expand Panel (Tab)" onClick={() => setLeftPanelCollapsed(false)}>
                           <FiMenu />
                         </button>
                         <div style={{ width: '100%', height: '1px', background: '#f1f5f9', margin: '4px 0' }} />
@@ -4545,6 +4569,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                       draggable={true}
                                       onDragStart={e => { e.dataTransfer.setData("text/plain", `type:${tmpl.type}`); e.dataTransfer.effectAllowed = "move"; }}
                                       className="fss-block-palette-item"
+                                      data-testid={`add-block-${tmpl.type.toLowerCase()}`}
                                     >
                                       <div style={{ background: tmpl.bg, padding: '0.3rem', borderRadius: '6px', display: 'flex', flexShrink: 0 }}>{tmpl.icon}</div>
                                       <div style={{ flex: 1 }}>
@@ -5051,6 +5076,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                     <label style={{ fontSize: '0.62rem', fontWeight: 600, color: '#64748b' }}>Speech Text</label>
                                     <textarea
                                       className="cs-form-input"
+                                      data-testid={`dialogue-step-text-${sIdx}`}
                                       style={{ minHeight: '36px', fontSize: '0.72rem', padding: '4px', lineHeight: 1.3 }}
                                       value={step.text}
                                       onChange={e => {
@@ -5075,6 +5101,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question Description</label>
                               <textarea
                                 className="cs-form-input"
+                                data-testid="quiz-question-input"
                                 style={{ minHeight: '44px', fontSize: '0.75rem' }}
                                 value={selectedBlock.content?.question || ''}
                                 onChange={e => handleUpdateBlockContent('question', e.target.value)}
@@ -5096,6 +5123,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                   <span style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#475569' }}>{String.fromCharCode(65 + oIdx)}:</span>
                                   <input
                                     className="cs-form-input"
+                                    data-testid={`quiz-option-input-${oIdx}`}
                                     style={{ height: '24px', fontSize: '0.72rem', flex: 1 }}
                                     type="text"
                                     value={opt}
@@ -5554,6 +5582,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   <button
                     onClick={handleAddNewScreen}
                     disabled={!selectedActivity?.id}
+                    data-testid="add-new-screen-btn"
                     style={{
                       background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
                       color: '#ffffff', border: 'none', borderRadius: '10px',
@@ -5591,6 +5620,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
                   <button
                     onClick={handleAddNewScreen}
+                    data-testid="add-new-screen-btn"
                     style={{
                       background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
                       color: '#ffffff', border: 'none', borderRadius: '10px',
@@ -5629,6 +5659,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         <div
                           key={scr.id}
                           onClick={() => loadScreenDetail(scr)}
+                          data-testid="screen-card"
+                          data-screen-title={scr.title}
                           style={{
                             padding: '1rem 1.25rem',
                             display: 'flex',
@@ -6864,6 +6896,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         <label className="cs-form-label" style={{ fontSize: '0.75rem' }}>Version Number <span style={{ color: '#ef4444' }}>*</span></label>
                         <input
                           className="cs-form-input"
+                          data-testid="publish-version-input"
                           style={{ fontSize: '0.8rem', padding: '0.4rem 0.6rem' }}
                           type="text"
                           placeholder="e.g. 1.0.0"
@@ -6887,6 +6920,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
                       <button
                         className="cs-btn-primary"
+                        data-testid="build-publish-package-btn"
                         style={{
                           background: 'linear-gradient(135deg, #4f46e5, #3730a3)',
                           boxShadow: '0 2px 8px rgba(79, 70, 229, 0.25)',
@@ -6952,6 +6986,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                     <div style={{ display: 'flex', gap: 4 }}>
                                       <button
                                         title="Download .elab package"
+                                        data-testid="download-elab-btn"
                                         onClick={() => handleDownloadPackageElab(pkg.id, elabFilename)}
                                         style={{
                                           background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe',
@@ -7121,23 +7156,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 <h1 className="sd-page-title" style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a' }}>Profile Settings</h1>
                 <p className="sd-page-sub" style={{ fontSize: '0.88rem', color: '#64748b', marginTop: '4px' }}>Manage your personal details and authentication options</p>
               </div>
-
-              {feedbackMsg.text && (
-                <div style={{
-                  padding: '0.85rem 1.25rem', borderRadius: '12px', marginBottom: '1.5rem',
-                  fontSize: '0.85rem', fontWeight: 600,
-                  background: feedbackMsg.type === 'error' ? '#fef2f2' : '#f0fdf4',
-                  color: feedbackMsg.type === 'error' ? '#ef4444' : '#15803d',
-                  border: feedbackMsg.type === 'error' ? '1px solid #fecaca' : '1px solid #bbf7d0',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}>
-                  <span>{feedbackMsg.type === 'error' ? '⚠️' : '✅'}</span>
-                  <span>{feedbackMsg.text}</span>
-                </div>
-              )}
 
               <form onSubmit={handleProfileUpdate} style={{ width: '100%' }}>
                 <div style={{ display: 'flex', flexDirection: 'row', gap: '2rem', flexWrap: 'wrap', alignItems: 'stretch' }}>
@@ -7628,30 +7646,40 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </p>
                 )}
                 
-                <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ marginBottom: customPrompt.error ? '0.4rem' : '1.5rem' }}>
                   <input
                     type="text"
+                    data-testid="prompt-modal-input"
                     style={{
                       width: '100%',
                       height: '38px',
                       fontSize: '0.88rem',
                       padding: '0 0.75rem',
                       borderRadius: '8px',
-                      border: '1.5px solid #cbd5e1',
+                      border: customPrompt.error ? '1.5px solid #ef4444' : '1.5px solid #cbd5e1',
                       outline: 'none',
                       boxSizing: 'border-box'
                     }}
                     value={customPrompt.value}
-                    onChange={e => setCustomPrompt(prev => ({ ...prev, value: e.target.value }))}
+                    onChange={e => setCustomPrompt(prev => ({ ...prev, value: e.target.value, error: '' }))}
                     placeholder={customPrompt.placeholder || 'Enter value...'}
                     autoFocus
                     onKeyDown={e => {
                       if (e.key === 'Enter') {
+                        if (!customPrompt.value || !customPrompt.value.trim()) {
+                          setCustomPrompt(prev => ({ ...prev, error: 'This field is required.' }));
+                          return;
+                        }
                         customPrompt.onConfirm && customPrompt.onConfirm(customPrompt.value);
                         setCustomPrompt(prev => ({ ...prev, show: false }));
                       }
                     }}
                   />
+                  {customPrompt.error && (
+                    <p data-testid="prompt-modal-error" style={{ color: '#ef4444', fontSize: '0.75rem', margin: '0.35rem 0 0 0' }}>
+                      {customPrompt.error}
+                    </p>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -7675,6 +7703,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </button>
                   <button
                     type="button"
+                    data-testid="prompt-modal-confirm"
                     style={{
                       flex: 1,
                       padding: '0.65rem 1rem',
@@ -7688,6 +7717,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       textAlign: 'center'
                     }}
                     onClick={() => {
+                      if (!customPrompt.value || !customPrompt.value.trim()) {
+                        setCustomPrompt(prev => ({ ...prev, error: 'This field is required.' }));
+                        return;
+                      }
                       customPrompt.onConfirm && customPrompt.onConfirm(customPrompt.value);
                       setCustomPrompt(prev => ({ ...prev, show: false }));
                     }}

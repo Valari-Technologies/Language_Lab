@@ -190,12 +190,34 @@ class BulkUploadAPIView(APIView):
         elif upload_type == "student":
             if not has_any(headers, "fullname", "full_name", "full name", "name", "student_name"):
                 return Response({"error": "Missing required column header: 'fullname'."}, status=status.HTTP_400_BAD_REQUEST)
-            if not has_any(headers, "rollno", "roll_no", "roll_number", "roll number"):
-                return Response({"error": "Missing required column header: 'rollno'."}, status=status.HTTP_400_BAD_REQUEST)
             if not has_any(headers, "grade", "grade_name", "grade name"):
                 return Response({"error": "Missing required column header: 'grade'."}, status=status.HTTP_400_BAD_REQUEST)
             if not has_any(headers, "section", "class_section", "class section"):
                 return Response({"error": "Missing required column header: 'section'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Roll No is always auto-generated from the student's full name (e.g. "Rahul" -> "RAH001"),
+        # continuing the numeric sequence from the school's existing student count — any
+        # rollno/roll_no column in the sheet is ignored for student imports.
+        existing_roll_nos = set()
+        next_roll_seq = 1
+        if upload_type == "student":
+            existing_roll_nos = {
+                (r or "").strip().upper()
+                for r in Student.objects.filter(school=school).values_list("roll_no", flat=True)
+            }
+            next_roll_seq = Student.objects.filter(school=school).count() + 1
+
+        def generate_roll_no(full_name):
+            nonlocal next_roll_seq
+            clean_name = "".join(ch for ch in full_name if ch.isalpha())
+            prefix = (clean_name[:3].upper() if clean_name else "STU").ljust(3, "X")
+            candidate = f"{prefix}{next_roll_seq:03d}"
+            while candidate in existing_roll_nos:
+                next_roll_seq += 1
+                candidate = f"{prefix}{next_roll_seq:03d}"
+            existing_roll_nos.add(candidate)
+            next_roll_seq += 1
+            return candidate
 
         # 6. Row Ingestion Processing
         User = get_user_model()
@@ -381,21 +403,20 @@ class BulkUploadAPIView(APIView):
 
                         elif upload_type == "student":
                             fullname_val = get_val(row_data, "fullname", "full_name", "full name", "name", "student_name")
-                            rollno_val = get_val(row_data, "rollno", "roll_no", "roll_number", "roll number", "student_id", "student id")
                             grade_val = get_val(row_data, "grade", "grade_name", "grade name")
                             section_val = get_val(row_data, "section", "class_section", "class section")
 
                             if not fullname_val or not str(fullname_val).strip():
                                 raise ValueError("fullname is required.")
-                            if not rollno_val or not str(rollno_val).strip():
-                                raise ValueError("rollno is required.")
                             if not grade_val or not str(grade_val).strip():
                                 raise ValueError("grade is required.")
                             if not section_val or not str(section_val).strip():
                                 raise ValueError("section is required.")
 
                             full_name = str(fullname_val).strip()
-                            roll_no = str(rollno_val).strip()
+                            # Roll No is always auto-generated from full_name — any rollno
+                            # value present in the sheet is intentionally ignored.
+                            roll_no = generate_roll_no(full_name)
                             grade = str(grade_val).strip()
                             section = str(section_val).strip()
 
