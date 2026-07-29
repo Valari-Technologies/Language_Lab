@@ -255,6 +255,145 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     loadExperiencesData();
   }, [filterGrade, filterSubject, filterDifficulty, filterStatus, filterTag]);
 
+  useEffect(() => {
+    if (currentPath && currentPath.startsWith('/content-studio/editor/')) {
+      const parts = currentPath.split('/');
+      const screenId = parts[parts.length - 1];
+      if (screenId && (!selectedScreen || selectedScreen.id !== parseInt(screenId))) {
+        const fetchScreenData = async () => {
+          try {
+            const res = await apiFetch(`/api/v1/content/screens/${screenId}/`);
+            if (res.ok) {
+              const sc = await res.json();
+              setSelectedScreen(sc);
+              
+              const content = sc.content || {};
+              let activeElements = [];
+              if (content.elements && Array.isArray(content.elements)) {
+                activeElements = JSON.parse(JSON.stringify(content.elements)).map(el => ({
+                  ...el,
+                  slot: el.slot || (['image', 'video', 'audio'].includes(el.type) ? 'right' : 'left')
+                }));
+              }
+              setScreenForm({
+                id: sc.id,
+                title: sc.title,
+                screen_type: sc.screen_type,
+                layout: content.layout || '1-column',
+                columnRatio: content.columnRatio || '50-50',
+                content: content.text || content.content || '',
+                tag: content.tag || 'H1',
+                font: content.font || 'Poppins',
+                weight: content.weight || 'Bold',
+                size: content.size || 48,
+                color: content.color || '#1F2937',
+                alignment: content.alignment || 'Center',
+                steps: content.steps || [],
+                media_url: content.media_url || '',
+                media_id: content.media_id || '',
+                media_type: content.media_type || '',
+                quiz_question: content.quiz_question || '',
+                quiz_options: content.quiz_options || ['', '', '', ''],
+                quiz_correct_index: content.quiz_correct_index !== undefined ? content.quiz_correct_index : 0,
+                elements: activeElements
+              });
+
+              if (activeElements.length > 0) {
+                setSelectedBlockId(activeElements[0].id);
+              } else {
+                setSelectedBlockId(null);
+              }
+
+              setView('screen-builder');
+              setIsEditingScreen(true);
+
+              if (sc.activity && (!selectedActivity || selectedActivity.id !== sc.activity)) {
+                const actRes = await apiFetch(`/api/v1/content/activities/${sc.activity}/`);
+                if (actRes.ok) {
+                  const actData = await actRes.json();
+                  setSelectedActivity(actData);
+                  
+                  if (actData.experience && (!selectedExperience || selectedExperience.id !== actData.experience)) {
+                    const expRes = await apiFetch(`/api/v1/content/experiences/${actData.experience}/`);
+                    if (expRes.ok) {
+                      const expData = await expRes.json();
+                      setSelectedExperience(expData);
+                    }
+                  }
+                }
+              }
+            } else {
+              showFeedback('Failed to fetch screen details or invalid screen ID', 'error');
+            }
+          } catch (err) {
+            console.error('Error fetching screen details on route load', err);
+          }
+        };
+        fetchScreenData();
+      }
+    } else if (currentPath === '/content-studio' && view === 'screen-builder' && isEditingScreen) {
+      // If user navigated away via URL to content studio root, clear screen editing state
+      setIsEditingScreen(false);
+      setView('dashboard');
+    }
+  }, [currentPath]);
+
+  // ── Full Screen Studio States ──
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(true);
+  const [viewportMode, setViewportMode] = useState('desktop'); // 'desktop' | 'tablet' | 'mobile'
+  const [zoomLevel, setZoomLevel] = useState(100);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [elementsHistory, setElementsHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [autoSaveStatus, setAutoSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'unsaved'
+  const [autoSaveTimer, setAutoSaveTimer] = useState(null);
+
+  const pushHistory = (elements) => {
+    setElementsHistory(prev => {
+      const newHistory = prev.slice(0, historyIndex + 1);
+      newHistory.push(JSON.parse(JSON.stringify(elements)));
+      setHistoryIndex(newHistory.length - 1);
+      return newHistory;
+    });
+  };
+
+  const handleUndo = () => {
+    if (historyIndex <= 0) return;
+    const newIndex = historyIndex - 1;
+    setHistoryIndex(newIndex);
+    setScreenForm(prev => ({ ...prev, elements: JSON.parse(JSON.stringify(elementsHistory[newIndex])) }));
+  };
+
+  const handleRedo = () => {
+    if (historyIndex >= elementsHistory.length - 1) return;
+    const newIndex = historyIndex + 1;
+    setHistoryIndex(newIndex);
+    setScreenForm(prev => ({ ...prev, elements: JSON.parse(JSON.stringify(elementsHistory[newIndex])) }));
+  };
+
+  // Tab keyboard shortcut for panel collapse in Full Screen Studio
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!isEditingScreen || !view === 'screen-builder') return;
+      if (e.key === 'Tab' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA' && document.activeElement.tagName !== 'SELECT') {
+        e.preventDefault();
+        setLeftPanelCollapsed(prev => !prev);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditingScreen, view, historyIndex, elementsHistory]);
+
+
+
   // Profile / Password states
   const [profileForm, setProfileForm] = useState({
     username: user?.username || 'content_creator',
@@ -425,6 +564,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   });
 
   const [selectedBlockId, setSelectedBlockId] = useState(null);
+  const [propertiesTab, setPropertiesTab] = useState('content'); // 'content' | 'style' | 'advanced'
 
   const [previewScreenNum, setPreviewScreenNum] = useState(3);
   const [selectedAnswer, setSelectedAnswer] = useState('B');
@@ -436,6 +576,18 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [showHelpModal,     setShowHelpModal]     = useState(false);
   const [currentUserState,  setCurrentUserState]  = useState(user);
   const [avatarUploading,   setAvatarUploading]   = useState(false);
+
+  const triggerAutoSave = () => {
+    setAutoSaveStatus('unsaved');
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    const timer = setTimeout(() => {
+      setAutoSaveStatus('saving');
+      setTimeout(() => setAutoSaveStatus('saved'), 600);
+    }, 1800);
+    setAutoSaveTimer(timer);
+  };
+
+
 
   const loadExperienceDetail = async (expObjOrId, changeViewToBuilder = false) => {
     const expId = typeof expObjOrId === 'object' ? expObjOrId.id : expObjOrId;
@@ -521,7 +673,21 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
       if (res.ok) {
         const data = await res.json();
-        setSelectedExperience(data);
+
+        // Sync learning outcomes textarea with backend (replace existing set with current lines)
+        const desiredLines = (outcomesText || '').split('\n').map(l => l.trim()).filter(Boolean);
+        const existingOutcomes = data.learning_outcomes || [];
+        try {
+          await Promise.all(existingOutcomes.map(o => apiFetch(`/api/v1/content/learning-outcomes/${o.id}/`, { method: 'DELETE' })));
+          await Promise.all(desiredLines.map(text => apiFetch('/api/v1/content/learning-outcomes/', {
+            method: 'POST',
+            body: JSON.stringify({ experience: data.id, text })
+          })));
+        } catch (outcomeErr) {
+          console.error('Failed to sync learning outcomes', outcomeErr);
+        }
+
+        await loadExperienceDetail(data.id);
         showFeedback('Experience saved successfully');
         loadExperiencesData();
         loadRecentExperiences();
@@ -868,13 +1034,18 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
     setView('screen-builder');
     setIsEditingScreen(true);
+
+    const targetPath = `/content-studio/editor/${sc.id}`;
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState({}, '', targetPath);
+      setCurrentPath(targetPath);
+    }
   };
 
   const handleAddBlock = (type) => {
     const newBlock = {
       id: `block-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type: type.toLowerCase(),
-      slot: screenForm.layout === '2-column' ? (['image', 'audio', 'video'].includes(type.toLowerCase()) ? 'right' : 'left') : 'left',
       content: {},
       styles: {}
     };
@@ -970,11 +1141,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     showFeedback(`Added ${type.replace('_', ' ')} block`);
   };
 
-  const handleDropBlock = (type, slot) => {
+  const handleDropBlock = (type) => {
     const newBlock = {
       id: `block-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type: type.toLowerCase(),
-      slot: slot,
       content: {},
       styles: {}
     };
@@ -1070,49 +1240,20 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     showFeedback(`Added ${type.replace('_', ' ')} block`);
   };
 
-  const handleDropOnSlot = (e, slot) => {
+  const handleDropOnSlot = (e) => {
     e.preventDefault();
     e.stopPropagation();
     const data = e.dataTransfer.getData("text/plain");
     if (!data) return;
 
     if (data.startsWith("block:")) {
-      const blockId = data.replace("block:", "");
-      setScreenForm(prev => {
-        const elements = (prev.elements || []).map(el => {
-          if (el.id === blockId) {
-            return { ...el, slot };
-          }
-          return el;
-        });
-        return { ...prev, elements };
-      });
-      showFeedback(`Moved block to ${slot} column`);
+      // Reordering is handled via the move up/down controls; dropping back onto the canvas is a no-op.
     } else if (data.startsWith("type:")) {
       const type = data.replace("type:", "");
-      handleDropBlock(type, slot);
+      handleDropBlock(type);
     } else {
-      handleDropBlock(data, slot);
+      handleDropBlock(data);
     }
-  };
-
-  const handleSetLayout = (layoutType, ratio = '50-50') => {
-    setScreenForm(prev => {
-      const elements = (prev.elements || []).map(el => {
-        if (!el.slot) {
-          const isMedia = ['image', 'audio', 'video'].includes(el.type);
-          el.slot = isMedia ? 'right' : 'left';
-        }
-        return el;
-      });
-      return {
-        ...prev,
-        layout: layoutType,
-        columnRatio: ratio,
-        elements
-      };
-    });
-    showFeedback(`Switched layout to ${layoutType === '2-column' ? '2-Column (' + ratio + ')' : 'Single Column'}`);
   };
 
   const renderCanvasBlock = (block, idx) => {
@@ -1132,7 +1273,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         onDrop={e => {
           e.preventDefault();
           e.stopPropagation();
-          handleDropOnSlot(e, block.slot || 'left');
+          handleDropOnSlot(e);
         }}
         onClick={(e) => {
           e.stopPropagation();
@@ -1146,7 +1287,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           background: isSelected ? '#f8fafc' : '#ffffff',
           boxShadow: isSelected ? '0 4px 12px rgba(11,87,208,0.1)' : '0 1px 3px rgba(0,0,0,0.02)',
           cursor: 'pointer',
-          transition: 'all 0.15s',
+          transition: 'border 0.15s, box-shadow 0.15s',
+          ...(block.styles?.blockWidth ? { width: block.styles.blockWidth } : {}),
+          ...(block.styles?.minHeight ? { minHeight: block.styles.minHeight } : {}),
         }}
       >
         {/* Selection Indicator / Action Toolbar */}
@@ -1548,6 +1691,113 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             </div>
           </div>
         )}
+
+        {/* ── Universal Resize / Crop Handles (all elements) ── */}
+        {isSelected && (() => {
+          const handleH = {
+            position: 'absolute',
+            background: '#ffffff',
+            border: '1.5px solid #0b57d0',
+            width: '8px',
+            height: '8px',
+            zIndex: 20,
+            borderRadius: '1px',
+            pointerEvents: 'none',
+          };
+
+          const makeBottomDragger = () => (
+            <div
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const startY = e.clientY;
+                const el = e.currentTarget.parentElement;
+                const initH = el.offsetHeight;
+                const move = (mv) => {
+                  const newH = Math.max(60, initH + (mv.clientY - startY));
+                  el.style.minHeight = `${newH}px`;
+                  handleUpdateBlockStyles('minHeight', `${newH}px`);
+                };
+                const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', up);
+              }}
+              style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '12px', cursor: 'ns-resize', zIndex: 15, background: 'transparent' }}
+              title="Drag to resize height"
+            />
+          );
+
+          const makeRightDragger = () => (
+            <div
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const startX = e.clientX;
+                const el = e.currentTarget.parentElement;
+                const initW = el.offsetWidth;
+                const move = (mv) => {
+                  const newW = Math.max(120, initW + (mv.clientX - startX));
+                  el.style.width = `${newW}px`;
+                  handleUpdateBlockStyles('blockWidth', `${newW}px`);
+                };
+                const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', up);
+              }}
+              style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: '12px', cursor: 'ew-resize', zIndex: 15, background: 'transparent' }}
+              title="Drag to resize width"
+            />
+          );
+
+          const makeCornerDragger = () => (
+            <div
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const startX = e.clientX;
+                const startY = e.clientY;
+                const el = e.currentTarget.parentElement;
+                const initW = el.offsetWidth;
+                const initH = el.offsetHeight;
+                const move = (mv) => {
+                  const newW = Math.max(120, initW + (mv.clientX - startX));
+                  const newH = Math.max(60, initH + (mv.clientY - startY));
+                  el.style.width = `${newW}px`;
+                  el.style.minHeight = `${newH}px`;
+                  const elements = (screenForm.elements || []).map(el2 =>
+                    el2.id === block.id ? { ...el2, styles: { ...el2.styles, blockWidth: `${newW}px`, minHeight: `${newH}px` } } : el2
+                  );
+                  setScreenForm(prev => ({ ...prev, elements }));
+                };
+                const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', up);
+              }}
+              style={{ position: 'absolute', bottom: 0, right: 0, width: '16px', height: '16px', cursor: 'nwse-resize', zIndex: 16, background: 'transparent' }}
+              title="Drag corner to resize"
+            />
+          );
+
+          return (
+            <>
+              {/* 4 corners */}
+              <div style={{ ...handleH, top: '-1px', left: '-1px' }} />
+              <div style={{ ...handleH, top: '-1px', right: '-1px' }} />
+              <div style={{ ...handleH, bottom: '-1px', left: '-1px' }} />
+              <div style={{ ...handleH, bottom: '-1px', right: '-1px' }} />
+              {/* 4 mid-edge handles */}
+              <div style={{ ...handleH, top: '-1px', left: 'calc(50% - 4px)' }} />
+              <div style={{ ...handleH, bottom: '-1px', left: 'calc(50% - 4px)' }} />
+              <div style={{ ...handleH, top: 'calc(50% - 4px)', left: '-1px' }} />
+              <div style={{ ...handleH, top: 'calc(50% - 4px)', right: '-1px' }} />
+              {/* Drag zones */}
+              {makeBottomDragger()}
+              {makeRightDragger()}
+              {makeCornerDragger()}
+            </>
+          );
+        })()}
+
       </div>
     );
   };
@@ -3554,12 +3804,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               </div>
 
               {/* Layout grid */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                {/* Full Width Column: Form and Timeline Table */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '1.25rem', alignItems: 'start' }}>
+                {/* LEFT COLUMN: Activity Form */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                      <div className="cs-form-group">
+                      <div className="cs-form-group" style={{ gridColumn: '1 / -1' }}>
                         <label className="cs-form-label">Activity Title <span style={{ color: '#ef4444' }}>*</span></label>
                         <input className="cs-form-input" type="text" value={activityForm.title}
                           onChange={e => setActivityForm({ ...activityForm, title: e.target.value })} />
@@ -3617,9 +3867,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  {/* Activity Timeline / Existing Activities Card */}
-                  <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {/* RIGHT COLUMN: Activity Timeline */}
+                <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
                       <div>
                         <h3 className="cs-card-title" style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0 }}>Activity Timeline</h3>
@@ -3728,7 +3979,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         })}
                       </div>
                     )}
-                  </div>
                 </div>
 
               </div>
@@ -3737,339 +3987,688 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
           {view === 'screen-builder' && (
             isEditingScreen ? (
-              <>
-              {/* Top navigation header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <button
-                    className="cs-icon-btn"
-                    onClick={() => setView('activity-builder')}
-                    style={{ background: '#ffffff', border: '1px solid #d1d5db', borderRadius: '8px', padding: '6px', cursor: 'pointer' }}
-                  >
-                    <FiArrowLeft style={{ fontSize: '1rem', color: '#475569' }} />
-                  </button>
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                      <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Experience Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Experience Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('activity-builder')}>{selectedActivity?.title || 'Activity Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Screen Editor</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '4px' }}>
-                      <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>{screenForm.title || 'Untitled Screen'}</h1>
-                      <button className="cs-icon-btn" style={{ fontSize: '0.85rem', color: '#0b57d0' }} onClick={() => {
-                        triggerPrompt(
-                          "Enter new screen title:",
-                          "Rename Screen Title",
-                          screenForm.title,
-                          "Screen Title",
-                          (newTitle) => {
-                            if (newTitle && newTitle.trim()) setScreenForm({ ...screenForm, title: newTitle.trim() });
-                          }
-                        );
-                      }}><FiEdit2 /></button>
-                      <span className="cs-badge cs-badge-draft" style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>{screenForm.screen_type}</span>
-                    </div>
+            <>
+              {/* ═══════════════════════════════════════════════════════════
+                  FULL SCREEN STUDIO OVERLAY
+                  Adobe Photoshop / Figma / Framer / Webflow inspired editor
+                  ═══════════════════════════════════════════════════════════ */}
+              <style>{`
+                /* ── Full Screen Studio ── */
+                @keyframes fss-fade-in { from { opacity: 0; transform: scale(0.99); } to { opacity: 1; transform: scale(1); } }
+                .fss-overlay {
+                  position: fixed;
+                  inset: 0;
+                  width: 100vw;
+                  height: 100vh;
+                  background: #ECEFF3;
+                  z-index: 9999;
+                  display: flex;
+                  flex-direction: column;
+                  font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                  animation: fss-fade-in 0.18s ease-out;
+                  overflow: hidden;
+                }
+
+                /* Top Toolbar */
+                .fss-toolbar {
+                  height: 52px;
+                  background: #ffffff;
+                  border-bottom: 1px solid #e2e8f0;
+                  display: flex;
+                  align-items: center;
+                  gap: 0;
+                  padding: 0;
+                  flex-shrink: 0;
+                  box-shadow: 0 1px 4px rgba(15,23,42,0.06);
+                  z-index: 10;
+                  position: relative;
+                }
+                .fss-toolbar-left {
+                  display: flex;
+                  align-items: center;
+                  gap: 0.5rem;
+                  padding: 0 1rem;
+                  border-right: 1px solid #f1f5f9;
+                  height: 100%;
+                  min-width: 240px;
+                }
+                .fss-toolbar-center {
+                  flex: 1;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 0.4rem;
+                  padding: 0 1rem;
+                }
+                .fss-toolbar-right {
+                  display: flex;
+                  align-items: center;
+                  gap: 0.5rem;
+                  padding: 0 1rem;
+                  border-left: 1px solid #f1f5f9;
+                  height: 100%;
+                }
+                .fss-toolbar-btn {
+                  display: flex;
+                  align-items: center;
+                  gap: 0.35rem;
+                  background: none;
+                  border: none;
+                  padding: 0.4rem 0.7rem;
+                  border-radius: 7px;
+                  cursor: pointer;
+                  font-size: 0.8rem;
+                  font-weight: 600;
+                  color: #475569;
+                  transition: all 0.15s;
+                  white-space: nowrap;
+                }
+                .fss-toolbar-btn:hover {
+                  background: #f1f5f9;
+                  color: #0f172a;
+                }
+                .fss-toolbar-btn:disabled {
+                  opacity: 0.4;
+                  cursor: not-allowed;
+                }
+                .fss-toolbar-btn.active {
+                  background: #eff6ff;
+                  color: #1d4ed8;
+                }
+                .fss-toolbar-btn.primary {
+                  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+                  color: #ffffff;
+                  box-shadow: 0 2px 6px rgba(29,78,216,0.3);
+                }
+                .fss-toolbar-btn.primary:hover {
+                  background: linear-gradient(135deg, #1e40af, #1d4ed8);
+                  color: #ffffff;
+                }
+                .fss-toolbar-divider {
+                  width: 1px;
+                  height: 24px;
+                  background: #e2e8f0;
+                  margin: 0 0.25rem;
+                  flex-shrink: 0;
+                }
+                .fss-screen-name-btn {
+                  background: none;
+                  border: none;
+                  font-size: 0.88rem;
+                  font-weight: 700;
+                  color: #0f172a;
+                  cursor: pointer;
+                  padding: 0.3rem 0.5rem;
+                  border-radius: 6px;
+                  max-width: 220px;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                  transition: background 0.15s;
+                }
+                .fss-screen-name-btn:hover {
+                  background: #f1f5f9;
+                }
+                .fss-autosave {
+                  display: flex;
+                  align-items: center;
+                  gap: 4px;
+                  font-size: 0.72rem;
+                  font-weight: 600;
+                  color: #16a34a;
+                  white-space: nowrap;
+                }
+                .fss-autosave.saving { color: #ca8a04; }
+                .fss-autosave.unsaved { color: #dc2626; }
+                .fss-autosave-dot {
+                  width: 6px; height: 6px;
+                  border-radius: 50%;
+                  background: currentColor;
+                  display: inline-block;
+                }
+
+                /* Viewport badge buttons */
+                .fss-viewport-btn {
+                  display: flex;
+                  align-items: center;
+                  gap: 0.3rem;
+                  background: none;
+                  border: 1px solid transparent;
+                  padding: 0.3rem 0.6rem;
+                  border-radius: 6px;
+                  cursor: pointer;
+                  font-size: 0.75rem;
+                  font-weight: 600;
+                  color: #64748b;
+                  transition: all 0.15s;
+                }
+                .fss-viewport-btn:hover { background: #f1f5f9; color: #1e293b; }
+                .fss-viewport-btn.active {
+                  background: #eff6ff;
+                  border-color: #bfdbfe;
+                  color: #1d4ed8;
+                }
+
+                /* Main body */
+                .fss-body {
+                  flex: 1;
+                  display: flex;
+                  overflow: hidden;
+                }
+
+                /* Left Panel */
+                .fss-left {
+                  background: #ffffff;
+                  border-right: 1px solid #e2e8f0;
+                  display: flex;
+                  flex-direction: column;
+                  flex-shrink: 0;
+                  overflow: hidden;
+                  position: relative;
+                  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                  box-shadow: 2px 0 8px rgba(15,23,42,0.04);
+                  z-index: 2;
+                }
+                .fss-left.expanded { width: 280px; }
+                .fss-left.collapsed { width: 60px; }
+
+                /* Collapsed icon toolbar */
+                .fss-icon-toolbar {
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  padding: 0.75rem 0;
+                  gap: 0.25rem;
+                  height: 100%;
+                  overflow-y: auto;
+                }
+                .fss-icon-tool {
+                  width: 44px;
+                  height: 44px;
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 2px;
+                  border: none;
+                  background: none;
+                  border-radius: 8px;
+                  cursor: pointer;
+                  color: #64748b;
+                  font-size: 1.1rem;
+                  transition: all 0.15s;
+                  position: relative;
+                }
+                .fss-icon-tool:hover {
+                  background: #eff6ff;
+                  color: #1d4ed8;
+                }
+                .fss-icon-tool-label {
+                  font-size: 0.48rem;
+                  font-weight: 700;
+                  text-transform: uppercase;
+                  letter-spacing: 0.03em;
+                  color: inherit;
+                  line-height: 1;
+                }
+                .fss-panel-toggle {
+                  width: 44px;
+                  height: 44px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  border: none;
+                  background: none;
+                  border-radius: 8px;
+                  cursor: pointer;
+                  color: #64748b;
+                  font-size: 1.1rem;
+                  transition: all 0.15s;
+                  flex-shrink: 0;
+                }
+                .fss-panel-toggle:hover { background: #f1f5f9; color: #0f172a; }
+
+                /* Full left panel when expanded */
+                .fss-left-inner {
+                  display: flex;
+                  flex-direction: column;
+                  height: 100%;
+                  overflow: hidden;
+                }
+                .fss-left-header {
+                  display: flex;
+                  align-items: center;
+                  justify-content: space-between;
+                  padding: 0.75rem 0.85rem;
+                  border-bottom: 1px solid #f1f5f9;
+                  flex-shrink: 0;
+                }
+                .fss-left-title {
+                  font-size: 0.75rem;
+                  font-weight: 700;
+                  color: #0f172a;
+                  text-transform: uppercase;
+                  letter-spacing: 0.05em;
+                }
+                .fss-left-scroll {
+                  flex: 1;
+                  overflow-y: auto;
+                  padding: 0.85rem;
+                  scrollbar-width: thin;
+                  scrollbar-color: #cbd5e1 transparent;
+                }
+                .fss-left-scroll::-webkit-scrollbar { width: 4px; }
+                .fss-left-scroll::-webkit-scrollbar-track { background: transparent; }
+                .fss-left-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+                /* Center workspace */
+                .fss-workspace {
+                  flex: 1;
+                  background: #ECEFF3;
+                  display: flex;
+                  flex-direction: column;
+                  overflow: hidden;
+                  position: relative;
+                }
+                .fss-workspace-inner {
+                  flex: 1;
+                  overflow-y: auto;
+                  overflow-x: auto;
+                  display: flex;
+                  align-items: flex-start;
+                  justify-content: center;
+                  padding: 2rem 2rem 4rem 2rem;
+                  scrollbar-width: thin;
+                  scrollbar-color: #94a3b8 transparent;
+                }
+                .fss-workspace-inner::-webkit-scrollbar { width: 6px; height: 6px; }
+                .fss-workspace-inner::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+                .fss-canvas-shell {
+                  background: #ffffff;
+                  border-radius: 12px;
+                  box-shadow: 0 4px 24px rgba(15,23,42,0.08), 0 1px 4px rgba(15,23,42,0.04), 0 0 0 1px rgba(15,23,42,0.06);
+                  width: 100%;
+                  min-height: 600px;
+                  position: relative;
+                  flex-shrink: 0;
+                  transition: max-width 0.3s ease;
+                }
+                .fss-canvas-shell.desktop { max-width: 1440px; }
+                .fss-canvas-shell.tablet { max-width: 768px; }
+                .fss-canvas-shell.mobile { max-width: 390px; }
+                .fss-canvas-content {
+                  padding: 2rem;
+                  min-height: 580px;
+                }
+                .fss-canvas-bar {
+                  height: 38px;
+                  background: #f8fafc;
+                  border-bottom: 1px solid #e2e8f0;
+                  border-radius: 12px 12px 0 0;
+                  display: flex;
+                  align-items: center;
+                  padding: 0 1rem;
+                  gap: 0.5rem;
+                  flex-shrink: 0;
+                }
+                .fss-canvas-dot {
+                  width: 10px; height: 10px;
+                  border-radius: 50%;
+                }
+                .fss-canvas-url {
+                  flex: 1;
+                  height: 22px;
+                  background: #e2e8f0;
+                  border-radius: 11px;
+                  margin: 0 0.5rem;
+                  display: flex;
+                  align-items: center;
+                  padding: 0 0.75rem;
+                  font-size: 0.65rem;
+                  color: #64748b;
+                  font-weight: 500;
+                }
+
+                /* Right Panel */
+                .fss-right {
+                  width: 340px;
+                  flex-shrink: 0;
+                  background: #ffffff;
+                  border-left: 1px solid #e2e8f0;
+                  display: flex;
+                  flex-direction: column;
+                  overflow: hidden;
+                  box-shadow: -2px 0 8px rgba(15,23,42,0.04);
+                  z-index: 2;
+                }
+                .fss-right-header {
+                  padding: 0.85rem 0.95rem 0.6rem 0.95rem;
+                  border-bottom: 1px solid #f1f5f9;
+                  flex-shrink: 0;
+                }
+                .fss-right-scroll {
+                  flex: 1;
+                  overflow-y: auto;
+                  padding: 0.85rem;
+                  scrollbar-width: thin;
+                  scrollbar-color: #cbd5e1 transparent;
+                }
+                .fss-right-scroll::-webkit-scrollbar { width: 4px; }
+                .fss-right-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+                .fss-block-palette-item {
+                  border: 1px solid #e2e8f0;
+                  border-radius: 10px;
+                  padding: 0.6rem 0.75rem;
+                  cursor: pointer;
+                  display: flex;
+                  gap: 0.65rem;
+                  align-items: center;
+                  background: #ffffff;
+                  transition: all 0.15s;
+                  margin-bottom: 0.4rem;
+                }
+                .fss-block-palette-item:hover {
+                  border-color: #3b82f6;
+                  background: #eff6ff;
+                  transform: translateX(2px);
+                }
+              `}</style>
+
+              <div className="fss-overlay">
+
+                {/* ── TOP TOOLBAR ── */}
+                <header className="fss-toolbar">
+                  {/* Left: Back + breadcrumb + name */}
+                  <div className="fss-toolbar-left">
+                    <button
+                      className="fss-toolbar-btn"
+                      title="Back to Activity Builder (saves first)"
+                      onClick={() => {
+                        handleSaveScreen(false);
+                        window.history.pushState({}, '', '/content-studio');
+                        setCurrentPath('/content-studio');
+                      }}
+                    >
+                      <FiArrowLeft style={{ fontSize: '1rem' }} />
+                      <span>Back</span>
+                    </button>
+                    <div className="fss-toolbar-divider" />
+                    <button
+                      className="fss-screen-name-btn"
+                      title="Rename screen"
+                      onClick={() => triggerPrompt(
+                        "Enter new screen title:", "Rename Screen Title", screenForm.title, "Screen Title",
+                        (newTitle) => { if (newTitle && newTitle.trim()) setScreenForm({ ...screenForm, title: newTitle.trim() }); }
+                      )}
+                    >
+                      {screenForm.title || 'Untitled Screen'}
+                    </button>
+                    <FiEdit2 style={{ fontSize: '0.75rem', color: '#94a3b8', cursor: 'pointer', flexShrink: 0 }} onClick={() => triggerPrompt(
+                      "Enter new screen title:", "Rename Screen Title", screenForm.title, "Screen Title",
+                      (newTitle) => { if (newTitle && newTitle.trim()) setScreenForm({ ...screenForm, title: newTitle.trim() }); }
+                    )} />
+                    <span style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '0.62rem', padding: '2px 7px', borderRadius: '10px', fontWeight: 700, flexShrink: 0 }}>{screenForm.screen_type}</span>
                   </div>
-                </div>
-                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.72rem', color: '#16a34a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
-                    <span style={{ width: '6px', height: '6px', background: '#16a34a', borderRadius: '50%', display: 'inline-block' }}></span> Autosaved
-                  </span>
-                  <button
-                    className="cs-btn-outline"
-                    onClick={() => {
-                      handleSaveScreen(false);
-                    }}
-                    style={{ background: '#ffffff', border: '1px solid #d1d5db', borderRadius: '10px', padding: '0.5rem 1rem', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', color: '#374151' }}
-                  >
-                    Back to Activity
-                  </button>
 
-                  <button
-                    onClick={() => handleSaveScreen(true)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '6px',
-                      background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
-                      color: '#ffffff', border: 'none', borderRadius: '10px',
-                      padding: '0.5rem 1.25rem', fontWeight: 700, fontSize: '0.82rem',
-                      cursor: 'pointer', boxShadow: '0 2px 8px rgba(11,87,208,0.25)'
-                    }}
-                  >
-                    Save Changes
-                  </button>
-                </div>
-              </div>
+                  {/* Center: Tools */}
+                  <div className="fss-toolbar-center">
+                    {/* Undo/Redo */}
+                    <button className="fss-toolbar-btn" title="Undo (Ctrl+Z)" disabled={historyIndex <= 0} onClick={handleUndo}>
+                      <span style={{ fontSize: '1rem' }}>↩</span>
+                    </button>
+                    <button className="fss-toolbar-btn" title="Redo (Ctrl+Y)" disabled={historyIndex >= elementsHistory.length - 1} onClick={handleRedo}>
+                      <span style={{ fontSize: '1rem' }}>↪</span>
+                    </button>
+                    <div className="fss-toolbar-divider" />
 
-              {/* 3 Column Builder Layout */}
-              <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr 310px', gap: '1.25rem', height: 'calc(100vh - 180px)', minHeight: 600 }}>
+                    {/* Viewport Switcher */}
+                    <button className={`fss-viewport-btn${viewportMode === 'desktop' ? ' active' : ''}`} onClick={() => setViewportMode('desktop')} title="Desktop view">
+                      <FiMonitor style={{ fontSize: '0.9rem' }} /> Desktop
+                    </button>
+                    <button className={`fss-viewport-btn${viewportMode === 'tablet' ? ' active' : ''}`} onClick={() => setViewportMode('tablet')} title="Tablet view">
+                      <FiTablet style={{ fontSize: '0.9rem' }} /> Tablet
+                    </button>
+                    <button className={`fss-viewport-btn${viewportMode === 'mobile' ? ' active' : ''}`} onClick={() => setViewportMode('mobile')} title="Mobile view">
+                      <FiSmartphone style={{ fontSize: '0.9rem' }} /> Mobile
+                    </button>
 
-                {/* Column 1: Add Elements Palette */}
-                <div className="cs-card" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                  <div>
-                    <h3 style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', margin: '0 0 4px 0' }}>Screen Layout</h3>
-                    <p style={{ fontSize: '0.68rem', color: '#64748b', margin: 0 }}>Configure viewport column split</p>
+                    <div className="fss-toolbar-divider" />
+
+                    {/* Zoom */}
+                    <button className="fss-toolbar-btn" onClick={() => setZoomLevel(z => Math.max(50, z - 10))} title="Zoom out" style={{ padding: '0.3rem 0.5rem' }}>−</button>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155', minWidth: '38px', textAlign: 'center' }}>{zoomLevel}%</span>
+                    <button className="fss-toolbar-btn" onClick={() => setZoomLevel(z => Math.min(150, z + 10))} title="Zoom in" style={{ padding: '0.3rem 0.5rem' }}>+</button>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem', marginBottom: '0.5rem' }}>
-                    {[
-                      { key: '1-column', ratio: '100', label: 'Single Column', desc: 'Standard single-panel layout', icon: <FiFileText style={{ color: '#0284c7' }} />, bg: '#e0f2fe' },
-                      { key: '2-column', ratio: '50-50', label: '2-Column Split [50/50]', desc: 'Equal split columns', icon: <FiColumns style={{ color: '#16a34a' }} />, bg: '#dcfce7' },
-                      { key: '2-column', ratio: '60-40', label: '2-Column Split [60/40]', desc: '60% Left, 40% Right panels', icon: <FiColumns style={{ color: '#7c3aed' }} />, bg: '#f3e8ff' },
-                    ].map(lay => {
-                      const isActive = screenForm.layout === lay.key && (lay.key === '1-column' || screenForm.columnRatio === lay.ratio);
-                      return (
-                        <div
-                          key={`${lay.key}-${lay.ratio}`}
-                          onClick={() => handleSetLayout(lay.key, lay.ratio)}
-                          className="cs-block-palette-item"
-                          style={{
-                            border: isActive ? '2px solid #0b57d0' : '1px solid #e2e8f0',
-                            borderRadius: '10px',
-                            padding: '0.65rem',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            gap: '0.75rem',
-                            alignItems: 'center',
-                            background: isActive ? '#f0f9ff' : '#ffffff',
-                            transition: 'all 0.15s'
-                          }}
-                        >
-                          <div style={{ background: lay.bg, padding: '0.45rem', borderRadius: '8px', display: 'flex' }}>
-                            {lay.icon}
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#1e293b' }}>{lay.label}</div>
-                            <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '1px' }}>{lay.desc}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div>
-                    <h3 style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', margin: '0 0 4px 0' }}>Add Elements</h3>
-                    <p style={{ fontSize: '0.68rem', color: '#64748b', margin: 0 }}>Append layout blocks to canvas</p>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                    {[
-                      {
-                        title: "Presentation & Media",
-                        items: [
-                          { type: 'Heading', desc: 'Main titles or section headers', icon: <FiFileText style={{ color: '#0b57d0' }} />, bg: '#e0f2fe' },
-                          { type: 'Text', desc: 'Standard paragraphs of text', icon: <FiFileText style={{ color: '#64748b' }} />, bg: '#f1f5f9' },
-                          { type: 'Image', desc: 'Display pictures and illustrations', icon: <FiImage style={{ color: '#16a34a' }} />, bg: '#dcfce7' },
-                          { type: 'Audio', desc: 'Voice instructions or speech files', icon: <FiVolume2 style={{ color: '#0ea5e9' }} />, bg: '#e0f9ff' },
-                          { type: 'Video', desc: 'Play embedded video presentations', icon: <FiMonitor style={{ color: '#7c3aed' }} />, bg: '#f3e8ff' },
-                          { type: 'Dialogue', desc: 'Interactive character chat bubbles', icon: <FiActivity style={{ color: '#db2777' }} />, bg: '#fce7f3' }
-                        ]
-                      },
-                      {
-                        title: "Assessment Blocks",
-                        items: [
-                          { type: 'Quiz', desc: 'Interactive MCQ quiz question', icon: <FiCheckCircle style={{ color: '#ea580c' }} />, bg: '#ffedd5' },
-                          { type: 'Voice_Recorder', desc: 'Speaking practice recording input', icon: <FiMic style={{ color: '#d97706' }} />, bg: '#fef3c7' },
-                          { type: 'Drag_Drop', desc: 'Drag items to correct targets', icon: <FiMove style={{ color: '#2563eb' }} />, bg: '#dbeafe' },
-                          { type: 'Fill_Blank', desc: 'Fill in missing words in text', icon: <FiEdit style={{ color: '#059669' }} />, bg: '#d1fae5' },
-                          { type: 'Match_Items', desc: 'Pair items in Column A & B', icon: <FiGitCommit style={{ color: '#7c3aed' }} />, bg: '#f3e8ff' },
-                          { type: 'Sequence', desc: 'Reorder items sequentially', icon: <FiList style={{ color: '#b45309' }} />, bg: '#fef3c7' }
-                        ]
-                      },
-                      {
-                        title: "Gamification Blocks",
-                        items: [
-                          { type: 'Flashcard', desc: 'Flip cards for front & back', icon: <FiLayers style={{ color: '#db2777' }} />, bg: '#fce7f3' },
-                          { type: 'Sentence_Builder', desc: 'Build sentences with word badges', icon: <FiType style={{ color: '#0284c7' }} />, bg: '#e0f2fe' },
-                          { type: 'Word_Search', desc: 'Simulated letter-grid puzzle', icon: <FiGrid style={{ color: '#4f46e5' }} />, bg: '#e0e7ff' }
-                        ]
-                      }
-                    ].map(cat => (
-                      <div key={cat.title} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                        <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px', borderBottom: '1px solid #f1f5f9', paddingBottom: '2px' }}>{cat.title}</span>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          {cat.items.map(tmpl => (
-                            <div
-                              key={tmpl.type}
-                              onClick={() => handleAddBlock(tmpl.type)}
-                              draggable={true}
-                              onDragStart={e => {
-                                e.dataTransfer.setData("text/plain", `type:${tmpl.type}`);
-                                e.dataTransfer.effectAllowed = "move";
-                              }}
-                              className="cs-block-palette-item"
-                              style={{
-                                border: '1px solid #e2e8f0',
-                                borderRadius: '10px',
-                                padding: '0.6rem 0.75rem',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                gap: '0.65rem',
-                                alignItems: 'center',
-                                background: '#ffffff',
-                                transition: 'all 0.15s'
-                              }}
-                            >
-                              <div style={{ background: tmpl.bg, padding: '0.35rem', borderRadius: '8px', display: 'flex' }}>
-                                {tmpl.icon}
-                              </div>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e293b' }}>{tmpl.type.replace('_', ' ')}</div>
-                                <div style={{ fontSize: '0.58rem', color: '#64748b', marginTop: '1px', lineHeight: '1.2' }}>{tmpl.desc}</div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{ marginTop: 'auto', background: '#f8fafc', padding: '0.75rem', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
-                    <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>💡 Pro-Tip</span>
-                    <span style={{ fontSize: '0.62rem', color: '#64748b', lineHeight: 1.4, display: 'block' }}>
-                      Click on any element block inside the viewport screen to select it and configure its properties.
+                  {/* Right: Save / Publish */}
+                  <div className="fss-toolbar-right">
+                    {/* Autosave */}
+                    <span className={`fss-autosave${autoSaveStatus !== 'saved' ? ` ${autoSaveStatus}` : ''}`}>
+                      <span className="fss-autosave-dot" />
+                      {autoSaveStatus === 'saved' ? 'Autosaved' : autoSaveStatus === 'saving' ? 'Saving…' : 'Unsaved'}
                     </span>
+                    <div className="fss-toolbar-divider" />
+                    <button className="fss-toolbar-btn" title="Save as Draft" onClick={() => { triggerAutoSave(); handleSaveScreen(false); }}>
+                      <FiCheck style={{ fontSize: '0.9rem' }} /> Save Draft
+                    </button>
+                    <button className="fss-toolbar-btn primary" title="Save and return" onClick={() => handleSaveScreen(true)}>
+                      <FiDownload style={{ fontSize: '0.85rem' }} /> Publish
+                    </button>
+                    <div className="fss-toolbar-divider" />
+                    <button className="fss-toolbar-btn" title="Toggle left panel (Tab)" onClick={() => setLeftPanelCollapsed(c => !c)} style={{ padding: '0.35rem 0.5rem' }}>
+                      <FiMenu style={{ fontSize: '1rem' }} />
+                    </button>
                   </div>
-                </div>
+                </header>
 
-                {/* Column 2: Center Canvas Screen Preview */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto', flex: 1 }}>
-                  {/* Canvas Device Switcher Controls */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '0.5rem 1rem', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155' }}>Design Canvas Page</span>
-                    <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.72rem', color: '#1e293b', fontWeight: 700 }}>Vertical Edit Mode (Full Page)</span>
+                {/* ── BODY ── */}
+                <div className="fss-body">
+
+                  {/* ── LEFT PANEL ── */}
+                  <div className={`fss-left ${leftPanelCollapsed ? 'collapsed' : 'expanded'}`}>
+                    {leftPanelCollapsed ? (
+                      /* Collapsed: icon-only toolbar */
+                      <div className="fss-icon-toolbar">
+                        <button className="fss-panel-toggle" title="Expand Panel (Tab)" onClick={() => setLeftPanelCollapsed(false)}>
+                          <FiMenu />
+                        </button>
+                        <div style={{ width: '100%', height: '1px', background: '#f1f5f9', margin: '4px 0' }} />
+                        {[
+                          { icon: <FiFileText />, label: 'Layout' },
+                          { icon: <FiType />, label: 'Text' },
+                          { icon: <FiImage />, label: 'Image' },
+                          { icon: <FiPlay />, label: 'Video' },
+                          { icon: <FiVolume2 />, label: 'Audio' },
+                          { icon: <FiActivity />, label: 'Quiz' },
+                          { icon: <FiGrid />, label: 'More' },
+                        ].map((t, i) => (
+                          <button key={i} className="fss-icon-tool" title={t.label} onClick={() => setLeftPanelCollapsed(false)}>
+                            {t.icon}
+                            <span className="fss-icon-tool-label">{t.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      /* Expanded: full element palette (identical to existing content) */
+                      <div className="fss-left-inner">
+                        <div className="fss-left-header">
+                          <span className="fss-left-title">Elements</span>
+                          <button className="fss-panel-toggle" title="Collapse Panel (Tab)" onClick={() => setLeftPanelCollapsed(true)}>
+                            <FiX style={{ fontSize: '0.95rem' }} />
+                          </button>
+                        </div>
+                        <div className="fss-left-scroll">
+                          {/* Add Elements */}
+                          <div>
+                            <h3 style={{ fontSize: '0.72rem', fontWeight: 800, color: '#0f172a', margin: '0 0 4px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Add Elements</h3>
+                            <p style={{ fontSize: '0.65rem', color: '#64748b', margin: '0 0 0.65rem 0' }}>Append layout blocks to canvas</p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                              {[
+                                {
+                                  title: "Presentation & Media",
+                                  items: [
+                                    { type: 'Heading', desc: 'Main titles or section headers', icon: <FiFileText style={{ color: '#0b57d0' }} />, bg: '#e0f2fe' },
+                                    { type: 'Text', desc: 'Standard paragraphs of text', icon: <FiFileText style={{ color: '#64748b' }} />, bg: '#f1f5f9' },
+                                    { type: 'Image', desc: 'Display pictures and illustrations', icon: <FiImage style={{ color: '#16a34a' }} />, bg: '#dcfce7' },
+                                    { type: 'Audio', desc: 'Voice instructions or speech files', icon: <FiVolume2 style={{ color: '#0ea5e9' }} />, bg: '#e0f9ff' },
+                                    { type: 'Video', desc: 'Play embedded video presentations', icon: <FiMonitor style={{ color: '#7c3aed' }} />, bg: '#f3e8ff' },
+                                    { type: 'Dialogue', desc: 'Interactive character chat bubbles', icon: <FiActivity style={{ color: '#db2777' }} />, bg: '#fce7f3' }
+                                  ]
+                                },
+                                {
+                                  title: "Assessment Blocks",
+                                  items: [
+                                    { type: 'Quiz', desc: 'Interactive MCQ quiz question', icon: <FiCheckCircle style={{ color: '#ea580c' }} />, bg: '#ffedd5' },
+                                    { type: 'Voice_Recorder', desc: 'Speaking practice recording input', icon: <FiMic style={{ color: '#d97706' }} />, bg: '#fef3c7' },
+                                    { type: 'Drag_Drop', desc: 'Drag items to correct targets', icon: <FiMove style={{ color: '#2563eb' }} />, bg: '#dbeafe' },
+                                    { type: 'Fill_Blank', desc: 'Fill in missing words in text', icon: <FiEdit style={{ color: '#059669' }} />, bg: '#d1fae5' },
+                                    { type: 'Match_Items', desc: 'Pair items in Column A & B', icon: <FiGitCommit style={{ color: '#7c3aed' }} />, bg: '#f3e8ff' },
+                                    { type: 'Sequence', desc: 'Reorder items sequentially', icon: <FiList style={{ color: '#b45309' }} />, bg: '#fef3c7' }
+                                  ]
+                                },
+                                {
+                                  title: "Gamification Blocks",
+                                  items: [
+                                    { type: 'Flashcard', desc: 'Flip cards for front & back', icon: <FiLayers style={{ color: '#db2777' }} />, bg: '#fce7f3' },
+                                    { type: 'Sentence_Builder', desc: 'Build sentences with word badges', icon: <FiType style={{ color: '#0284c7' }} />, bg: '#e0f2fe' },
+                                    { type: 'Word_Search', desc: 'Simulated letter-grid puzzle', icon: <FiGrid style={{ color: '#4f46e5' }} />, bg: '#e0e7ff' }
+                                  ]
+                                }
+                              ].map(cat => (
+                                <div key={cat.title}>
+                                  <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '0.4rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '2px' }}>{cat.title}</span>
+                                  {cat.items.map(tmpl => (
+                                    <div
+                                      key={tmpl.type}
+                                      onClick={() => handleAddBlock(tmpl.type)}
+                                      draggable={true}
+                                      onDragStart={e => { e.dataTransfer.setData("text/plain", `type:${tmpl.type}`); e.dataTransfer.effectAllowed = "move"; }}
+                                      className="fss-block-palette-item"
+                                    >
+                                      <div style={{ background: tmpl.bg, padding: '0.3rem', borderRadius: '6px', display: 'flex', flexShrink: 0 }}>{tmpl.icon}</div>
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e293b' }}>{tmpl.type.replace('_', ' ')}</div>
+                                        <div style={{ fontSize: '0.58rem', color: '#64748b', marginTop: '1px', lineHeight: 1.3 }}>{tmpl.desc}</div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Pro-tip */}
+                            <div style={{ marginTop: '1rem', background: '#f8fafc', padding: '0.65rem', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+                              <span style={{ fontSize: '0.65rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '3px' }}>💡 Pro-Tip</span>
+                              <span style={{ fontSize: '0.6rem', color: '#64748b', lineHeight: 1.4, display: 'block' }}>Click or drag elements onto the canvas. Press <strong>Tab</strong> to collapse this panel.</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── CENTER WORKSPACE ── */}
+                  <div className="fss-workspace">
+                    {/* Workspace status bar */}
+                    <div style={{ height: '34px', background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', padding: '0 1.25rem', gap: '1rem', flexShrink: 0 }}>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b' }}>
+                        {viewportMode === 'desktop' ? '🖥 Desktop — 1440px' : viewportMode === 'tablet' ? '📱 Tablet — 768px' : '📱 Mobile — 390px'}
+                      </span>
+                      <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>·</span>
+                      <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
+                        {(screenForm.elements || []).length} element{(screenForm.elements || []).length !== 1 ? 's' : ''}
+                      </span>
+                      <span style={{ fontSize: '0.68rem', color: '#94a3b8', marginLeft: 'auto' }}>Press <kbd style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '0 4px', fontSize: '0.62rem' }}>Tab</kbd> to toggle panel</span>
+                    </div>
+
+                    {/* Scrollable canvas area */}
+                    <div className="fss-workspace-inner">
+                      <div className={`fss-canvas-shell ${viewportMode}`} style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}>
+                        {/* Browser chrome bar */}
+                        <div className="fss-canvas-bar">
+                          <div className="fss-canvas-dot" style={{ background: '#ef4444' }} />
+                          <div className="fss-canvas-dot" style={{ background: '#f59e0b' }} />
+                          <div className="fss-canvas-dot" style={{ background: '#10b981' }} />
+                          <div className="fss-canvas-url">
+                            lingualab.edu / experiences / {selectedExperience?.title ? selectedExperience.title.toLowerCase().replace(/\s+/g, '-') : 'screen'}
+                          </div>
+                        </div>
+
+                        {/* Canvas content */}
+                        <div className="fss-canvas-content">
+                          <div
+                            onDragOver={e => e.preventDefault()}
+                            onDrop={e => handleDropOnSlot(e)}
+                            style={{ flex: 1, display: 'flex', flexDirection: 'row', flexWrap: 'wrap', alignContent: 'flex-start', alignItems: 'flex-start', gap: '1rem', background: '#ffffff', minHeight: '500px' }}
+                          >
+                            {(!screenForm.elements || screenForm.elements.length === 0) ? (
+                              <div
+                                onDragOver={e => e.preventDefault()}
+                                onDrop={e => handleDropOnSlot(e)}
+                                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed #cbd5e1', borderRadius: '12px', color: '#94a3b8', padding: '4rem 2rem', textAlign: 'center', gap: '1rem', minHeight: '400px', background: '#fafbfc', width: '100%' }}
+                              >
+                                <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <FiPlusCircle style={{ fontSize: '2rem', color: '#3b82f6' }} />
+                                </div>
+                                <span style={{ fontSize: '1.05rem', fontWeight: 700, color: '#1e293b' }}>Your Canvas is Empty</span>
+                                <span style={{ fontSize: '0.82rem', maxWidth: '320px', color: '#64748b', lineHeight: 1.5 }}>Click or drag layout elements from the left panel to start building your screen.</span>
+                                <button
+                                  onClick={() => setLeftPanelCollapsed(false)}
+                                  style={{ marginTop: '0.5rem', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff', border: 'none', borderRadius: '10px', padding: '0.6rem 1.5rem', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(37,99,235,0.25)' }}
+                                >
+                                  Open Element Panel
+                                </button>
+                              </div>
+                            ) : (
+                              screenForm.elements.map((block, idx) => renderCanvasBlock(block, idx))
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Main illustrated canvas container */}
-                  <div style={{ flex: 1, border: '1px solid #cbd5e1', background: '#f8fafc', borderRadius: '12px', display: 'flex', flexDirection: 'column', padding: '1.25rem', minHeight: '650px' }}>
+                  {/* ── RIGHT PROPERTIES PANEL ── */}
+                  <div className="fss-right">
+                    <div className="fss-right-header">
+                      <h3 style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0f172a', margin: '0 0 2px 0' }}>Configuration Properties</h3>
+                      <span style={{ fontSize: '0.62rem', color: '#64748b' }}>Edit details for the active element</span>
 
-                    {/* Desktop Aspect Ratio Container Wrapper with no vertical scrolling */}
-                    <div style={{
-                      width: '100%',
-                      minHeight: '600px',
-                      background: '#ffffff',
-                      borderRadius: '16px',
-                      boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-                      border: '1px solid #cbd5e1',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      position: 'relative',
-                      padding: '1.5rem'
-                    }}>
-
-                      {/* Canvas Screen Content Area */}
-                      <div
-                        onDragOver={e => e.preventDefault()}
-                        onDrop={e => handleDropOnSlot(e, 'left')}
-                        style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', background: '#ffffff' }}
-                      >
-
-                        {(!screenForm.elements || screenForm.elements.length === 0) ? (
-                          <div
-                            onDragOver={e => e.preventDefault()}
-                            onDrop={e => handleDropOnSlot(e, 'left')}
-                            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed #cbd5e1', borderRadius: '12px', color: '#94a3b8', padding: '3rem', textAlign: 'center', gap: '0.75rem', minHeight: '400px' }}
+                      {/* Tab Selector */}
+                      <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.2rem', gap: '0.75rem', marginTop: '0.6rem' }}>
+                        {['content', 'style', 'advanced'].map(t => (
+                          <button
+                            key={t}
+                            onClick={() => setPropertiesTab(t)}
+                            style={{
+                              background: 'none', border: 'none',
+                              borderBottom: propertiesTab === t ? '2px solid #2563eb' : '2px solid transparent',
+                              color: propertiesTab === t ? '#2563eb' : '#64748b',
+                              fontSize: '0.68rem', fontWeight: 700, padding: '3px 2px',
+                              cursor: 'pointer', textTransform: 'uppercase', transition: 'all 0.15s'
+                            }}
                           >
-                            <FiPlusCircle style={{ fontSize: '3rem', opacity: 0.6, color: '#0b57d0' }} />
-                            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e293b' }}>Your Screen Canvas is Empty</span>
-                            <span style={{ fontSize: '0.75rem', maxWidth: '300px' }}>Click or drag layout elements from the left panel to build your screen.</span>
-                          </div>
-                        ) : screenForm.layout === '2-column' ? (
-                          <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: screenForm.columnRatio === '60-40' ? '6fr 4fr' : '1fr 1fr',
-                            gap: '1.5rem',
-                            width: '100%'
-                          }}>
-                            {/* Left Column Drop / Display Zone */}
-                            <div
-                              onDragOver={e => e.preventDefault()}
-                              onDrop={e => handleDropOnSlot(e, 'left')}
-                              style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '1rem',
-                                borderRight: '1.5px dashed #cbd5e1',
-                                paddingRight: '1.25rem',
-                                minHeight: '400px'
-                              }}
-                            >
-                              {screenForm.elements.filter(block => (block.slot || 'left') === 'left').length === 0 ? (
-                                <div
-                                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
-                                  onDrop={e => handleDropOnSlot(e, 'left')}
-                                  style={{ flex: 1, border: '1.5px dashed #cbd5e1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.78rem', fontStyle: 'italic', background: '#f8fafc', minHeight: '150px' }}
-                                >
-                                  Left Column Elements
-                                </div>
-                              ) : (
-                                screenForm.elements.map((block, idx) => {
-                                  if ((block.slot || 'left') !== 'left') return null;
-                                  return renderCanvasBlock(block, idx);
-                                })
-                              )}
-                            </div>
-
-                            {/* Right Column Drop / Display Zone */}
-                            <div
-                              onDragOver={e => e.preventDefault()}
-                              onDrop={e => handleDropOnSlot(e, 'right')}
-                              style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '1rem',
-                                minHeight: '400px'
-                              }}
-                            >
-                              {screenForm.elements.filter(block => (block.slot || 'left') === 'right').length === 0 ? (
-                                <div
-                                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
-                                  onDrop={e => handleDropOnSlot(e, 'right')}
-                                  style={{ flex: 1, border: '1.5px dashed #cbd5e1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.78rem', fontStyle: 'italic', background: '#f8fafc', minHeight: '150px' }}
-                                >
-                                  Right Column Elements (Media)
-                                </div>
-                              ) : (
-                                screenForm.elements.map((block, idx) => {
-                                  if ((block.slot || 'left') !== 'right') return null;
-                                  return renderCanvasBlock(block, idx);
-                                })
-                              )}
-                            </div>
-                          </div>
-                        ) : (
-                          <div
-                            onDragOver={e => e.preventDefault()}
-                            onDrop={e => handleDropOnSlot(e, 'left')}
-                            style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
-                          >
-                            {screenForm.elements.map((block, idx) => renderCanvasBlock(block, idx))}
-                          </div>
-                        )}
-
+                            {t}
+                          </button>
+                        ))}
                       </div>
                     </div>
 
-                  </div>
-                </div>
-
-                                {/* Column 3: Right Properties Panel */}
-                <div className="cs-card" style={{ padding: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.85rem', overflowY: 'auto', background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-
-                  {/* Panel Section Head */}
-                  <div>
-                    <h3 style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', margin: '0 0 2px 0' }}>Configuration Properties</h3>
-                    <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Edit details for the active screen mode</span>
-                  </div>
-
-                  {(() => {
-                    const selectedBlock = (screenForm.elements || []).find(el => el.id === selectedBlockId);
-                    if (!selectedBlock) {
-                      return (
-                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.72rem', textAlign: 'center', padding: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
-                          No block selected. Click any block in the canvas to configure it.
-                        </div>
-                      );
-                    }
+                    <div className="fss-right-scroll">
+                      {(() => {
+                        const selectedBlock = (screenForm.elements || []).find(el => el.id === selectedBlockId);
+                        if (!selectedBlock) {
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.72rem', textAlign: 'center', padding: '2rem 1rem', gap: '0.75rem' }}>
+                              <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <FiLayers style={{ color: '#cbd5e1', fontSize: '1.4rem' }} />
+                              </div>
+                              <span style={{ color: '#64748b', fontWeight: 600, fontSize: '0.78rem' }}>No Element Selected</span>
+                              <span style={{ color: '#94a3b8', fontSize: '0.7rem', lineHeight: 1.5 }}>Click any element on the canvas to configure its properties here.</span>
+                            </div>
+                          );
+                        }
 
                     return (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }}>
@@ -4079,21 +4678,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           </span>
                         </div>
 
-                        {/* Global Slot Selection for 2-column layout */}
-                        {screenForm.layout === '2-column' && (
-                          <div className="cs-form-group" style={{ background: '#f8fafc', padding: '0.5rem', borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: '0.25rem' }}>
-                            <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Layout Display Column</label>
-                            <select
-                              className="cs-form-input"
-                              style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
-                              value={selectedBlock.slot || 'left'}
-                              onChange={e => handleUpdateBlockMultipleContent({ slot: e.target.value })}
-                            >
-                              <option value="left">Left Column</option>
-                              <option value="right">Right Column</option>
-                            </select>
-                          </div>
-                        )}
+                        {propertiesTab === 'content' && (
+                          <>
 
                         {/* BLOCK TYPE 1: HEADING */}
                         {selectedBlock.type === 'heading' && (
@@ -4757,13 +5343,193 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                             </div>
                           </div>
                         )}
+                      </>
+                    )}
+
+                        {propertiesTab === 'style' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Font Family</label>
+                              <select
+                                className="cs-form-input"
+                                style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
+                                value={selectedBlock.styles?.fontFamily || 'Poppins'}
+                                onChange={e => handleUpdateBlockStyles('fontFamily', e.target.value)}
+                              >
+                                <option value="Poppins">Poppins</option>
+                                <option value="Inter">Inter</option>
+                                <option value="Roboto">Roboto</option>
+                                <option value="Georgia">Georgia</option>
+                              </select>
+                            </div>
+
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Font Size</label>
+                              <input
+                                className="cs-form-input"
+                                style={{ height: '28px', fontSize: '0.75rem' }}
+                                type="text"
+                                value={selectedBlock.styles?.fontSize || ''}
+                                onChange={e => handleUpdateBlockStyles('fontSize', e.target.value)}
+                                placeholder="e.g. 16px, 1.25rem"
+                              />
+                            </div>
+
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Font Weight</label>
+                              <select
+                                className="cs-form-input"
+                                style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
+                                value={selectedBlock.styles?.fontWeight || 'Normal'}
+                                onChange={e => handleUpdateBlockStyles('fontWeight', e.target.value)}
+                              >
+                                <option value="Normal">Normal</option>
+                                <option value="SemiBold">SemiBold</option>
+                                <option value="Bold">Bold</option>
+                              </select>
+                            </div>
+
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Text Color</label>
+                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <input
+                                  type="color"
+                                  value={selectedBlock.styles?.color && selectedBlock.styles.color.startsWith('#') ? selectedBlock.styles.color : '#1e293b'}
+                                  onChange={e => handleUpdateBlockStyles('color', e.target.value)}
+                                  style={{ border: 'none', width: '32px', height: '32px', padding: 0, cursor: 'pointer', borderRadius: '4px' }}
+                                />
+                                <input
+                                  className="cs-form-input"
+                                  style={{ height: '28px', fontSize: '0.75rem', flex: 1 }}
+                                  type="text"
+                                  value={selectedBlock.styles?.color || ''}
+                                  onChange={e => handleUpdateBlockStyles('color', e.target.value)}
+                                  placeholder="Hex color code"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Alignment</label>
+                              <select
+                                className="cs-form-input"
+                                style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
+                                value={selectedBlock.styles?.alignment || 'Left'}
+                                onChange={e => handleUpdateBlockStyles('alignment', e.target.value)}
+                              >
+                                <option value="Left">Left</option>
+                                <option value="Center">Center</option>
+                                <option value="Right">Right</option>
+                                <option value="Justify">Justify</option>
+                              </select>
+                            </div>
+
+                            {selectedBlock.type === 'image' && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
+                                <div className="cs-form-group">
+                                  <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Image Crop / Fit Mode</label>
+                                  <select
+                                    className="cs-form-input"
+                                    style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
+                                    value={selectedBlock.styles?.objectFit || 'cover'}
+                                    onChange={e => handleUpdateBlockStyles('objectFit', e.target.value)}
+                                  >
+                                    <option value="cover">Crop to Fit (Cover)</option>
+                                    <option value="contain">Show Entire Image (Contain)</option>
+                                    <option value="fill">Stretch to Fill (Fill)</option>
+                                  </select>
+                                </div>
+
+                                <div className="cs-form-group">
+                                  <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Image Height</label>
+                                  <select
+                                    className="cs-form-input"
+                                    style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
+                                    value={selectedBlock.styles?.height || '220px'}
+                                    onChange={e => handleUpdateBlockStyles('height', e.target.value)}
+                                  >
+                                    <option value="120px">Small (120px)</option>
+                                    <option value="220px">Medium (220px)</option>
+                                    <option value="320px">Large (320px)</option>
+                                    <option value="420px">X-Large (420px)</option>
+                                    <option value="auto">Auto Height</option>
+                                  </select>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {propertiesTab === 'advanced' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                            {screenForm.layout === '2-column' && (
+                              <div className="cs-form-group" style={{ background: '#f8fafc', padding: '0.5rem', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                                <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Layout Display Column</label>
+                                <select
+                                  className="cs-form-input"
+                                  style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
+                                  value={selectedBlock.slot || 'left'}
+                                  onChange={e => handleUpdateBlockMultipleContent({ slot: e.target.value })}
+                                >
+                                  <option value="left">Left Column</option>
+                                  <option value="right">Right Column</option>
+                                </select>
+                              </div>
+                            )}
+
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Custom Developer CSS Class</label>
+                              <input
+                                className="cs-form-input"
+                                style={{ height: '28px', fontSize: '0.75rem' }}
+                                type="text"
+                                value={selectedBlock.styles?.customClass || ''}
+                                onChange={e => handleUpdateBlockStyles('customClass', e.target.value)}
+                                placeholder="e.g. animated-card custom-btn"
+                              />
+                            </div>
+
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>Raw JSON Attributes Editor</span>
+                                <span style={{ color: '#0b57d0', fontSize: '0.6rem' }}>Developer Mode</span>
+                              </label>
+                              <textarea
+                                className="cs-form-input"
+                                style={{ minHeight: '140px', fontSize: '0.68rem', fontFamily: 'monospace', lineHeight: 1.3, background: '#1e293b', color: '#38bdf8', padding: '0.5rem' }}
+                                value={JSON.stringify({ content: selectedBlock.content, styles: selectedBlock.styles }, null, 2)}
+                                onChange={e => {
+                                  try {
+                                    const parsed = JSON.parse(e.target.value);
+                                    if (parsed.content || parsed.styles) {
+                                      const elements = (screenForm.elements || []).map(el => {
+                                        if (el.id === selectedBlockId) {
+                                          return {
+                                            ...el,
+                                            content: parsed.content || el.content,
+                                            styles: parsed.styles || el.styles
+                                          };
+                                        }
+                                        return el;
+                                      });
+                                      setScreenForm(prev => ({ ...prev, elements }));
+                                    }
+                                  } catch (err) {
+                                    // Ignore parse errors while typing
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
 
-
                 </div>
+              </div>
 
+              </div>
               </div>
             </>
           ) : (
@@ -6066,8 +6832,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     </h3>
                     
                     <div style={{ display: 'flex', gap: '1.25rem', marginBottom: '1rem', alignItems: 'flex-start' }}>
-                      <div style={{ width: 84, height: 64, background: '#bae6fd', borderRadius: 6, flexShrink: 0, border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7', fontSize: '1.25rem' }}>
-                        <FiDownload />
+                      <div style={{ width: 84, height: 64, background: '#f1f5f9', borderRadius: 6, flexShrink: 0, border: '1px solid #e2e8f0', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7', fontSize: '1.25rem' }}>
+                        {selectedExperience?.thumbnail ? (
+                          <img
+                            src={selectedExperience.thumbnail.startsWith('http') ? selectedExperience.thumbnail : `${API_BASE_URL}${selectedExperience.thumbnail}`}
+                            alt={selectedExperience?.title || 'Experience'}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        ) : (
+                          <FiDownload />
+                        )}
                       </div>
                       <div style={{ flex: 1 }}>
                         <h4 style={{ fontSize: '0.85rem', fontWeight: 700, margin: '0 0 4px 0', color: '#1e293b' }}>
@@ -6177,17 +6951,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                   <td>
                                     <div style={{ display: 'flex', gap: 4 }}>
                                       <button
-                                        title="Download JSON (for testing)"
-                                        onClick={() => handleDownloadPackageJSON(pkg.id, elabFilename)}
-                                        style={{
-                                          background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0',
-                                          borderRadius: 5, padding: '3px 7px', fontSize: '0.68rem',
-                                          fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap'
-                                        }}
-                                      >
-                                        ⬇ JSON
-                                      </button>
-                                      <button
                                         title="Download .elab package"
                                         onClick={() => handleDownloadPackageElab(pkg.id, elabFilename)}
                                         style={{
@@ -6210,15 +6973,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
                 </div>
 
-              
-                
+                {/* RIGHT COLUMN: Assign, Validation & Reports */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
                   {/* Card 5: Assign Experience to School/Grade */}
-                  <div className="cs-card" style={{ marginTop: '1.25rem' }}>
+                  <div className="cs-card">
                     <h3 style={{ fontSize: '0.85rem', fontWeight: 700, borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', margin: '0 0 0.75rem 0', color: '#0f172a' }}>
                       Assign Experience to Tenant School
                     </h3>
-                    
+
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <label style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>Select School <span style={{ color: '#ef4444' }}>*</span></label>
@@ -6234,7 +6997,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         </select>
                       </div>
 
-                      
                       <button
                         onClick={handleAssignExperience}
                         disabled={actionLoading}
@@ -6251,25 +7013,22 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          marginTop: '0.5rem',
                           transition: 'all 0.15s'
                         }}
                       >
                         {actionLoading ? 'Assigning...' : 'Assign Experience'}
                       </button>
+                    </div>
+                  </div>
 
-
-  {/* RIGHT COLUMN: Validation Status & Reports */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                  
                   {/* Card 3: Validation Check Report */}
-                  <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '260px' }}>
+                  <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                     <h3 style={{ fontSize: '0.85rem', fontWeight: 700, borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', margin: '0 0 0.75rem 0', color: '#0f172a' }}>
                       Experience Validation Status
                     </h3>
-                    
+
                     {validationReport ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.75rem', flex: 1 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.75rem', flex: 1, minHeight: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ color: '#64748b', fontWeight: 600 }}>OVERALL CHECK</span>
                           <span className={`cs-badge`}
@@ -6298,11 +7057,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           </div>
                         </div>
 
-                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.45rem', maxHeight: '200px', paddingRight: '4px' }}>
+                        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.45rem', maxHeight: '140px', paddingRight: '4px' }}>
                           {validationReport.results && validationReport.results.filter(r => r.severity !== 'PASSED').length === 0 ? (
-                            <div style={{ color: '#16a34a', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', fontWeight: 600, padding: '1.5rem 0', justifyContent: 'center', textAlign: 'center' }}>
-                              <span style={{ fontSize: '1.75rem' }}>✓</span>
-                              <span style={{ fontSize: '0.78rem' }}>Ready for compilation & distribution!</span>
+                            <div style={{ color: '#16a34a', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', fontWeight: 600, padding: '1rem 0', justifyContent: 'center', textAlign: 'center' }}>
+                              <span style={{ fontSize: '1.5rem' }}>✓</span>
+                              <span style={{ fontSize: '0.75rem' }}>Ready for compilation & distribution!</span>
                             </div>
                           ) : (
                             validationReport.results && validationReport.results.filter(r => r.severity !== 'PASSED').map((res, i) => (
@@ -6321,31 +7080,26 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                             ))
                           )}
                         </div>
+
+                        {assignHistory.length > 0 && (
+                          <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '0.6rem' }}>
+                            <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155', margin: '0 0 0.5rem 0' }}>Current Assignments</h4>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', maxHeight: '90px', overflowY: 'auto' }}>
+                              {assignHistory.map(a => (
+                                <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '0.7rem' }}>
+                                  <span style={{ fontWeight: 600 }}>{a.school__school_name}</span>
+                                  <span style={{ color: '#64748b' }}>{a.grade__grade_name || 'All Grades'}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#64748b', fontSize: '0.75rem' }}>
                         Running validation check...
                       </div>
                     )}
-                  </div>
-
-                     
-
-                      {assignHistory.length > 0 && (
-                        <div style={{ borderTop: '1px solid #f1f5f9', marginTop: '0.75rem', paddingTop: '0.75rem' }}>
-                          <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155', margin: '0 0 0.5rem 0' }}>Current Assignments</h4>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', maxHeight: '140px', overflowY: 'auto' }}>
-                            {assignHistory.map(a => (
-                              <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '0.7rem' }}>
-                                <span style={{ fontWeight: 600 }}>{a.school__school_name}</span>
-                                <span style={{ color: '#64748b' }}>{a.grade__grade_name || 'All Grades'}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                    </div>
                   </div>
                 </div>
 

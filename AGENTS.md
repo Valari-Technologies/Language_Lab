@@ -26,14 +26,16 @@
   - `SchoolDashboard.jsx`: School Admin dashboard for managing their school's users.
   - `TeacherDashboard.jsx`: Teacher dashboard for managing scenarios and content.
 
-## 3. HARD RULES
-- Work in phases: explore and report BEFORE editing.
-- One change at a time; show a summary after each.
-- Ask before assuming when anything is ambiguous.
-- Preserve working modules; do not redesign, re-architect, or add new business modules unless asked.
-- Never overstate completion; if untested or uncertain, say so.
-- Never hand-edit historical migration files.
-- NEVER execute Git commands that modify or reset files (e.g., git pull, git checkout, git reset, git restore) without the user's explicit permission.
+## 3. HARD RULES & AGENT BEHAVIOR
+- **Exploration & Work Flow:** Work in phases: explore and report BEFORE editing. One change at a time; show a summary after each. Ask before assuming when anything is ambiguous.
+- **Code Preservation:** Preserve working modules; do not redesign, re-architect, or add new business modules unless asked.
+- **Accuracy:** Never overstate completion; if untested or uncertain, say so.
+- **Database Migrations:** Never hand-edit historical migration files.
+- **Git Security (STRICT NO-ACCESS WITHOUT PERMISSION):** NEVER execute Git commands that modify, reset, pull, checkout, or stage files (e.g., `git pull`, `git checkout`, `git reset`, `git restore`, `git clean`) without the user's explicit permission.
+- **Quota & Token Optimization (STRICT LIMIT SAVING):**
+  - **Minimal Context:** Focus strictly on specified files/folders; do not scan or read the entire repository unless explicitly instructed.
+  - **Model & Effort Efficiency:** Keep reasoning effort low/minimal for routine code edits or syntax checking.
+  - **No Unnecessary Executions:** Do not trigger long-running background tasks, automatic linting across all files, or visual test loops unless requested.
 
 ## 4. NAMING STANDARD
 - "Scenario" -> "Experience"

@@ -13,6 +13,25 @@ import { apiFetch } from './api';
 import logoIcon from './assets/icon.png';
 import teacherHeaderBanner from './assets/teacher_header_banner.png';
 
+/* ─── Auto-generate a student roll no from their name, e.g. "Rahul" -> "RAH001" ───
+   The numeric part continues from the total number of existing students (school-wide),
+   so it never restarts at 001 once other students already exist — e.g. with 4 students
+   already in the school, the next one becomes ...005, not 001. If that exact roll no is
+   somehow already taken, it keeps incrementing until a free one is found. */
+const generateRollNo = (fullName, existingStudents = []) => {
+  const cleanName = (fullName || '').trim().replace(/[^a-zA-Z]/g, '');
+  if (!cleanName) return '';
+  const prefix = cleanName.slice(0, 3).toUpperCase().padEnd(3, 'X');
+  const takenRollNos = new Set((existingStudents || []).map(s => (s.roll_no || '').toUpperCase()));
+  let n = (existingStudents || []).length + 1;
+  let candidate = `${prefix}${String(n).padStart(3, '0')}`;
+  while (takenRollNos.has(candidate)) {
+    n += 1;
+    candidate = `${prefix}${String(n).padStart(3, '0')}`;
+  }
+  return candidate;
+};
+
 /* ─── Static chart data (reference-matched visual) ─── */
 const CHART_MONTHS = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
 const CHART_LINES = [
@@ -2732,12 +2751,19 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                   <div className="sd-form-group">
                     <label className="sd-form-label">Full Name *</label>
                     <input className="sd-form-input" type="text" value={studentForm.full_name}
-                      onChange={e => setStudentForm({...studentForm, full_name:e.target.value})} required placeholder="e.g. Arjun Sharma"/>
+                      onChange={e => {
+                        const full_name = e.target.value;
+                        setStudentForm(prev => ({
+                          ...prev,
+                          full_name,
+                          roll_no: modalType === 'add' ? generateRollNo(full_name, students) : prev.roll_no
+                        }));
+                      }} required placeholder="e.g. Arjun Sharma"/>
                   </div>
                   <div className="sd-form-group">
                     <label className="sd-form-label">Roll No *</label>
                     <input className="sd-form-input" type="text" value={studentForm.roll_no}
-                      onChange={e => setStudentForm({...studentForm, roll_no:e.target.value})} required placeholder="e.g. 2024001"/>
+                      onChange={e => setStudentForm({...studentForm, roll_no:e.target.value})} required placeholder="Auto-generated from name"/>
                   </div>
                 </div>
                 <div className="sd-form-row">
