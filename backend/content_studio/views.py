@@ -1105,3 +1105,38 @@ class LMSAssignmentOptionsAPIView(APIView):
             "grades": list(grades),
             "assignments": list(assignments)
         }, status=status.HTTP_200_OK)
+
+
+class AIGenerateView(APIView):
+    """
+    POST /api/v1/cms/ai-generate/
+    AI Content Assistant utilizing Google Gemini API (gemini-1.5-flash) to auto-generate structured screen content.
+    """
+    permission_classes = [IsAuthenticated, IsContentCreatorOrSuperAdmin]
+
+    def post(self, request):
+        topic = request.data.get("topic")
+        target_level = request.data.get("target_level")
+        content_type = request.data.get("content_type")
+
+        if not topic or not target_level or not content_type:
+            return Response(
+                {"error": "Missing required fields: topic, target_level, and content_type are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if content_type not in ["quiz", "dialogue", "fill_in_blanks", "full_screen"]:
+            return Response(
+                {"error": "Invalid content_type. Choices are: quiz, dialogue, fill_in_blanks, full_screen."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from .services.ai_service import generate_ai_content
+        try:
+            result = generate_ai_content(topic, target_level, content_type)
+            return Response(result, status=status.HTTP_200_OK)
+        except ValueError as ve:
+            return Response({"error": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": f"AI generation failed: {str(e)}"}, status=status.HTTP_502_BAD_GATEWAY)
+

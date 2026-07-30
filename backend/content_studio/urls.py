@@ -16,6 +16,7 @@ from .views import (
     DashboardNotificationsAPIView,
     ExperienceAssignAPIView,
     LMSAssignmentOptionsAPIView,
+    AIGenerateView,
 )
 
 router = DefaultRouter()
@@ -64,4 +65,5 @@ urlpatterns = [
     path("content/assign-experience", ExperienceAssignAPIView.as_view()),
     path("content/assignment-options/", LMSAssignmentOptionsAPIView.as_view(), name="assignment-options"),
     path("content/assignment-options", LMSAssignmentOptionsAPIView.as_view()),
+    path("cms/ai-generate/", AIGenerateView.as_view(), name="cms-ai-generate"),
 ]

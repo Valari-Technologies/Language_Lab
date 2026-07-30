@@ -97,6 +97,231 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [detailExperience, setDetailExperience] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  // AI Content Assistant states
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiPreviewData, setAiPreviewData] = useState(null);
+  const [aiForm, setAiForm] = useState({
+    topic: '',
+    content_type: 'quiz',
+    target_level: 'Beginner / Grade 5'
+  });
+
+  const handleGenerateAIContent = async (e) => {
+    e.preventDefault();
+    if (!aiForm.topic.trim()) {
+      showFeedback('Please enter a topic or prompt.', 'error');
+      return;
+    }
+    setAiLoading(true);
+    setAiPreviewData(null);
+    try {
+      const res = await apiFetch('/api/v1/cms/ai-generate/', {
+        method: 'POST',
+        body: JSON.stringify({
+          topic: aiForm.topic,
+          target_level: aiForm.target_level,
+          content_type: aiForm.content_type
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAiPreviewData(data);
+        showFeedback('Content generated successfully!');
+      } else {
+        showFeedback(data.error || 'Failed to generate content', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showFeedback('Network error occurred during generation', 'error');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const updateElementProperties = (elementId, newProps) => {
+    setScreenForm(prev => {
+      const elements = (prev.elements || []).map(el => {
+        if (el.id === elementId) {
+          return {
+            ...el,
+            content: {
+              ...el.content,
+              ...newProps
+            }
+          };
+        }
+        return el;
+      });
+      return { ...prev, elements };
+    });
+  };
+
+  const handleAcceptAIContent = () => {
+    if (!aiPreviewData) return;
+    
+    // Auto-fill Title
+    const generatedTitle = aiPreviewData.title || screenForm.title || 'AI Generated Screen';
+    
+    let updatedForm = {
+      ...screenForm,
+      title: generatedTitle
+    };
+
+    const type = aiForm.content_type;
+    
+    if (type === 'quiz') {
+      // Set legacy fields
+      updatedForm.quiz_question = aiPreviewData.question || '';
+      updatedForm.quiz_options = aiPreviewData.options || ['', '', '', ''];
+      updatedForm.quiz_correct_index = aiPreviewData.correct_option_index !== undefined ? aiPreviewData.correct_option_index : 0;
+      updatedForm.screen_type = 'QUIZ';
+
+      const newProps = {
+        question: aiPreviewData.question || '',
+        options: aiPreviewData.options || ['', '', '', ''],
+        correctAnswerIndex: aiPreviewData.correct_option_index !== undefined ? aiPreviewData.correct_option_index : 0,
+        explanation: aiPreviewData.explanation || ''
+      };
+
+      const activeBlock = (screenForm.elements || []).find(el => el.id === selectedBlockId);
+      if (activeBlock && activeBlock.type === 'quiz') {
+        updateElementProperties(selectedBlockId, newProps);
+      } else {
+        const newId = Date.now();
+        const quizBlock = {
+          id: newId,
+          type: 'quiz',
+          slot: 'left',
+          content: newProps,
+          styles: { color: '#1F2937', alignment: 'Left' }
+        };
+        updatedForm.elements = [...(screenForm.elements || []), quizBlock];
+        setSelectedBlockId(newId);
+      }
+    }
+    else if (type === 'dialogue') {
+      // Set legacy fields
+      updatedForm.steps = (aiPreviewData.dialogue_steps || []).map((step, idx) => ({
+        id: idx + 1,
+        speaker: step.speaker || 'A',
+        text: step.text || ''
+      }));
+      updatedForm.screen_type = 'DIALOGUE';
+
+      const newProps = {
+        steps: (aiPreviewData.dialogue_steps || []).map((step, idx) => ({
+          step: idx + 1,
+          name: step.speaker || 'A',
+          text: step.text || '',
+          avatarColor: '#3b82f6',
+          side: 'left'
+        }))
+      };
+
+      const activeBlock = (screenForm.elements || []).find(el => el.id === selectedBlockId);
+      if (activeBlock && activeBlock.type === 'dialogue') {
+        updateElementProperties(selectedBlockId, newProps);
+      } else {
+        const newId = Date.now();
+        const dialogueBlock = {
+          id: newId,
+          type: 'dialogue',
+          slot: 'left',
+          content: newProps,
+          styles: {}
+        };
+        updatedForm.elements = [...(screenForm.elements || []), dialogueBlock];
+        setSelectedBlockId(newId);
+      }
+    }
+    else if (type === 'fill_in_blanks') {
+      updatedForm.content = aiPreviewData.text_template || '';
+      updatedForm.screen_type = 'INFORMATION';
+
+      const newProps = {
+        question: aiPreviewData.question_instruction || '',
+        text: aiPreviewData.text_template || ''
+      };
+
+      const activeBlock = (screenForm.elements || []).find(el => el.id === selectedBlockId);
+      if (activeBlock && activeBlock.type === 'fill_blank') {
+        updateElementProperties(selectedBlockId, newProps);
+      } else {
+        const newId = Date.now();
+        const fibBlock = {
+          id: newId,
+          type: 'fill_blank',
+          slot: 'left',
+          content: newProps,
+          styles: {}
+        };
+        updatedForm.elements = [...(screenForm.elements || []), fibBlock];
+        setSelectedBlockId(newId);
+      }
+    }
+    else if (type === 'full_screen') {
+      updatedForm.content = aiPreviewData.body || '';
+      updatedForm.screen_type = 'INFORMATION';
+      
+      const elements = [
+        {
+          id: Date.now(),
+          type: 'heading',
+          slot: 'left',
+          content: { text: aiPreviewData.heading || aiPreviewData.title || '', tag: 'H1' },
+          styles: { color: '#0f172a', fontWeight: 'Bold', alignment: 'Center', fontSize: '36px' }
+        },
+        {
+          id: Date.now() + 1,
+          type: 'text',
+          slot: 'left',
+          content: { text: aiPreviewData.body || '' },
+          styles: { color: '#334155', fontWeight: 'Normal', alignment: 'Left', fontSize: '16px' }
+        }
+      ];
+      
+      if (aiPreviewData.dialogue_steps) {
+        elements.push({
+          id: Date.now() + 2,
+          type: 'dialogue',
+          slot: 'left',
+          content: {
+            steps: aiPreviewData.dialogue_steps.map((step, idx) => ({
+              step: idx + 1,
+              name: step.speaker || 'A',
+              text: step.text || '',
+              avatarColor: '#3b82f6',
+              side: 'left'
+            }))
+          },
+          styles: {}
+        });
+      }
+      
+      if (aiPreviewData.quiz) {
+        elements.push({
+          id: Date.now() + 3,
+          type: 'quiz',
+          slot: 'left',
+          content: {
+            question: aiPreviewData.quiz.question || '',
+            options: aiPreviewData.quiz.options || ['', '', '', ''],
+            correctAnswerIndex: aiPreviewData.quiz.correct_option_index !== undefined ? aiPreviewData.quiz.correct_option_index : 0
+          },
+          styles: {}
+        });
+      }
+      
+      updatedForm.elements = elements;
+    }
+
+    setScreenForm(updatedForm);
+    setShowAiModal(false);
+    showFeedback('Editor populated with generated AI content!');
+  };
+
+
   const handleSelectExperience = (id) => {
     setSelectedExperienceIds(prev =>
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
@@ -4594,6 +4819,20 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       {autoSaveStatus === 'saved' ? 'Autosaved' : autoSaveStatus === 'saving' ? 'Saving…' : 'Unsaved'}
                     </span>
                     <div className="fss-toolbar-divider" />
+                    <button
+                      data-testid="ai-assistant-btn"
+                      className="fss-toolbar-btn"
+                      style={{ background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      title="AI Content Assistant"
+                      onClick={() => {
+                        setAiForm({ topic: '', content_type: 'quiz', target_level: 'Beginner / Grade 5' });
+                        setAiPreviewData(null);
+                        setShowAiModal(true);
+                      }}
+                    >
+                      ✨ AI Assistant
+                    </button>
+                    <div className="fss-toolbar-divider" />
                     <button data-testid="save-draft-btn" className="fss-toolbar-btn" title="Save as Draft" onClick={() => { triggerAutoSave(); handleSaveScreen(false); }}>
                       <FiCheck style={{ fontSize: '0.9rem' }} /> Save Draft
                     </button>
@@ -7824,6 +8063,166 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               </div>
             </div>
           )}
+
+          {/* ── AI Content Generator Assistant Modal ── */}
+          {showAiModal && (
+            <div
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: '100vw',
+                height: '100vh',
+                backgroundColor: 'rgba(15, 23, 42, 0.45)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 99999,
+                padding: '1rem'
+              }}
+              onClick={() => setShowAiModal(false)}
+            >
+              <div
+                style={{
+                  width: '100%',
+                  maxWidth: '650px',
+                  maxHeight: '90vh',
+                  backgroundColor: '#ffffff',
+                  borderRadius: '16px',
+                  padding: '2rem',
+                  boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.3)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1.5rem',
+                  overflowY: 'auto'
+                }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>AI Assistant</span>
+                  </h3>
+                  <button
+                    onClick={() => setShowAiModal(false)}
+                    style={{ background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center' }}
+                  >
+                    <FiX />
+                  </button>
+                </div>
+
+                <form onSubmit={handleGenerateAIContent} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div className="cs-form-group">
+                    <label className="cs-form-label" style={{ fontWeight: 600 }}>Topic / Prompt</label>
+                    <input
+                      data-testid="ai-topic-input"
+                      type="text"
+                      className="cs-form-input"
+                      value={aiForm.topic}
+                      onChange={e => setAiForm({ ...aiForm, topic: e.target.value })}
+                      placeholder="e.g. English Grammar - Present Continuous Tense"
+                      style={{ height: '36px' }}
+                      required
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div className="cs-form-group">
+                      <label className="cs-form-label" style={{ fontWeight: 600 }}>Content Type</label>
+                      <select
+                        data-testid="ai-type-select"
+                        className="cs-form-input"
+                        value={aiForm.content_type}
+                        onChange={e => setAiForm({ ...aiForm, content_type: e.target.value })}
+                        style={{ height: '36px' }}
+                      >
+                        <option value="quiz">Quiz Question</option>
+                        <option value="dialogue">Dialogue / Conversation</option>
+                        <option value="fill_in_blanks">Fill in the Blanks</option>
+                        <option value="full_screen">Full Screen Template</option>
+                      </select>
+                    </div>
+
+                    <div className="cs-form-group">
+                      <label className="cs-form-label" style={{ fontWeight: 600 }}>Target Level</label>
+                      <select
+                        data-testid="ai-level-select"
+                        className="cs-form-input"
+                        value={aiForm.target_level}
+                        onChange={e => setAiForm({ ...aiForm, target_level: e.target.value })}
+                        style={{ height: '36px' }}
+                      >
+                        <option value="Beginner / Grade 5">Beginner (Grade 3-5)</option>
+                        <option value="Intermediate / Grade 7">Intermediate (Grade 6-7)</option>
+                        <option value="Advanced / Grade 8">Advanced (Grade 8)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+                    <button
+                      type="button"
+                      className="sd-btn-cancel"
+                      onClick={() => setShowAiModal(false)}
+                      style={{ padding: '0.55rem 1.25rem' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      data-testid="ai-submit-btn"
+                      type="submit"
+                      className="cs-btn-primary"
+                      disabled={aiLoading}
+                      style={{ background: '#7c3aed', color: '#ffffff', fontWeight: 600, padding: '0.55rem 1.25rem', border: 'none', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      {aiLoading ? (
+                        <>
+                          <FiRefreshCw className="spin" /> Generating...
+                        </>
+                      ) : 'Generate with AI'}
+                    </button>
+                  </div>
+                </form>
+
+                {/* Preview Section */}
+                {aiPreviewData && (
+                  <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>AI Preview Results</div>
+                    
+                    <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #cbd5e1', maxHeight: '200px', overflowY: 'auto' }}>
+                      <pre style={{ fontSize: '0.78rem', color: '#334155', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>
+                        {JSON.stringify(aiPreviewData, null, 2)}
+                      </pre>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+                      <button
+                        data-testid="ai-accept-btn"
+                        onClick={handleAcceptAIContent}
+                        style={{
+                          background: '#16a34a',
+                          color: '#ffffff',
+                          border: 'none',
+                          padding: '0.55rem 1.5rem',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          fontSize: '0.85rem',
+                          cursor: 'pointer',
+                          boxShadow: '0 4px 12px rgba(22,163,74,0.25)'
+                        }}
+                      >
+                        Accept & Insert
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
 
           {/* ── Custom Alert Modal ── */}
           {customAlert.show && (
