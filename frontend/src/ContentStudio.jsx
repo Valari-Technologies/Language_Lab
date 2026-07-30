@@ -91,6 +91,47 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [filterTag, setFilterTag] = useState('');
   const [activeMenuId, setActiveMenuId] = useState(null);
 
+  // Multi-select and View Details states for Experiences
+  const [selectedExperienceIds, setSelectedExperienceIds] = useState([]);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailExperience, setDetailExperience] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const handleSelectExperience = (id) => {
+    setSelectedExperienceIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllExperiences = () => {
+    if (selectedExperienceIds.length === experiences.length) {
+      setSelectedExperienceIds([]);
+    } else {
+      setSelectedExperienceIds(experiences.map(e => e.id));
+    }
+  };
+
+  const handleViewDetails = async (id) => {
+    setDetailLoading(true);
+    setShowDetailModal(true);
+    try {
+      const res = await apiFetch(`/api/v1/content/experiences/${id}/`);
+      if (res.ok) {
+        const data = await res.json();
+        setDetailExperience(data);
+      } else {
+        showFeedback('Failed to load experience details', 'error');
+        setShowDetailModal(false);
+      }
+    } catch (e) {
+      console.error(e);
+      showFeedback('Error loading experience details', 'error');
+      setShowDetailModal(false);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   // Previewer session payload track
   const [previewPayload, setPreviewPayload] = useState(null);
   const [previewActivityIndex, setPreviewActivityIndex] = useState(0);
@@ -113,6 +154,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       if (res.ok) {
         const data = await res.json();
         setExperiences(data.results || data);
+        setSelectedExperienceIds([]);
       }
     } catch (e) {
       console.error('Failed to load experiences in Content Studio', e);
@@ -729,6 +771,20 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       let url = '';
       let options = { method: 'DELETE' };
 
+      if (type === 'bulk-experiences') {
+        const ids = selectedExperienceIds;
+        await Promise.all(ids.map(itemId => apiFetch(`/api/v1/content/experiences/${itemId}/`, options)));
+        showFeedback(`${ids.length} experiences deleted successfully!`);
+        setSelectedExperienceIds([]);
+        setDeleteConfirm({ show: false, id: null, type: '', title: '', message: '', isConflict: false, usages: [] });
+        loadExperiencesData();
+        loadRecentExperiences();
+        if (selectedExperience && ids.includes(selectedExperience.id)) {
+          setSelectedExperience(null);
+        }
+        return;
+      }
+
       if (type === 'experience') {
         url = `/api/v1/content/experiences/${id}/`;
       } else if (type === 'activity') {
@@ -794,6 +850,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       type: 'experience',
       title: 'Delete Experience',
       message: `Are you sure you want to delete the experience "${exp?.title || ''}"? This action cannot be undone.`
+    });
+  };
+
+  const handleBulkDeleteExperiences = () => {
+    setDeleteConfirm({
+      show: true,
+      id: 'bulk',
+      type: 'bulk-experiences',
+      title: 'Delete Selected Experiences',
+      message: `Are you sure you want to delete the ${selectedExperienceIds.length} selected experiences? This action cannot be undone.`
     });
   };
 
@@ -3401,7 +3467,27 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
 
                   {/* Right Side: Action Button */}
-                  <div style={{ paddingBottom: '4px' }}>
+                  <div style={{ paddingBottom: '4px', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    {selectedExperienceIds.length > 0 && (
+                      <button
+                        style={{
+                          background: '#fee2e2',
+                          color: '#dc2626',
+                          border: '1px solid #fca5a5',
+                          fontWeight: 600,
+                          fontSize: '0.82rem',
+                          padding: '0.55rem 1.25rem',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                        onClick={handleBulkDeleteExperiences}
+                      >
+                        <FiTrash2 /> Delete Selected ({selectedExperienceIds.length})
+                      </button>
+                    )}
                     <button
                       className="cs-btn-primary"
                       style={{ background: '#0b57d0', color: '#ffffff', fontWeight: 600, fontSize: '0.82rem', padding: '0.55rem 1.25rem', borderRadius: '8px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
@@ -3435,6 +3521,14 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 <table className="cs-table">
                   <thead>
                     <tr>
+                      <th style={{ width: '40px', paddingLeft: '1.5rem' }}>
+                        <input
+                          type="checkbox"
+                          checked={experiences.length > 0 && selectedExperienceIds.length === experiences.length}
+                          onChange={handleSelectAllExperiences}
+                          style={{ cursor: 'pointer' }}
+                        />
+                      </th>
                       <th>Experience</th>
                       <th>Grade</th>
                       <th>Subject</th>
@@ -3448,11 +3542,19 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   <tbody>
                     {experiences.length === 0 ? (
                       <tr>
-                        <td colSpan="8" style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No experiences found. Click "+ New Experience" to create one!</td>
+                        <td colSpan="9" style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No experiences found. Click "+ New Experience" to create one!</td>
                       </tr>
                     ) : (
                       experiences.map((row) => (
                         <tr key={row.id} style={{ cursor: 'pointer' }} onClick={() => loadExperienceDetail(row, true)}>
+                          <td style={{ paddingLeft: '1.5rem' }} onClick={e => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedExperienceIds.includes(row.id)}
+                              onChange={() => handleSelectExperience(row.id)}
+                              style={{ cursor: 'pointer' }}
+                            />
+                          </td>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                               <div style={{ width: 48, height: 34, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden' }}>
@@ -3488,13 +3590,32 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                             <div style={{ fontSize: '0.72rem', color: '#64748b' }}>by {row.created_by_name || 'Content Creator'}</div>
                           </td>
                           <td style={{ textAlign: 'right', position: 'relative' }} onClick={e => e.stopPropagation()}>
-                            <button
-                              className="cs-icon-btn"
-                              onClick={() => setActiveMenuId(activeMenuId === row.id ? null : row.id)}
-                              style={{ padding: '6px 10px', fontSize: '1.2rem', cursor: 'pointer', border: 'none', background: 'none', color: '#64748b' }}
-                            >
-                              <FiMoreVertical />
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem' }}>
+                              <button
+                                title="View Details"
+                                onClick={() => handleViewDetails(row.id)}
+                                style={{
+                                  padding: '6px',
+                                  fontSize: '1.15rem',
+                                  cursor: 'pointer',
+                                  border: 'none',
+                                  background: 'none',
+                                  color: '#3b82f6',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}
+                              >
+                                <FiEye />
+                              </button>
+                              <button
+                                className="cs-icon-btn"
+                                onClick={() => setActiveMenuId(activeMenuId === row.id ? null : row.id)}
+                                style={{ padding: '6px', fontSize: '1.15rem', cursor: 'pointer', border: 'none', background: 'none', color: '#64748b', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                              >
+                                <FiMoreVertical />
+                              </button>
+                            </div>
                             {activeMenuId === row.id && (
                               <div style={{
                                 position: 'absolute', right: '16px', top: '75%', background: '#ffffff',
@@ -7514,6 +7635,190 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     disabled={actionLoading}
                   >
                     {actionLoading ? 'Deleting...' : (deleteConfirm.isConflict ? 'Force Delete' : 'Delete')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Experience Details View Modal ── */}
+          {showDetailModal && (
+            <div
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: '100vw',
+                height: '100vh',
+                backgroundColor: 'rgba(15, 23, 42, 0.45)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 99999,
+                padding: '1rem'
+              }}
+              onClick={() => setShowDetailModal(false)}
+            >
+              <div
+                style={{
+                  width: '100%',
+                  maxWidth: '750px',
+                  maxHeight: '90vh',
+                  backgroundColor: '#ffffff',
+                  borderRadius: '16px',
+                  padding: '2rem',
+                  boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.3)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1.5rem',
+                  overflowY: 'auto'
+                }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Experience Details</h3>
+                  <button
+                    onClick={() => setShowDetailModal(false)}
+                    style={{ background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center' }}
+                  >
+                    <FiX />
+                  </button>
+                </div>
+
+                {detailLoading ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem', gap: '0.75rem' }}>
+                    <FiRefreshCw className="spin" style={{ fontSize: '2rem', color: '#0b57d0' }} />
+                    <span style={{ fontSize: '0.9rem', color: '#64748b' }}>Loading details...</span>
+                  </div>
+                ) : detailExperience ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    {/* Header Summary */}
+                    <div style={{ display: 'flex', gap: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '12px' }}>
+                      <div style={{ width: 80, height: 60, background: '#e2e8f0', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
+                        {detailExperience.thumbnail ? (
+                          <img
+                            src={detailExperience.thumbnail.startsWith('http') ? detailExperience.thumbnail : `${API_BASE_URL}${detailExperience.thumbnail}`}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        ) : null}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>{detailExperience.title}</h4>
+                        <p style={{ fontSize: '0.85rem', color: '#475569', margin: 0 }}>{detailExperience.description || 'No description provided.'}</p>
+                      </div>
+                    </div>
+
+                    {/* Metadata Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                      <div>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Grade</span>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px' }}>{detailExperience.grade_name || `Grade ${detailExperience.grade}`}</div>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Subject</span>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px' }}>{Array.isArray(detailExperience.subject) ? detailExperience.subject.join(', ') : (detailExperience.subject || 'N/A')}</div>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Difficulty</span>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: detailExperience.difficulty === 'EASY' ? '#10b981' : detailExperience.difficulty === 'HARD' ? '#ef4444' : '#3b82f6' }} />
+                          {detailExperience.difficulty}
+                        </div>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Language</span>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px' }}>{detailExperience.language || 'English'}</div>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Duration</span>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px' }}>{detailExperience.estimated_duration || 0} mins</div>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Status</span>
+                        <div style={{ marginTop: '2px' }}>
+                          <span className={`cs-badge ${detailExperience.status === 'PUBLISHED' ? 'cs-badge-published' : 'cs-badge-draft'}`} style={{ display: 'inline-block' }}>
+                            {detailExperience.status}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Tags */}
+                    {detailExperience.tags && detailExperience.tags.length > 0 && (
+                      <div>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Tags</span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '4px' }}>
+                          {detailExperience.tags.map(t => (
+                            <span key={t} style={{ background: '#e2e8f0', color: '#475569', fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px' }}>{t}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Learning Outcomes */}
+                    {detailExperience.learning_outcomes && detailExperience.learning_outcomes.length > 0 && (
+                      <div>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Learning Outcomes</span>
+                        <ul style={{ margin: '4px 0 0 0', paddingLeft: '1.25rem', fontSize: '0.85rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          {detailExperience.learning_outcomes.map((o, idx) => (
+                            <li key={idx}>{typeof o === 'string' ? o : (o.text || o.description || o.outcome || o.name || '')}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Activities list */}
+                    <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem' }}>
+                      <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.75rem 0' }}>Activities ({detailExperience.activities?.length || 0})</h4>
+                      {!detailExperience.activities || detailExperience.activities.length === 0 ? (
+                        <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0, fontStyle: 'italic' }}>No activities in this experience.</p>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                          {detailExperience.activities.map((act, idx) => (
+                            <div key={act.id || idx} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.85rem' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1e293b' }}>{act.title}</span>
+                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{act.estimated_duration || 5} mins | {act.screens?.length || 0} screens</span>
+                              </div>
+                              {act.description && <p style={{ fontSize: '0.8rem', color: '#475569', margin: '0 0 6px 0' }}>{act.description}</p>}
+                              {act.skills && act.skills.length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                  {act.skills.map((sk, sidx) => (
+                                    <span key={sidx} style={{ background: '#f0fdf4', color: '#166534', fontSize: '9px', fontWeight: 600, padding: '1px 5px', borderRadius: '4px', border: '1px solid #bbf7d0' }}>
+                                      {typeof sk === 'string' ? sk : (sk.name || '')}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ textAlign: 'center', color: '#64748b', fontSize: '0.9rem', margin: 0 }}>No details available.</p>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: '1rem', marginTop: '0.5rem' }}>
+                  <button
+                    onClick={() => setShowDetailModal(false)}
+                    style={{
+                      background: '#0b57d0',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '0.5rem 1.25rem',
+                      borderRadius: '8px',
+                      fontWeight: 600,
+                      fontSize: '0.85rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Close
                   </button>
                 </div>
               </div>
