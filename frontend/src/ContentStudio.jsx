@@ -68,6 +68,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [learningOutcomes, setLearningOutcomes] = useState([]);
   const [outcomesText, setOutcomesText] = useState('');
   const [gradesList, setGradesList] = useState([]);
+  const [activitySkillOptions, setActivitySkillOptions] = useState([]);
   const [recentExperiences, setRecentExperiences] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -76,12 +77,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [publishHistory, setPublishHistory] = useState([]);
   const [validationReport, setValidationReport] = useState(null);
 
-  // Experience Assignment state
-  const [assignSchools, setAssignSchools] = useState([]);
-  const [assignGrades, setAssignGrades] = useState([]);
-  const [assignHistory, setAssignHistory] = useState([]);
-  const [targetSchoolId, setTargetSchoolId] = useState('');
-  const [targetGradeId, setTargetGradeId] = useState('');
+
 
   // Filter states for Experience Library
   const [filterGrade, setFilterGrade] = useState('');
@@ -467,6 +463,18 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
   };
 
+  const loadActivitySkills = async () => {
+    try {
+      const res = await apiFetch('/api/v1/content/activity-skills/');
+      if (res.ok) {
+        const data = await res.json();
+        setActivitySkillOptions(Array.isArray(data) ? data : (data.results || []));
+      }
+    } catch (e) {
+      console.error('Failed to load activity skills', e);
+    }
+  };
+
   useEffect(() => {
     loadExperiencesData();
     loadMediaData();
@@ -475,6 +483,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     loadRecentActivity();
     loadNotifications();
     loadGrades();
+    loadActivitySkills();
   }, []);
 
   /* ── Clock ticker ── */
@@ -537,10 +546,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               const content = sc.content || {};
               let activeElements = [];
               if (content.elements && Array.isArray(content.elements)) {
-                activeElements = JSON.parse(JSON.stringify(content.elements)).map(el => ({
-                  ...el,
-                  slot: el.slot || (['image', 'video', 'audio'].includes(el.type) ? 'right' : 'left')
-                }));
+                activeElements = JSON.parse(JSON.stringify(content.elements)).map(el => {
+                  if (el.type === 'quiz' && el.content && Array.isArray(el.content.options)) {
+                    el.content.options = el.content.options.map(opt => typeof opt === 'object' ? opt : { text: opt });
+                  }
+                  return {
+                    ...el,
+                    slot: el.slot || (['image', 'video', 'audio'].includes(el.type) ? 'right' : 'left')
+                  };
+                });
               }
               setScreenForm({
                 id: sc.id,
@@ -917,7 +931,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         title: experienceForm.title,
         description: experienceForm.description || '',
         grade: parseInt(experienceForm.grade) || null,
-        subject: Array.isArray(experienceForm.subject) ? experienceForm.subject.join(', ') : (experienceForm.subject || ''),
+        subject: (Array.isArray(experienceForm.subject) ? experienceForm.subject.join(', ') : (experienceForm.subject || '')) || 'General',
         language: experienceForm.language || 'English',
         difficulty: diff,
         estimated_duration: parseInt(experienceForm.duration) || 15,
@@ -1124,13 +1138,19 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
     setActionLoading(true);
     try {
+      const selectedSkillNames = Array.isArray(activityForm.skills) ? activityForm.skills : [];
+      const skillIds = activitySkillOptions
+        .filter(s => selectedSkillNames.includes(s.name))
+        .map(s => s.id);
+
       const payload = {
         experience: selectedExperience.id,
         title: activityForm.title,
         description: activityForm.description || '',
         learning_objective: activityForm.objective || '',
         estimated_duration: parseInt(activityForm.duration) || 5,
-        mastery_threshold: parseInt(activityForm.mastery) || 80
+        mastery_threshold: parseInt(activityForm.mastery) || 80,
+        skill_ids: skillIds
       };
 
       let res;
@@ -1272,7 +1292,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           slot: 'left',
           content: {
             question: content.quiz_question || 'Question label?',
-            options: content.quiz_options || ['', '', '', ''],
+            options: (content.quiz_options || ['', '', '', '']).map(opt => typeof opt === 'object' ? opt : { text: opt }),
             correctAnswerIndex: content.quiz_correct_index !== undefined ? content.quiz_correct_index : 0
           }
         });
@@ -1363,9 +1383,21 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       newBlock.type = 'quiz';
       newBlock.content = {
         question: 'Question text?',
-        options: ['Option A', 'Option B', 'Option C', 'Option D'],
+        options: [{ text: 'Option A' }, { text: 'Option B' }, { text: 'Option C' }, { text: 'Option D' }],
         correctAnswerIndex: 0
       };
+    } else if (type.toLowerCase() === 'dictation') {
+      newBlock.type = 'dictation';
+      newBlock.content = { url: '', question: 'Listen and type what you hear.' };
+    } else if (type.toLowerCase() === 'grammar_correction') {
+      newBlock.type = 'grammar_correction';
+      newBlock.content = { incorrectSentence: 'They is going to school.', correctedSentence: 'They are going to school.' };
+    } else if (type.toLowerCase() === 'reading_passage') {
+      newBlock.type = 'reading_passage';
+      newBlock.content = { title: 'Reading Passage', passage: 'Read this text carefully...', question: 'Did you understand the text?' };
+    } else if (type.toLowerCase() === 'writing_prompt') {
+      newBlock.type = 'writing_prompt';
+      newBlock.content = { prompt: 'Write about your favorite hobby.', placeholder: 'Start writing here...', minWords: 10 };
     } else if (type.toLowerCase() === 'voice_recorder' || type.toLowerCase() === 'voice recorder') {
       newBlock.type = 'voice_recorder';
       newBlock.content = { prompt: 'Please record your response.' };
@@ -1384,14 +1416,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         question: 'Complete the sentence by filling in the blanks.',
         text: 'The quick brown [fox] jumps over the lazy [dog].'
       };
-    } else if (type.toLowerCase() === 'match_items' || type.toLowerCase() === 'match items') {
-      newBlock.type = 'match_items';
+    } else if (type.toLowerCase() === 'match_items' || type.toLowerCase() === 'match items' || type.toLowerCase() === 'match') {
+      newBlock.type = 'match';
       newBlock.content = {
         question: 'Match the items in Column A with Column B.',
-        pairs: [
-          { id: 'match-1', left: 'Dog', right: 'Bark' },
-          { id: 'match-2', left: 'Cat', right: 'Meow' }
-        ]
+        leftItems: ['Dog', 'Cat'],
+        rightItems: ['Bark', 'Meow']
       };
     } else if (type.toLowerCase() === 'sequence' || type.toLowerCase() === 'sequence / order') {
       newBlock.type = 'sequence';
@@ -1421,6 +1451,24 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         words: ['DASHBOARD', 'STUDIO', 'TEACHER'],
         gridSize: 8
       };
+    } else if (type.toLowerCase() === 'pronunciation') {
+      newBlock.type = 'pronunciation';
+      newBlock.content = { word: 'Hello', phonetic: '/həˈloʊ/' };
+    } else if (type.toLowerCase() === 'role_play' || type.toLowerCase() === 'role play') {
+      newBlock.type = 'role_play';
+      newBlock.content = { title: 'Introduction', prompt: 'Introduce yourself.', script: [{ speaker: 'A', text: 'Hi! How are you?' }, { speaker: 'B', text: 'Im good, thanks!' }] };
+    } else if (type.toLowerCase() === 'input') {
+      newBlock.type = 'input';
+      newBlock.content = { placeholder: 'Type your answer here...' };
+    } else if (type.toLowerCase() === 'memory') {
+      newBlock.type = 'memory';
+      newBlock.content = { cards: ['Apple', 'Fruit', 'Carrot', 'Vegetable'] };
+    } else if (type.toLowerCase() === 'crossword') {
+      newBlock.type = 'crossword';
+      newBlock.content = { question: 'Solve the crossword grid.', words: [] };
+    } else if (type.toLowerCase() === 'true_false' || type.toLowerCase() === 'true false' || type.toLowerCase() === 'true/false') {
+      newBlock.type = 'true_false';
+      newBlock.content = { question: 'Is this statement true?', correctAnswer: true };
     }
 
     const updatedElements = [...(screenForm.elements || []), newBlock];
@@ -1462,9 +1510,21 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       newBlock.type = 'quiz';
       newBlock.content = {
         question: 'Question text?',
-        options: ['Option A', 'Option B', 'Option C', 'Option D'],
+        options: [{ text: 'Option A' }, { text: 'Option B' }, { text: 'Option C' }, { text: 'Option D' }],
         correctAnswerIndex: 0
       };
+    } else if (type.toLowerCase() === 'dictation') {
+      newBlock.type = 'dictation';
+      newBlock.content = { url: '', question: 'Listen and type what you hear.' };
+    } else if (type.toLowerCase() === 'grammar_correction') {
+      newBlock.type = 'grammar_correction';
+      newBlock.content = { incorrectSentence: 'They is going to school.', correctedSentence: 'They are going to school.' };
+    } else if (type.toLowerCase() === 'reading_passage') {
+      newBlock.type = 'reading_passage';
+      newBlock.content = { title: 'Reading Passage', passage: 'Read this text carefully...', question: 'Did you understand the text?' };
+    } else if (type.toLowerCase() === 'writing_prompt') {
+      newBlock.type = 'writing_prompt';
+      newBlock.content = { prompt: 'Write about your favorite hobby.', placeholder: 'Start writing here...', minWords: 10 };
     } else if (type.toLowerCase() === 'voice_recorder' || type.toLowerCase() === 'voice recorder') {
       newBlock.type = 'voice_recorder';
       newBlock.content = { prompt: 'Please record your response.' };
@@ -1483,14 +1543,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         question: 'Complete the sentence by filling in the blanks.',
         text: 'The quick brown [fox] jumps over the lazy [dog].'
       };
-    } else if (type.toLowerCase() === 'match_items' || type.toLowerCase() === 'match items') {
-      newBlock.type = 'match_items';
+    } else if (type.toLowerCase() === 'match_items' || type.toLowerCase() === 'match items' || type.toLowerCase() === 'match') {
+      newBlock.type = 'match';
       newBlock.content = {
         question: 'Match the items in Column A with Column B.',
-        pairs: [
-          { id: 'match-1', left: 'Dog', right: 'Bark' },
-          { id: 'match-2', left: 'Cat', right: 'Meow' }
-        ]
+        leftItems: ['Dog', 'Cat'],
+        rightItems: ['Bark', 'Meow']
       };
     } else if (type.toLowerCase() === 'sequence' || type.toLowerCase() === 'sequence / order') {
       newBlock.type = 'sequence';
@@ -1520,6 +1578,24 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         words: ['DASHBOARD', 'STUDIO', 'TEACHER'],
         gridSize: 8
       };
+    } else if (type.toLowerCase() === 'pronunciation') {
+      newBlock.type = 'pronunciation';
+      newBlock.content = { word: 'Hello', phonetic: '/həˈloʊ/' };
+    } else if (type.toLowerCase() === 'role_play' || type.toLowerCase() === 'role play') {
+      newBlock.type = 'role_play';
+      newBlock.content = { title: 'Introduction', prompt: 'Introduce yourself.', script: [{ speaker: 'A', text: 'Hi! How are you?' }, { speaker: 'B', text: 'Im good, thanks!' }] };
+    } else if (type.toLowerCase() === 'input') {
+      newBlock.type = 'input';
+      newBlock.content = { placeholder: 'Type your answer here...' };
+    } else if (type.toLowerCase() === 'memory') {
+      newBlock.type = 'memory';
+      newBlock.content = { cards: ['Apple', 'Fruit', 'Carrot', 'Vegetable'] };
+    } else if (type.toLowerCase() === 'crossword') {
+      newBlock.type = 'crossword';
+      newBlock.content = { question: 'Solve the crossword grid.', words: [] };
+    } else if (type.toLowerCase() === 'true_false' || type.toLowerCase() === 'true false' || type.toLowerCase() === 'true/false') {
+      newBlock.type = 'true_false';
+      newBlock.content = { question: 'Is this statement true?', correctAnswer: true };
     }
 
     const updatedElements = [...(screenForm.elements || []), newBlock];
@@ -1760,6 +1836,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
               {(block.content?.options || ['', '', '', '']).map((opt, oIdx) => {
                 const isCorrect = parseInt(block.content?.correctAnswerIndex) === oIdx;
+                const optionText = typeof opt === 'object' ? opt?.text : opt;
                 return (
                   <div
                     key={oIdx}
@@ -1788,11 +1865,73 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       color: isCorrect ? '#16a34a' : '#64748b',
                       borderColor: isCorrect ? '#16a34a' : '#cbd5e1'
                     }}>{String.fromCharCode(65 + oIdx)}</span>
-                    <span style={{ color: opt ? '#334155' : '#94a3b8' }}>{opt || `Option ${oIdx + 1}`}</span>
+                    <span style={{ color: optionText ? '#334155' : '#94a3b8' }}>{optionText || `Option ${oIdx + 1}`}</span>
                     {isCorrect && <span style={{ marginLeft: 'auto', color: '#16a34a', fontSize: '0.58rem', fontWeight: 'bold' }}>✓ Correct</span>}
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {block.type === 'dictation' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FiVolume2 /> Dictation (Listening Module)
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#475569' }}>
+              <strong>Prompt/Question:</strong> {block.content?.question || 'Listen and type what you hear.'}
+            </div>
+            <div style={{ fontSize: '0.68rem', color: '#64748b', fontStyle: 'italic', wordBreak: 'break-all' }}>
+              Audio Source: {block.content?.url || '(No audio file selected)'}
+            </div>
+            <input type="text" disabled placeholder="User types response here..." style={{ width: '100%', height: '30px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 8px', fontSize: '0.72rem', background: '#f8fafc' }} />
+          </div>
+        )}
+
+        {block.type === 'grammar_correction' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #a7f3d0', background: '#ecfdf5', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FiCheckCircle /> Grammar Correction
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#b91c1c', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '6px', padding: '6px' }}>
+              <strong>Incorrect:</strong> {block.content?.incorrectSentence || 'They is going to school.'}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#15803d', background: '#f0fdf4', border: '1px solid #dcfce7', borderRadius: '6px', padding: '6px' }}>
+              <strong>Corrected:</strong> {block.content?.correctedSentence || 'They are going to school.'}
+            </div>
+          </div>
+        )}
+
+        {block.type === 'reading_passage' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f1f5f9', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FiFileText /> Reading Passage: {block.content?.title || 'Passage Title'}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#334155', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', whiteSpace: 'pre-wrap', maxHeight: '100px', overflowY: 'auto' }}>
+              {block.content?.passage || 'Read this text carefully...'}
+            </div>
+            {block.content?.question && (
+              <div style={{ fontSize: '0.7rem', color: '#475569', fontStyle: 'italic' }}>
+                Question: {block.content?.question}
+              </div>
+            )}
+            <button disabled style={{ width: 'fit-content', padding: '4px 12px', borderRadius: '20px', background: '#10b981', color: '#fff', border: 'none', fontSize: '0.68rem', fontWeight: 600 }}>Mark as Read</button>
+          </div>
+        )}
+
+        {block.type === 'writing_prompt' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fdf2f8', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#9d174d', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FiEdit2 /> Writing Prompt (Word Count Gate)
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>
+              Prompt: {block.content?.prompt || 'Write about your favorite hobby.'}
+            </div>
+            <textarea disabled placeholder={block.content?.placeholder || 'Start writing here...'} style={{ width: '100%', height: '50px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '6px', fontSize: '0.72rem', background: '#f8fafc', resize: 'none' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#9d174d', fontWeight: 600 }}>
+              <span>Minimum word count: {block.content?.minWords || 10} words</span>
+              <span>0 words</span>
             </div>
           </div>
         )}
@@ -1873,7 +2012,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           </div>
         )}
 
-        {block.type === 'match_items' && (
+        {block.type === 'match' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #e9d5ff', background: '#f3e8ff', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#6b21a8' }}>
               Match Items: {block.content?.question || 'Pair Column A with Column B'}
@@ -1881,19 +2020,19 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.25rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                 <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#7c3aed', textTransform: 'uppercase' }}>Column A</span>
-                {(block.content?.pairs || []).map((p, pIdx) => (
+                {(block.content?.leftItems || []).map((left, pIdx) => (
                   <div key={pIdx} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '0.7rem', fontWeight: 600, color: '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>{p.left || `Item ${pIdx + 1}`}</span>
+                    <span>{left || `Item ${pIdx + 1}`}</span>
                     <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#7c3aed' }}></span>
                   </div>
                 ))}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                 <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#7c3aed', textTransform: 'uppercase' }}>Column B</span>
-                {(block.content?.pairs || []).map((p, pIdx) => (
+                {(block.content?.rightItems || []).map((right, pIdx) => (
                   <div key={pIdx} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '0.7rem', fontWeight: 600, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#7c3aed' }}></span>
-                    <span>{p.right || `Match ${pIdx + 1}`}</span>
+                    <span>{right || `Match ${pIdx + 1}`}</span>
                   </div>
                 ))}
               </div>
@@ -1983,6 +2122,88 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           </div>
         )}
 
+        {block.type === 'pronunciation' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FiMic /> Pronunciation Block
+            </div>
+            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>
+              Word: {block.content?.word || 'Hello'}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic' }}>
+              Phonetic: {block.content?.phonetic || '/həˈloʊ/'}
+            </div>
+          </div>
+        )}
+
+        {block.type === 'role_play' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fdf2f8', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#9d174d', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FiActivity /> Role Play: {block.content?.title || 'Introduction'}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#475569', fontStyle: 'italic' }}>
+              Scenario: {block.content?.prompt || 'Introduce yourself.'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {(block.content?.script || [{ speaker: 'A', text: 'Hi! How are you?' }]).map((line, lIdx) => (
+                <div key={lIdx} style={{ fontSize: '0.72rem', color: '#1e293b' }}>
+                  <strong>{line.speaker}:</strong> {line.text}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {block.type === 'input' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FiType /> Text Input Area
+            </div>
+            <input type="text" disabled placeholder={block.content?.placeholder || 'Type your answer here...'} style={{ width: '100%', height: '30px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 8px', fontSize: '0.72rem', background: '#f8fafc' }} />
+          </div>
+        )}
+
+        {block.type === 'memory' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #e0e7ff', background: '#f5f3ff', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#4f46e5', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FiGrid /> Memory matching game
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.35rem' }}>
+              {[1, 2, 3, 4].map(idx => (
+                <div key={idx} style={{ height: '40px', background: '#fff', borderRadius: '6px', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700, color: '#4f46e5' }}>?</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {block.type === 'crossword' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #dcfce7', background: '#ecfdf5', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FiGrid /> Crossword: {block.content?.question || 'Solve the crossword'}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 20px)', gap: '2px', width: 'fit-content' }}>
+              {Array.from({ length: 25 }).map((_, idx) => (
+                <div key={idx} style={{ width: '20px', height: '20px', background: idx % 3 === 0 ? '#1e293b' : '#fff', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700 }}></div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {block.type === 'true_false' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#c2410c', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FiCheckCircle /> True / False question
+            </div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>
+              {block.content?.question || 'Is this statement true?'}
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button disabled style={{ flex: 1, padding: '4px', borderRadius: '6px', border: block.content?.correctAnswer ? '1.5px solid #16a34a' : '1px solid #cbd5e1', background: block.content?.correctAnswer ? '#dcfce7' : '#fff', color: block.content?.correctAnswer ? '#16a34a' : '#64748b', fontSize: '0.68rem', fontWeight: 700 }}>True</button>
+              <button disabled style={{ flex: 1, padding: '4px', borderRadius: '6px', border: !block.content?.correctAnswer ? '1.5px solid #16a34a' : '1px solid #cbd5e1', background: !block.content?.correctAnswer ? '#dcfce7' : '#fff', color: !block.content?.correctAnswer ? '#16a34a' : '#64748b', fontSize: '0.68rem', fontWeight: 700 }}>False</button>
+            </div>
+          </div>
+        )}
+
         {/* ── Universal Resize / Crop Handles (all elements) ── */}
         {isSelected && (() => {
           const handleH = {
@@ -2015,6 +2236,28 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               }}
               style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '12px', cursor: 'ns-resize', zIndex: 15, background: 'transparent' }}
               title="Drag to resize height"
+            />
+          );
+
+          const makeLeftDragger = () => (
+            <div
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const startX = e.clientX;
+                const el = e.currentTarget.parentElement;
+                const initW = el.offsetWidth;
+                const move = (mv) => {
+                  const newW = Math.max(120, initW - (mv.clientX - startX));
+                  el.style.width = `${newW}px`;
+                  handleUpdateBlockStyles('blockWidth', `${newW}px`);
+                };
+                const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', up);
+              }}
+              style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: '12px', cursor: 'ew-resize', zIndex: 15, background: 'transparent' }}
+              title="Drag left side to resize width"
             />
           );
 
@@ -2083,6 +2326,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               <div style={{ ...handleH, top: 'calc(50% - 4px)', right: '-1px' }} />
               {/* Drag zones */}
               {makeBottomDragger()}
+              {makeLeftDragger()}
               {makeRightDragger()}
               {makeCornerDragger()}
             </>
@@ -2213,7 +2457,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       const quizBlock = blocks.find(b => b.type === 'quiz');
       if (quizBlock) {
         fallbackQuizQuestion = quizBlock.content?.question || '';
-        fallbackQuizOptions = quizBlock.content?.options || ['', '', '', ''];
+        fallbackQuizOptions = (quizBlock.content?.options || []).map(opt => typeof opt === 'object' ? (opt.text || '') : opt);
         fallbackQuizCorrectIndex = quizBlock.content?.correctAnswerIndex !== undefined ? quizBlock.content.correctAnswerIndex : 0;
       }
       const textBlock = blocks.find(b => b.type === 'text');
@@ -2640,30 +2884,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       if (resVal.ok) {
         setValidationReport(await resVal.json());
       }
-      // Load assignment options
-      const resAssign = await apiFetch(`/api/v1/content/assignment-options/`);
-      if (resAssign.ok) {
-        const assignData = await resAssign.json();
-        setAssignSchools(assignData.schools || []);
-        const rawGrades = assignData.grades || [];
-        const filteredGrades = rawGrades.filter(g => {
-          const match = g.grade_name.match(/^Grade\s+(\d+)$/i);
-          if (match) {
-            const num = parseInt(match[1]);
-            return num >= 3 && num <= 8;
-          }
-          return false;
-        }).sort((a, b) => {
-          const numA = parseInt(a.grade_name.match(/\d+/)[0]);
-          const numB = parseInt(b.grade_name.match(/\d+/)[0]);
-          return numA - numB;
-        });
-        setAssignGrades(filteredGrades);
-        const expAssignments = (assignData.assignments || []).filter(
-          a => String(a.experience_ref) === String(experienceId)
-        );
-        setAssignHistory(expAssignments);
-      }
+
     } catch (e) {
       console.error('Failed to load publish status, history, validation or assignment data', e);
     }
@@ -2704,41 +2925,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
   };
 
-  const handleAssignExperience = async () => {
-    if (!selectedExperience || !selectedExperience.id) {
-      triggerAlert("No active experience selected.", "No Experience Selected", "warning");
-      return;
-    }
-    if (!targetSchoolId) {
-      triggerAlert("Please select a target school.", "School Required", "warning");
-      return;
-    }
-    setActionLoading(true);
-    try {
-      const res = await apiFetch(`/api/v1/content/assign-experience/`, {
-        method: 'POST',
-        body: JSON.stringify({
-          experience_id: selectedExperience.id,
-          school_id: targetSchoolId,
-          grade_id: targetGradeId || null
-        })
-      });
-      if (res.ok) {
-        showFeedback("Experience assigned successfully!");
-        setTargetSchoolId('');
-        setTargetGradeId('');
-        loadPublishData(selectedExperience.id);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        showFeedback(data.error || "Failed to assign experience.", "error");
-      }
-    } catch (err) {
-      console.error(err);
-      showFeedback("Failed to assign experience due to a network error.", "error");
-    } finally {
-      setActionLoading(false);
-    }
-  };
+
 
 
 
@@ -3905,10 +4092,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         {isNewExperience ? 'New Experience' : 'Experience Builder'}
                       </h1>
                     </div>
-                    {experienceForm.grade && Array.isArray(experienceForm.subject) && experienceForm.subject.length > 0 && (
+                    {experienceForm.grade && (
                       <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
                         {gradesList.find(g => String(g.id) === String(experienceForm.grade))?.grade_name}
-                        {` · ${experienceForm.subject.join(' & ')}`}
                         {experienceForm.difficulty ? ` · ${experienceForm.difficulty}` : ''}
                         {experienceForm.duration ? ` · Est. ${experienceForm.duration} min` : ''}
                       </div>
@@ -3920,10 +4106,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     onClick={async () => {
                       await handleSaveExperience();
                       setSelectedActivity(null);
-                      const defaultSkills = Array.isArray(experienceForm.subject) && experienceForm.subject.length > 0
-                        ? [...experienceForm.subject]
-                        : [];
-                      setActivityForm({ title: '', description: '', objective: '', skills: defaultSkills, duration: 5, mastery: 80 });
+                      setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
                       setView('activity-builder');
                     }}
                     style={{
@@ -4037,51 +4220,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     </div>
                   </div>
 
-                  {/* Subject Checkboxes — full width row */}
-                  <div className="cs-form-group">
-                    <label className="cs-form-label">Subject <span style={{ color: '#ef4444' }}>*</span></label>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.4rem' }}>
-                      {['Speak', 'Listen', 'Read', 'Write', 'Grammar', 'Vocabulary', 'Phonetics'].map(skill => {
-                        const isChecked = Array.isArray(experienceForm.subject) && experienceForm.subject.includes(skill);
-                        return (
-                          <label
-                            key={skill}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
-                              cursor: 'pointer', fontSize: '0.82rem',
-                              padding: '5px 14px', borderRadius: '20px',
-                              border: isChecked ? '1.5px solid #0b57d0' : '1.5px solid #e2e8f0',
-                              background: isChecked ? '#e0f2fe' : '#f8fafc',
-                              color: isChecked ? '#0369a1' : '#374151',
-                              fontWeight: isChecked ? 600 : 400,
-                              transition: 'all 0.15s', userSelect: 'none'
-                            }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={e => {
-                                const current = Array.isArray(experienceForm.subject) ? experienceForm.subject : [];
-                                if (e.target.checked) {
-                                  setExperienceForm({ ...experienceForm, subject: [...current, skill] });
-                                } else {
-                                  setExperienceForm({ ...experienceForm, subject: current.filter(s => s !== skill) });
-                                }
-                              }}
-                              style={{ display: 'none' }}
-                            />
-                            {isChecked && <FiCheck style={{ fontSize: '0.75rem', color: '#0b57d0' }} />}
-                            {skill}
-                          </label>
-                        );
-                      })}
-                    </div>
-                    {Array.isArray(experienceForm.subject) && experienceForm.subject.length === 0 && (
-                      <div style={{ fontSize: '0.72rem', color: '#f59e0b', marginTop: '0.35rem' }}>
-                        Please select at least one subject skill.
-                      </div>
-                    )}
-                  </div>
+
 
                   <div className="cs-form-group" style={{ display: 'none' }}>
                     {/* tags hidden placeholder */}
@@ -4135,7 +4274,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
                         {activityForm.title && <span>{activityForm.title} · </span>}
                         {gradesList.find(g => String(g.id) === String(selectedExperience?.grade_id || selectedExperience?.grade))?.grade_name || ''}
-                        {selectedExperience?.subject ? ` · ${Array.isArray(experienceForm.subject) && experienceForm.subject.length > 0 ? experienceForm.subject.join(' & ') : selectedExperience.subject}` : ''}
                         {selectedExperience?.difficulty ? ` · ${selectedExperience.difficulty}` : ''}
                       </div>
                     )}
@@ -4183,31 +4321,31 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           onChange={e => setActivityForm({ ...activityForm, title: e.target.value })} />
                       </div>
                       <div className="cs-form-group" style={{ gridColumn: '1 / -1' }}>
-                        <label className="cs-form-label">Skills</label>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.4rem' }}>
-                          {(() => {
-                            const displaySkills = Array.isArray(experienceForm.subject) && experienceForm.subject.length > 0
-                              ? experienceForm.subject
-                              : (Array.isArray(activityForm.skills) && activityForm.skills.length > 0 ? activityForm.skills : []);
-                            if (displaySkills.length === 0) {
-                              return <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic' }}>Select subjects in Experience Builder to set skills.</span>;
-                            }
-                            return displaySkills.map(skill => (
-                              <span
-                                key={skill}
-                                style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-                                  fontSize: '0.82rem', padding: '4px 12px', borderRadius: '20px',
-                                  border: '1.5px solid #0b57d0',
-                                  background: '#e0f2fe', color: '#0369a1', fontWeight: 600
-                                }}
-                              >
-                                <FiCheck style={{ fontSize: '0.72rem', color: '#0b57d0' }} />
-                                {skill}
-                              </span>
-                            ));
-                          })()}
-                        </div>
+                        <label className="cs-form-label">Modules</label>
+                        <select
+                          className="cs-form-input"
+                          style={{ height: '36px', fontSize: '0.78rem', borderRadius: '8px', border: '1px solid #cbd5e1', padding: '0 0.5rem', background: '#fff' }}
+                          value={Array.isArray(activityForm.skills) && activityForm.skills.length > 0 ? activityForm.skills[0] : ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setActivityForm({ ...activityForm, skills: val ? [val] : [] });
+                          }}
+                        >
+                          <option value="">-- Choose Module --</option>
+                          {activitySkillOptions.length > 0 ? (
+                            activitySkillOptions.map(skill => (
+                              <option key={skill.id} value={skill.name}>
+                                {skill.name.charAt(0).toUpperCase() + skill.name.slice(1)}
+                              </option>
+                            ))
+                          ) : (
+                            ['listening', 'speaking', 'reading', 'writing', 'grammar'].map(name => (
+                              <option key={name} value={name}>
+                                {name.charAt(0).toUpperCase() + name.slice(1)}
+                              </option>
+                            ))
+                          )}
+                        </select>
                       </div>
                       <div className="cs-form-group">
                         <label className="cs-form-label">Description</label>
@@ -4250,10 +4388,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', background: '#fff', cursor: 'pointer', fontWeight: 600 }}
                         onClick={() => {
                           setSelectedActivity(null);
-                          const defaultSkills = Array.isArray(experienceForm.subject) && experienceForm.subject.length > 0
-                            ? [...experienceForm.subject]
-                            : [];
-                          setActivityForm({ title: '', description: '', objective: '', skills: defaultSkills, duration: 5, mastery: 80 });
+                          setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
                           setScreens([]);
                         }}
                       >
@@ -4312,12 +4447,17 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                 {index + 1}
                               </div>
 
-                              {/* Info */}
+                               {/* Info */}
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                   <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>{act.title}</span>
                                   <span style={{ fontSize: '0.7rem', color: '#64748b' }}>({act.estimated_duration || 5} min)</span>
                                 </div>
+                                {act.skills && act.skills.length > 0 && (
+                                  <div style={{ fontSize: '0.68rem', color: '#0b57d0', fontWeight: 600, marginTop: '2px', textTransform: 'capitalize' }}>
+                                    Module: {typeof act.skills[0] === 'object' ? act.skills[0].name : act.skills[0]}
+                                  </div>
+                                )}
                                 <p style={{ fontSize: '0.72rem', color: '#64748b', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {act.learning_objective || act.description || 'No objective set.'}
                                 </p>
@@ -4836,9 +4976,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <button data-testid="save-draft-btn" className="fss-toolbar-btn" title="Save as Draft" onClick={() => { triggerAutoSave(); handleSaveScreen(false); }}>
                       <FiCheck style={{ fontSize: '0.9rem' }} /> Save Draft
                     </button>
-                    <button data-testid="publish-screen-btn" className="fss-toolbar-btn primary" title="Save and return" onClick={() => handleSaveScreen(true)}>
-                      <FiDownload style={{ fontSize: '0.85rem' }} /> Publish
-                    </button>
                     <div className="fss-toolbar-divider" />
                     <button className="fss-toolbar-btn" title="Toggle left panel (Tab)" onClick={() => setLeftPanelCollapsed(c => !c)} style={{ padding: '0.35rem 0.5rem' }}>
                       <FiMenu style={{ fontSize: '1rem' }} />
@@ -4874,7 +5011,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         ))}
                       </div>
                     ) : (
-                      /* Expanded: full element palette (identical to existing content) */
+                      /* Expanded: full element palette */
                       <div className="fss-left-inner">
                         <div className="fss-left-header">
                           <span className="fss-left-title">Elements</span>
@@ -4897,18 +5034,26 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                     { type: 'Image', desc: 'Display pictures and illustrations', icon: <FiImage style={{ color: '#16a34a' }} />, bg: '#dcfce7' },
                                     { type: 'Audio', desc: 'Voice instructions or speech files', icon: <FiVolume2 style={{ color: '#0ea5e9' }} />, bg: '#e0f9ff' },
                                     { type: 'Video', desc: 'Play embedded video presentations', icon: <FiMonitor style={{ color: '#7c3aed' }} />, bg: '#f3e8ff' },
-                                    { type: 'Dialogue', desc: 'Interactive character chat bubbles', icon: <FiActivity style={{ color: '#db2777' }} />, bg: '#fce7f3' }
+                                    { type: 'Dialogue', desc: 'Interactive character chat bubbles', icon: <FiActivity style={{ color: '#db2777' }} />, bg: '#fce7f3' },
+                                    { type: 'Reading_Passage', desc: 'Read a text passage and mark complete', icon: <FiFileText style={{ color: '#6366f1' }} />, bg: '#e0e7ff' },
+                                    { type: 'Role_Play', desc: 'Interactive role play scripts', icon: <FiActivity style={{ color: '#db2777' }} />, bg: '#fce7f3' }
                                   ]
                                 },
                                 {
-                                  title: "Assessment Blocks",
+                                  title: "Assessment & Module Blocks",
                                   items: [
                                     { type: 'Quiz', desc: 'Interactive MCQ quiz question', icon: <FiCheckCircle style={{ color: '#ea580c' }} />, bg: '#ffedd5' },
                                     { type: 'Voice_Recorder', desc: 'Speaking practice recording input', icon: <FiMic style={{ color: '#d97706' }} />, bg: '#fef3c7' },
+                                    { type: 'Dictation', desc: 'Listen and type what you hear', icon: <FiVolume2 style={{ color: '#0b57d0' }} />, bg: '#e0f2fe' },
+                                    { type: 'Grammar_Correction', desc: 'Find and fix incorrect grammar', icon: <FiCheckCircle style={{ color: '#10b981' }} />, bg: '#d1fae5' },
+                                    { type: 'Writing_Prompt', desc: 'Write responses with word count limits', icon: <FiEdit2 style={{ color: '#ec4899' }} />, bg: '#fce7f3' },
                                     { type: 'Drag_Drop', desc: 'Drag items to correct targets', icon: <FiMove style={{ color: '#2563eb' }} />, bg: '#dbeafe' },
                                     { type: 'Fill_Blank', desc: 'Fill in missing words in text', icon: <FiEdit style={{ color: '#059669' }} />, bg: '#d1fae5' },
                                     { type: 'Match_Items', desc: 'Pair items in Column A & B', icon: <FiGitCommit style={{ color: '#7c3aed' }} />, bg: '#f3e8ff' },
-                                    { type: 'Sequence', desc: 'Reorder items sequentially', icon: <FiList style={{ color: '#b45309' }} />, bg: '#fef3c7' }
+                                    { type: 'Sequence', desc: 'Reorder items sequentially', icon: <FiList style={{ color: '#b45309' }} />, bg: '#fef3c7' },
+                                    { type: 'True_False', desc: 'True or False question', icon: <FiCheckCircle style={{ color: '#ea580c' }} />, bg: '#ffedd5' },
+                                    { type: 'Pronunciation', desc: 'Practice pronouncing words correctly', icon: <FiMic style={{ color: '#d97706' }} />, bg: '#fef3c7' },
+                                    { type: 'Input', desc: 'Free text typing input area', icon: <FiType style={{ color: '#0ea5e9' }} />, bg: '#e0f9ff' }
                                   ]
                                 },
                                 {
@@ -4916,10 +5061,53 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                   items: [
                                     { type: 'Flashcard', desc: 'Flip cards for front & back', icon: <FiLayers style={{ color: '#db2777' }} />, bg: '#fce7f3' },
                                     { type: 'Sentence_Builder', desc: 'Build sentences with word badges', icon: <FiType style={{ color: '#0284c7' }} />, bg: '#e0f2fe' },
-                                    { type: 'Word_Search', desc: 'Simulated letter-grid puzzle', icon: <FiGrid style={{ color: '#4f46e5' }} />, bg: '#e0e7ff' }
+                                    { type: 'Word_Search', desc: 'Simulated letter-grid puzzle', icon: <FiGrid style={{ color: '#4f46e5' }} />, bg: '#e0e7ff' },
+                                    { type: 'Memory', desc: 'Card matching memory game', icon: <FiGrid style={{ color: '#4f46e5' }} />, bg: '#e0e7ff' },
+                                    { type: 'Crossword', desc: 'Educational crossword puzzle', icon: <FiGrid style={{ color: '#16a34a' }} />, bg: '#dcfce7' }
                                   ]
                                 }
-                              ].map(cat => (
+                              ].map(cat => {
+                                const activeModule = (() => {
+                                  const rawSkills = selectedActivity?.skills || activityForm?.skills || [];
+                                  if (Array.isArray(rawSkills) && rawSkills.length > 0) {
+                                    const first = rawSkills[0];
+                                    if (typeof first === 'object' && first !== null) {
+                                      return (first.name || '').toLowerCase();
+                                    }
+                                    if (typeof first === 'string') {
+                                      return first.toLowerCase();
+                                    }
+                                  }
+                                  return '';
+                                })();
+
+                                const MODULE_ELEMENTS = {
+                                  listening: ['heading', 'audio', 'video', 'sequence', 'dictation', 'quiz', 'mcq', 'text', 'image'],
+                                  speaking:  ['heading', 'dialogue', 'input', 'voice_recorder', 'pronunciation', 'role_play', 'audio'],
+                                  reading:   ['text', 'heading', 'image', 'quiz', 'mcq', 'match', 'flashcard', 'memory', 'crossword', 'word_search', 'reading_passage'],
+                                  writing:   ['fill_blank', 'sentence_builder', 'writing_prompt', 'text', 'heading'],
+                                  grammar:   ['heading', 'true_false', 'drag_drop', 'grammar_correction', 'quiz', 'mcq', 'fill_blank', 'match', 'sequence']
+                                };
+
+                                const allowedTypes = MODULE_ELEMENTS[activeModule] || [];
+
+                                const isAllowed = (tmplType) => {
+                                  if (!activeModule) return true;
+                                  const mapped = tmplType.toLowerCase();
+                                  if (mapped === 'quiz') {
+                                    return allowedTypes.includes('quiz') || allowedTypes.includes('mcq');
+                                  }
+                                  if (mapped === 'match_items') {
+                                    return allowedTypes.includes('match') || allowedTypes.includes('match_items');
+                                  }
+                                  return allowedTypes.includes(mapped);
+                                };
+
+                                return {
+                                  ...cat,
+                                  items: cat.items.filter(tmpl => isAllowed(tmpl.type))
+                                };
+                              }).filter(cat => cat.items.length > 0).map(cat => (
                                 <div key={cat.title}>
                                   <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '0.4rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '2px' }}>{cat.title}</span>
                                   {cat.items.map(tmpl => (
@@ -5486,16 +5674,98 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                     data-testid={`quiz-option-input-${oIdx}`}
                                     style={{ height: '24px', fontSize: '0.72rem', flex: 1 }}
                                     type="text"
-                                    value={opt}
+                                    value={typeof opt === 'object' ? (opt?.text || '') : opt}
                                     onChange={e => {
                                       const options = [...(selectedBlock.content?.options || ['', '', '', ''])];
-                                      options[oIdx] = e.target.value;
+                                      if (typeof options[oIdx] === 'object') {
+                                        options[oIdx] = { ...options[oIdx], text: e.target.value };
+                                      } else {
+                                        options[oIdx] = { text: e.target.value };
+                                      }
                                       handleUpdateBlockContent('options', options);
                                     }}
                                     placeholder={`Option text ${oIdx + 1}...`}
                                   />
                                 </div>
                               ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* BLOCK TYPE: DICTATION */}
+                        {selectedBlock.type === 'dictation' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Dictation Settings</span>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question / Instruction</label>
+                              <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
+                                onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Listen to the audio and write down what you hear." />
+                            </div>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Audio URL / File Path</label>
+                              <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.url || ''}
+                                onChange={e => handleUpdateBlockContent('url', e.target.value)} placeholder="e.g. audio/dictation_1.mp3 or media library URL" />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* BLOCK TYPE: GRAMMAR CORRECTION */}
+                        {selectedBlock.type === 'grammar_correction' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Grammar Correction Settings</span>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Incorrect Sentence</label>
+                              <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.incorrectSentence || ''}
+                                onChange={e => handleUpdateBlockContent('incorrectSentence', e.target.value)} placeholder="e.g. They is going to school." />
+                            </div>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Corrected Sentence</label>
+                              <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.correctedSentence || ''}
+                                onChange={e => handleUpdateBlockContent('correctedSentence', e.target.value)} placeholder="e.g. They are going to school." />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* BLOCK TYPE: READING PASSAGE */}
+                        {selectedBlock.type === 'reading_passage' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Reading Passage Settings</span>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Passage Title</label>
+                              <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.title || ''}
+                                onChange={e => handleUpdateBlockContent('title', e.target.value)} placeholder="e.g. The Fox and the Grapes" />
+                            </div>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Passage Content</label>
+                              <textarea className="cs-form-input" style={{ minHeight: '120px', fontSize: '0.75rem', lineHeight: 1.4 }} value={selectedBlock.content?.passage || ''}
+                                onChange={e => handleUpdateBlockContent('passage', e.target.value)} placeholder="Type the text passage here..." />
+                            </div>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Follow-up Question (Optional)</label>
+                              <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
+                                onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Did you understand the text?" />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* BLOCK TYPE: WRITING PROMPT */}
+                        {selectedBlock.type === 'writing_prompt' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Writing Prompt Settings</span>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Prompt Instruction</label>
+                              <textarea className="cs-form-input" style={{ minHeight: '54px', fontSize: '0.75rem' }} value={selectedBlock.content?.prompt || ''}
+                                onChange={e => handleUpdateBlockContent('prompt', e.target.value)} placeholder="e.g. Describe your favorite memory from childhood." />
+                            </div>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Textarea Placeholder</label>
+                              <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.placeholder || ''}
+                                onChange={e => handleUpdateBlockContent('placeholder', e.target.value)} placeholder="e.g. Start writing your description here..." />
+                            </div>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Minimum Words Required</label>
+                              <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="number" value={selectedBlock.content?.minWords || 10}
+                                onChange={e => handleUpdateBlockContent('minWords', parseInt(e.target.value) || 0)} placeholder="e.g. 10" />
                             </div>
                           </div>
                         )}
@@ -5574,7 +5844,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         )}
 
                         {/* BLOCK TYPE: MATCH ITEMS */}
-                        {selectedBlock.type === 'match_items' && (
+                        {selectedBlock.type === 'match' && (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                             <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Match Column Pairs</span>
                             <div className="cs-form-group">
@@ -5585,24 +5855,32 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
                               <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Match Pairs</span>
                               <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
-                                onClick={() => { const pairs = [...(selectedBlock.content?.pairs || [])]; pairs.push({ id: `match-${Date.now()}`, left: 'Left Option', right: 'Right Match' }); handleUpdateBlockContent('pairs', pairs); }}>
+                                onClick={() => {
+                                  const leftItems = [...(selectedBlock.content?.leftItems || []), 'Left Option'];
+                                  const rightItems = [...(selectedBlock.content?.rightItems || []), 'Right Match'];
+                                  handleUpdateBlockMultipleContent({ leftItems, rightItems });
+                                }}>
                                 + Add Match
                               </button>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '200px', overflowY: 'auto' }}>
-                              {(selectedBlock.content?.pairs || []).map((p, pIdx) => (
-                                <div key={p.id || pIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              {(selectedBlock.content?.leftItems || []).map((left, pIdx) => (
+                                <div key={pIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b' }}>Pair #{pIdx + 1}</span>
                                     <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
-                                      onClick={() => { const pairs = (selectedBlock.content.pairs || []).filter((_, i) => i !== pIdx); handleUpdateBlockContent('pairs', pairs); }}>
+                                      onClick={() => {
+                                        const leftItems = (selectedBlock.content.leftItems || []).filter((_, i) => i !== pIdx);
+                                        const rightItems = (selectedBlock.content.rightItems || []).filter((_, i) => i !== pIdx);
+                                        handleUpdateBlockMultipleContent({ leftItems, rightItems });
+                                      }}>
                                       <FiTrash2 style={{ fontSize: '0.72rem' }} /></button>
                                   </div>
                                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
-                                    <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Column A (Left)" value={p.left}
-                                      onChange={e => { const pairs = [...selectedBlock.content.pairs]; pairs[pIdx].left = e.target.value; handleUpdateBlockContent('pairs', pairs); }} />
-                                    <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Column B (Right)" value={p.right}
-                                      onChange={e => { const pairs = [...selectedBlock.content.pairs]; pairs[pIdx].right = e.target.value; handleUpdateBlockContent('pairs', pairs); }} />
+                                    <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Column A (Left)" value={left}
+                                      onChange={e => { const leftItems = [...selectedBlock.content.leftItems]; leftItems[pIdx] = e.target.value; handleUpdateBlockContent('leftItems', leftItems); }} />
+                                    <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Column B (Right)" value={(selectedBlock.content?.rightItems || [])[pIdx] || ''}
+                                      onChange={e => { const rightItems = [...(selectedBlock.content.rightItems || [])]; rightItems[pIdx] = e.target.value; handleUpdateBlockContent('rightItems', rightItems); }} />
                                   </div>
                                 </div>
                               ))}
@@ -5728,6 +6006,69 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                 value={selectedBlock.content?.words?.join(', ') || ''}
                                 onChange={e => { const list = e.target.value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean); handleUpdateBlockContent('words', list); }}
                                 placeholder="e.g. DASHBOARD, STUDIO, TEACHER" />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* BLOCK TYPE: PRONUNCIATION */}
+                        {selectedBlock.type === 'pronunciation' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Pronunciation Settings</span>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Target Word</label>
+                              <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.word || ''}
+                                onChange={e => handleUpdateBlockContent('word', e.target.value)} placeholder="e.g. Hello" />
+                            </div>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Phonetic representation</label>
+                              <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.phonetic || ''}
+                                onChange={e => handleUpdateBlockContent('phonetic', e.target.value)} placeholder="e.g. /həˈloʊ/" />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* BLOCK TYPE: ROLE PLAY */}
+                        {selectedBlock.type === 'role_play' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Role Play Settings</span>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Scenario Title</label>
+                              <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.title || ''}
+                                onChange={e => handleUpdateBlockContent('title', e.target.value)} placeholder="e.g. At the Restaurant" />
+                            </div>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Instructions / Scenario</label>
+                              <textarea className="cs-form-input" style={{ minHeight: '54px', fontSize: '0.75rem' }} value={selectedBlock.content?.prompt || ''}
+                                onChange={e => handleUpdateBlockContent('prompt', e.target.value)} placeholder="e.g. Practice ordering food." />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* BLOCK TYPE: INPUT */}
+                        {selectedBlock.type === 'input' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Text Input Settings</span>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Input Placeholder</label>
+                              <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.placeholder || ''}
+                                onChange={e => handleUpdateBlockContent('placeholder', e.target.value)} placeholder="e.g. Type your response here..." />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* BLOCK TYPE: TRUE FALSE */}
+                        {selectedBlock.type === 'true_false' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>True / False Settings</span>
+                            <div className="cs-form-group">
+                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Statement Question</label>
+                              <textarea className="cs-form-input" style={{ minHeight: '54px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
+                                onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Water boils at 100 degrees Celsius." />
+                            </div>
+                            <div className="cs-form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <input type="checkbox" checked={!!selectedBlock.content?.correctAnswer}
+                                onChange={e => handleUpdateBlockContent('correctAnswer', e.target.checked)} />
+                              <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Correct Answer is True</label>
                             </div>
                           </div>
                         )}
@@ -5998,6 +6339,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <div>
                       <span style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', fontWeight: 700 }}>Active Activity</span>
                       <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: '2px 0 0 0' }}>{selectedActivity.title}</h2>
+                      {selectedActivity.skills && selectedActivity.skills.length > 0 && (
+                        <div style={{ fontSize: '0.72rem', color: '#0b57d0', fontWeight: 600, marginTop: '2px', textTransform: 'capitalize' }}>
+                          Module: {typeof selectedActivity.skills[0] === 'object' ? selectedActivity.skills[0].name : selectedActivity.skills[0]}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: 'flex', gap: '1.5rem' }}>
                       <div style={{ textAlign: 'right' }}>
@@ -6202,6 +6548,18 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     </button>
                     <button
                       className="cs-btn-primary"
+                      style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', color: '#ffffff', border: 'none', borderRadius: '10px', padding: '0.5rem 1.25rem', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,197,94,0.25)', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      onClick={() => {
+                        if (selectedExperience?.id) {
+                          loadPublishData(selectedExperience.id);
+                        }
+                        setView('publish');
+                      }}
+                    >
+                      <FiDownload style={{ fontSize: '1rem' }} /> Go to Publish
+                    </button>
+                    <button
+                      className="cs-btn-primary"
                       style={{ background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)', color: '#ffffff', border: 'none', borderRadius: '10px', padding: '0.5rem 1.25rem', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(11,87,208,0.25)', display: 'flex', alignItems: 'center', gap: '6px' }}
                       onClick={() => setView('experience-builder')}
                     >
@@ -6289,7 +6647,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       </div>
 
                       {/* Content Preview Canvas body */}
-                      <div style={{ flex: 1, padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', background: '#ffffff', fontFamily: activeScreen?.content?.font || 'Poppins' }}>
+                      <div style={{ flex: 1, padding: '1.25rem', display: 'flex', flexDirection: 'row', flexWrap: 'wrap', alignContent: 'flex-start', alignItems: 'flex-start', gap: '1rem', overflowY: 'auto', background: '#ffffff', fontFamily: activeScreen?.content?.font || 'Poppins' }}>
                         <style>{`
                           @keyframes pulse {
                             0% { transform: scale(1); }
@@ -6309,7 +6667,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         ) : (
                           activeScreen.elements.map((block) => {
                             return (
-                              <div key={block.id} style={{ width: '100%', marginBottom: '0.25rem' }}>
+                              <div
+                                key={block.id}
+                                className={block.styles?.customClass || ''}
+                                style={{
+                                  width: block.styles?.blockWidth || '100%',
+                                  minHeight: block.styles?.minHeight || 'auto',
+                                  marginBottom: '0.25rem',
+                                  transition: 'all 0.15s'
+                                }}
+                              >
                                 {/* HEADING BLOCK */}
                                 {block.type === 'heading' && (
                                   <div style={{ textAlign: (block.styles?.alignment || 'Center').toLowerCase(), marginBottom: '0.5rem' }}>
@@ -6522,7 +6889,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                               }}>
                                                 {String.fromCharCode(65 + oIdx)}
                                               </span>
-                                              <span style={{ fontWeight: 600, color: textCol }}>{opt || `Quiz Option ${oIdx + 1}`}</span>
+                                              <span style={{ fontWeight: 600, color: textCol }}>{(typeof opt === 'object' ? opt?.text : opt) || `Quiz Option ${oIdx + 1}`}</span>
 
                                               {hasSelected && isCorrectAnswer && (
                                                 <span style={{ marginLeft: 'auto', color: '#16a34a', fontSize: '0.72rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '3px' }}>
@@ -6696,8 +7063,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                 })()}
 
                                 {/* MATCH ITEMS BLOCK */}
-                                {block.type === 'match_items' && (() => {
-                                  const pairs = block.content?.pairs || [];
+                                {block.type === 'match' && (() => {
+                                  const leftItems = block.content?.leftItems || [];
+                                  const rightItems = block.content?.rightItems || [];
                                   const question = block.content?.question || 'Match the columns';
                                   return (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#fdf2f8', padding: '1rem', borderRadius: '12px', border: '1px solid #fbcfe8', marginTop: '0.5rem' }}>
@@ -6705,25 +7073,25 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         🔗 {question}
                                       </div>
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                        {pairs.map((pair, pIdx) => {
-                                          const selected = dragDropSelections[`${block.id}_${pair.id || pIdx}`] || '';
+                                        {leftItems.map((left, pIdx) => {
+                                          const selected = dragDropSelections[`${block.id}_${pIdx}`] || '';
                                           return (
-                                            <div key={pair.id || pIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #fbcfe8', fontSize: '0.72rem' }}>
-                                              <span style={{ fontWeight: 600, color: '#9d174d' }}>{pair.left}</span>
+                                            <div key={pIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #fbcfe8', fontSize: '0.72rem' }}>
+                                              <span style={{ fontWeight: 600, color: '#9d174d' }}>{left}</span>
                                               <select
                                                 value={selected}
                                                 onChange={(e) => {
                                                   const val = e.target.value;
                                                   setDragDropSelections(prev => ({
                                                     ...prev,
-                                                    [`${block.id}_${pair.id || pIdx}`]: val
+                                                    [`${block.id}_${pIdx}`]: val
                                                   }));
                                                 }}
                                                 style={{ padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #fbcfe8', fontSize: '0.7rem', color: '#9d174d', outline: 'none' }}
                                               >
                                                 <option value="">Select match...</option>
-                                                {pairs.map((p, idx) => (
-                                                  <option key={idx} value={p.right}>{p.right}</option>
+                                                {rightItems.map((right, idx) => (
+                                                  <option key={idx} value={right}>{right}</option>
                                                 ))}
                                               </select>
                                             </div>
@@ -7371,50 +7739,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 {/* RIGHT COLUMN: Assign, Validation & Reports */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
-                  {/* Card 5: Assign Experience to School/Grade */}
-                  <div className="cs-card">
-                    <h3 style={{ fontSize: '0.85rem', fontWeight: 700, borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', margin: '0 0 0.75rem 0', color: '#0f172a' }}>
-                      Assign Experience to Tenant School
-                    </h3>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <label style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>Select School <span style={{ color: '#ef4444' }}>*</span></label>
-                        <select
-                          value={targetSchoolId}
-                          onChange={e => setTargetSchoolId(e.target.value)}
-                          style={{ width: '100%', height: '36px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.78rem', padding: '0 0.5rem', background: '#fff' }}
-                        >
-                          <option value="">-- Choose School --</option>
-                          {assignSchools.map(s => (
-                            <option key={s.school_id} value={s.school_id}>{s.school_name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <button
-                        onClick={handleAssignExperience}
-                        disabled={actionLoading}
-                        style={{
-                          width: '100%',
-                          height: '36px',
-                          borderRadius: '8px',
-                          background: '#4f46e5',
-                          color: '#ffffff',
-                          fontWeight: 700,
-                          fontSize: '0.8rem',
-                          border: 'none',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'all 0.15s'
-                        }}
-                      >
-                        {actionLoading ? 'Assigning...' : 'Assign Experience'}
-                      </button>
-                    </div>
-                  </div>
 
                   {/* Card 3: Validation Check Report */}
                   <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
@@ -7475,20 +7800,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                             ))
                           )}
                         </div>
-
-                        {assignHistory.length > 0 && (
-                          <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '0.6rem' }}>
-                            <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155', margin: '0 0 0.5rem 0' }}>Current Assignments</h4>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', maxHeight: '90px', overflowY: 'auto' }}>
-                              {assignHistory.map(a => (
-                                <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '0.7rem' }}>
-                                  <span style={{ fontWeight: 600 }}>{a.school__school_name}</span>
-                                  <span style={{ color: '#64748b' }}>{a.grade__grade_name || 'All Grades'}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                       </div>
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#64748b', fontSize: '0.75rem' }}>

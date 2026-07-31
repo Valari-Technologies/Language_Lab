@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     ExperienceViewSet,
     ActivityViewSet,
+    ActivitySkillViewSet,
     ScreenViewSet,
     MediaViewSet,
     LearningOutcomeViewSet,
@@ -14,14 +15,13 @@ from .views import (
     DashboardRecentExperiencesAPIView,
     DashboardRecentActivityAPIView,
     DashboardNotificationsAPIView,
-    ExperienceAssignAPIView,
-    LMSAssignmentOptionsAPIView,
     AIGenerateView,
 )
 
 router = DefaultRouter()
 router.register("content/experiences", ExperienceViewSet, basename="experience")
 router.register("content/activities", ActivityViewSet, basename="activity")
+router.register("content/activity-skills", ActivitySkillViewSet, basename="activity-skill")
 router.register("content/screens", ScreenViewSet, basename="screen")
 router.register("content/media", MediaViewSet, basename="media")
 router.register("content/learning-outcomes", LearningOutcomeViewSet, basename="learning-outcome")
@@ -61,9 +61,5 @@ urlpatterns = [
     path("dashboard/notifications", DashboardNotificationsAPIView.as_view(), name="dashboard-notifications"),
 
     # Assignment mapping
-    path("content/assign-experience/", ExperienceAssignAPIView.as_view(), name="assign-experience"),
-    path("content/assign-experience", ExperienceAssignAPIView.as_view()),
-    path("content/assignment-options/", LMSAssignmentOptionsAPIView.as_view(), name="assignment-options"),
-    path("content/assignment-options", LMSAssignmentOptionsAPIView.as_view()),
     path("cms/ai-generate/", AIGenerateView.as_view(), name="cms-ai-generate"),
 ]

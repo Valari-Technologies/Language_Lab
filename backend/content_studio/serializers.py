@@ -19,7 +19,7 @@ User = get_user_model()
 class LearningOutcomeSerializer(serializers.ModelSerializer):
     class Meta:
         model = LearningOutcome
-        fields = ["id", "text", "created_at", "updated_at"]
+        fields = ["id", "experience", "text", "created_at", "updated_at"]
 
 
 class ActivitySkillSerializer(serializers.ModelSerializer):
@@ -69,6 +69,10 @@ class ScreenSerializer(serializers.ModelSerializer):
 class ActivitySerializer(serializers.ModelSerializer):
     experience_title = serializers.CharField(source="experience.title", read_only=True)
     skills = ActivitySkillSerializer(many=True, read_only=True)
+    skill_ids = serializers.PrimaryKeyRelatedField(
+        source="skills", many=True, queryset=ActivitySkill.objects.all(),
+        write_only=True, required=False
+    )
 
     class Meta:
         model = Activity
@@ -80,6 +84,7 @@ class ActivitySerializer(serializers.ModelSerializer):
             "description",
             "learning_objective",
             "skills",
+            "skill_ids",
             "estimated_duration",
             "mastery_threshold",
             "display_order",
@@ -100,6 +105,10 @@ class ActivitySerializer(serializers.ModelSerializer):
 class ActivityDetailSerializer(serializers.ModelSerializer):
     experience_title = serializers.CharField(source="experience.title", read_only=True)
     skills = ActivitySkillSerializer(many=True, read_only=True)
+    skill_ids = serializers.PrimaryKeyRelatedField(
+        source="skills", many=True, queryset=ActivitySkill.objects.all(),
+        write_only=True, required=False
+    )
     screens = ScreenSerializer(many=True, read_only=True)
 
     class Meta:
@@ -112,6 +121,7 @@ class ActivityDetailSerializer(serializers.ModelSerializer):
             "description",
             "learning_objective",
             "skills",
+            "skill_ids",
             "estimated_duration",
             "mastery_threshold",
             "display_order",

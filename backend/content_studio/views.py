@@ -24,6 +24,7 @@ from .serializers import (
     ExperienceDetailSerializer,
     ActivitySerializer,
     ActivityDetailSerializer,
+    ActivitySkillSerializer,
     ScreenSerializer,
     MediaSerializer,
     MediaUploadSerializer,
@@ -217,6 +218,13 @@ class ExperienceViewSet(viewsets.ModelViewSet):
             "errors": [],
             "warnings": []
         }, status=status.HTTP_200_OK)
+
+
+class ActivitySkillViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAuthenticated]
+    queryset = ActivitySkill.objects.all().order_by("name")
+    serializer_class = ActivitySkillSerializer
+    pagination_class = None
 
 
 class ActivityViewSet(viewsets.ModelViewSet):
@@ -1016,95 +1024,6 @@ class PackageViewSet(viewsets.ViewSet):
             },
             status=status.HTTP_200_OK,
         )
-
-
-class ExperienceAssignAPIView(APIView):
-    """
-    POST /api/v1/content/assign-experience/
-    Assigns a published experience to school and optional grade/class.
-    """
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, *args, **kwargs):
-        from super_admin.models import School, Grade
-        from school_admin.models import Class
-        from assessments.models import ExperienceAssignment
-        from .models import Experience
-        from django.utils import timezone
-
-        experience_id = request.data.get("experience_id")
-        school_id = request.data.get("school_id")
-        grade_id = request.data.get("grade_id")
-        class_id = request.data.get("class_id")
-
-        if not experience_id or not school_id:
-            return Response(
-                {"error": "Both experience_id and school_id are required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        experience = Experience.objects.filter(id=experience_id).first()
-        if not experience:
-            return Response(
-                {"error": "Experience not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        school = School.objects.filter(school_id=school_id).first()
-        if not school:
-            return Response(
-                {"error": "School not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        grade = None
-        if grade_id:
-            grade = Grade.objects.filter(id=grade_id).first()
-
-        class_obj = None
-        if class_id:
-            class_obj = Class.objects.filter(class_id=class_id).first()
-
-        assignment, created = ExperienceAssignment.objects.update_or_create(
-            school=school,
-            experience_ref=str(experience.id),
-            class_obj=class_obj,
-            defaults={
-                "experience_title": experience.title,
-                "grade": grade,
-                "assigned_by": request.user,
-                "assigned_at": timezone.now()
-            }
-        )
-
-        return Response({
-            "message": "Experience successfully assigned.",
-            "assignment_id": assignment.id,
-            "created": created
-        }, status=status.HTTP_200_OK)
-
-
-class LMSAssignmentOptionsAPIView(APIView):
-    """
-    GET /api/v1/content/assignment-options/
-    Retrieves all active schools, grades, and current experience assignments.
-    """
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, *args, **kwargs):
-        from super_admin.models import School, Grade
-        from assessments.models import ExperienceAssignment
-
-        schools = School.objects.filter(is_active=True).values("school_id", "school_name")
-        grades = Grade.objects.all().values("id", "grade_name")
-        assignments = ExperienceAssignment.objects.all().values(
-            "id", "school_id", "school__school_name", "experience_ref", "experience_title", "grade_id", "grade__grade_name"
-        )
-        return Response({
-            "schools": list(schools),
-            "grades": list(grades),
-            "assignments": list(assignments)
-        }, status=status.HTTP_200_OK)
 
 
 class AIGenerateView(APIView):

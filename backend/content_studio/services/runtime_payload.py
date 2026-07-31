@@ -168,12 +168,14 @@ def build_runtime_payload(experience, request=None):
                         }
                     })
                 elif scr.screen_type == 'QUIZ':
+                    raw_opts = content.get("quiz_options") or ["", "", "", ""]
+                    formatted_opts = [{"text": opt} if isinstance(opt, str) else opt for opt in raw_opts]
                     elements.append({
                         "id": f"block-{scr.id}-quiz",
                         "type": "quiz",
                         "content": {
                             "question": content.get("quiz_question") or "",
-                            "options": content.get("quiz_options") or ["", "", "", ""],
+                            "options": formatted_opts,
                             "correctAnswerIndex": content.get("quiz_correct_index") if content.get("quiz_correct_index") is not None else 0
                         }
                     })
