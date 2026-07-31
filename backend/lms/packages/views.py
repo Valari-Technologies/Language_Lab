@@ -70,22 +70,11 @@ class LMSPackageListAPIView(APIView):
         class_obj = Class.objects.select_related("grade").filter(school=school, is_active=True).first()
         grade = class_obj.grade if class_obj else None
 
-        # 1. Resolve assigned experiences via ExperienceAssignment
-        assigned_exp_refs = set(
-            ExperienceAssignment.objects.filter(school=school)
-            .filter(Q(grade=grade) | Q(class_obj=class_obj) | Q(grade__isnull=True, class_obj__isnull=True))
-            .values_list("experience_ref", flat=True)
-        )
+        # 1. Resolve assigned experiences via ExperienceAssignment (Bypassed: send all published experiences to LMS)
+        assigned_exp_refs = set()
 
         # 2. Query PublishedPackages matching experience IDs or titles or assigned grade
         pkg_queryset = PublishedPackage.objects.filter(compression_status="COMPLETED")
-
-        # Filter by tenant school assignments or matching grade
-        q_filter = Q(experience__grade=grade) | Q(experience__id__in=[
-            int(r) for r in assigned_exp_refs if str(r).isdigit()
-        ]) | Q(experience__title__in=assigned_exp_refs)
-
-        pkg_queryset = pkg_queryset.filter(q_filter)
 
         # Fetch latest PublishVersion for each PublishedPackage
         latest_versions = []
@@ -165,8 +154,8 @@ class LMSPackageCheckUpdatesAPIView(APIView):
         grade = class_obj.grade if class_obj else None
 
         pkgs = PublishedPackage.objects.filter(compression_status="COMPLETED")
-        if grade:
-            pkgs = pkgs.filter(experience__grade=grade)
+        # Remove grade-based filtering so all packages check for updates
+        pass
 
         updates_available = []
         for pkg in pkgs.select_related("experience", "experience__grade"):

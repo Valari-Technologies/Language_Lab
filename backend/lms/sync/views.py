@@ -336,17 +336,8 @@ class LMSPullUpdatesAPIView(APIView):
             compression_status="COMPLETED"
         ).select_related("experience")
 
-        # If school is resolved, scope to assigned experiences; otherwise return all
-        if school:
-            assigned_exp_refs = set(
-                ExperienceAssignment.objects.filter(school=school)
-                .values_list("experience_ref", flat=True)
-            )
-            if assigned_exp_refs:
-                q_filter = Q(experience__id__in=[
-                    int(r) for r in assigned_exp_refs if str(r).isdigit()
-                ]) | Q(experience__title__in=assigned_exp_refs)
-                pkg_queryset = pkg_queryset.filter(q_filter)
+        # Scoping to assigned experiences bypassed to send all packages to LMS
+        pass
 
         # Build absolute base URL for download links
         base_url = request.build_absolute_uri("/").rstrip("/")
