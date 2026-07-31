@@ -46,6 +46,11 @@ const resolveMediaUrl = (url) => {
   return `${base}${path}`;
 };
 
+const getThumbnailUrl = (thumbnail) => {
+  if (!thumbnail || thumbnail === 'None' || thumbnail === 'null') return null;
+  return resolveMediaUrl(thumbnail);
+};
+
 /* ═══════════════════════════════════════════════════════════
    CONTENT STUDIO COMPONENT
    ═══════════════════════════════════════════════════════════ */
@@ -1625,6 +1630,35 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   const renderCanvasBlock = (block, idx) => {
     const isSelected = selectedBlockId === block.id;
+ 
+    const makeMoveDragger = () => (
+      <div
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const startX = e.clientX;
+          const startY = e.clientY;
+          const initLeft = parseInt(block.styles?.left) || 0;
+          const initTop = parseInt(block.styles?.top) || 0;
+          const move = (mv) => {
+            const newLeft = initLeft + (mv.clientX - startX);
+            const newTop = initTop + (mv.clientY - startY);
+            const elements = (screenForm.elements || []).map(el2 =>
+              el2.id === block.id ? { ...el2, styles: { ...el2.styles, left: `${newLeft}px`, top: `${newTop}px` } } : el2
+            );
+            setScreenForm(prev => ({ ...prev, elements }));
+          };
+          const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+          window.addEventListener('mousemove', move);
+          window.addEventListener('mouseup', up);
+        }}
+        style={{ cursor: 'move', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', marginRight: '4px' }}
+        title="Drag to move element"
+      >
+        <FiMove style={{ fontSize: '0.85rem', color: '#ffffff' }} />
+      </div>
+    );
+ 
     return (
       <div
         key={block.id}
@@ -1647,14 +1681,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           setSelectedBlockId(block.id);
         }}
         style={{
-          position: 'relative',
+          position: 'absolute',
+          left: block.styles?.left || '0px',
+          top: block.styles?.top || '0px',
           padding: '0.85rem',
           borderRadius: '12px',
           border: isSelected ? '2px solid #0b57d0' : '1.5px solid #e2e8f0',
           background: isSelected ? '#f8fafc' : '#ffffff',
           boxShadow: isSelected ? '0 4px 12px rgba(11,87,208,0.1)' : '0 1px 3px rgba(0,0,0,0.02)',
           cursor: 'pointer',
-          transition: 'border 0.15s, box-shadow 0.15s',
+          transition: 'border 0.15s, box-shadow 0.15s, left 0.1s, top 0.1s',
           ...(block.styles?.blockWidth ? { width: block.styles.blockWidth } : {}),
           ...(block.styles?.minHeight ? { minHeight: block.styles.minHeight } : {}),
         }}
@@ -1677,6 +1713,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             zIndex: 10,
             boxShadow: '0 2px 4px rgba(0,0,0,0.15)'
           }}>
+            {makeMoveDragger()}
             <span style={{ marginRight: '4px', textTransform: 'uppercase', fontSize: '0.58rem' }}>{block.type}</span>
             
             <button
@@ -2247,10 +2284,17 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 const startX = e.clientX;
                 const el = e.currentTarget.parentElement;
                 const initW = el.offsetWidth;
+                const initLeft = parseInt(block.styles?.left) || 0;
                 const move = (mv) => {
-                  const newW = Math.max(120, initW - (mv.clientX - startX));
+                  const deltaX = mv.clientX - startX;
+                  const newW = Math.max(120, initW - deltaX);
+                  const newLeft = initLeft + (initW - newW);
                   el.style.width = `${newW}px`;
-                  handleUpdateBlockStyles('blockWidth', `${newW}px`);
+                  el.style.left = `${newLeft}px`;
+                  const elements = (screenForm.elements || []).map(el2 =>
+                    el2.id === block.id ? { ...el2, styles: { ...el2.styles, blockWidth: `${newW}px`, left: `${newLeft}px` } } : el2
+                  );
+                  setScreenForm(prev => ({ ...prev, elements }));
                 };
                 const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
                 window.addEventListener('mousemove', move);
@@ -3537,8 +3581,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             { key: 'activity-builder', label: 'Activity Builder', icon: <FiSettings /> },
             { key: 'screen-builder', label: 'Screen Builder', icon: <FiMonitor /> },
             { key: 'preview', label: 'Runtime Preview', icon: <FiPlay /> },
-            { key: 'media', label: 'Media Library', icon: <FiImage /> },
             { key: 'publish', label: 'Publish Center', icon: <FiDownload /> },
+            { key: 'media', label: 'Media Library', icon: <FiImage /> },
             { key: 'reports', label: 'Sync Reports', icon: <FiFileText /> },
             { key: 'profile', label: 'Profile Settings', icon: <FiUser /> },
           ].map(item => (
@@ -3731,7 +3775,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               <tr key={idx}>
                                 <td>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <div style={{ width: 36, height: 26, background: '#f1f5f9', borderRadius: 4 }} />
+                                    <div style={{ width: 36, height: 26, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      {getThumbnailUrl(row.thumbnail) ? (
+                                        <img src={getThumbnailUrl(row.thumbnail)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                      ) : (
+                                        <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>📖</span>
+                                      )}
+                                    </div>
                                     <span style={{ fontWeight: 600 }}>{row.title}</span>
                                   </div>
                                 </td>
@@ -3970,7 +4020,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                               <div style={{ width: 48, height: 34, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden' }}>
-                                {row.thumbnail ? <img src={row.thumbnail.startsWith('http') ? row.thumbnail : `${API_BASE_URL}${row.thumbnail}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
+                                {getThumbnailUrl(row.thumbnail) ? <img src={getThumbnailUrl(row.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
                               </div>
                               <div>
                                 <div style={{ fontWeight: 700, color: '#0f172a' }}>{row.title}</div>
@@ -4157,8 +4207,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         onClick={() => document.getElementById('thumb-file-input').click()}
                         style={{ border: '1.5px dashed #cbd5e1', borderRadius: '10px', padding: '0.5rem', textAlign: 'center', height: '120px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', background: '#ffffff', position: 'relative' }}
                       >
-                        {experienceForm.thumbnail ? (
-                          <img src={experienceForm.thumbnail} alt="Thumbnail Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                        {getThumbnailUrl(experienceForm.thumbnail) ? (
+                          <img src={getThumbnailUrl(experienceForm.thumbnail)} alt="Thumbnail Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                         ) : (
                           <>
                             <div style={{ width: 44, height: 34, background: '#f1f5f9', borderRadius: 4, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🌅</div>
@@ -5173,7 +5223,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           <div
                             onDragOver={e => e.preventDefault()}
                             onDrop={e => handleDropOnSlot(e)}
-                            style={{ flex: 1, display: 'flex', flexDirection: 'row', flexWrap: 'wrap', alignContent: 'flex-start', alignItems: 'flex-start', gap: '1rem', background: '#ffffff', minHeight: '500px' }}
+                            style={{ flex: 1, position: 'relative', background: '#ffffff', minHeight: '600px' }}
                           >
                             {(!screenForm.elements || screenForm.elements.length === 0) ? (
                               <div
@@ -6647,7 +6697,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       </div>
 
                       {/* Content Preview Canvas body */}
-                      <div style={{ flex: 1, padding: '1.25rem', display: 'flex', flexDirection: 'row', flexWrap: 'wrap', alignContent: 'flex-start', alignItems: 'flex-start', gap: '1rem', overflowY: 'auto', background: '#ffffff', fontFamily: activeScreen?.content?.font || 'Poppins' }}>
+                      <div style={{ flex: 1, padding: '1.25rem', position: 'relative', overflowY: 'auto', background: '#ffffff', fontFamily: activeScreen?.content?.font || 'Poppins' }}>
                         <style>{`
                           @keyframes pulse {
                             0% { transform: scale(1); }
@@ -6671,6 +6721,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                 key={block.id}
                                 className={block.styles?.customClass || ''}
                                 style={{
+                                  position: 'absolute',
+                                  left: block.styles?.left || '0px',
+                                  top: block.styles?.top || '0px',
                                   width: block.styles?.blockWidth || '100%',
                                   minHeight: block.styles?.minHeight || 'auto',
                                   marginBottom: '0.25rem',
@@ -7593,9 +7646,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     
                     <div style={{ display: 'flex', gap: '1.25rem', marginBottom: '1rem', alignItems: 'flex-start' }}>
                       <div style={{ width: 84, height: 64, background: '#f1f5f9', borderRadius: 6, flexShrink: 0, border: '1px solid #e2e8f0', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7', fontSize: '1.25rem' }}>
-                        {selectedExperience?.thumbnail ? (
+                        {getThumbnailUrl(selectedExperience?.thumbnail) ? (
                           <img
-                            src={selectedExperience.thumbnail.startsWith('http') ? selectedExperience.thumbnail : `${API_BASE_URL}${selectedExperience.thumbnail}`}
+                            src={getThumbnailUrl(selectedExperience.thumbnail)}
                             alt={selectedExperience?.title || 'Experience'}
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                           />
@@ -8249,9 +8302,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     {/* Header Summary */}
                     <div style={{ display: 'flex', gap: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '12px' }}>
                       <div style={{ width: 80, height: 60, background: '#e2e8f0', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
-                        {detailExperience.thumbnail ? (
+                        {getThumbnailUrl(detailExperience.thumbnail) ? (
                           <img
-                            src={detailExperience.thumbnail.startsWith('http') ? detailExperience.thumbnail : `${API_BASE_URL}${detailExperience.thumbnail}`}
+                            src={getThumbnailUrl(detailExperience.thumbnail)}
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                           />
                         ) : null}

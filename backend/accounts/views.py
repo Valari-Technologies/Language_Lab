@@ -69,6 +69,29 @@ class LoginAPIView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        # Strict profile validation for administrators, teachers, and students
+        if user.role == "SCHOOL_ADMIN":
+            from super_admin.models import SchoolAdminProfile
+            if not SchoolAdminProfile.objects.filter(user=user).exists():
+                return Response(
+                    {"message": "Access denied. Your School Admin profile was not found or has been deleted."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        elif user.role == "TEACHER":
+            from school_admin.models import Teacher
+            if not Teacher.objects.filter(user=user).exists():
+                return Response(
+                    {"message": "Access denied. Your Teacher profile was not found or has been deleted."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        elif user.role == "STUDENT":
+            from teacher.models import Student
+            if not Student.objects.filter(user=user).exists():
+                return Response(
+                    {"message": "Access denied. Your Student profile was not found or has been deleted."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
         refresh = RefreshToken.for_user(user)
 
         school_obj = get_user_school(user)
@@ -556,31 +579,40 @@ class GoogleLoginAPIView(APIView):
                     user.profile_picture = picture
                 user.save(update_fields=['google_id', 'profile_picture'])
 
-        # Register new student user dynamically
         if not user:
-            base_username = email.split('@')[0]
-            username = base_username
-            counter = 1
-            while User.objects.filter(username=username).exists():
-                username = f"{base_username}{counter}"
-                counter += 1
-
-            user = User.objects.create(
-                username=username,
-                email=email,
-                full_name=name or username,
-                google_id=google_id,
-                profile_picture=picture,
-                role=User.Role.STUDENT
+            return Response(
+                {"message": "Your Google account is not registered. Please contact your administrator."},
+                status=status.HTTP_403_FORBIDDEN
             )
-            user.set_unusable_password()
-            user.save()
 
         if not user.is_active:
             return Response(
                 {"message": "This account has been deactivated."},
                 status=status.HTTP_403_FORBIDDEN
             )
+
+        # Block Student logins from accessing CMS via Google Login
+        if user.role == "STUDENT":
+            return Response(
+                {"message": "Access denied. Students must log in via the Desktop LMS application only."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Enforce profile checks for School Admin and Teacher
+        if user.role == "SCHOOL_ADMIN":
+            from super_admin.models import SchoolAdminProfile
+            if not SchoolAdminProfile.objects.filter(user=user).exists():
+                return Response(
+                    {"message": "Access denied. Your School Admin profile was not found or has been deleted."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        elif user.role == "TEACHER":
+            from school_admin.models import Teacher
+            if not Teacher.objects.filter(user=user).exists():
+                return Response(
+                    {"message": "Access denied. Your Teacher profile was not found or has been deleted."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
         refresh = RefreshToken.for_user(user)
 
