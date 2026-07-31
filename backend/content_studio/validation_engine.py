@@ -13,12 +13,12 @@ def get_referenced_media_ids_and_urls(content):
             for item in val:
                 recurse(item, key)
         elif isinstance(val, int):
-            if key and ("media_id" in key.lower() or "image_id" in key.lower() or "audio_id" in key.lower() or "video_id" in key.lower() or key.lower() == "id"):
+            if key and ("media_id" in key.lower() or "image_id" in key.lower() or "audio_id" in key.lower() or "video_id" in key.lower()):
                 referenced_ids.add(val)
         elif isinstance(val, str):
             if val.startswith("http") or "/media/" in val:
                 referenced_urls.add(val)
-            if key and ("media_id" in key.lower() or "image_id" in key.lower() or "audio_id" in key.lower() or "video_id" in key.lower() or key.lower() == "id"):
+            if key and ("media_id" in key.lower() or "image_id" in key.lower() or "audio_id" in key.lower() or "video_id" in key.lower()):
                 try:
                     referenced_ids.add(int(val))
                 except ValueError:

@@ -219,6 +219,7 @@ class Screen(models.Model):
         QUIZ = "QUIZ", _("Quiz")
         SPEAKING = "SPEAKING", _("Speaking")
         WRITING = "WRITING", _("Writing")
+        DIALOGUE = "DIALOGUE", _("Dialogue")
 
     class ScreenStatus(models.TextChoices):
         NOT_STARTED = "NOT_STARTED", _("Not Started")

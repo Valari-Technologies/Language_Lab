@@ -5133,10 +5133,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
                                   const MODULE_ELEMENTS = {
                                     listening: ['heading', 'audio', 'video', 'sequence', 'dictation', 'quiz', 'mcq', 'text', 'image'],
-                                    speaking: ['heading', 'dialogue', 'input', 'voice_recorder', 'pronunciation', 'role_play', 'audio'],
-                                    reading: ['text', 'heading', 'image', 'quiz', 'mcq', 'match', 'flashcard', 'memory', 'crossword', 'word_search', 'reading_passage'],
-                                    writing: ['fill_blank', 'sentence_builder', 'writing_prompt', 'text', 'heading'],
-                                    grammar: ['heading', 'true_false', 'drag_drop', 'grammar_correction', 'quiz', 'mcq', 'fill_blank', 'match', 'sequence']
+                                    speaking: ['heading', 'dialogue', 'input', 'voice_recorder', 'pronunciation', 'role_play', 'audio', 'image', 'video', 'text'],
+                                    reading: ['text', 'heading', 'image', 'quiz', 'mcq', 'match', 'flashcard', 'memory', 'crossword', 'word_search', 'reading_passage', 'audio', 'video'],
+                                    writing: ['fill_blank', 'sentence_builder', 'writing_prompt', 'text', 'heading', 'image', 'video', 'audio'],
+                                    grammar: ['heading', 'true_false', 'drag_drop', 'grammar_correction', 'quiz', 'mcq', 'fill_blank', 'match', 'sequence', 'image', 'video', 'audio', 'text']
                                   };
 
                                   const allowedTypes = MODULE_ELEMENTS[activeModule] || [];
