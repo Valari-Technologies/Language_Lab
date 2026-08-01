@@ -16,6 +16,7 @@ import './Dashboard.css';
 import contentCreatorHeaderBanner from './assets/3.jpeg';
 import logoIcon from './assets/icon.png';
 import ReportsAnalytics from './ReportsAnalytics';
+import AvatarCropperModal from './AvatarCropperModal';
 
 const incrementVersion = (versionStr) => {
   if (!versionStr) return "1.0.0";
@@ -752,30 +753,80 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
   };
 
-  const handleAvatarChange = async (e) => {
+  const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      showFeedback("Image is too large. Max size is 3MB.", "error");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropImageSrc(reader.result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleCropSave = async (blob) => {
+    setCropImageSrc(null);
     const formData = new FormData();
-    formData.append('avatar', file);
+    formData.append('avatar', blob, 'avatar.jpg');
     setAvatarUploading(true);
     try {
       const res = await apiFetch('/api/users/profile/avatar/', {
         method: 'POST',
         body: formData
       });
+      const text = await res.text();
       let resData = {};
-      try { resData = await res.json(); } catch { resData = {}; }
+      try { resData = JSON.parse(text); } catch { resData = {}; }
       if (res.ok) {
         const updatedUser = { ...currentUserState, profile_picture: resData.profile_picture };
         setCurrentUserState(updatedUser);
         if (onUpdateUser) onUpdateUser(updatedUser);
         showFeedback('Profile picture updated successfully!');
       } else {
-        showFeedback(resData.error || 'Failed to upload profile picture.', 'error');
+        showFeedback(resData.error || resData.detail || text.slice(0, 100) || 'Failed to upload profile picture.', 'error');
       }
     } catch (err) {
       console.error(err);
       showFeedback('Upload error: ' + err.message, 'error');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleRemoveAvatar = () => {
+    setDeleteConfirm({
+      show: true,
+      id: 'profile-avatar',
+      type: 'profile picture',
+      title: 'Are you sure?',
+      message: 'Are you sure you want to delete this profile picture? This action cannot be undone.',
+      isConflict: false,
+      usages: []
+    });
+  };
+
+  const handleRemoveAvatarConfirm = async () => {
+    setAvatarUploading(true);
+    try {
+      const res = await apiFetch('/api/users/profile/avatar/', {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        const updatedUser = { ...currentUserState, profile_picture: null };
+        setCurrentUserState(updatedUser);
+        if (onUpdateUser) onUpdateUser(updatedUser);
+        showFeedback('Profile picture removed successfully!');
+      } else {
+        const d = await res.json();
+        showFeedback(d.error || 'Failed to remove profile picture.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showFeedback("Failed to remove profile picture.", 'error');
     } finally {
       setAvatarUploading(false);
     }
@@ -862,6 +913,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [currentUserState, setCurrentUserState] = useState(user);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState(null);
 
   const triggerAutoSave = () => {
     setAutoSaveStatus('unsaved');
@@ -1009,6 +1061,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   const executeDeleteAction = async () => {
     const { id, type, isConflict } = deleteConfirm;
+    if (id === 'profile-avatar') {
+      setDeleteConfirm({ show: false, id: null, type: '', title: '', message: '', isConflict: false, usages: [] });
+      await handleRemoveAvatarConfirm();
+      return;
+    }
     if (!id) return;
     setActionLoading(true);
     try {
@@ -7919,6 +7976,32 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       onChange={handleAvatarChange}
                     />
 
+                    {currentUserState?.profile_picture && (
+                      <button 
+                        type="button"
+                        onClick={handleRemoveAvatar}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#ef4444',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          marginTop: '0.5rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <FiTrash2 /> Remove Photo
+                      </button>
+                    )}
+
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: '1rem 0 0.25rem 0' }}>
                       {profileForm.full_name || currentUserState?.username || 'Content Creator'}
                     </h3>
@@ -8830,6 +8913,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             </div>
           </div>
         </div>
+      )}
+      {cropImageSrc && (
+        <AvatarCropperModal 
+          src={cropImageSrc}
+          onCrop={handleCropSave}
+          onCancel={() => setCropImageSrc(null)}
+        />
       )}
     </div>
   );

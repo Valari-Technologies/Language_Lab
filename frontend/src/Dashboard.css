@@ -1265,7 +1265,7 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
 /* Header Actions Cluster */
 .sd-header-actions-widget {
   position: absolute !important;
-  bottom: 1.5rem !important;
+  top: 1.5rem !important;
   right: 2.5rem !important;
   display: flex !important;
   align-items: center !important;

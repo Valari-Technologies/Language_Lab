@@ -671,4 +671,13 @@ class ProfileAvatarUploadAPIView(APIView):
             "profile_picture": url
         }, status=status.HTTP_200_OK)
 
+    def delete(self, request, *args, **kwargs):
+        user = request.user
+        user.profile_picture = None
+        user.save(update_fields=["profile_picture"])
+        return Response({
+            "message": "Avatar removed successfully.",
+            "profile_picture": None
+        }, status=status.HTTP_200_OK)
+
 

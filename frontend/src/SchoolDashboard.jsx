@@ -11,7 +11,8 @@ import {
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
 import logoIcon from './assets/icon.png';
-import teacherHeaderBanner from './assets/teacher_header_banner.png';
+import teacherHeaderBanner from './assets/6.jpeg';
+import AvatarCropperModal from './AvatarCropperModal';
 
 /* ─── Auto-generate a student roll no from their name, e.g. "Rahul" -> "RAH001" ───
    The numeric part continues from the total number of existing students (school-wide),
@@ -176,16 +177,27 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [errorMsg, setErrorMsg]       = useState('');
   const [successMsg, setSuccessMsg]   = useState('');
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState(null);
 
-  const handleAvatarChange = async (e) => {
+  const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 3 * 1024 * 1024) {
-      alert("Image is too large. Max size is 3MB.");
+      showFeedback(null, "Image is too large. Max size is 3MB.");
       return;
     }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropImageSrc(reader.result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleCropSave = async (blob) => {
+    setCropImageSrc(null);
     const formData = new FormData();
-    formData.append('avatar', file);
+    formData.append('avatar', blob, 'avatar.jpg');
     setAvatarUploading(true);
     try {
       const res = await apiFetch('/api/users/profile/avatar/', {
@@ -200,12 +212,51 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         setSuccessMsg('');
         showFeedback('Profile picture updated successfully!', null);
       } else {
-        const d = await res.json();
-        alert(d.error || 'Failed to upload profile picture.');
+        const text = await res.text();
+        let errMsg = 'Failed to upload profile picture.';
+        try {
+          const d = JSON.parse(text);
+          errMsg = d.error || d.detail || errMsg;
+        } catch {
+          errMsg = text.slice(0, 100) || errMsg;
+        }
+        showFeedback(null, errMsg);
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to upload profile picture.");
+      showFeedback(null, `Upload error: ${err.message}`);
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleRemoveAvatar = () => {
+    setDeleteConfirm({
+      show: true,
+      id: 'profile-avatar',
+      type: 'profile picture'
+    });
+  };
+
+  const handleRemoveAvatarConfirm = async () => {
+    setAvatarUploading(true);
+    try {
+      const res = await apiFetch('/api/users/profile/avatar/', {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const updatedUser = { ...user, profile_picture: null };
+        setUser(updatedUser);
+        if (onUpdateUser) onUpdateUser(updatedUser);
+        showFeedback('Profile picture removed successfully!', null);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        showFeedback(null, d.error || 'Failed to remove profile picture.');
+      }
+    } catch (err) {
+      console.error(err);
+      showFeedback(null, "Failed to remove profile picture.");
     } finally {
       setAvatarUploading(false);
     }
@@ -743,6 +794,11 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         return;
       }
       const { id, type } = deleteConfirm;
+      if (id === 'profile-avatar') {
+        setDeleteConfirm({ show: false, id: null, type: null });
+        await handleRemoveAvatarConfirm();
+        return;
+      }
       if (!id || !type) return;
       const url = `/api/cms/v1/${activeSubTab}/${id}/`;
       const res = await apiFetch(url, { method: 'DELETE' });
@@ -963,7 +1019,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         }
         .sd-header-actions-widget {
           position: absolute !important;
-          bottom: 1.5rem !important;
+          top: 1.5rem !important;
           right: 2.5rem !important;
           display: flex !important;
           align-items: center !important;
@@ -1249,7 +1305,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <div className="sd-stat-card-content-part">
                       <div className="sd-stat-value">{s.value}</div>
                       <div className="sd-stat-label">{s.label}</div>
-                      <span className="sd-stat-trend">{s.trend}</span>
+                      {s.trend && <span className="sd-stat-trend">{s.trend}</span>}
                     </div>
                   </div>
                 ))}
@@ -2497,23 +2553,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           )}
 
           {activeSubTab === 'profile' && (
-                        <div style={{ padding: '0.5rem', width: '100%', maxWidth: '1100px', margin: '0 auto' }}>
-              {errorMsg && (
-                <div style={{
-                  padding: '0.85rem 1.25rem', borderRadius: '12px', marginBottom: '1.5rem',
-                  fontSize: '0.85rem', fontWeight: 600,
-                  background: '#fef2f2',
-                  color: '#ef4444',
-                  border: '1px solid #fecaca',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}>
-                  <span>⚠️</span>
-                  <span>{errorMsg}</span>
-                </div>
-              )}
-
+            <div style={{ padding: '0.5rem', width: '100%', maxWidth: '1100px', margin: '0 auto' }}>
               <form onSubmit={handleProfileUpdate} style={{ width: '100%' }}>
                 <div style={{ display: 'flex', flexDirection: 'row', gap: '2rem', flexWrap: 'wrap', alignItems: 'stretch' }}>
                   {/* Left Column: Avatar & Summary Card */}
@@ -2551,6 +2591,32 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       accept="image/*" 
                       onChange={handleAvatarChange}
                     />
+                    
+                    {user?.profile_picture && (
+                      <button 
+                        type="button"
+                        onClick={handleRemoveAvatar}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#ef4444',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          marginTop: '0.5rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <FiTrash2 /> Remove Photo
+                      </button>
+                    )}
                     
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: '1rem 0 0.25rem 0' }}>
                       {profileForm.full_name || user?.username || 'User'}
@@ -3412,6 +3478,13 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         </div>
       )}
 
+      {cropImageSrc && (
+        <AvatarCropperModal 
+          src={cropImageSrc}
+          onCrop={handleCropSave}
+          onCancel={() => setCropImageSrc(null)}
+        />
+      )}
     </div>
   );
 };

@@ -13,6 +13,7 @@ import './Dashboard.css';
 import { apiFetch } from './api';
 import dashboardHeaderBanner from './assets/1.jpeg';
 import logoIcon from './assets/icon.png';
+import AvatarCropperModal from './AvatarCropperModal';
 
 const INDIAN_STATES_AND_CITIES = {
   "Tamil Nadu": [
@@ -468,16 +469,27 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   
   /* ── Forms ── */
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState(null);
 
-  const handleAvatarChange = async (e) => {
+  const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 3 * 1024 * 1024) {
-      alert("Image is too large. Max size is 3MB.");
+      showFeedback(null, "Image is too large. Max size is 3MB.");
       return;
     }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropImageSrc(reader.result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleCropSave = async (blob) => {
+    setCropImageSrc(null);
     const formData = new FormData();
-    formData.append('avatar', file);
+    formData.append('avatar', blob, 'avatar.jpg');
     setAvatarUploading(true);
     try {
       const res = await apiFetch('/api/users/profile/avatar/', {
@@ -491,12 +503,51 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         if (onUpdateUser) onUpdateUser(updatedUser);
         showFeedback('Profile picture updated successfully!', null);
       } else {
-        const d = await res.json();
-        alert(d.error || 'Failed to upload profile picture.');
+        const text = await res.text();
+        let errMsg = 'Failed to upload profile picture.';
+        try {
+          const d = JSON.parse(text);
+          errMsg = d.error || d.detail || errMsg;
+        } catch {
+          errMsg = text.slice(0, 100) || errMsg;
+        }
+        showFeedback(null, errMsg);
       }
     } catch (err) {
       console.error(err);
-      alert('Upload error: ' + err.message);
+      showFeedback(null, `Upload error: ${err.message}`);
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleRemoveAvatar = () => {
+    setDeleteConfirm({
+      show: true,
+      id: 'profile-avatar',
+      type: 'profile picture'
+    });
+  };
+
+  const handleRemoveAvatarConfirm = async () => {
+    setAvatarUploading(true);
+    try {
+      const res = await apiFetch('/api/users/profile/avatar/', {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const updatedUser = { ...user, profile_picture: null };
+        setUser(updatedUser);
+        if (onUpdateUser) onUpdateUser(updatedUser);
+        showFeedback('Profile picture removed successfully!', null);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        showFeedback(null, d.error || 'Failed to remove profile picture.');
+      }
+    } catch (err) {
+      console.error(err);
+      showFeedback(null, "Failed to remove profile picture.");
     } finally {
       setAvatarUploading(false);
     }
@@ -946,6 +997,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         return;
       }
       const { id } = deleteConfirm;
+      if (id === 'profile-avatar') {
+        setDeleteConfirm({ show: false, id: null, type: '' });
+        await handleRemoveAvatarConfirm();
+        setLoading(false);
+        return;
+      }
       if (!id) return;
       let targetTab = activeTab === 'reports' ? 'publish-contents' : activeTab;
 
@@ -1228,12 +1285,11 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           <button className={`sd-nav-item${activeTab === 'schools' ? ' active' : ''}`} onClick={() => goTo('schools')}>
             <FiBookOpen/><span>Manage Schools</span>
           </button>
-          <button className={`sd-nav-item${activeTab === 'subscriptions' ? ' active' : ''}`} onClick={() => goTo('subscriptions')}>
-            <FiCheckCircle/><span>Subscriptions</span>
-          </button>
-
           <button className={`sd-nav-item${activeTab === 'reports' ? ' active' : ''}`} onClick={() => goTo('reports')}>
             <FiFileText/><span>Reports</span>
+          </button>
+          <button className={`sd-nav-item${activeTab === 'subscriptions' ? ' active' : ''}`} onClick={() => goTo('subscriptions')}>
+            <FiCheckCircle/><span>Subscriptions</span>
           </button>
           <button className={`sd-nav-item${activeTab === 'profile' ? ' active' : ''}`} onClick={() => goTo('profile')}>
             <FiUser/><span>Profile Settings</span>
@@ -1386,8 +1442,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                   <p>Monitor schools, track student engagement, analyze subscriptions, and make data-driven decisions from one unified dashboard.</p>
                 </div>
 
-                {/* Export Report placed in the bottom-right corner of the card */}
-                <button className="sd-btn-outline" style={{ position: 'absolute', bottom: '1.5rem', right: '2.5rem', background: '#ffffff', color: '#475569', border: '1px solid #dbeafe', margin: 0, padding: '0.5rem 1.25rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', zIndex: 3 }}>
+                {/* Export Report placed in the top-right corner of the card */}
+                <button className="sd-btn-outline" style={{ position: 'absolute', top: '1.5rem', right: '2.5rem', background: '#ffffff', color: '#475569', border: '1px solid #dbeafe', margin: 0, padding: '0.5rem 1.25rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', zIndex: 3 }}>
                   Export Report <FiDownload style={{ fontSize: '0.9rem' }}/>
                 </button>
               </div>
@@ -2294,26 +2350,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           {/* ══════════ SYSTEM SETTINGS / PROFILE TAB ══════════ */}
           {activeTab === 'profile' && (
             <>
-
-
-                          <div style={{ padding: '0.5rem', width: '100%', maxWidth: '1100px', margin: '0 auto' }}>
-              {errorMsg && (
-                <div style={{
-                  padding: '0.85rem 1.25rem', borderRadius: '12px', marginBottom: '1.5rem',
-                  fontSize: '0.85rem', fontWeight: 600,
-                  background: '#fef2f2',
-                  color: '#ef4444',
-                  border: '1px solid #fecaca',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}>
-                  <span>⚠️</span>
-                  <span>{errorMsg}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleProfileUpdate} style={{ width: '100%' }}>
+              <div style={{ padding: '0.5rem', width: '100%', maxWidth: '1100px', margin: '0 auto' }}>
+                <form onSubmit={handleProfileUpdate} style={{ width: '100%' }}>
                 <div style={{ display: 'flex', flexDirection: 'row', gap: '2rem', flexWrap: 'wrap', alignItems: 'stretch' }}>
                   {/* Left Column: Avatar & Summary Card */}
                   <div style={{ background: '#ffffff', borderRadius: '16px', padding: '2rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '300px', flexShrink: 0, position: 'relative' }}>
@@ -2351,6 +2389,32 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       onChange={handleAvatarChange}
                     />
                     
+                    {user?.profile_picture && (
+                      <button 
+                        type="button"
+                        onClick={handleRemoveAvatar}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#ef4444',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          marginTop: '0.5rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <FiTrash2 /> Remove Photo
+                      </button>
+                    )}
+                    
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: '1rem 0 0.25rem 0' }}>
                       {profileForm.full_name || user?.username || 'User'}
                     </h3>
@@ -2359,12 +2423,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#0284c7' }}></span>
                       <span>{user?.role?.replace('_', ' ') || 'User'}</span>
                     </div>
-
-                    {(profileForm.school_name || user?.school_name) && (
-                      <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
-                        🏫 {profileForm.school_name || user?.school_name}
-                      </div>
-                    )}
 
                     <div style={{ width: '100%', borderTop: '1px solid #f1f5f9', margin: '1.5rem 0' }}></div>
 
@@ -3052,42 +3110,28 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
       {/* ── Help & Support Modal ── */}
       {showHelpModal && (
-        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowHelpModal(false); }}>
-          <div className="sd-modal" style={{ maxWidth: 600 }}>
-            <div className="sd-modal-header">
-              <span className="sd-modal-title">Help & Support Center</span>
-              <button className="sd-modal-close" onClick={() => setShowHelpModal(false)}><FiX/></button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowHelpModal(false)}>
+          <div style={{ background: '#ffffff', borderRadius: '16px', padding: '2rem', width: '480px', maxWidth: '90vw', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>Help & Support</h2>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '1.25rem' }} onClick={() => setShowHelpModal(false)}><FiX/></button>
             </div>
-            <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem', fontSize: '0.85rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div>
-                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Frequently Asked Questions</h3>
-                <details style={{ marginBottom: '8px', cursor: 'pointer' }}>
-                  <summary style={{ fontWeight: 600, color: '#1e293b' }}>How to reset a student password?</summary>
-                  <p style={{ margin: '4px 0 0 16px', color: '#64748b' }}>Select the student from your dashboard list, open the Edit modal, and click "Reset Password" or input a new credentials field.</p>
-                </details>
-                <details style={{ cursor: 'pointer' }}>
-                  <summary style={{ fontWeight: 600, color: '#1e293b' }}>How to synchronize content compilation?</summary>
-                  <p style={{ margin: '4px 0 0 16px', color: '#64748b' }}>Navigate to the "Publish & Releases" tab in the Super Admin panel to run the atomic schema compiler and export package checksums.</p>
-                </details>
-              </div>
-              <hr style={{ border: 'none', borderTop: '1px solid #e2e8f0', margin: 0 }} />
-              <div>
-                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Terms of Service & Agreements</h3>
-                <div style={{ padding: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', maxHeight: '120px', overflowY: 'auto', fontSize: '0.8rem', color: '#64748b', lineHeight: 1.5, textAlign: 'left' }}>
-                  <h4 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', color: '#0f172a' }}>1. Acceptable Use Policy</h4>
-                  <p style={{ margin: '0 0 10px 0' }}>All platform administrators, teachers, and student accounts registered under schools must maintain guidelines for educational purposes only. Unauthorized extraction of media content from the Content Studio is strictly prohibited.</p>
-                  <h4 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', color: '#0f172a' }}>2. Data Security & Privacy</h4>
-                  <p style={{ margin: 0 }}>Our database utilizes cryptographic hash signatures (using official verified verification algorithms) for user records, including auto-generated credentials, protecting educational tenant data security boundary isolation.</p>
-                </div>
-              </div>
-              <div>
-                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Contact Support</h3>
-                <p style={{ margin: 0, color: '#64748b' }}>Email: <a href="mailto:support@lingualab.edu" style={{ color: '#4f46e5', fontWeight: 600 }}>support@lingualab.edu</a></p>
-                <p style={{ margin: '4px 0 0 0', color: '#64748b' }}>Hotline: 1-800-LINGUA-LAB</p>
-              </div>
-            </div>
-            <div className="sd-modal-footer" style={{ marginTop: '1.5rem' }}>
-              <button className="sd-btn-cancel" onClick={() => setShowHelpModal(false)}>Close</button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {[
+                { icon: '📧', title: 'Email Support', desc: 'support@languagelab.edu', action: 'mailto:support@languagelab.edu' },
+                { icon: '📚', title: 'Documentation', desc: 'Browse our knowledge base and guides', action: '#' },
+                { icon: '💬', title: 'Live Chat', desc: 'Chat with our support team', action: '#' },
+              ].map((item, idx) => (
+                <a key={idx} href={item.action} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', textDecoration: 'none', color: '#334155', transition: 'background 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}>
+                  <span style={{ fontSize: '1.5rem' }}>{item.icon}</span>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{item.title}</div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{item.desc}</div>
+                  </div>
+                </a>
+              ))}
             </div>
           </div>
         </div>
@@ -3280,6 +3324,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         </div>
       )}
 
+      {cropImageSrc && (
+        <AvatarCropperModal 
+          src={cropImageSrc}
+          onCrop={handleCropSave}
+          onCancel={() => setCropImageSrc(null)}
+        />
+      )}
     </div>
   );
 };
