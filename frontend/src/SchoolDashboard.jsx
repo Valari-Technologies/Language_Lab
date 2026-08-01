@@ -12,6 +12,7 @@ import './SchoolDashboard.css';
 import { apiFetch } from './api';
 import logoIcon from './assets/icon.png';
 import teacherHeaderBanner from './assets/6.jpeg';
+import schoolBg from './assets/school_bg.png';
 import AvatarCropperModal from './AvatarCropperModal';
 
 /* ─── Auto-generate a student roll no from their name, e.g. "Rahul" -> "RAH001" ───
@@ -359,6 +360,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   ]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showHelpModal,     setShowHelpModal]     = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
   /* ══════════════════════════════════
      DATA LOADERS (unchanged from original)
@@ -485,6 +487,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     const handler = () => {
       setShowNotifDropdown(false);
       setActiveDropdown(null);
+      setShowProfileDropdown(false);
     };
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
@@ -1027,6 +1030,26 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           z-index: 3 !important;
         }
 
+         .sd-main {
+          background-image: url(${schoolBg}) !important;
+          background-size: cover !important;
+          background-position: center !important;
+          background-repeat: no-repeat !important;
+        }
+        .sd-topbar {
+          background: rgba(229, 236, 244, 0.7) !important;
+          backdrop-filter: blur(12px) !important;
+          -webkit-backdrop-filter: blur(12px) !important;
+          border-bottom: 1px solid rgba(15, 23, 42, 0.05) !important;
+          position: sticky !important;
+          top: 0 !important;
+          z-index: 10 !important;
+        }
+        .sd-content {
+          background: transparent !important;
+          background-color: transparent !important;
+        }
+
         /* Card shadows and style matches */
         .sd-card {
           border: 1px solid #e2e8f0 !important;
@@ -1179,9 +1202,75 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           </button>
         </nav>
 
-        {/* Sidebar bottom: user card with logout icon */}
-        <div className="sd-sidebar-bottom">
-          <div className="sd-user-card">
+        <div className="sd-sidebar-bottom" style={{ position: 'relative' }}>
+          {showProfileDropdown && (
+            <div style={{
+              position: 'absolute',
+              bottom: '75px',
+              left: '0.75rem',
+              right: '0.75rem',
+              background: '#095d8f',
+              borderRadius: '12px',
+              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.3)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              padding: '6px',
+              zIndex: 1000,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px'
+            }} onClick={(e) => e.stopPropagation()}>
+              <button 
+                onClick={() => { goTo('profile'); setShowProfileDropdown(false); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: 'none',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#f1f5f9',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.15s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <FiUser style={{ fontSize: '1rem', color: '#cbd5e1' }} />
+                <span>View Profile</span>
+              </button>
+              <button 
+                onClick={() => { setShowProfileDropdown(false); onLogout(); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: 'none',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#f87171',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.15s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <FiLogOut style={{ fontSize: '1rem', color: '#f87171' }} />
+                <span>Logout</span>
+              </button>
+            </div>
+          )}
+
+          <div className="sd-user-card" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}>
             <div className="sd-user-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
               {user?.profile_picture ? (
                 <img src={user.profile_picture} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
@@ -1189,13 +1278,13 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 (user?.username || 'SA').slice(0, 2).toUpperCase()
               )}
             </div>
-            <div className="sd-user-meta">
+            <div className="sd-user-meta" style={{ flex: 1 }}>
               <div className="sd-user-name">{profileForm.full_name || user?.full_name || user?.username || 'School Admin'}</div>
               <div className="sd-user-role">School Admin</div>
             </div>
-            <button className="sd-logout-icon-btn" onClick={onLogout} title="Logout">
-              <FiLogOut/>
-            </button>
+            <div style={{ color: 'rgba(255, 255, 255, 0.75)', display: 'flex', alignItems: 'center', fontSize: '1rem' }}>
+              <FiChevronDown />
+            </div>
           </div>
         </div>
       </aside>
@@ -1278,13 +1367,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div className="sd-header-text-section" style={{ maxWidth: '50%' }}>
                   <h1>{getGreeting()}, {profileForm.full_name || profileForm.username || user?.full_name || user?.username || 'School Admin'}!</h1>
                   <p>Manage teachers, track student progress, monitor classes, and coordinate academic resources.</p>
-                </div>
-
-                {/* Export Report placed in the bottom-right corner of the card */}
-                <div className="sd-header-actions-widget">
-                  <button className="sd-btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.5rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-                    Export Report <FiDownload style={{ fontSize: '0.9rem' }}/>
-                  </button>
                 </div>
               </div>
 

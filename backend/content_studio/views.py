@@ -491,7 +491,7 @@ class MediaViewSet(viewsets.ModelViewSet):
         media = self.get_object()
         force_delete = request.query_params.get("force", "").lower() == "true"
         
-        all_screens = Screen.objects.all().select_related("activity__experience")
+        all_screens = Screen.objects.filter(activity__experience__is_deleted=False).select_related("activity__experience")
         usages = []
         for scr in all_screens:
             is_used = False
@@ -541,7 +541,7 @@ class MediaViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def usage(self, request, pk=None):
         media = self.get_object()
-        all_screens = Screen.objects.all().select_related("activity__experience")
+        all_screens = Screen.objects.filter(activity__experience__is_deleted=False).select_related("activity__experience")
         usages = []
         for scr in all_screens:
             is_used = False

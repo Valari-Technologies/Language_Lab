@@ -62,6 +62,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [selectedExperience, setSelectedExperience] = useState(null);
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [selectedScreen, setSelectedScreen] = useState(null);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
   // Backend Integration States
   const [experiences, setExperiences] = useState([]);
@@ -72,6 +73,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [screens, setScreens] = useState([]);
   const [isEditingScreen, setIsEditingScreen] = useState(false);
   const [learningOutcomes, setLearningOutcomes] = useState([]);
+  const [originalOutcomes, setOriginalOutcomes] = useState([]);
   const [outcomesText, setOutcomesText] = useState('');
   const [gradesList, setGradesList] = useState([]);
   const [activitySkillOptions, setActivitySkillOptions] = useState([]);
@@ -162,8 +164,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const handleAcceptAIContent = () => {
     if (!aiPreviewData) return;
 
-    // Auto-fill Title
-    const generatedTitle = aiPreviewData.title || screenForm.title || 'AI Generated Screen';
+    // Auto-fill Title: Prioritize keeping the existing screen title
+    const generatedTitle = screenForm.title || aiPreviewData.title || 'AI Generated Screen';
 
     let updatedForm = {
       ...screenForm,
@@ -513,7 +515,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   /* ── Dismiss notification dropdown on outside click ── */
   useEffect(() => {
-    const handler = () => setShowNotifDropdown(false);
+    const handler = () => {
+      setShowNotifDropdown(false);
+      setShowProfileDropdown(false);
+    };
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
   }, []);
@@ -624,6 +629,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       setView('dashboard');
     }
   }, [currentPath]);
+
+  /* ── Clear editor path from URL when navigating away ── */
+  useEffect(() => {
+    if (view !== 'screen-builder') {
+      if (window.location.pathname.startsWith('/content-studio/editor/')) {
+        window.history.pushState({}, '', '/content-studio');
+        setCurrentPath('/content-studio');
+      }
+    }
+  }, [view]);
 
   // ── Full Screen Studio States ──
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(true);
@@ -957,6 +972,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         setActivities(data.activities || []);
         const rawOutcomes = data.learning_outcomes || [];
         setLearningOutcomes(rawOutcomes);
+        setOriginalOutcomes(rawOutcomes);
         // Convert to plain text — support {text}, {description}, {outcome}, raw strings
         const textStr = rawOutcomes.map(o => {
           if (typeof o === 'string') return o;
@@ -1014,7 +1030,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
         // Sync learning outcomes textarea with backend (replace existing set with current lines)
         const desiredLines = (outcomesText || '').split('\n').map(l => l.trim()).filter(Boolean);
-        const existingOutcomes = data.learning_outcomes || [];
+        const existingOutcomes = originalOutcomes || [];
         try {
           await Promise.all(existingOutcomes.map(o => apiFetch(`/api/v1/content/learning-outcomes/${o.id}/`, { method: 'DELETE' })));
           await Promise.all(desiredLines.map(text => apiFetch('/api/v1/content/learning-outcomes/', {
@@ -3237,7 +3253,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           color: rgba(255, 255, 255, 0.6);
         }
 
-        /* ── Main Area ── */
+         /* ── Main Area ── */
         .cs-content-area {
           flex: 1;
           display: flex;
@@ -3412,24 +3428,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s ease;
           overflow: hidden;
         }
-        .cs-stat-card::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: 4px;
-          background-color: #0284c7;
-          opacity: 0.8;
-          transition: height 0.3s ease;
-        }
         .cs-stat-card:hover {
           transform: translateY(-6px);
           border-color: #bae6fd;
           box-shadow: 0 15px 30px rgba(0, 0, 0, 0.06), 0 5px 10px rgba(0, 0, 0, 0.02);
-        }
-        .cs-stat-card:hover::before {
-          height: 6px;
         }
         .cs-stat-val-row {
           display: flex;
@@ -3667,8 +3669,75 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           ))}
         </nav>
 
-        <div className="cs-sidebar-footer">
-          <div className="cs-profile-card">
+        <div className="cs-sidebar-footer" style={{ position: 'relative' }}>
+          {showProfileDropdown && (
+            <div style={{
+              position: 'absolute',
+              bottom: '75px',
+              left: '0.75rem',
+              right: '0.75rem',
+              background: '#095d8f',
+              borderRadius: '12px',
+              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.3)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              padding: '6px',
+              zIndex: 1000,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px'
+            }} onClick={(e) => e.stopPropagation()}>
+              <button 
+                onClick={() => { setView('profile'); setShowProfileDropdown(false); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: 'none',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#f1f5f9',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.15s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <FiUser style={{ fontSize: '1rem', color: '#cbd5e1' }} />
+                <span>View Profile</span>
+              </button>
+              <button 
+                onClick={() => { setShowProfileDropdown(false); onLogout(); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: 'none',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#f87171',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.15s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <FiLogOut style={{ fontSize: '1rem', color: '#f87171' }} />
+                <span>Logout</span>
+              </button>
+            </div>
+          )}
+
+          <div className="cs-profile-card" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}>
             <div className="cs-profile-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
               {currentUserState?.profile_picture ? (
                 <img src={resolveMediaUrl(currentUserState.profile_picture)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
@@ -3676,13 +3745,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 (currentUserState?.username || 'CC').slice(0, 2).toUpperCase()
               )}
             </div>
-            <div className="cs-profile-info">
+            <div className="cs-profile-info" style={{ flex: 1 }}>
               <div className="cs-profile-name">{currentUserState?.full_name || currentUserState?.username || 'Content Creator'}</div>
               <div className="cs-profile-desc">Content Creator</div>
             </div>
-            <button className="sd-logout-icon-btn cs-logout-btn" onClick={onLogout} title="Logout">
-              <FiLogOut />
-            </button>
+            <div className="cs-dropdown-icon" style={{ color: 'rgba(255, 255, 255, 0.75)', display: 'flex', alignItems: 'center', fontSize: '1rem' }}>
+              <FiChevronDown />
+            </div>
           </div>
         </div>
       </aside>
@@ -3780,22 +3849,25 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               {/* 4 Stats Cards */}
               <div className="cs-stat-row">
                 {[
-                  { label: 'Total Experiences', value: dashboardSummary?.total_experiences || 0, icon: <FiFileText style={{ color: '#0284c7', fontSize: '1.5rem' }} />, bg: '#e0f2fe', trend: 'Active', trendBg: '#dcfce7', trendColor: '#15803d' },
-                  { label: 'Draft Experiences', value: dashboardSummary?.draft_experiences || 0, icon: <FiFileText style={{ color: '#ea580c', fontSize: '1.5rem' }} />, bg: '#ffedd5', trend: 'Editing', trendBg: '#ffedd5', trendColor: '#ea580c' },
-                  { label: 'Published Experiences', value: dashboardSummary?.published_experiences || 0, icon: <FiCheckCircle style={{ color: '#16a34a', fontSize: '1.5rem' }} />, bg: '#dcfce7', trend: 'Live', trendBg: '#dcfce7', trendColor: '#16a34a' },
-                  { label: 'Total Media Assets', value: dashboardSummary?.total_media_assets || 0, icon: <FiImage style={{ color: '#7c3aed', fontSize: '1.5rem' }} />, bg: '#f3e8ff', trend: 'Library', trendBg: '#f3e8ff', trendColor: '#7c3aed' },
+                  { label: 'Total Experiences', value: dashboardSummary?.total_experiences || 0, trend: 'Active', trendBg: '#dcfce7', trendColor: '#15803d', icon: <FiBookOpen />, iconBg: '#e0f2fe', iconColor: '#0284c7' },
+                  { label: 'Draft Experiences', value: dashboardSummary?.draft_experiences || 0, trend: 'Editing', trendBg: '#ffedd5', trendColor: '#ea580c', icon: <FiFileText />, iconBg: '#ffedd5', iconColor: '#ea580c' },
+                  { label: 'Published Experiences', value: dashboardSummary?.published_experiences || 0, trend: 'Live', trendBg: '#dcfce7', trendColor: '#16a34a', icon: <FiActivity />, iconBg: '#dcfce7', iconColor: '#16a34a' },
+                  { label: 'Total Media Assets', value: dashboardSummary?.total_media_assets || 0, trend: 'Library', trendBg: '#f3e8ff', trendColor: '#7c3aed', icon: <FiImage />, iconBg: '#f3e8ff', iconColor: '#7c3aed' },
                 ].map((stat, idx) => (
-                  <div className="cs-stat-card" key={idx}>
-                    <div className="cs-stat-val-row">
+                  <div 
+                    className="cs-stat-card" 
+                    key={idx}
+                  >
+                    <div className="cs-stat-val-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                       <div>
-                        <span className="cs-stat-label">{stat.label}</span>
-                        <div className="cs-stat-value">{stat.value}</div>
+                        <span className="cs-stat-label" style={{ color: '#64748b', fontWeight: 600 }}>{stat.label}</span>
+                        <div className="cs-stat-value" style={{ color: '#0f172a', fontWeight: 800, fontSize: '1.75rem', marginTop: '4px' }}>{stat.value}</div>
                       </div>
-                      <div style={{ background: stat.bg, padding: '0.45rem', borderRadius: '8px', display: 'flex' }}>
+                      <div style={{ background: stat.iconBg, color: stat.iconColor, width: '42px', height: '42px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem' }}>
                         {stat.icon}
                       </div>
                     </div>
-                    <div style={{ marginTop: '0.75rem' }}>
+                    <div style={{ marginTop: 'auto', paddingTop: '0.75rem' }}>
                       <span className="cs-stat-trend" style={{ background: stat.trendBg, color: stat.trendColor }}>{stat.trend}</span>
                     </div>
                   </div>

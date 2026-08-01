@@ -445,6 +445,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [notifications, setNotifications] = useState([
     { id: 1, text: 'System backup completed successfully.', time: '10 mins ago', read: false },
     { id: 2, text: 'New school registration request received.', time: '1 hour ago', read: false },
@@ -793,6 +794,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     const handleOutsideClick = () => {
       setActiveDropdown(null);
       setShowNotifDropdown(false);
+      setShowProfileDropdown(false);
     };
     window.addEventListener('click', handleOutsideClick);
     return () => window.removeEventListener('click', handleOutsideClick);
@@ -1252,6 +1254,17 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
      ══════════════════════════════════════════════════ */
   return (
     <div className="sd-layout">
+      <style>{`
+        .sd-topbar {
+          background: rgba(229, 236, 244, 0.7) !important;
+          backdrop-filter: blur(12px) !important;
+          -webkit-backdrop-filter: blur(12px) !important;
+          border-bottom: 1px solid rgba(15, 23, 42, 0.05) !important;
+          position: sticky !important;
+          top: 0 !important;
+          z-index: 10 !important;
+        }
+      `}</style>
 
       {/* ── Mobile top bar ── */}
       <header className="sd-mobile-header">
@@ -1296,9 +1309,75 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           </button>
         </nav>
 
-        {/* Sidebar bottom: user card with logout icon */}
-        <div className="sd-sidebar-bottom">
-          <div className="sd-user-card">
+        <div className="sd-sidebar-bottom" style={{ position: 'relative' }}>
+          {showProfileDropdown && (
+            <div style={{
+              position: 'absolute',
+              bottom: '75px',
+              left: '0.75rem',
+              right: '0.75rem',
+              background: '#095d8f',
+              borderRadius: '12px',
+              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.3)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              padding: '6px',
+              zIndex: 1000,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px'
+            }} onClick={(e) => e.stopPropagation()}>
+              <button 
+                onClick={() => { goTo('profile'); setShowProfileDropdown(false); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: 'none',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#f1f5f9',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.15s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <FiUser style={{ fontSize: '1rem', color: '#cbd5e1' }} />
+                <span>View Profile</span>
+              </button>
+              <button 
+                onClick={() => { setShowProfileDropdown(false); onLogout(); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: 'none',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#f87171',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.15s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <FiLogOut style={{ fontSize: '1rem', color: '#f87171' }} />
+                <span>Logout</span>
+              </button>
+            </div>
+          )}
+
+          <div className="sd-user-card" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}>
             <div className="sd-user-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
               {user?.profile_picture ? (
                 <img src={user.profile_picture} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
@@ -1306,13 +1385,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 (user?.username || 'AD').slice(0, 2).toUpperCase()
               )}
             </div>
-            <div className="sd-user-meta">
+            <div className="sd-user-meta" style={{ flex: 1 }}>
               <div className="sd-user-name">{profileForm.full_name || user?.full_name || user?.username || 'Super Admin'}</div>
               <div className="sd-user-role">Super Admin</div>
             </div>
-            <button className="sd-logout-icon-btn" onClick={onLogout} title="Logout">
-              <FiLogOut/>
-            </button>
+            <div style={{ color: 'rgba(255, 255, 255, 0.75)', display: 'flex', alignItems: 'center', fontSize: '1rem' }}>
+              <FiChevronDown />
+            </div>
           </div>
         </div>
       </aside>
@@ -1441,11 +1520,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                    <h1>{getGreeting()}, {profileForm.full_name || profileForm.username || user?.full_name || user?.username || 'Super Admin'}!</h1>
                   <p>Monitor schools, track student engagement, analyze subscriptions, and make data-driven decisions from one unified dashboard.</p>
                 </div>
-
-                {/* Export Report placed in the top-right corner of the card */}
-                <button className="sd-btn-outline" style={{ position: 'absolute', top: '1.5rem', right: '2.5rem', background: '#ffffff', color: '#475569', border: '1px solid #dbeafe', margin: 0, padding: '0.5rem 1.25rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', zIndex: 3 }}>
-                  Export Report <FiDownload style={{ fontSize: '0.9rem' }}/>
-                </button>
               </div>
 
               {/* 3 Stat Cards */}
