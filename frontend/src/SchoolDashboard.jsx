@@ -1034,7 +1034,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         }
         .sd-stat-row {
           display: grid !important;
-          grid-template-columns: repeat(6, 1fr) !important;
+          grid-template-columns: repeat(4, 1fr) !important;
           gap: 0.75rem !important;
           margin-bottom: 1.5rem !important;
         }
@@ -1291,12 +1291,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               {/* Stat cards */}
               <div className="sd-stat-row">
                 {[
-                  { label:'Total School',        value: statSchools,   color:'#22c55e', bg:'#dcfce7', icon:<FiGrid/>,       trend:'+4%' },
-                  { label:'Total Teachers',      value: statTeachers,  color:'#3b82f6', bg:'#dbeafe', icon:<FiUsers/>,      trend:'+8%' },
-                  { label:'Total Students',      value: statStudents,  color:'#a855f7', bg:'#f3e8ff', icon:<FiUsers/>,      trend:'+86%' },
-                  { label:'Active Batches',      value: statClasses,   color:'#10b981', bg:'#d1fae5', icon:<FiActivity/>,   trend:'+6%' },
-                  { label:'Total Courses',       value: statExperiences, color:'#f97316', bg:'#ffedd5', icon:<FiBookOpen/>,   trend:'+8%' },
-                  { label:'Average Attendance',  value: statAttend,    color:'#06b6d4', bg:'#cffafe', icon:<FiTrendingUp/>, trend:'+5%' },
+                  { label:'Total Teachers',      value: statTeachers,  color:'#3b82f6', bg:'#dbeafe', icon:<FiUsers/> },
+                  { label:'Total Students',      value: statStudents,  color:'#a855f7', bg:'#f3e8ff', icon:<FiUsers/> },
+                  { label:'Total Courses',       value: statExperiences, color:'#f97316', bg:'#ffedd5', icon:<FiBookOpen/> },
+                  { label:'Average Attendance',  value: statAttend,    color:'#06b6d4', bg:'#cffafe', icon:<FiTrendingUp/> },
                 ].map((s, i) => (
                   <div className="sd-stat-card" key={i}>
                     <div className="sd-stat-card-icon-part" style={{ background: s.bg, color: s.color }}>
