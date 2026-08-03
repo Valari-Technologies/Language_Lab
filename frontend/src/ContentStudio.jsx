@@ -14,6 +14,7 @@ import {
 } from 'react-icons/fi';
 import './Dashboard.css';
 import contentCreatorHeaderBanner from './assets/3.jpeg';
+import contentStudioBg from './assets/contentbg.png';
 import logoIcon from './assets/icon.png';
 import ReportsAnalytics from './ReportsAnalytics';
 import AvatarCropperModal from './AvatarCropperModal';
@@ -879,7 +880,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     grade: '',
     subject: [],
     language: 'English',
-    difficulty: 'Medium',
+    difficulty: 'Intermediate',
     duration: 15,
     tags: []
   });
@@ -964,7 +965,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           grade: data.grade || '',
           subject: subjectArray,
           language: data.language || 'English',
-          difficulty: data.difficulty || 'Medium',
+          difficulty: data.difficulty || 'Intermediate',
           duration: data.estimated_duration || 0,
           tags: data.tags || [],
           thumbnail: data.thumbnail || ''
@@ -995,9 +996,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const handleSaveExperience = async () => {
     setActionLoading(true);
     try {
-      let diff = (experienceForm.difficulty || 'Medium').toUpperCase();
-      if (diff !== 'EASY' && diff !== 'MEDIUM' && diff !== 'HARD') {
-        diff = 'MEDIUM';
+      let diff = (experienceForm.difficulty || 'Intermediate').toUpperCase();
+      if (diff !== 'BEGINNER' && diff !== 'INTERMEDIATE' && diff !== 'MASTER') {
+        diff = 'INTERMEDIATE';
       }
 
       const payload = {
@@ -3021,12 +3022,14 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     try {
       const res = await apiFetch(`/api/v1/content/publish/${selectedExperience.id}/`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ version: publishVersion.trim(), release_notes: publishNotes })
       });
-      if (res.status === 201) {
-        showFeedback('Package published successfully!');
+      if (res.status === 200 || res.status === 201) {
+        showFeedback('Experience submitted to Super Admin for approval.');
         setPublishNotes('Initial release of the experience.');
         loadPublishData(selectedExperience.id);
+        loadExperiencesData();
       } else {
         const errData = await res.json().catch(() => ({}));
         if (errData.validation_report) {
@@ -3090,7 +3093,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
 
   return (
-    <div className="cs-layout">
+    <div className="cs-layout" style={{ backgroundImage: `url(${contentStudioBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}>
       {/* Scope CSS variables & scoped rules */}
       <style>{`
         .cs-layout {
@@ -3106,15 +3109,18 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         /* ── Sidebar ── */
         .cs-sidebar {
           width: 260px;
-          background: linear-gradient(180deg, #006aa6 0%, #005080 100%);
+          background: linear-gradient(180deg, rgba(0, 106, 166, 0.82) 0%, rgba(0, 80, 128, 0.9) 100%);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
           color: #cbd5e1;
           display: flex;
           flex-direction: column;
           height: 100%;
-          border-right: 1px solid rgba(255, 255, 255, 0.03);
+          border-right: 1px solid rgba(255, 255, 255, 0.08);
           flex-shrink: 0;
           position: relative;
           overflow: hidden;
+          box-shadow: 4px 0 24px rgba(0,0,0,0.15);
         }
         .cs-brand {
           padding: 1.5rem;
@@ -3260,16 +3266,23 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           flex-direction: column;
           height: 100%;
           overflow: hidden;
+          background-color: transparent !important;
         }
         .cs-header {
           height: 60px;
-          border-bottom: none;
-          background-color: #e5ecf4;
+          border-bottom: 1px solid rgba(15, 23, 42, 0.07);
+          background-color: rgba(248, 250, 252, 0.72) !important;
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
           padding: 0 1.5rem;
           display: flex;
           align-items: center;
           justify-content: space-between;
           flex-shrink: 0;
+          position: sticky;
+          top: 0;
+          z-index: 20;
+          box-shadow: 0 1px 12px rgba(15, 23, 42, 0.05);
         }
         .cs-header-search-wrap {
           position: relative;
@@ -3499,9 +3512,17 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           background-color: #ffedd5;
           color: #d97706;
         }
-        .cs-badge-published {
+        .cs-badge-published, .cs-badge-approved {
           background-color: #dcfce7;
           color: #15803d;
+        }
+        .cs-badge-pending {
+          background-color: #fef9c3;
+          color: #854d0e;
+        }
+        .cs-badge-rejected {
+          background-color: #fee2e2;
+          color: #b91c1c;
         }
 
         /* Form Controls */
@@ -3757,7 +3778,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       </aside>
 
       {/* ── Main Area ── */}
-      <div className="cs-content-area">
+      <div className="cs-content-area" style={{ backgroundImage: `url(${contentStudioBg})`, backgroundSize: 'cover', backgroundPosition: 'center bottom', backgroundRepeat: 'no-repeat' }}>
         {/* Global feedback toast — visible across every view, not just Profile */}
         {feedbackMsg.text && (
           <div
@@ -3916,8 +3937,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                 </td>
                                 <td>{row.grade_name || `Grade ${row.grade}`}</td>
                                 <td>
-                                  <span className={`cs-badge ${row.status === 'PUBLISHED' ? 'cs-badge-published' : 'cs-badge-draft'}`}>
-                                    {row.status}
+                                  <span className={`cs-badge ${row.status === 'APPROVED' || row.status === 'PUBLISHED' ? 'cs-badge-approved' : row.status === 'PENDING_APPROVAL' ? 'cs-badge-pending' : row.status === 'REJECTED' ? 'cs-badge-rejected' : 'cs-badge-draft'}`}>
+                                    {row.status === 'PENDING_APPROVAL' ? 'PENDING' : row.status}
                                   </span>
                                 </td>
                                 <td>{new Date(row.updated_at).toLocaleDateString()}</td>
@@ -4007,9 +4028,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', letterSpacing: '0.02em' }}>Difficulty</span>
                         <select className="cs-filter-select" style={{ width: '100%', height: '36px', fontSize: '0.78rem', background: '#ffffff', border: '1px solid #d1d5db', borderRadius: '8px', padding: '0 0.5rem', color: '#1e293b', cursor: 'pointer' }} value={filterDifficulty} onChange={e => setFilterDifficulty(e.target.value)}>
                           <option value="">All Levels</option>
-                          <option value="easy">Easy</option>
-                          <option value="medium">Medium</option>
-                          <option value="hard">Hard</option>
+                          <option value="beginner">Beginner</option>
+                          <option value="intermediate">Intermediate</option>
+                          <option value="master">Master</option>
                         </select>
                       </div>
 
@@ -4166,13 +4187,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           <td>{row.subject}</td>
                           <td>
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: row.difficulty === 'EASY' ? '#10b981' : row.difficulty === 'HARD' ? '#ef4444' : '#3b82f6' }} />
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: row.difficulty === 'BEGINNER' ? '#10b981' : row.difficulty === 'MASTER' ? '#ef4444' : '#3b82f6' }} />
                               {row.difficulty_display || row.difficulty}
                             </span>
                           </td>
                           <td>
-                            <span className={`cs-badge ${row.status === 'PUBLISHED' ? 'cs-badge-published' : 'cs-badge-draft'}`}>
-                              {row.status}
+                            <span className={`cs-badge ${row.status === 'APPROVED' || row.status === 'PUBLISHED' ? 'cs-badge-approved' : row.status === 'PENDING_APPROVAL' ? 'cs-badge-pending' : row.status === 'REJECTED' ? 'cs-badge-rejected' : 'cs-badge-draft'}`}>
+                              {row.status === 'PENDING_APPROVAL' ? 'PENDING' : row.status}
                             </span>
                           </td>
                           <td>v1.0.0</td>
@@ -4387,9 +4408,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <label className="cs-form-label">Difficulty <span style={{ color: '#ef4444' }}>*</span></label>
                       <select className="cs-form-input" value={experienceForm.difficulty}
                         onChange={e => setExperienceForm({ ...experienceForm, difficulty: e.target.value })}>
-                        <option value="Easy">Easy</option>
-                        <option value="Medium">Medium</option>
-                        <option value="Hard">Hard</option>
+                        <option value="Beginner">Beginner</option>
+                        <option value="Intermediate">Intermediate</option>
+                        <option value="Master">Master</option>
                       </select>
                     </div>
                     <div className="cs-form-group">
@@ -8483,7 +8504,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <div>
                         <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Difficulty</span>
                         <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: detailExperience.difficulty === 'EASY' ? '#10b981' : detailExperience.difficulty === 'HARD' ? '#ef4444' : '#3b82f6' }} />
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: detailExperience.difficulty === 'BEGINNER' ? '#10b981' : detailExperience.difficulty === 'MASTER' ? '#ef4444' : '#3b82f6' }} />
                           {detailExperience.difficulty}
                         </div>
                       </div>
@@ -8498,8 +8519,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <div>
                         <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Status</span>
                         <div style={{ marginTop: '2px' }}>
-                          <span className={`cs-badge ${detailExperience.status === 'PUBLISHED' ? 'cs-badge-published' : 'cs-badge-draft'}`} style={{ display: 'inline-block' }}>
-                            {detailExperience.status}
+                          <span className={`cs-badge ${detailExperience.status === 'APPROVED' || detailExperience.status === 'PUBLISHED' ? 'cs-badge-approved' : detailExperience.status === 'PENDING_APPROVAL' ? 'cs-badge-pending' : detailExperience.status === 'REJECTED' ? 'cs-badge-rejected' : 'cs-badge-draft'}`} style={{ display: 'inline-block' }}>
+                            {detailExperience.status === 'PENDING_APPROVAL' ? 'PENDING' : detailExperience.status}
                           </span>
                         </div>
                       </div>

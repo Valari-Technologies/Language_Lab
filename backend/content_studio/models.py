@@ -5,14 +5,15 @@ from django.utils.translation import gettext_lazy as _
 
 class Experience(models.Model):
     class Difficulty(models.TextChoices):
-        EASY = "EASY", _("Easy")
-        MEDIUM = "MEDIUM", _("Medium")
-        HARD = "HARD", _("Hard")
+        BEGINNER = "BEGINNER", _("Beginner")
+        INTERMEDIATE = "INTERMEDIATE", _("Intermediate")
+        MASTER = "MASTER", _("Master")
 
     class Status(models.TextChoices):
         DRAFT = "DRAFT", _("Draft")
-        PUBLISHED = "PUBLISHED", _("Published")
-        ARCHIVED = "ARCHIVED", _("Archived")
+        PENDING_APPROVAL = "PENDING_APPROVAL", _("Pending Approval")
+        APPROVED = "APPROVED", _("Approved")
+        REJECTED = "REJECTED", _("Rejected")
 
     title = models.CharField(
         max_length=200,
@@ -45,7 +46,7 @@ class Experience(models.Model):
     difficulty = models.CharField(
         max_length=20,
         choices=Difficulty.choices,
-        default=Difficulty.MEDIUM,
+        default=Difficulty.INTERMEDIATE,
         verbose_name=_("Difficulty")
     )
     estimated_duration = models.IntegerField(
@@ -63,6 +64,22 @@ class Experience(models.Model):
         choices=Status.choices,
         default=Status.DRAFT,
         verbose_name=_("Status")
+    )
+    pending_version = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name=_("Pending Version")
+    )
+    pending_release_notes = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name=_("Pending Release Notes")
+    )
+    review_remark = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name=_("Review Remark")
     )
     tags = models.JSONField(
         default=list,

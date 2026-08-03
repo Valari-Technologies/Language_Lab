@@ -109,7 +109,7 @@ class DashboardStatsAPIView(APIView):
         from content_studio.models import Experience, PublishedPackage
         total_exp = Experience.objects.count()
         draft_exp = Experience.objects.filter(status="DRAFT").count()
-        published_exp = Experience.objects.filter(status="PUBLISHED").count()
+        published_exp = Experience.objects.filter(status="APPROVED").count()
         total_pkg = PublishedPackage.objects.count()
 
         return Response({

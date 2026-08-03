@@ -195,7 +195,7 @@ class PublishService:
                 version_obj.download_url = f"/api/v1/content/packages/{version_obj.id}/download/"
                 version_obj.save(update_fields=["download_url"])
 
-                experience.status = "PUBLISHED"
+                experience.status = "APPROVED"
                 experience.save(update_fields=["status"])
 
             return {

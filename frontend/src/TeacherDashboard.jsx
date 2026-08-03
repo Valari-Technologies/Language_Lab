@@ -743,7 +743,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
      RENDER
      ══════════════════════════════════════ */
   return (
-    <div className="sd-layout">
+    <div className="sd-layout" style={{ backgroundImage: `url(${teacherBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}>
       {/* ── Scoped Teacher Dashboard Luminous Slate Theme Styling ── */}
       <style>{`
          :root {
@@ -755,24 +755,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         }
 
         .sd-main {
-          background-image: url(${teacherBg}) !important;
-          background-size: cover !important;
-          background-position: center !important;
-          background-repeat: no-repeat !important;
-        }
-        .sd-topbar {
-          background: rgba(229, 236, 244, 0.7) !important;
-          backdrop-filter: blur(12px) !important;
-          -webkit-backdrop-filter: blur(12px) !important;
-          border-bottom: 1px solid rgba(15, 23, 42, 0.05) !important;
-          position: sticky !important;
-          top: 0 !important;
-          z-index: 10 !important;
-        }
-        .sd-content {
-          background: transparent !important;
+          background-image: none !important;
           background-color: transparent !important;
         }
+
 
         /* ── Premium Dashboard Header Card ── */
         .sd-dashboard-header-card {

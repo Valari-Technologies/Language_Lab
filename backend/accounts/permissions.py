@@ -130,3 +130,19 @@ class IsContentCreatorOrSuperAdmin(BasePermission):
             (getattr(request.user, "role", None) in ["CONTENT_CREATOR"] or request.user.is_superuser)
         )
 
+
+class IsAuthenticatedOrLMSClient(BasePermission):
+    """
+    Allows access if the user is authenticated and is a Content Creator, Super Admin, or superuser
+    OR if the request contains headers/query parameters indicating an LMS client (e.g. X-Student-ID, student_id, X-Roll-Number).
+    """
+    def has_permission(self, request, view):
+        if request.user and request.user.is_authenticated:
+            role = getattr(request.user, "role", None)
+            if role in ["CONTENT_CREATOR", "SUPER_ADMIN"] or request.user.is_superuser:
+                return True
+        student_id = request.headers.get("X-Student-ID") or request.query_params.get("student_id") or request.headers.get("X-Roll-Number")
+        if student_id:
+            return True
+        return False
+

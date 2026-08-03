@@ -333,7 +333,8 @@ class LMSPullUpdatesAPIView(APIView):
 
         # Build base queryset
         pkg_queryset = PublishedPackage.objects.filter(
-            compression_status="COMPLETED"
+            compression_status="COMPLETED",
+            experience__status="APPROVED"
         ).select_related("experience")
 
         # Scoping to assigned experiences bypassed to send all packages to LMS
@@ -505,7 +506,8 @@ class LMSStudentRollNoAuthAPIView(APIView):
         )
 
         pkg_queryset = PublishedPackage.objects.filter(
-            compression_status="COMPLETED"
+            compression_status="COMPLETED",
+            experience__status="APPROVED"
         ).select_related("experience")
 
         if assigned_exp_refs:

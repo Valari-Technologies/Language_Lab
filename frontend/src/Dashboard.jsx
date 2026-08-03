@@ -11,7 +11,34 @@ import {
 } from 'react-icons/fi';
 import './Dashboard.css';
 import { apiFetch } from './api';
+import { API_BASE_URL } from './config';
 import dashboardHeaderBanner from './assets/1.jpeg';
+import superAdminBg from './assets/superadminbg.png';
+
+const resolvePreviewUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  const path = url.startsWith('/') ? url : '/' + url;
+  return `${base}${path}`;
+};
+
+const getPreviewMediaUrl = (screen, type) => {
+  if (!screen) return '';
+  const element = screen.elements?.find(el => el.type === type);
+  if (element && element.content?.url) {
+    return resolvePreviewUrl(element.content.url);
+  }
+  const mediaItem = screen.resolved_media?.find(m => m.type?.toLowerCase() === type.toLowerCase() || (type === 'audio' && m.type?.toLowerCase() === 'speaking'));
+  if (mediaItem && mediaItem.url) {
+    return resolvePreviewUrl(mediaItem.url);
+  }
+  if (screen.resolved_media?.[0]?.url) {
+    return resolvePreviewUrl(screen.resolved_media[0].url);
+  }
+  return resolvePreviewUrl(screen.content?.media_url || '');
+};
+
 import logoIcon from './assets/icon.png';
 import AvatarCropperModal from './AvatarCropperModal';
 
@@ -148,7 +175,7 @@ const MultiDonutChart = ({ total = 124, activeCount = 78, expiringCount = 28, ex
 
   return (
     <svg viewBox="0 0 120 120" width="135" height="135" className="sd-donut-svg">
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f1f5f9" strokeWidth="12"/>
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f1f5f9" strokeWidth="12" />
       {/* Active Segment (Deep Blue) */}
       <circle cx={CX} cy={CY} r={R} fill="none" stroke="#006aa6" strokeWidth="12"
         strokeDasharray={`${activeDash} ${circ}`}
@@ -167,7 +194,7 @@ const MultiDonutChart = ({ total = 124, activeCount = 78, expiringCount = 28, ex
         strokeLinecap="round"
         transform={`rotate(${-90 + ((activePct + expiringPct) * 360)} ${CX} ${CY})`}
       />
-      
+
       {/* Inner circle for cleaner donut hole */}
       <circle cx={CX} cy={CY} r={R - 6} fill="#ffffff" />
 
@@ -201,7 +228,7 @@ const DistributionDonutChart = () => {
 
   return (
     <svg viewBox="0 0 120 120" width="135" height="135" className="sd-donut-svg" style={{ filter: 'drop-shadow(0px 6px 12px rgba(3, 105, 161, 0.15))', transition: 'all 0.3s ease' }}>
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f1f5f9" strokeWidth="12"/>
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f1f5f9" strokeWidth="12" />
       {/* Basic (Dark Navy Blue) */}
       <circle cx={CX} cy={CY} r={R} fill="none" stroke="#004e75" strokeWidth="12"
         strokeDasharray={`${basicDash} ${circ}`}
@@ -384,7 +411,7 @@ const Pagination = ({ total, perPage = 4, page, onPage }) => {
       </span>
       <div className="sd-pagination-pages">
         <button className="sd-page-btn arrow" disabled={page === 1} onClick={() => onPage(page - 1)}>
-          <FiChevronLeft/>
+          <FiChevronLeft />
         </button>
         {items.map((it, i) =>
           it === '...'
@@ -392,7 +419,7 @@ const Pagination = ({ total, perPage = 4, page, onPage }) => {
             : <button key={it} className={`sd-page-btn${page === it ? ' active' : ''}`} onClick={() => onPage(it)}>{it}</button>
         )}
         <button className="sd-page-btn arrow" disabled={page === pages} onClick={() => onPage(page + 1)}>
-          <FiChevronRight/>
+          <FiChevronRight />
         </button>
       </div>
     </div>
@@ -429,6 +456,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   /* ── Data lists ── */
   const [grades, setGrades] = useState([]);
   const [experiences, setExperiences] = useState([]);
+  const [submittedExperiences, setSubmittedExperiences] = useState([]);
+  const [saExpFilter, setSaExpFilter] = useState('');
+  const [saExpPage, setSaExpPage] = useState(1);
+  const [rejectingId, setRejectingId] = useState(null);
+  const [rejectRemark, setRejectRemark] = useState('');
+  const [showRejectModal, setShowRejectModal] = useState(false);
   const [experienceBuilders, setExperienceBuilders] = useState([]);
   const [schools, setSchools] = useState([]);
   const [publishContents, setPublishContents] = useState([]);
@@ -467,7 +500,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     const digits = Math.floor(1000 + Math.random() * 9000);
     return `${capitalized}@${digits}!`;
   };
-  
+
   /* ── Forms ── */
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [cropImageSrc, setCropImageSrc] = useState(null);
@@ -558,7 +591,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [schoolForm, setSchoolForm] = useState({ school_name: '', school_code: '', address: '', phone: '', email: '', logo: '', is_active: true });
   const [publishForm, setPublishForm] = useState({ release_name: '', grade: '', total_experiences: 0, status: 'DRAFT', export_file: '', checksum: '' });
   const [gradeForm, setGradeForm] = useState({ grade_name: '', description: '', sort_order: 1 });
-  const [experienceForm, setExperienceForm] = useState({ grade: '', title: '', description: '', objective: '', estimated_duration: 15, difficulty: 'MEDIUM', status: 'DRAFT', thumbnail: '' });
+  const [experienceForm, setExperienceForm] = useState({ grade: '', title: '', description: '', objective: '', estimated_duration: 15, difficulty: 'INTERMEDIATE', status: 'DRAFT', thumbnail: '' });
   const [experienceBuilderForm, setExperienceBuilderForm] = useState({ experience: '', block_type: 'VIDEO', title: '', content: '', media_url: '', display_order: 1, settings: '{}' });
   const [schoolAdminForm, setSchoolAdminForm] = useState({ username: '', email: '', full_name: '', is_active: true, school: '', password: '', role: 'school-admins' });
   const [teacherForm, setTeacherForm] = useState({ username: '', full_name: '', email: '', is_active: true, school: '', qualification: '', experience_years: 0, password: '' });
@@ -589,7 +622,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
   /* ── Selection State ── */
   const [selectedSchoolIds, setSelectedSchoolIds] = useState([]);
-  const [selectedUserIds,   setSelectedUserIds]   = useState([]);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
 
   /* ── Modal management ── */
   const [showModal, setShowModal] = useState(false);
@@ -599,6 +632,10 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
   const [pwModalError, setPwModalError] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, type: '' });
+  const [activePreviewScreen, setActivePreviewScreen] = useState(null);
+  const [selectedQuizOption, setSelectedQuizOption] = useState(null);
+  const [quizChecked, setQuizChecked] = useState(false);
+  const [audioPlaying, setAudioPlaying] = useState(false);
 
   /* ══════════════════════════════════
      DATA LOADERS (unchanged from original)
@@ -624,18 +661,65 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     } catch (e) { console.error('Failed to load dashboard stats', e); }
   };
 
+  const handleSelectPreviewScreen = (scr) => {
+    setActivePreviewScreen(scr);
+    setSelectedQuizOption(null);
+    setQuizChecked(false);
+    setAudioPlaying(false);
+  };
+
+  const getFlatScreens = () => {
+    if (!previewExperience || !previewExperience.steps) return [];
+    const flat = [];
+    previewExperience.steps.forEach(act => {
+      if (act.screens) {
+        act.screens.forEach(scr => {
+          flat.push({ ...scr, actTitle: act.title });
+        });
+      }
+    });
+    return flat;
+  };
+
+  const handleNextScreen = () => {
+    const flat = getFlatScreens();
+    const idx = flat.findIndex(s => s.id === activePreviewScreen?.id);
+    if (idx !== -1 && idx < flat.length - 1) {
+      handleSelectPreviewScreen(flat[idx + 1]);
+    }
+  };
+
+  const handlePrevScreen = () => {
+    const flat = getFlatScreens();
+    const idx = flat.findIndex(s => s.id === activePreviewScreen?.id);
+    if (idx > 0) {
+      handleSelectPreviewScreen(flat[idx - 1]);
+    }
+  };
+
   const handlePreviewExperience = async (experience) => {
+    setSelectedQuizOption(null);
+    setQuizChecked(false);
+    setAudioPlaying(false);
     try {
-      const res = await apiFetch(`/api/v1/content/preview/${experience.id}/`);
+      const res = await apiFetch(`/api/v1/content/experiences/${experience.id}/preview/`);
       if (res.ok) {
         const data = await res.json();
-        setPreviewExperience({ ...experience, steps: data.payload?.activities || data.results || [] });
+        const steps = data.activities || data.payload?.activities || data.results || [];
+        setPreviewExperience({ ...experience, steps });
+        if (steps.length > 0 && steps[0].screens && steps[0].screens.length > 0) {
+          handleSelectPreviewScreen(steps[0].screens[0]);
+        } else {
+          setActivePreviewScreen(null);
+        }
       } else {
         setPreviewExperience({ ...experience, steps: [] });
+        setActivePreviewScreen(null);
       }
     } catch (e) {
       console.error('Failed to load experience steps', e);
       setPreviewExperience({ ...experience, steps: [] });
+      setActivePreviewScreen(null);
     }
   };
 
@@ -669,6 +753,66 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       const res = await apiFetch('/api/v1/content/experiences/');
       if (res.ok) { const data = await res.json(); setExperiences(data.results || data); }
     } catch (e) { console.error('Failed to load experiences', e); }
+  };
+
+  const loadSuperAdminExperiences = async () => {
+    try {
+      const url = saExpFilter
+        ? `/api/v1/super-admin/experiences/?status=${saExpFilter}`
+        : '/api/v1/super-admin/experiences/';
+      const res = await apiFetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setSubmittedExperiences(data.results || data);
+      }
+    } catch (e) {
+      console.error('Failed to load submitted experiences', e);
+    }
+  };
+
+  const handleApproveExperience = async (id) => {
+    try {
+      const res = await apiFetch(`/api/v1/super-admin/experiences/${id}/approve/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        showFeedback('Experience approved and package generated successfully.');
+        loadSuperAdminExperiences();
+        loadAllData();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showFeedback(null, err.error || 'Failed to approve experience.');
+      }
+    } catch (e) {
+      console.error('Error approving experience', e);
+      showFeedback(null, 'Network error occurred during approval.');
+    }
+  };
+
+  const handleRejectExperienceSubmit = async () => {
+    if (!rejectingId) return;
+    try {
+      const res = await apiFetch(`/api/v1/super-admin/experiences/${rejectingId}/reject/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ review_remark: rejectRemark })
+      });
+      if (res.ok) {
+        showFeedback('Experience rejected successfully.');
+        setShowRejectModal(false);
+        setRejectingId(null);
+        setRejectRemark('');
+        loadSuperAdminExperiences();
+        loadAllData();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showFeedback(null, err.error || 'Failed to reject experience.');
+      }
+    } catch (e) {
+      console.error('Error rejecting experience', e);
+      showFeedback(null, 'Network error occurred during rejection.');
+    }
   };
 
   const loadExperienceBuilders = async () => {
@@ -781,6 +925,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         loadSchools(), loadPublishContents(), loadDashboardStats(),
         loadGrades(), loadExperiences(), loadExperienceBuilders(),
         loadSchoolAdmins(), loadTeachers(), loadStudents(),
+        loadSuperAdminExperiences(),
       ]);
     } catch (e) {
       console.error('Failed to load data from backend server.', e);
@@ -790,6 +935,11 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   };
 
   useEffect(() => { loadAllData(); }, []);
+  useEffect(() => {
+    if (activeTab === 'experiences') {
+      loadSuperAdminExperiences();
+    }
+  }, [saExpFilter, activeTab]);
   useEffect(() => {
     const handleOutsideClick = () => {
       setActiveDropdown(null);
@@ -818,7 +968,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
   const showFeedback = (success, error) => {
     if (success) { setSuccessMsg(success); }
-    if (error)   { setErrorMsg(formatErrorMsg(error)); }
+    if (error) { setErrorMsg(formatErrorMsg(error)); }
   };
 
   /* ── Form Clean/Init ── */
@@ -845,11 +995,11 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       setExperienceForm(entity ? {
         grade: entity.grade?.id || entity.grade || '', title: entity.title || '',
         description: entity.description || '', objective: entity.objective || '',
-        estimated_duration: entity.estimated_duration || 15, difficulty: entity.difficulty || 'MEDIUM',
+        estimated_duration: entity.estimated_duration || 15, difficulty: entity.difficulty || 'INTERMEDIATE',
         status: entity.status || 'DRAFT', thumbnail: entity.thumbnail || ''
       } : {
         grade: selectedGradeFilter || (grades[0]?.id || ''), title: '', description: '',
-        objective: '', estimated_duration: 15, difficulty: 'MEDIUM', status: 'DRAFT', thumbnail: ''
+        objective: '', estimated_duration: 15, difficulty: 'INTERMEDIATE', status: 'DRAFT', thumbnail: ''
       });
     } else if (tab === 'experience-builders') {
       setExperienceBuilderForm(entity ? {
@@ -1253,31 +1403,21 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
      RENDER
      ══════════════════════════════════════════════════ */
   return (
-    <div className="sd-layout">
-      <style>{`
-        .sd-topbar {
-          background: rgba(229, 236, 244, 0.7) !important;
-          backdrop-filter: blur(12px) !important;
-          -webkit-backdrop-filter: blur(12px) !important;
-          border-bottom: 1px solid rgba(15, 23, 42, 0.05) !important;
-          position: sticky !important;
-          top: 0 !important;
-          z-index: 10 !important;
-        }
-      `}</style>
+    <div className="sd-layout" style={{ backgroundImage: `url(${superAdminBg})`, backgroundSize: 'cover', backgroundPosition: 'center bottom', backgroundRepeat: 'no-repeat' }}>
+
 
       {/* ── Mobile top bar ── */}
       <header className="sd-mobile-header">
-        <button className="sd-hamburger" onClick={() => setIsSidebarOpen(true)} aria-label="Open menu"><FiMenu/></button>
+        <button className="sd-hamburger" onClick={() => setIsSidebarOpen(true)} aria-label="Open menu"><FiMenu /></button>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <img src={logoIcon} alt="Logo" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
           <span className="sd-mobile-brand">LinguaLab</span>
         </div>
-        <div style={{ width: 34 }}/>
+        <div style={{ width: 34 }} />
       </header>
 
       {/* ── Sidebar backdrop (mobile) ── */}
-      <div className={`sd-sidebar-backdrop${isSidebarOpen ? ' open' : ''}`} onClick={() => setIsSidebarOpen(false)}/>
+      <div className={`sd-sidebar-backdrop${isSidebarOpen ? ' open' : ''}`} onClick={() => setIsSidebarOpen(false)} />
 
       {/* ═════════════════
           SIDEBAR
@@ -1293,19 +1433,22 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
         <nav className="sd-nav">
           <button className={`sd-nav-item${activeTab === 'dashboard' ? ' active' : ''}`} onClick={() => goTo('dashboard')}>
-            <FiGrid/><span>Dashboard</span>
+            <FiGrid /><span>Dashboard</span>
           </button>
           <button className={`sd-nav-item${activeTab === 'schools' ? ' active' : ''}`} onClick={() => goTo('schools')}>
-            <FiBookOpen/><span>Manage Schools</span>
+            <FiBookOpen /><span>Manage Schools</span>
+          </button>
+          <button className={`sd-nav-item${activeTab === 'experiences' ? ' active' : ''}`} onClick={() => goTo('experiences')}>
+            <FiFileText /><span>Manage Experiences</span>
           </button>
           <button className={`sd-nav-item${activeTab === 'reports' ? ' active' : ''}`} onClick={() => goTo('reports')}>
-            <FiFileText/><span>Reports</span>
+            <FiFileText /><span>Reports</span>
           </button>
           <button className={`sd-nav-item${activeTab === 'subscriptions' ? ' active' : ''}`} onClick={() => goTo('subscriptions')}>
-            <FiCheckCircle/><span>Subscriptions</span>
+            <FiCheckCircle /><span>Subscriptions</span>
           </button>
           <button className={`sd-nav-item${activeTab === 'profile' ? ' active' : ''}`} onClick={() => goTo('profile')}>
-            <FiUser/><span>Profile Settings</span>
+            <FiUser /><span>Profile Settings</span>
           </button>
         </nav>
 
@@ -1326,7 +1469,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               flexDirection: 'column',
               gap: '4px'
             }} onClick={(e) => e.stopPropagation()}>
-              <button 
+              <button
                 onClick={() => { goTo('profile'); setShowProfileDropdown(false); }}
                 style={{
                   display: 'flex',
@@ -1350,7 +1493,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 <FiUser style={{ fontSize: '1rem', color: '#cbd5e1' }} />
                 <span>View Profile</span>
               </button>
-              <button 
+              <button
                 onClick={() => { setShowProfileDropdown(false); onLogout(); }}
                 style={{
                   display: 'flex',
@@ -1453,21 +1596,22 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             )}
             <h2 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
               {activeTab === 'dashboard' ? 'Dashboard Overview' :
-               activeTab === 'schools' ? (isAddingSchool ? 'Add New School' : 'Manage Schools') :
-               activeTab === 'subscriptions' ? (subPage === 'create-plan' ? 'Create New Plan' : 'Subscriptions & Plans') :
+                activeTab === 'schools' ? (isAddingSchool ? 'Add New School' : 'Manage Schools') :
+                  activeTab === 'experiences' ? 'Manage Experiences' :
+                    activeTab === 'subscriptions' ? (subPage === 'create-plan' ? 'Create New Plan' : 'Subscriptions & Plans') :
 
-               activeTab === 'reports' ? 'Reports & Releases' :
-               activeTab === 'profile' ? 'Profile Settings' : 'Super Admin Portal'}
+                      activeTab === 'reports' ? 'Reports & Releases' :
+                        activeTab === 'profile' ? 'Profile Settings' : 'Super Admin Portal'}
             </h2>
           </div>
           <div className="sd-topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}>
             <div className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.5rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600 }}>
-              <FiCalendar/> {formatDateTime(currentTime)}
+              <FiCalendar /> {formatDateTime(currentTime)}
             </div>
-            
+
             <div style={{ position: 'relative' }}>
               <button className="sd-icon-btn" style={{ position: 'relative' }} onClick={(e) => { e.stopPropagation(); setShowNotifDropdown(!showNotifDropdown); }}>
-                <FiBell/>
+                <FiBell />
                 {notifications.some(n => !n.read) && (
                   <span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' }} />
                 )}
@@ -1490,7 +1634,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               )}
             </div>
 
-            <button className="sd-icon-btn" onClick={() => setShowHelpModal(true)} title="Help & Support"><FiHelpCircle/></button>
+            <button className="sd-icon-btn" onClick={() => setShowHelpModal(true)} title="Help & Support"><FiHelpCircle /></button>
           </div>
         </div>
 
@@ -1500,14 +1644,14 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           {/* Alerts */}
           {successMsg && (
             <div className="sd-alert sd-alert-success" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <FiCheckCircle/> <span>{successMsg}</span>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setSuccessMsg('')}><FiX/></button>
+              <FiCheckCircle /> <span>{successMsg}</span>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setSuccessMsg('')}><FiX /></button>
             </div>
           )}
           {errorMsg && (
             <div className="sd-alert sd-alert-error" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span>{errorMsg}</span>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setErrorMsg('')}><FiX/></button>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setErrorMsg('')}><FiX /></button>
             </div>
           )}
 
@@ -1517,7 +1661,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               {/* Premium Dashboard Header Card with Background Image */}
               <div className="sd-dashboard-header-card" style={{ backgroundImage: `url(${dashboardHeaderBanner})`, position: 'relative' }}>
                 <div className="sd-header-text-section" style={{ maxWidth: '50%' }}>
-                   <h1>{getGreeting()}, {profileForm.full_name || profileForm.username || user?.full_name || user?.username || 'Super Admin'}!</h1>
+                  <h1>{getGreeting()}, {profileForm.full_name || profileForm.username || user?.full_name || user?.username || 'Super Admin'}!</h1>
                   <p>Monitor schools, track student engagement, analyze subscriptions, and make data-driven decisions from one unified dashboard.</p>
                 </div>
               </div>
@@ -1548,7 +1692,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     bg: '#f0fdfa',
                     trendBg: '#ccfbf1',
                     trendColor: '#0f766e',
-                    icon: <FiUsers/>,
+                    icon: <FiUsers />,
                     trend: '↑ 0% this month',
                     chart: <MiniBarChart color="#0d9488" values={[0, 0, 0, 0, 0, 0]} />
                   },
@@ -1559,7 +1703,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     bg: '#f5f3ff',
                     trendBg: '#ede9fe',
                     trendColor: '#6d28d9',
-                    icon: <FiUser/>,
+                    icon: <FiUser />,
                     trend: '↑ 0% this month',
                     chart: <MiniLineChart color="#8b5cf6" fillGradId="subGrad" points={[0, 0, 0, 0, 0]} />
                   },
@@ -1617,17 +1761,17 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     </div>
                     <div className="sd-completion-grid">
                       <div className="sd-donut-wrap">
-                        <MultiDonutChart total={124} activeCount={78} expiringCount={28} expiredCount={18}/>
+                        <MultiDonutChart total={124} activeCount={78} expiringCount={28} expiredCount={18} />
                       </div>
                       <div className="sd-legend">
                         {[
-                          { label: 'Active',        color: '#006aa6', pct: '78 (62.9%)' },
+                          { label: 'Active', color: '#006aa6', pct: '78 (62.9%)' },
                           { label: 'Expiring Soon', color: '#0ea5e9', pct: '28 (22.6%)' },
-                          { label: 'Expired',       color: '#38bdf8', pct: '18 (14.5%)' },
+                          { label: 'Expired', color: '#38bdf8', pct: '18 (14.5%)' },
                         ].map(l => (
                           <div className="sd-legend-row" key={l.label}>
                             <div className="sd-legend-dot-label">
-                              <div className="sd-legend-dot" style={{ background: l.color }}/>
+                              <div className="sd-legend-dot" style={{ background: l.color }} />
                               {l.label}
                             </div>
                             <span className="sd-legend-pct">{l.pct}</span>
@@ -1636,7 +1780,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* View All Subscriptions Link */}
                   <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'center' }}>
                     <button className="sd-view-all" onClick={() => goTo('subscriptions')} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#2563eb', fontWeight: 600, fontSize: '0.82rem', background: 'none', border: 'none', cursor: 'pointer' }}>
@@ -1674,17 +1818,17 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                   school_name: name,
                                   school_code: code
                                 }));
-                              }}/>
+                              }} />
                           </div>
                           <div className="sd-form-group">
                             <label className="sd-form-label">School Code</label>
                             <input className="sd-form-input" type="text" placeholder="Automatically generated" readOnly
-                              value={newSchoolForm.school_code || ''} style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }}/>
+                              value={newSchoolForm.school_code || ''} style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }} />
                           </div>
                           <div className="sd-form-group" style={{ gridColumn: 'span 2' }}>
                             <label className="sd-form-label">Address <span style={{ color: '#ef4444' }}>*</span></label>
                             <textarea className="sd-form-input" style={{ minHeight: '80px', resize: 'vertical' }} placeholder="Enter full address" required
-                              value={newSchoolForm.address} onChange={e => setNewSchoolForm({ ...newSchoolForm, address: e.target.value })}/>
+                              value={newSchoolForm.address} onChange={e => setNewSchoolForm({ ...newSchoolForm, address: e.target.value })} />
                           </div>
                           <div className="sd-form-group">
                             <label className="sd-form-label">State <span style={{ color: '#ef4444' }}>*</span></label>
@@ -1728,12 +1872,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                           <div className="sd-form-group">
                             <label className="sd-form-label">Pincode <span style={{ color: '#ef4444' }}>*</span></label>
                             <input className="sd-form-input" type="text" placeholder="Enter pincode" required
-                              value={newSchoolForm.pincode} onChange={e => setNewSchoolForm({ ...newSchoolForm, pincode: e.target.value })}/>
+                              value={newSchoolForm.pincode} onChange={e => setNewSchoolForm({ ...newSchoolForm, pincode: e.target.value })} />
                           </div>
                           <div className="sd-form-group">
                             <label className="sd-form-label">Phone Number <span style={{ color: '#ef4444' }}>*</span></label>
                             <input className="sd-form-input" type="text" placeholder="Enter phone number" required
-                              value={newSchoolForm.phone || ''} onChange={e => setNewSchoolForm({ ...newSchoolForm, phone: e.target.value })}/>
+                              value={newSchoolForm.phone || ''} onChange={e => setNewSchoolForm({ ...newSchoolForm, phone: e.target.value })} />
                           </div>
                         </div>
                       </div>
@@ -1752,11 +1896,11 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                           <div className="sd-form-group">
                             <label className="sd-form-label">Email Address <span style={{ color: '#ef4444' }}>*</span></label>
                             <input className="sd-form-input" type="email" placeholder="Enter email address" required
-                              value={newSchoolForm.email} onChange={e => setNewSchoolForm({ ...newSchoolForm, email: e.target.value })}/>
+                              value={newSchoolForm.email} onChange={e => setNewSchoolForm({ ...newSchoolForm, email: e.target.value })} />
                           </div>
                         </div>
                         <div style={{ marginTop: '1.25rem', fontSize: '0.82rem', color: '#475569', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.45rem', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                          <FiCheckCircle style={{ color: '#16a34a', flexShrink: 0, fontSize: '1rem' }}/>
+                          <FiCheckCircle style={{ color: '#16a34a', flexShrink: 0, fontSize: '1rem' }} />
                           <span>Account credentials will be automatically generated and sent to {newSchoolForm.email ? <strong style={{ color: '#4f46e5' }}>{newSchoolForm.email}</strong> : 'the School Admin email'}.</span>
                         </div>
                       </div>
@@ -1777,7 +1921,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                   <div className="sd-card" style={{ padding: '1.25rem 1.5rem' }}>
                     <div className="sd-table-toolbar">
                       <div className="sd-table-search">
-                        <FiSearch/>
+                        <FiSearch />
                         <input
                           type="text"
                           placeholder="Search schools..."
@@ -1788,10 +1932,10 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       <div className="sd-table-actions">
                         {selectedSchoolIds.length > 0 && (
                           <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteSchools}>
-                            <FiTrash2/> Delete Selected ({selectedSchoolIds.length})
+                            <FiTrash2 /> Delete Selected ({selectedSchoolIds.length})
                           </button>
                         )}
-                        <button className="sd-btn-primary" onClick={() => setIsAddingSchool(true)}><FiPlus/>Add School</button>
+                        <button className="sd-btn-primary" onClick={() => setIsAddingSchool(true)}><FiPlus />Add School</button>
                       </div>
                     </div>
 
@@ -1997,7 +2141,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         </tbody>
                       </table>
                     </div>
-                    <Pagination total={filterList(schools).length} perPage={PER_PAGE} page={schoolsPage} onPage={setSchoolsPage}/>
+                    <Pagination total={filterList(schools).length} perPage={PER_PAGE} page={schoolsPage} onPage={setSchoolsPage} />
                   </div>
                 </>
               )}
@@ -2068,10 +2212,10 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                   {/* 4 Stat Cards */}
                   <div className="sd-stat-row sd-stat-row--4col">
                     {[
-                      { label: 'TOTAL ACTIVE',    value: '124',          color: '#3b82f6', bg: '#e0f2fe', icon: <FiUser/>,     trend: '↑ 6 this month', trendColor: '#22c55e' },
-                      { label: 'EXPIRING SOON',   value: '9',            color: '#f97316', bg: '#ffedd5', icon: <FiBell/>,     trend: 'Within 30 days', trendColor: '#64748b' },
-                      { label: 'EXPIRED',         value: '5',            color: '#ef4444', bg: '#fee2e2', icon: <FiXCircle/>,  trend: 'Needs attention', trendColor: '#ef4444' },
-                      { label: 'TOTAL REVENUE',   value: '₹12,45,000',   color: '#a855f7', bg: '#f3e8ff', icon: <FiAward/>,    trend: '↑ 15% this month', trendColor: '#22c55e' },
+                      { label: 'TOTAL ACTIVE', value: '124', color: '#3b82f6', bg: '#e0f2fe', icon: <FiUser />, trend: '↑ 6 this month', trendColor: '#22c55e' },
+                      { label: 'EXPIRING SOON', value: '9', color: '#f97316', bg: '#ffedd5', icon: <FiBell />, trend: 'Within 30 days', trendColor: '#64748b' },
+                      { label: 'EXPIRED', value: '5', color: '#ef4444', bg: '#fee2e2', icon: <FiXCircle />, trend: 'Needs attention', trendColor: '#ef4444' },
+                      { label: 'TOTAL REVENUE', value: '₹12,45,000', color: '#a855f7', bg: '#f3e8ff', icon: <FiAward />, trend: '↑ 15% this month', trendColor: '#22c55e' },
                     ].map((s, i) => (
                       <div className="sd-sub-stat-card" key={i}>
                         <div className="sd-sub-stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
@@ -2094,19 +2238,19 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       </div>
                       <div className="sd-completion-grid" style={{ margin: '1rem 0' }}>
                         <div className="sd-donut-wrap">
-                          <DistributionDonutChart/>
+                          <DistributionDonutChart />
                         </div>
                         <div className="sd-legend">
                           {[
-                            { label: 'Basic Plan',          color: '#004e75', pct: '45 (36.3%)' },
-                            { label: 'Standard Plan',       color: '#006aa6', pct: '38 (30.6%)' },
-                            { label: 'Premium Plan',        color: '#0ea5e9', pct: '28 (22.6%)' },
-                            { label: 'Enterprise Plan',     color: '#38bdf8', pct: '10 (8.1%)' },
+                            { label: 'Basic Plan', color: '#004e75', pct: '45 (36.3%)' },
+                            { label: 'Standard Plan', color: '#006aa6', pct: '38 (30.6%)' },
+                            { label: 'Premium Plan', color: '#0ea5e9', pct: '28 (22.6%)' },
+                            { label: 'Enterprise Plan', color: '#38bdf8', pct: '10 (8.1%)' },
                             { label: 'Expired / Cancelled', color: '#bae6fd', pct: '3 (2.4%)' },
                           ].map(l => (
                             <div className="sd-legend-row" key={l.label}>
                               <div className="sd-legend-dot-label">
-                                <div className="sd-legend-dot" style={{ background: l.color }}/>
+                                <div className="sd-legend-dot" style={{ background: l.color }} />
                                 {l.label}
                               </div>
                               <span className="sd-legend-pct">{l.pct}</span>
@@ -2116,7 +2260,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       </div>
                       <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '1rem', display: 'flex' }}>
                         <button style={{ border: 'none', background: 'none', color: '#4f46e5', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' }} onClick={() => setSubPage('plan-details')}>
-                          <FiSettings/> Manage All Subscriptions
+                          <FiSettings /> Manage All Subscriptions
                         </button>
                       </div>
                     </div>
@@ -2132,20 +2276,20 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       </div>
                       <div className="sd-activity-list">
                         {[
-                          { id: 1, name: 'Python',     time: '2 min ago',    color: '#22c55e' },
-                          { id: 2, name: 'SQL',        time: '15 min ago',   color: '#22c55e' },
-                          { id: 3, name: 'C++',        time: '1 hour ago',   color: '#22c55e' },
-                          { id: 4, name: 'JavaScript', time: '3 hours ago',  color: '#22c55e' },
+                          { id: 1, name: 'Python', time: '2 min ago', color: '#22c55e' },
+                          { id: 2, name: 'SQL', time: '15 min ago', color: '#22c55e' },
+                          { id: 3, name: 'C++', time: '1 hour ago', color: '#22c55e' },
+                          { id: 4, name: 'JavaScript', time: '3 hours ago', color: '#22c55e' },
                         ].map(act => (
                           <div className="sd-activity-item" key={act.id}>
                             <div className="sd-activity-avatar" style={{ background: '#e0f2fe', color: '#0284c7' }}>
-                              <FiCheckCircle/>
+                              <FiCheckCircle />
                             </div>
                             <div className="sd-activity-body">
                               <div className="sd-activity-name">{act.name}</div>
                               <div className="sd-activity-desc">{act.time}</div>
                             </div>
-                            <div style={{ color: '#22c55e', fontSize: '1.1rem' }}><FiCheckCircle/></div>
+                            <div style={{ color: '#22c55e', fontSize: '1.1rem' }}><FiCheckCircle /></div>
                           </div>
                         ))}
                       </div>
@@ -2204,7 +2348,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                               <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>{bar.value}</span>
                             </div>
                             <div style={{ width: '100%', height: 8, background: '#f3f4f6', borderRadius: 4, overflow: 'hidden' }}>
-                              <div style={{ width: `${bar.pct}%`, height: '100%', background: bar.color, borderRadius: 4 }}/>
+                              <div style={{ width: `${bar.pct}%`, height: '100%', background: bar.color, borderRadius: 4 }} />
                             </div>
                           </div>
                         ))}
@@ -2217,7 +2361,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       <div className="sd-card">
                         <div className="sd-card-header"><div className="sd-card-title">Next Renewal</div></div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '0.5rem 0 1rem 0' }}>
-                          <div style={{ background: '#e0f2fe', color: '#0369a1', padding: '0.5rem', borderRadius: '8px', display: 'flex' }}><FiCalendar/></div>
+                          <div style={{ background: '#e0f2fe', color: '#0369a1', padding: '0.5rem', borderRadius: '8px', display: 'flex' }}><FiCalendar /></div>
                           <div>
                             <div style={{ fontSize: '1rem', fontWeight: 700 }}>May 20, 2026</div>
                             <div style={{ fontSize: '0.78rem', color: '#64748b' }}>364 days remaining</div>
@@ -2267,11 +2411,11 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         </thead>
                         <tbody>
                           {[
-                            { name: 'Basic Plan',      dur: '1 Year', schools: '45', price: '8,000',  feat: '6',    active: true },
-                            { name: 'Standard Plan',   dur: '1 Year', schools: '38', price: '15,000', feat: '10',   active: true },
-                            { name: 'Premium Plan',    dur: '1 Year', schools: '28', price: '25,000', feat: '15',   active: true },
-                            { name: 'Enterprise Plan', dur: '1 Year', schools: '10', price: '50,000', feat: 'All',  active: true },
-                            { name: 'Custom Plan',     dur: 'Custom', schools: '3',  price: '-',      feat: 'Custom', active: true }
+                            { name: 'Basic Plan', dur: '1 Year', schools: '45', price: '8,000', feat: '6', active: true },
+                            { name: 'Standard Plan', dur: '1 Year', schools: '38', price: '15,000', feat: '10', active: true },
+                            { name: 'Premium Plan', dur: '1 Year', schools: '28', price: '25,000', feat: '15', active: true },
+                            { name: 'Enterprise Plan', dur: '1 Year', schools: '10', price: '50,000', feat: 'All', active: true },
+                            { name: 'Custom Plan', dur: 'Custom', schools: '3', price: '-', feat: 'Custom', active: true }
                           ].map((p, idx) => (
                             <tr key={idx}>
                               <td style={{ fontWeight: 600 }}>{p.name}</td>
@@ -2279,12 +2423,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                               <td>{p.schools}</td>
                               <td>{p.price}</td>
                               <td>{p.feat}</td>
-                               <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
+                              <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
                                 <span className={`sd-badge ${p.active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>Active</span>
                               </td>
                               <td>
                                 <div className="sd-action-cell">
-                                  <button className="sd-icon-action edit" title="Edit"><FiEdit2/></button>
+                                  <button className="sd-icon-action edit" title="Edit"><FiEdit2 /></button>
                                 </div>
                               </td>
                             </tr>
@@ -2313,12 +2457,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         </thead>
                         <tbody>
                           {[
-                            { name: 'Access to Content Library', b: true,  s: true,  p: true,  e: true },
-                            { name: 'Activity Reports',          b: true,  s: true,  p: true,  e: true },
-                            { name: 'Advanced Analytics',        b: false, s: false, p: true,  e: true },
-                            { name: 'Custom Assessments',        b: false, s: true,  p: true,  e: true },
-                            { name: 'Priority Support',          b: false, s: false, p: true,  e: true },
-                            { name: 'API Access',                b: false, s: false, p: false, e: true }
+                            { name: 'Access to Content Library', b: true, s: true, p: true, e: true },
+                            { name: 'Activity Reports', b: true, s: true, p: true, e: true },
+                            { name: 'Advanced Analytics', b: false, s: false, p: true, e: true },
+                            { name: 'Custom Assessments', b: false, s: true, p: true, e: true },
+                            { name: 'Priority Support', b: false, s: false, p: true, e: true },
+                            { name: 'API Access', b: false, s: false, p: false, e: true }
                           ].map((f, idx) => (
                             <tr key={idx}>
                               <td style={{ fontWeight: 500 }}>{f.name}</td>
@@ -2353,7 +2497,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                         <div className="sd-form-group">
                           <label className="sd-form-label">Plan Name <span style={{ color: '#ef4444' }}>*</span></label>
-                          <input className="sd-form-input" type="text" placeholder="Enter plan name" required/>
+                          <input className="sd-form-input" type="text" placeholder="Enter plan name" required />
                         </div>
                         <div className="sd-form-group">
                           <label className="sd-form-label">Duration <span style={{ color: '#ef4444' }}>*</span></label>
@@ -2369,16 +2513,16 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                         <div className="sd-form-group">
                           <label className="sd-form-label">Description</label>
-                          <textarea className="sd-form-input" style={{ minHeight: '85px', resize: 'vertical' }} placeholder="Enter plan description"/>
+                          <textarea className="sd-form-input" style={{ minHeight: '85px', resize: 'vertical' }} placeholder="Enter plan description" />
                         </div>
                         <div className="sd-form-group">
                           <label className="sd-form-label">Status</label>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '4px' }}>
                             {/* Toggle Switch */}
                             <label style={{ position: 'relative', display: 'inline-block', width: 44, height: 24 }}>
-                              <input type="checkbox" defaultChecked style={{ opacity: 0, width: 0, height: 0 }}/>
+                              <input type="checkbox" defaultChecked style={{ opacity: 0, width: 0, height: 0 }} />
                               <span style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#6366f1', borderRadius: 24, transition: '0.3s' }}>
-                                <span style={{ position: 'absolute', content: '""', height: 18, width: 18, left: 22, bottom: 3, backgroundColor: '#fff', borderRadius: '50%', transition: '0.3s' }}/>
+                                <span style={{ position: 'absolute', content: '""', height: 18, width: 18, left: 22, bottom: 3, backgroundColor: '#fff', borderRadius: '50%', transition: '0.3s' }} />
                               </span>
                             </label>
                             <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#374151' }}>Active</span>
@@ -2400,12 +2544,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' }}>Overall assessment scores, average scores, student evaluations, and workload reports.</p>
               </div>
 
-              <div className="sd-card" style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                padding: '5rem 2rem', 
+              <div className="sd-card" style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '5rem 2rem',
                 textAlign: 'center',
                 background: '#ffffff',
                 borderRadius: '16px',
@@ -2421,185 +2565,328 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             </>
           )}
 
+          {/* ══════════ MANAGE EXPERIENCES TAB ══════════ */}
+          {activeTab === 'experiences' && (
+            <>
+              <div className="sd-page-header">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '1rem' }}>
+                  <div>
+                    <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' }}>
+                      Review and approve experience publishing requests for LMS synchronization.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="sd-card" style={{ padding: '1.25rem 1.5rem' }}>
+                <div className="sd-table-toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+                  <div className="sd-table-search">
+                    <FiSearch />
+                    <input
+                      type="text"
+                      placeholder="Search experiences..."
+                      value={searchQuery}
+                      onChange={e => { setSearchQuery(e.target.value); setSaExpPage(1); }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>Status Filter:</span>
+                    <select
+                      className="sd-form-input"
+                      style={{ width: '180px', height: '38px', padding: '0 0.75rem', fontSize: '0.82rem', borderRadius: '8px' }}
+                      value={saExpFilter}
+                      onChange={e => { setSaExpFilter(e.target.value); setSaExpPage(1); }}
+                    >
+                      <option value="">All Statuses</option>
+                      <option value="PENDING_APPROVAL">Pending Approval</option>
+                      <option value="APPROVED">Approved</option>
+                      <option value="REJECTED">Rejected</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="sd-table-wrap">
+                  <table className="sd-table">
+                    <thead>
+                      <tr>
+                        <th>Title</th>
+                        <th>Grade</th>
+                        <th>Created By</th>
+                        <th>Status</th>
+                        <th>Pending/Active Version</th>
+                        <th>Date Submitted</th>
+                        <th style={{ textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {submittedExperiences.length === 0 ? (
+                        <tr>
+                          <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
+                            <FiFileText style={{ fontSize: '2.5rem', color: '#cbd5e1', marginBottom: '1rem' }} />
+                            <div style={{ fontWeight: 600 }}>No experiences found</div>
+                            <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Try changing the filter criteria.</div>
+                          </td>
+                        </tr>
+                      ) : (
+                        paginate(filterList(submittedExperiences), saExpPage).map((exp, idx) => (
+                          <tr key={exp.id || idx}>
+                            <td>
+                              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>{exp.title}</span>
+                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{exp.subject} • {exp.estimated_duration} mins</span>
+                              </div>
+                            </td>
+                            <td>{exp.grade_name || `Grade ${exp.grade}`}</td>
+                            <td>{exp.created_by_name || exp.created_by?.username || 'Content Creator'}</td>
+                            <td>
+                              <span className={`sd-badge ${exp.status === 'APPROVED' ? 'sd-badge-published' :
+                                exp.status === 'PENDING_APPROVAL' ? 'sd-badge-review' : 'sd-badge-draft'
+                                }`}>
+                                {exp.status === 'PENDING_APPROVAL' ? 'PENDING' : exp.status}
+                              </span>
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontWeight: 600 }}>{exp.pending_version || exp.version_number || '1.0'}</span>
+                                {exp.pending_release_notes && (
+                                  <span style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={exp.pending_release_notes}>
+                                    Notes: {exp.pending_release_notes}
+                                  </span>
+                                )}
+                                {exp.review_remark && exp.status === 'REJECTED' && (
+                                  <span style={{ fontSize: '0.72rem', color: '#ef4444', fontStyle: 'italic', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={exp.review_remark}>
+                                    Reason: {exp.review_remark}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td>{new Date(exp.updated_at).toLocaleDateString()}</td>
+                            <td>
+                              <div className="sd-action-cell" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                                <button
+                                  className="sd-btn-outline"
+                                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                                  onClick={() => handlePreviewExperience(exp)}
+                                >
+                                  👁️ Preview Screen
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {submittedExperiences.length > PER_PAGE && (
+                  <div className="sd-pagination" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.25rem' }}>
+                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                      Showing {(saExpPage - 1) * PER_PAGE + 1} to {Math.min(saExpPage * PER_PAGE, submittedExperiences.length)} of {submittedExperiences.length} experiences
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button
+                        className="sd-btn-outline"
+                        style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                        disabled={saExpPage === 1}
+                        onClick={() => setSaExpPage(prev => Math.max(prev - 1, 1))}
+                      >
+                        Previous
+                      </button>
+                      <button
+                        className="sd-btn-outline"
+                        style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                        disabled={saExpPage * PER_PAGE >= submittedExperiences.length}
+                        onClick={() => setSaExpPage(prev => prev + 1)}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
           {/* ══════════ SYSTEM SETTINGS / PROFILE TAB ══════════ */}
           {activeTab === 'profile' && (
             <>
               <div style={{ padding: '0.5rem', width: '100%', maxWidth: '1100px', margin: '0 auto' }}>
                 <form onSubmit={handleProfileUpdate} style={{ width: '100%' }}>
-                <div style={{ display: 'flex', flexDirection: 'row', gap: '2rem', flexWrap: 'wrap', alignItems: 'stretch' }}>
-                  {/* Left Column: Avatar & Summary Card */}
-                  <div style={{ background: '#ffffff', borderRadius: '16px', padding: '2rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '300px', flexShrink: 0, position: 'relative' }}>
-                    {avatarUploading && (
-                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(4px)', borderRadius: '16px', zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <FiRefreshCw className="spin-anim" style={{ color: '#0b75b3', fontSize: '1.5rem' }} />
-                      </div>
-                    )}
-                    <div 
-                      style={{ position: 'relative', margin: '0.5rem 0', cursor: 'pointer' }}
-                      onClick={() => document.getElementById('profile-avatar-input').click()}
-                    >
-                      <div style={{ width: '96px', height: '96px', borderRadius: '50%', border: '4px solid #eff6ff', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(11, 117, 179, 0.2)', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {user?.profile_picture ? (
-                          <img src={user.profile_picture} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        ) : (
-                          <div style={{ width: '100%', height: '100%', background: '#0b75b3', color: '#fff', fontWeight: 800, fontSize: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {(user?.username || 'U').slice(0, 2).toUpperCase()}
-                          </div>
-                        )}
-                      </div>
-                      <div 
-                        style={{ position: 'absolute', bottom: 0, right: 0, background: '#0b75b3', color: '#fff', padding: '0.45rem', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: '2px solid #fff', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="Upload Photo"
+                  <div style={{ display: 'flex', flexDirection: 'row', gap: '2rem', flexWrap: 'wrap', alignItems: 'stretch' }}>
+                    {/* Left Column: Avatar & Summary Card */}
+                    <div style={{ background: '#ffffff', borderRadius: '16px', padding: '2rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '300px', flexShrink: 0, position: 'relative' }}>
+                      {avatarUploading && (
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(4px)', borderRadius: '16px', zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <FiRefreshCw className="spin-anim" style={{ color: '#0b75b3', fontSize: '1.5rem' }} />
+                        </div>
+                      )}
+                      <div
+                        style={{ position: 'relative', margin: '0.5rem 0', cursor: 'pointer' }}
+                        onClick={() => document.getElementById('profile-avatar-input').click()}
                       >
-                        <FiUpload />
+                        <div style={{ width: '96px', height: '96px', borderRadius: '50%', border: '4px solid #eff6ff', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(11, 117, 179, 0.2)', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {user?.profile_picture ? (
+                            <img src={user.profile_picture} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <div style={{ width: '100%', height: '100%', background: '#0b75b3', color: '#fff', fontWeight: 800, fontSize: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {(user?.username || 'U').slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div
+                          style={{ position: 'absolute', bottom: 0, right: 0, background: '#0b75b3', color: '#fff', padding: '0.45rem', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: '2px solid #fff', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title="Upload Photo"
+                        >
+                          <FiUpload />
+                        </div>
+                      </div>
+
+                      <input
+                        type="file"
+                        id="profile-avatar-input"
+                        style={{ display: 'none' }}
+                        accept="image/*"
+                        onChange={handleAvatarChange}
+                      />
+
+                      {user?.profile_picture && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveAvatar}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#ef4444',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            marginTop: '0.5rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <FiTrash2 /> Remove Photo
+                        </button>
+                      )}
+
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: '1rem 0 0.25rem 0' }}>
+                        {profileForm.full_name || user?.username || 'User'}
+                      </h3>
+
+                      <div style={{ marginTop: '0.35rem', display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#e0f2fe', color: '#0369a1', borderRadius: '9999px', padding: '0.25rem 0.75rem', fontSize: '0.72rem', fontWeight: 700 }}>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#0284c7' }}></span>
+                        <span>{user?.role?.replace('_', ' ') || 'User'}</span>
+                      </div>
+
+                      <div style={{ width: '100%', borderTop: '1px solid #f1f5f9', margin: '1.5rem 0' }}></div>
+
+                      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', padding: '0.75rem 1rem', background: '#f0f9ff', color: '#0369a1', borderRadius: '8px', border: 'none', fontWeight: 700, fontSize: '0.82rem', textAlign: 'left' }}>
+                          <FiUser style={{ fontSize: '1rem' }} />
+                          <span>Account Details</span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPwForm({ current_password: '', new_password: '', confirm_password: '' });
+                            setPwModalError('');
+                            setShowPwModal(true);
+                          }}
+                          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', padding: '0.75rem 1rem', background: 'transparent', color: '#475569', borderRadius: '8px', border: 'none', fontWeight: 500, fontSize: '0.82rem', textAlign: 'left', cursor: 'pointer', transition: 'background 0.15s' }}
+                          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                          <FiLock style={{ fontSize: '1rem', color: '#94a3b8' }} />
+                          <span>Security & Password</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={onLogout}
+                          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', padding: '0.75rem 1rem', background: 'transparent', color: '#ef4444', borderRadius: '8px', border: 'none', fontWeight: 600, fontSize: '0.82rem', textAlign: 'left', cursor: 'pointer', marginTop: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}
+                        >
+                          <FiLogOut style={{ fontSize: '1rem' }} />
+                          <span>Log Out</span>
+                        </button>
                       </div>
                     </div>
 
-                    <input 
-                      type="file" 
-                      id="profile-avatar-input" 
-                      style={{ display: 'none' }} 
-                      accept="image/*" 
-                      onChange={handleAvatarChange}
-                    />
-                    
-                    {user?.profile_picture && (
-                      <button 
-                        type="button"
-                        onClick={handleRemoveAvatar}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#ef4444',
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          marginTop: '0.5rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <FiTrash2 /> Remove Photo
-                      </button>
-                    )}
-                    
-                    <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: '1rem 0 0.25rem 0' }}>
-                      {profileForm.full_name || user?.username || 'User'}
-                    </h3>
-                    
-                    <div style={{ marginTop: '0.35rem', display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#e0f2fe', color: '#0369a1', borderRadius: '9999px', padding: '0.25rem 0.75rem', fontSize: '0.72rem', fontWeight: 700 }}>
-                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#0284c7' }}></span>
-                      <span>{user?.role?.replace('_', ' ') || 'User'}</span>
-                    </div>
-
-                    <div style={{ width: '100%', borderTop: '1px solid #f1f5f9', margin: '1.5rem 0' }}></div>
-
-                    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', padding: '0.75rem 1rem', background: '#f0f9ff', color: '#0369a1', borderRadius: '8px', border: 'none', fontWeight: 700, fontSize: '0.82rem', textAlign: 'left' }}>
-                        <FiUser style={{ fontSize: '1rem' }} />
-                        <span>Account Details</span>
+                    {/* Right Column: Edit Form Details Card */}
+                    <div style={{ background: '#ffffff', borderRadius: '16px', padding: '2rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: 1, minWidth: '320px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem' }}>
+                        <FiUser style={{ color: '#0b75b3', fontSize: '1.25rem' }} />
+                        <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>Personal Information</span>
                       </div>
-                      
-                      <button 
-                        type="button" 
-                        onClick={() => {
-                          setPwForm({ current_password: '', new_password: '', confirm_password: '' });
-                          setPwModalError('');
-                          setShowPwModal(true);
-                        }} 
-                        style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', padding: '0.75rem 1rem', background: 'transparent', color: '#475569', borderRadius: '8px', border: 'none', fontWeight: 500, fontSize: '0.82rem', textAlign: 'left', cursor: 'pointer', transition: 'background 0.15s' }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                      >
-                        <FiLock style={{ fontSize: '1rem', color: '#94a3b8' }} />
-                        <span>Security & Password</span>
-                      </button>
-                      
-                      <button 
-                        type="button" 
-                        onClick={onLogout} 
-                        style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', padding: '0.75rem 1rem', background: 'transparent', color: '#ef4444', borderRadius: '8px', border: 'none', fontWeight: 600, fontSize: '0.82rem', textAlign: 'left', cursor: 'pointer', marginTop: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}
-                      >
-                        <FiLogOut style={{ fontSize: '1rem' }} />
-                        <span>Log Out</span>
-                      </button>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
+                        <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Full Name</label>
+                          <input className="sd-form-input" type="text"
+                            value={profileForm.full_name}
+                            onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
+                            placeholder="Your full name" required
+                            style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
+                            onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
+                            onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
+                          />
+                        </div>
+                        <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Email Address</label>
+                          <input className="sd-form-input" type="email"
+                            value={profileForm.email}
+                            onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
+                            placeholder="your@email.com"
+                            style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
+                            onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
+                            onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
+                        <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Username</label>
+                          <input className="sd-form-input" type="text" value={profileForm.username || user?.username} disabled
+                            style={{ width: '100%', height: '42px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} />
+                        </div>
+                        <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Phone Number</label>
+                          <input className="sd-form-input" type="tel"
+                            value={profileForm.phone_no}
+                            onChange={e => setProfileForm({ ...profileForm, phone_no: e.target.value })}
+                            placeholder="+91 98765 43210"
+                            style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
+                            onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
+                            onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
+                          />
+                        </div>
+                      </div>
+
+                      {(profileForm.school_name || user?.school_name) && (
+                        <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>School Tenant</label>
+                          <input className="sd-form-input" type="text" value={profileForm.school_name || user?.school_name} disabled
+                            style={{ width: '100%', height: '42px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} />
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '1.5rem', marginTop: '1.5rem' }}>
+                        <button type="submit" className="sd-btn-primary" disabled={actionLoading} style={{ padding: '0.75rem 2rem', background: '#0b75b3', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', transition: 'background 0.2s', boxShadow: '0 4px 6px -1px rgba(11, 117, 179, 0.2)' }}>
+                          {actionLoading ? 'Saving...' : 'Save Changes'}
+                        </button>
+                      </div>
                     </div>
                   </div>
-
-                  {/* Right Column: Edit Form Details Card */}
-                  <div style={{ background: '#ffffff', borderRadius: '16px', padding: '2rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: 1, minWidth: '320px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem' }}>
-                      <FiUser style={{ color: '#0b75b3', fontSize: '1.25rem' }} />
-                      <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>Personal Information</span>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
-                      <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Full Name</label>
-                        <input className="sd-form-input" type="text"
-                          value={profileForm.full_name}
-                          onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
-                          placeholder="Your full name" required 
-                          style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
-                          onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
-                          onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
-                        />
-                      </div>
-                      <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Email Address</label>
-                        <input className="sd-form-input" type="email"
-                          value={profileForm.email}
-                          onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
-                          placeholder="your@email.com" 
-                          style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
-                          onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
-                          onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
-                        />
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
-                      <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Username</label>
-                        <input className="sd-form-input" type="text" value={profileForm.username || user?.username} disabled
-                          style={{ width: '100%', height: '42px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} />
-                      </div>
-                      <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Phone Number</label>
-                        <input className="sd-form-input" type="tel"
-                          value={profileForm.phone_no}
-                          onChange={e => setProfileForm({ ...profileForm, phone_no: e.target.value })}
-                          placeholder="+91 98765 43210" 
-                          style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
-                          onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
-                          onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
-                        />
-                      </div>
-                    </div>
-
-                    {(profileForm.school_name || user?.school_name) && (
-                      <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>School Tenant</label>
-                        <input className="sd-form-input" type="text" value={profileForm.school_name || user?.school_name} disabled
-                          style={{ width: '100%', height: '42px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} />
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '1.5rem', marginTop: '1.5rem' }}>
-                      <button type="submit" className="sd-btn-primary" disabled={actionLoading} style={{ padding: '0.75rem 2rem', background: '#0b75b3', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', transition: 'background 0.2s', boxShadow: '0 4px 6px -1px rgba(11, 117, 179, 0.2)' }}>
-                        {actionLoading ? 'Saving...' : 'Save Changes'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </form>
-            </div>
+                </form>
+              </div>
             </>
           )}
 
@@ -2611,14 +2898,14 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                   <div>
                     <h1 className="sd-page-title">Manage Grades</h1>
                   </div>
-                  <button className="sd-btn-primary" onClick={handleOpenAdd}><FiPlus/>Add Grade</button>
+                  <button className="sd-btn-primary" onClick={handleOpenAdd}><FiPlus />Add Grade</button>
                 </div>
               </div>
 
               <div className="sd-card" style={{ padding: '1.25rem 1.5rem' }}>
                 <div className="sd-table-toolbar">
                   <div className="sd-table-search">
-                    <FiSearch/>
+                    <FiSearch />
                     <input
                       type="text"
                       placeholder="Search grades..."
@@ -2643,16 +2930,16 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         <tr key={g.id || i}>
                           <td style={{ fontWeight: 700 }}>#{g.sort_order}</td>
                           <td style={{ fontWeight: 600 }}>{g.grade_name}</td>
-                          <td>{g.description || <span style={{ color:'#9ca3af', fontStyle:'italic' }}>No description</span>}</td>
+                          <td>{g.description || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>No description</span>}</td>
                           <td>
                             <button onClick={() => { setSelectedGradeFilter(g.id); onTabChange('experiences'); }} className="sd-btn-outline" style={{ display: 'flex', gap: '4px', alignItems: 'center', fontSize: '0.78rem', padding: '0.35rem 0.75rem' }}>
-                              <FiCornerDownRight/> Experiences
+                              <FiCornerDownRight /> Experiences
                             </button>
                           </td>
                           <td>
                             <div className="sd-action-cell">
-                              <button className="sd-icon-action edit" onClick={() => handleOpenEdit(g)} title="Edit"><FiEdit2/></button>
-                              <button className="sd-icon-action delete" onClick={() => openDeleteModal(g.id, 'grade')} title="Delete"><FiTrash2/></button>
+                              <button className="sd-icon-action edit" onClick={() => handleOpenEdit(g)} title="Edit"><FiEdit2 /></button>
+                              <button className="sd-icon-action delete" onClick={() => openDeleteModal(g.id, 'grade')} title="Delete"><FiTrash2 /></button>
                             </div>
                           </td>
                         </tr>
@@ -2663,95 +2950,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     </tbody>
                   </table>
                 </div>
-                <Pagination total={filterList(grades).length} perPage={PER_PAGE} page={gradesPage} onPage={setGradesPage}/>
+                <Pagination total={filterList(grades).length} perPage={PER_PAGE} page={gradesPage} onPage={setGradesPage} />
               </div>
             </>
           )}
 
-          {/* ══════════ EXPERIENCES TAB ══════════ */}
-          {activeTab === 'experiences' && (
-            <>
-              <div className="sd-page-header">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '1rem' }}>
-                  <div>
-                    <h1 className="sd-page-title">Manage Experiences</h1>
-                  </div>
-                  <button className="sd-btn-primary" onClick={handleOpenAdd}><FiPlus/>Add Experience</button>
-                </div>
-              </div>
 
-              <div className="sd-card" style={{ padding: '1.25rem 1.5rem' }}>
-                <div className="sd-table-toolbar">
-                  <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', flex: 1 }}>
-                    <div className="sd-table-search">
-                      <FiSearch/>
-                      <input
-                        type="text"
-                        placeholder="Search experiences..."
-                        value={searchQuery}
-                        onChange={e => { setSearchQuery(e.target.value); setExperiencesPage(1); }}
-                      />
-                    </div>
-                    <select className="sd-btn-filter" style={{ border: '1.5px solid #e8edf5', background: '#fff', fontSize: '0.8rem', fontWeight: 500 }}
-                      value={selectedGradeFilter} onChange={e => { setSelectedGradeFilter(e.target.value); setExperiencesPage(1); }}>
-                      <option value="">All Grades</option>
-                      {grades.map(g => <option key={g.id} value={g.id}>{g.grade_name}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="sd-table-wrap">
-                  <table className="sd-table">
-                    <thead>
-                      <tr>
-                        <th>Grade</th>
-                        <th>Title</th>
-                        <th>Duration</th>
-                        <th>Difficulty</th>
-                        <th>Status</th>
-                        <th>Components</th>
-                        <th style={{ textAlign: 'right' }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginate(filterList(experiences).filter(ex => !selectedGradeFilter || ex.grade?.id === parseInt(selectedGradeFilter) || ex.grade === parseInt(selectedGradeFilter)), experiencesPage).map((ex, i) => (
-                        <tr key={ex.id || i}>
-                          <td style={{ overflow: 'visible', textOverflow: 'clip' }}><span className="sd-badge sd-badge-active" style={{ background: '#e0f2fe', color: '#0369a1' }}>{ex.grade_name || `Grade ID: ${ex.grade}`}</span></td>
-                          <td style={{ fontWeight: 600 }}>{ex.title}</td>
-                          <td>{ex.estimated_duration} mins</td>
-                          <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
-                            <span className={`sd-badge ${ex.difficulty === 'EASY' ? 'sd-badge-active' : ex.difficulty === 'HARD' ? 'sd-badge-leave' : 'sd-badge-review'}`}>
-                              {ex.difficulty}
-                            </span>
-                          </td>
-                          <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
-                            <span className={`sd-badge ${ex.status === 'PUBLISHED' ? 'sd-badge-published' : ex.status === 'REVIEW' ? 'sd-badge-review' : 'sd-badge-draft'}`}>
-                              {ex.status}
-                            </span>
-                          </td>
-                          <td>
-                            <button onClick={() => { setSelectedExperienceFilter(ex.id); onTabChange('experience-builders'); }} className="btn-link" style={{ background:'none', border:'none', color:'#6366f1', textDecoration:'underline', cursor:'pointer', fontSize:'0.8rem', fontWeight:600 }}>
-                              Experience Builders
-                            </button>
-                          </td>
-                          <td>
-                            <div className="sd-action-cell">
-                              <button className="sd-icon-action edit" onClick={() => handlePreviewExperience(ex)} title="Preview"><FiBookOpen style={{ color:'#3b82f6' }}/></button>
-                              <button className="sd-icon-action edit" onClick={() => handleOpenEdit(ex)} title="Edit"><FiEdit2/></button>
-                              <button className="sd-icon-action delete" onClick={() => openDeleteModal(ex.id, 'experience')} title="Delete"><FiTrash2/></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                      {filterList(experiences).length === 0 && (
-                        <tr><td colSpan="7" className="sd-empty-state">No experiences found.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                <Pagination total={filterList(experiences).filter(ex => !selectedGradeFilter || ex.grade?.id === parseInt(selectedGradeFilter) || ex.grade === parseInt(selectedGradeFilter)).length} perPage={PER_PAGE} page={experiencesPage} onPage={setExperiencesPage}/>
-              </div>
-            </>
-          )}
 
         </div>{/* /sd-content */}
       </main>
@@ -2766,9 +2970,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               <span className="sd-modal-title">
                 {modalType === 'add' ? 'Create' : 'Edit'} {activeTab.slice(0, -1).toUpperCase()}
               </span>
-              <button className="sd-modal-close" onClick={() => setShowModal(false)}><FiX/></button>
+              <button className="sd-modal-close" onClick={() => setShowModal(false)}><FiX /></button>
             </div>
-            {errorMsg && <div className="sd-alert sd-alert-error" style={{ marginBottom:'1rem' }}><FiX/>{errorMsg}</div>}
+            {errorMsg && <div className="sd-alert sd-alert-error" style={{ marginBottom: '1rem' }}><FiX />{errorMsg}</div>}
             <form className="sd-modal-form" onSubmit={handleFormSubmit}>
 
               {/* Schools Form */}
@@ -2779,28 +2983,28 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     const name = e.target.value;
                     const code = generateSchoolCode(name);
                     setSchoolForm({ ...schoolForm, school_name: name, school_code: code });
-                  }}/>
+                  }} />
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">School Code</label>
-                  <input className="sd-form-input" type="text" readOnly value={schoolForm.school_code || ''} style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }}/>
+                  <input className="sd-form-input" type="text" readOnly value={schoolForm.school_code || ''} style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }} />
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Address *</label>
-                  <input className="sd-form-input" type="text" required value={schoolForm.address} onChange={e => setSchoolForm({ ...schoolForm, address: e.target.value })}/>
+                  <input className="sd-form-input" type="text" required value={schoolForm.address} onChange={e => setSchoolForm({ ...schoolForm, address: e.target.value })} />
                 </div>
                 <div className="sd-form-row">
                   <div className="sd-form-group">
                     <label className="sd-form-label">Phone *</label>
-                    <input className="sd-form-input" type="text" required value={schoolForm.phone} onChange={e => setSchoolForm({ ...schoolForm, phone: e.target.value })}/>
+                    <input className="sd-form-input" type="text" required value={schoolForm.phone} onChange={e => setSchoolForm({ ...schoolForm, phone: e.target.value })} />
                   </div>
                   <div className="sd-form-group">
                     <label className="sd-form-label">Email *</label>
-                    <input className="sd-form-input" type="email" required value={schoolForm.email} onChange={e => setSchoolForm({ ...schoolForm, email: e.target.value })}/>
+                    <input className="sd-form-input" type="email" required value={schoolForm.email} onChange={e => setSchoolForm({ ...schoolForm, email: e.target.value })} />
                   </div>
                 </div>
                 <label className="sd-checkbox-label">
-                  <input type="checkbox" checked={schoolForm.is_active} onChange={e => setSchoolForm({ ...schoolForm, is_active: e.target.checked })}/>
+                  <input type="checkbox" checked={schoolForm.is_active} onChange={e => setSchoolForm({ ...schoolForm, is_active: e.target.checked })} />
                   Is Active
                 </label>
               </>)}
@@ -2809,7 +3013,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               {(activeTab === 'publish-contents' || activeTab === 'reports') && (<>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Release Name *</label>
-                  <input className="sd-form-input" type="text" required value={publishForm.release_name} onChange={e => setPublishForm({ ...publishForm, release_name: e.target.value })}/>
+                  <input className="sd-form-input" type="text" required value={publishForm.release_name} onChange={e => setPublishForm({ ...publishForm, release_name: e.target.value })} />
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Grade *</label>
@@ -2821,7 +3025,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 <div className="sd-form-row">
                   <div className="sd-form-group">
                     <label className="sd-form-label">Total Experiences *</label>
-                    <input className="sd-form-input" type="number" required value={publishForm.total_experiences} onChange={e => setPublishForm({ ...publishForm, total_experiences: parseInt(e.target.value) || 0 })}/>
+                    <input className="sd-form-input" type="number" required value={publishForm.total_experiences} onChange={e => setPublishForm({ ...publishForm, total_experiences: parseInt(e.target.value) || 0 })} />
                   </div>
                   <div className="sd-form-group">
                     <label className="sd-form-label">Status *</label>
@@ -2834,7 +3038,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Export File URL</label>
-                  <input className="sd-form-input" type="text" value={publishForm.export_file} onChange={e => setPublishForm({ ...publishForm, export_file: e.target.value })}/>
+                  <input className="sd-form-input" type="text" value={publishForm.export_file} onChange={e => setPublishForm({ ...publishForm, export_file: e.target.value })} />
                 </div>
               </>)}
 
@@ -2842,15 +3046,15 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               {activeTab === 'grades' && (<>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Grade Name *</label>
-                  <input className="sd-form-input" type="text" required value={gradeForm.grade_name} onChange={e => setGradeForm({ ...gradeForm, grade_name: e.target.value })} placeholder="e.g. Grade 1"/>
+                  <input className="sd-form-input" type="text" required value={gradeForm.grade_name} onChange={e => setGradeForm({ ...gradeForm, grade_name: e.target.value })} placeholder="e.g. Grade 1" />
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Description</label>
-                  <textarea className="sd-form-input" value={gradeForm.description} onChange={e => setGradeForm({ ...gradeForm, description: e.target.value })} placeholder="Enter grade details"/>
+                  <textarea className="sd-form-input" value={gradeForm.description} onChange={e => setGradeForm({ ...gradeForm, description: e.target.value })} placeholder="Enter grade details" />
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Sort Order *</label>
-                  <input className="sd-form-input" type="number" required value={gradeForm.sort_order} onChange={e => setGradeForm({ ...gradeForm, sort_order: parseInt(e.target.value) || 0 })}/>
+                  <input className="sd-form-input" type="number" required value={gradeForm.sort_order} onChange={e => setGradeForm({ ...gradeForm, sort_order: parseInt(e.target.value) || 0 })} />
                 </div>
               </>)}
 
@@ -2865,23 +3069,23 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Title *</label>
-                  <input className="sd-form-input" type="text" required value={experienceForm.title} onChange={e => setExperienceForm({ ...experienceForm, title: e.target.value })} placeholder="Beginner Lesson"/>
+                  <input className="sd-form-input" type="text" required value={experienceForm.title} onChange={e => setExperienceForm({ ...experienceForm, title: e.target.value })} placeholder="Beginner Lesson" />
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Description</label>
-                  <textarea className="sd-form-input" value={experienceForm.description} onChange={e => setExperienceForm({ ...experienceForm, description: e.target.value })}/>
+                  <textarea className="sd-form-input" value={experienceForm.description} onChange={e => setExperienceForm({ ...experienceForm, description: e.target.value })} />
                 </div>
                 <div className="sd-form-row">
                   <div className="sd-form-group">
                     <label className="sd-form-label">Duration *</label>
-                    <input className="sd-form-input" type="number" required value={experienceForm.estimated_duration} onChange={e => setExperienceForm({ ...experienceForm, estimated_duration: parseInt(e.target.value) || 15 })}/>
+                    <input className="sd-form-input" type="number" required value={experienceForm.estimated_duration} onChange={e => setExperienceForm({ ...experienceForm, estimated_duration: parseInt(e.target.value) || 15 })} />
                   </div>
                   <div className="sd-form-group">
                     <label className="sd-form-label">Difficulty *</label>
                     <select className="sd-form-input" value={experienceForm.difficulty} onChange={e => setExperienceForm({ ...experienceForm, difficulty: e.target.value })}>
-                      <option value="EASY">Easy</option>
-                      <option value="MEDIUM">Medium</option>
-                      <option value="HARD">Hard</option>
+                      <option value="BEGINNER">Beginner</option>
+                      <option value="INTERMEDIATE">Intermediate</option>
+                      <option value="MASTER">Master</option>
                     </select>
                   </div>
                 </div>
@@ -2899,21 +3103,21 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               {(activeTab === 'school-admins') && (<>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Username *</label>
-                  <input className="sd-form-input" type="text" required disabled={modalType === 'edit'} value={schoolAdminForm.username} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, username: e.target.value })}/>
+                  <input className="sd-form-input" type="text" required disabled={modalType === 'edit'} value={schoolAdminForm.username} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, username: e.target.value })} />
                 </div>
                 {modalType === 'add' && (
                   <div className="sd-form-group">
                     <label className="sd-form-label">Password *</label>
-                    <input className="sd-form-input" type="password" required value={schoolAdminForm.password || ''} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, password: e.target.value })}/>
+                    <input className="sd-form-input" type="password" required value={schoolAdminForm.password || ''} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, password: e.target.value })} />
                   </div>
                 )}
                 <div className="sd-form-group">
                   <label className="sd-form-label">Full Name *</label>
-                  <input className="sd-form-input" type="text" required value={schoolAdminForm.full_name} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, full_name: e.target.value })}/>
+                  <input className="sd-form-input" type="text" required value={schoolAdminForm.full_name} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, full_name: e.target.value })} />
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Email *</label>
-                  <input className="sd-form-input" type="email" required value={schoolAdminForm.email} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, email: e.target.value })}/>
+                  <input className="sd-form-input" type="email" required value={schoolAdminForm.email} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, email: e.target.value })} />
                 </div>
                 <div className="sd-form-group">
                   <label className="sd-form-label">Select Role *</label>
@@ -2931,7 +3135,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                   </select>
                 </div>
                 <label className="sd-checkbox-label">
-                  <input type="checkbox" checked={schoolAdminForm.is_active} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, is_active: e.target.checked })}/>
+                  <input type="checkbox" checked={schoolAdminForm.is_active} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, is_active: e.target.checked })} />
                   Active User Account
                 </label>
               </>)}
@@ -2951,7 +3155,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           <div className="sd-modal" style={{ maxWidth: 420 }}>
             <div className="sd-modal-header">
               <span className="sd-modal-title">Change Password</span>
-              <button className="sd-modal-close" onClick={() => setShowPwModal(false)}><FiX/></button>
+              <button className="sd-modal-close" onClick={() => setShowPwModal(false)}><FiX /></button>
             </div>
 
             <form className="sd-modal-form" onSubmit={async e => {
@@ -3016,7 +3220,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                   gap: '0.6rem',
                   boxSizing: 'border-box'
                 }}>
-                  <FiAlertTriangle style={{ flexShrink: 0, color: '#ef4444', fontSize: '1rem' }} />
                   <span style={{ lineHeight: 1.4 }}>{pwModalError}</span>
                 </div>
               )}
@@ -3025,21 +3228,21 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 <input className="sd-form-input" type="password"
                   value={pwForm.current_password}
                   onChange={e => { setPwForm({ ...pwForm, current_password: e.target.value }); setPwModalError(''); }}
-                  placeholder="Enter current password" required/>
+                  placeholder="Enter current password" required />
               </div>
               <div className="sd-form-group">
                 <label className="sd-form-label">New Password</label>
                 <input className="sd-form-input" type="password"
                   value={pwForm.new_password}
                   onChange={e => { setPwForm({ ...pwForm, new_password: e.target.value }); setPwModalError(''); }}
-                  placeholder="Minimum 6 characters" required minLength={6}/>
+                  placeholder="Minimum 6 characters" required minLength={6} />
               </div>
               <div className="sd-form-group">
                 <label className="sd-form-label">Confirm Password</label>
                 <input className="sd-form-input" type="password"
                   value={pwForm.confirm_password}
                   onChange={e => { setPwForm({ ...pwForm, confirm_password: e.target.value }); setPwModalError(''); }}
-                  placeholder="Confirm new password" required minLength={6}/>
+                  placeholder="Confirm new password" required minLength={6} />
               </div>
               <div className="sd-modal-footer">
                 <button type="button" className="sd-btn-cancel" onClick={() => setShowPwModal(false)}>Cancel</button>
@@ -3054,31 +3257,426 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
       {/* ── Experience Preview Modal ── */}
       {previewExperience && (
-        <div className="sd-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) setPreviewExperience(null); }}>
-          <div className="sd-modal" style={{ maxWidth: 700 }}>
-            <div className="sd-modal-header">
-              <span className="sd-modal-title">Preview Experience: {previewExperience.title}</span>
-              <button className="sd-modal-close" onClick={() => setPreviewExperience(null)}><FiX/></button>
+        <div className="sd-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) { setPreviewExperience(null); setActivePreviewScreen(null); } }} style={{ zIndex: 9999 }}>
+          <div className="sd-modal" style={{ width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', margin: 0, borderRadius: 0, top: 0, left: 0, position: 'fixed', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+            {/* Modal Header */}
+            <div className="sd-modal-header" style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', flexShrink: 0, background: '#f8fafc' }}>
+              <div>
+                <span className="sd-modal-title" style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Interactive Student Player Simulator</span>
+                <span style={{ fontSize: '0.85rem', color: '#64748b', marginLeft: '12px', paddingLeft: '12px', borderLeft: '1px solid #cbd5e1' }}>
+                  <strong>Experience:</strong> {previewExperience.title} • <strong>Grade:</strong> {previewExperience.grade_name || `Grade ${previewExperience.grade}`} • <strong>Difficulty:</strong> {previewExperience.difficulty}
+                </span>
+              </div>
+              <button className="sd-modal-close" onClick={() => { setPreviewExperience(null); setActivePreviewScreen(null); }}><FiX /></button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', fontSize: '0.85rem' }}>
-              <div><strong>Grade:</strong> {previewExperience.grade_name || `Grade ID: ${previewExperience.grade}`}</div>
-              <div><strong>Duration:</strong> {previewExperience.estimated_duration} mins</div>
-              <div><strong>Difficulty:</strong> {previewExperience.difficulty}</div>
-              <div><strong>Status:</strong> {previewExperience.status}</div>
-            </div>
-            <h4 style={{ marginBottom: '0.75rem', fontWeight: 700, fontSize: '0.9rem' }}>Experience Steps</h4>
-            <div className="sd-activity-list">
-              {previewExperience.steps?.map((s, idx) => (
-                <div className="sd-activity-item" key={s.id || idx}>
-                  <div className="sd-activity-body">
-                    <div className="sd-activity-name">Step #{s.display_order}: {s.title} ({s.block_type})</div>
-                    {s.content && <div className="sd-activity-desc">{s.content}</div>}
+
+            {/* Modal Body: Split view */}
+            <div style={{ display: 'flex', flex: 1, overflow: 'hidden', backgroundColor: '#f1f5f9' }}>
+
+              {/* Left Sidebar: Navigator */}
+              <div style={{ width: '280px', borderRight: '1px solid #e2e8f0', backgroundColor: '#ffffff', overflowY: 'auto', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem', flexShrink: 0 }}>
+                <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', tracking: '0.05em', marginBottom: '0.25rem' }}>Experience Navigator</h4>
+
+                {previewExperience.steps?.map((act, actIdx) => (
+                  <div key={act.id || actIdx} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1e293b', padding: '2px 4px', borderBottom: '1px solid #f1f5f9', marginBottom: '4px' }}>
+                      Act {act.display_order || (actIdx + 1)}: {act.title}
+                    </div>
+                    {act.screens?.map((scr, scrIdx) => {
+                      const isActive = activePreviewScreen && activePreviewScreen.id === scr.id;
+                      return (
+                        <button
+                          key={scr.id || scrIdx}
+                          type="button"
+                          onClick={() => handleSelectPreviewScreen(scr)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            width: '100%',
+                            padding: '0.6rem 0.75rem',
+                            borderRadius: '8px',
+                            border: 'none',
+                            background: isActive ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : 'transparent',
+                            color: isActive ? '#ffffff' : '#475569',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            fontSize: '0.78rem',
+                            fontWeight: isActive ? 600 : 500,
+                            transition: 'all 0.2s',
+                          }}
+                        >
+                          <span style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            backgroundColor: isActive ? '#ffffff' : (scr.screen_type === 'QUIZ' ? '#f59e0b' : '#10b981')
+                          }} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                            {scr.display_order}. {scr.title || 'Untitled Screen'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    {(!act.screens || act.screens.length === 0) && (
+                      <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontStyle: 'italic', paddingLeft: '8px' }}>No screens</span>
+                    )}
                   </div>
-                </div>
-              ))}
+                ))}
+
+                {(!previewExperience.steps || previewExperience.steps.length === 0) && (
+                  <div style={{ color: '#64748b', fontSize: '0.8rem', fontStyle: 'italic', padding: '1rem 0' }}>
+                    No activities defined.
+                  </div>
+                )}
+              </div>
+
+              {/* Right Content Pane: Full canvas player simulator */}
+              <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', position: 'relative' }}>
+                {activePreviewScreen ? (
+                  <div style={{
+                    backgroundColor: '#ffffff',
+                    borderRadius: '16px',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
+                    border: '1px solid #e2e8f0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    flex: 1
+                  }}>
+                    {/* Viewport Header */}
+                    <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fafafa', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span className="sd-badge sd-badge-active" style={{ fontSize: '0.7rem', padding: '2px 8px', textTransform: 'uppercase', fontWeight: 700 }}>
+                          {activePreviewScreen.screen_type}
+                        </span>
+                        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                          {activePreviewScreen.title || 'Untitled Screen'}
+                        </h3>
+                      </div>
+
+                      {/* Nav counter */}
+                      {(() => {
+                        const flat = getFlatScreens();
+                        const idx = flat.findIndex(s => s.id === activePreviewScreen.id);
+                        if (idx !== -1) {
+                          return (
+                            <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
+                              Screen {idx + 1} of {flat.length}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+
+                    {/* Viewport Canvas Body */}
+                    <div style={{ flex: 1, padding: '2.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                      <div style={{ maxWidth: '800px', width: '100%', margin: '0 auto' }}>
+                        {activePreviewScreen.screen_type === 'INFORMATION' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                            <div style={{ padding: '1.25rem', background: '#f0f9ff', borderRadius: '12px', borderLeft: '4px solid #0284c7', fontSize: '0.9rem', color: '#075985', lineHeight: 1.6, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                              {activePreviewScreen.content?.intro_text || activePreviewScreen.content?.text || 'Read the conversation dialogue below carefully.'}
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+                              {(activePreviewScreen.elements?.[0]?.content?.steps || activePreviewScreen.content?.steps || [
+                                { step: 1, name: "Instructor", text: "Welcome to this experience! Interact with the options below.", side: 'left' }
+                              ]).map((dlg, idx) => (
+                                <div key={idx} style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: dlg.side === 'right' ? 'flex-end' : 'flex-start',
+                                  width: '100%'
+                                }}>
+                                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', marginBottom: '4px', marginLeft: dlg.side === 'right' ? 0 : '8px', marginRight: dlg.side === 'right' ? '8px' : 0 }}>
+                                    {dlg.name}
+                                  </span>
+                                  <div style={{
+                                    padding: '0.8rem 1.2rem',
+                                    borderRadius: '16px',
+                                    borderTopLeftRadius: dlg.side === 'right' ? '16px' : '4px',
+                                    borderTopRightRadius: dlg.side === 'right' ? '4px' : '16px',
+                                    backgroundColor: dlg.side === 'right' ? '#0284c7' : '#f1f5f9',
+                                    color: dlg.side === 'right' ? '#ffffff' : '#1e293b',
+                                    fontSize: '0.85rem',
+                                    maxWidth: '75%',
+                                    lineHeight: 1.5,
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                  }}>
+                                    {dlg.text}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {activePreviewScreen.screen_type === 'IMAGE' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center' }}>
+                            {getPreviewMediaUrl(activePreviewScreen, 'image') ? (
+                              <img
+                                src={getPreviewMediaUrl(activePreviewScreen, 'image')}
+                                alt="Screen Image"
+                                style={{ width: '100%', maxWidth: '600px', borderRadius: '16px', maxHeight: '350px', objectFit: 'cover', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                              />
+                            ) : (
+                              <div style={{ width: '100%', maxWidth: '600px', height: '220px', backgroundColor: '#f1f5f9', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '3rem', border: '2px dashed #cbd5e1' }}>🖼️</div>
+                            )}
+                            <p style={{ fontSize: '0.95rem', color: '#334155', textAlign: 'center', lineHeight: 1.6, margin: 0, maxWidth: '600px' }}>
+                              {activePreviewScreen.content?.caption || activePreviewScreen.content?.text || 'Image asset preview.'}
+                            </p>
+                          </div>
+                        )}
+
+                        {activePreviewScreen.screen_type === 'VIDEO' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', alignItems: 'center' }}>
+                            <div style={{
+                              width: '100%',
+                              maxWidth: '640px',
+                              height: '360px',
+                              backgroundColor: '#0f172a',
+                              borderRadius: '16px',
+                              overflow: 'hidden',
+                              boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
+                            }}>
+                              <video
+                                src={getPreviewMediaUrl(activePreviewScreen, 'video')}
+                                controls
+                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {activePreviewScreen.screen_type === 'SPEAKING' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center' }}>
+                            <div style={{
+                              width: '100%',
+                              maxWidth: '500px',
+                              padding: '2.5rem',
+                              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                              borderRadius: '24px',
+                              color: '#ffffff',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: '20px',
+                              boxShadow: '0 20px 25px -5px rgba(2, 132, 199, 0.3)',
+                            }}>
+                              <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{activePreviewScreen.content?.title || 'Audio Pronunciation Practice'}</div>
+                                <div style={{ fontSize: '0.8rem', color: '#e0f2fe', marginTop: '4px', marginBottom: '1.5rem' }}>Use the controls below to play the dialogue audio clip</div>
+                              </div>
+
+                              <audio
+                                src={getPreviewMediaUrl(activePreviewScreen, 'audio')}
+                                controls
+                                style={{ width: '100%' }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {activePreviewScreen.screen_type === 'QUIZ' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem', lineHeight: 1.5 }}>
+                              ❓ {activePreviewScreen.elements?.[0]?.content?.question || activePreviewScreen.content?.quiz_question || 'Choose the correct answer.'}
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                              {(activePreviewScreen.elements?.[0]?.content?.options || activePreviewScreen.content?.quiz_options || ["Option A", "Option B", "Option C", "Option D"]).map((opt, oIdx) => {
+                                const isCorrectAnswer = oIdx === (activePreviewScreen.elements?.[0]?.content?.correctAnswerIndex ?? activePreviewScreen.content?.quiz_correct_index ?? 0);
+                                const isSelected = selectedQuizOption === oIdx;
+                                const optText = typeof opt === 'object' ? opt.text : opt;
+
+                                let cardBorder = '1px solid #cbd5e1';
+                                let cardBg = '#ffffff';
+                                let cardColor = '#334155';
+
+                                if (quizChecked) {
+                                  if (isCorrectAnswer) {
+                                    cardBorder = '2px solid #10b981';
+                                    cardBg = '#ecfdf5';
+                                    cardColor = '#065f46';
+                                  } else if (isSelected) {
+                                    cardBorder = '2px solid #ef4444';
+                                    cardBg = '#fef2f2';
+                                    cardColor = '#991b1b';
+                                  }
+                                } else if (isSelected) {
+                                  cardBorder = '2px solid #0284c7';
+                                  cardBg = '#f0f9ff';
+                                  cardColor = '#0369a1';
+                                }
+
+                                return (
+                                  <button
+                                    key={oIdx}
+                                    type="button"
+                                    disabled={quizChecked}
+                                    onClick={() => setSelectedQuizOption(oIdx)}
+                                    style={{
+                                      padding: '1rem 1.25rem',
+                                      borderRadius: '12px',
+                                      border: cardBorder,
+                                      backgroundColor: cardBg,
+                                      color: cardColor,
+                                      fontSize: '0.9rem',
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      alignItems: 'center',
+                                      fontWeight: isSelected || (quizChecked && isCorrectAnswer) ? 600 : 500,
+                                      cursor: quizChecked ? 'default' : 'pointer',
+                                      textAlign: 'left',
+                                      transition: 'all 0.15s',
+                                      width: '100%',
+                                    }}
+                                  >
+                                    <span>{optText}</span>
+                                    {quizChecked && isCorrectAnswer && <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓ Correct Option</span>}
+                                    {quizChecked && isSelected && !isCorrectAnswer && <span style={{ color: '#ef4444', fontWeight: 'bold' }}>✗ Incorrect</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Quiz Actions */}
+                            <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem' }}>
+                              {!quizChecked ? (
+                                <button
+                                  type="button"
+                                  className="sd-btn-primary"
+                                  disabled={selectedQuizOption === null}
+                                  onClick={() => setQuizChecked(true)}
+                                  style={{ padding: '0.65rem 1.5rem', fontSize: '0.85rem' }}
+                                >
+                                  Check Answer
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="sd-btn-outline"
+                                  onClick={() => {
+                                    setSelectedQuizOption(null);
+                                    setQuizChecked(false);
+                                  }}
+                                  style={{ padding: '0.65rem 1.5rem', fontSize: '0.85rem' }}
+                                >
+                                  Retry Quiz Attempt
+                                </button>
+                              )}
+
+                              {quizChecked && (
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  fontSize: '0.9rem',
+                                  fontWeight: 600,
+                                  color: selectedQuizOption === (activePreviewScreen.elements?.[0]?.content?.correctAnswerIndex ?? activePreviewScreen.content?.quiz_correct_index ?? 0) ? '#10b981' : '#ef4444'
+                                }}>
+                                  {selectedQuizOption === (activePreviewScreen.elements?.[0]?.content?.correctAnswerIndex ?? activePreviewScreen.content?.quiz_correct_index ?? 0)
+                                    ? "🎉 Excellent job! That is correct."
+                                    : "❌ Oops, that is not correct. Try again!"}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {activePreviewScreen.screen_type === 'WRITING' && (
+                          <div style={{
+                            padding: '2.5rem',
+                            backgroundColor: '#fefcf6',
+                            border: '1px solid #fef08a',
+                            borderRadius: '16px',
+                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.02)',
+                            fontSize: '1rem',
+                            color: '#451a03',
+                            lineHeight: 1.8,
+                            fontFamily: activePreviewScreen.content?.font === 'Courier' ? 'Courier New, monospace' : 'Georgia, serif',
+                            position: 'relative'
+                          }}>
+                            {/* Mock line guide */}
+                            <div style={{ position: 'absolute', left: '10px', top: 0, bottom: 0, width: '1px', backgroundColor: '#fef08a' }} />
+                            {activePreviewScreen.content?.text || 'Custom styled writing text screen layout.'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Navigation Footer Inside Canvas */}
+                    <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, backgroundColor: '#fafafa' }}>
+                      {(() => {
+                        const flat = getFlatScreens();
+                        const idx = flat.findIndex(s => s.id === activePreviewScreen.id);
+                        return (
+                          <>
+                            <button
+                              type="button"
+                              className="sd-btn-outline"
+                              disabled={idx <= 0}
+                              onClick={handlePrevScreen}
+                              style={{ padding: '0.45rem 1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            >
+                              ← Previous Screen
+                            </button>
+
+                            <button
+                              type="button"
+                              className="sd-btn-outline"
+                              disabled={idx === -1 || idx === flat.length - 1}
+                              onClick={handleNextScreen}
+                              style={{ padding: '0.45rem 1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            >
+                              Next Screen →
+                            </button>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ flex: 1, backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+                    <span style={{ fontSize: '4rem' }}>📱</span>
+                    <h5 style={{ fontWeight: 600, marginTop: '1.5rem', color: '#1e293b' }}>Select a screen from the steps sidebar to preview</h5>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="sd-modal-footer">
-              <button className="sd-btn-cancel" onClick={() => setPreviewExperience(null)}>Close</button>
+
+            {/* Sticky Modal Footer: Action controls */}
+            <div className="sd-modal-footer" style={{ position: 'sticky', bottom: 0, backgroundColor: '#ffffff', borderTop: '1px solid #e2e8f0', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100, flexShrink: 0 }}>
+              <button type="button" className="sd-btn-cancel" onClick={() => { setPreviewExperience(null); setActivePreviewScreen(null); }}>Close Preview</button>
+
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  className="sd-btn-primary"
+                  style={{ padding: '0.65rem 1.5rem', backgroundColor: '#ef4444', border: 'none', color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}
+                  onClick={() => {
+                    setRejectingId(previewExperience.id);
+                    setRejectRemark('');
+                    setShowRejectModal(true);
+                    setPreviewExperience(null);
+                    setActivePreviewScreen(null);
+                  }}
+                >
+                  ❌ Reject Experience
+                </button>
+                <button
+                  type="button"
+                  className="sd-btn-primary"
+                  style={{ padding: '0.65rem 1.5rem', backgroundColor: '#22c55e', border: 'none', color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}
+                  onClick={() => {
+                    handleApproveExperience(previewExperience.id);
+                    setPreviewExperience(null);
+                    setActivePreviewScreen(null);
+                  }}
+                >
+                  ✅ Approve Experience
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -3086,13 +3684,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
       {/* ── School Details Modal ── */}
       {showSchoolDetailModal && selectedSchoolDetail && (
-        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowSchoolDetailModal(false); }}>
+        <div className="sd-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) setShowSchoolDetailModal(false); }}>
           <div className="sd-modal" style={{ maxWidth: 500 }}>
             <div className="sd-modal-header">
               <span className="sd-modal-title">School Details</span>
-              <button className="sd-modal-close" onClick={() => setShowSchoolDetailModal(false)}><FiX/></button>
+              <button className="sd-modal-close" onClick={() => setShowSchoolDetailModal(false)}><FiX /></button>
             </div>
-            
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid #f1f5f9' }}>
               <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: '#dbeafe', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 'bold' }}>
                 {selectedSchoolDetail.school_name ? selectedSchoolDetail.school_name[0].toUpperCase() : 'S'}
@@ -3137,13 +3735,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
       {/* ── School Admin Details Modal ── */}
       {showSchoolAdminDetailModal && selectedSchoolAdminDetail && (
-        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowSchoolAdminDetailModal(false); }}>
+        <div className="sd-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) setShowSchoolAdminDetailModal(false); }}>
           <div className="sd-modal" style={{ maxWidth: 500 }}>
             <div className="sd-modal-header">
               <span className="sd-modal-title">School Admin Details</span>
-              <button className="sd-modal-close" onClick={() => setShowSchoolAdminDetailModal(false)}><FiX/></button>
+              <button className="sd-modal-close" onClick={() => setShowSchoolAdminDetailModal(false)}><FiX /></button>
             </div>
-            
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid #f1f5f9' }}>
               <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: '#e0e7ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 'bold' }}>
                 {selectedSchoolAdminDetail.full_name ? selectedSchoolAdminDetail.full_name[0].toUpperCase() : 'A'}
@@ -3188,7 +3786,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           <div style={{ background: '#ffffff', borderRadius: '16px', padding: '2rem', width: '480px', maxWidth: '90vw', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>Help & Support</h2>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '1.25rem' }} onClick={() => setShowHelpModal(false)}><FiX/></button>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '1.25rem' }} onClick={() => setShowHelpModal(false)}><FiX /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {[
@@ -3398,8 +3996,85 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         </div>
       )}
 
+      {showRejectModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '1rem'
+          }}
+          onClick={() => { setShowRejectModal(false); setRejectingId(null); setRejectRemark(''); }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '420px',
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              padding: '1.75rem 1.5rem',
+              boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.3)'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>
+              Reject Experience Request
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1.25rem' }}>
+              Please provide a brief review remark explaining the reason for rejection (optional).
+            </p>
+            <textarea
+              className="sd-form-input"
+              style={{
+                width: '100%',
+                height: '100px',
+                padding: '0.75rem',
+                fontSize: '0.88rem',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                resize: 'none',
+                outline: 'none',
+                marginBottom: '1.25rem'
+              }}
+              placeholder="e.g. Needs more activity screens or audio is unclear..."
+              value={rejectRemark}
+              onChange={e => setRejectRemark(e.target.value)}
+            />
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="sd-btn-outline"
+                style={{ padding: '0.5rem 1rem' }}
+                onClick={() => { setShowRejectModal(false); setRejectingId(null); setRejectRemark(''); }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="sd-btn-primary"
+                style={{ padding: '0.5rem 1rem', backgroundColor: '#ef4444', color: '#fff', border: 'none' }}
+                onClick={handleRejectExperienceSubmit}
+              >
+                Confirm Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {cropImageSrc && (
-        <AvatarCropperModal 
+        <AvatarCropperModal
           src={cropImageSrc}
           onCrop={handleCropSave}
           onCancel={() => setCropImageSrc(null)}

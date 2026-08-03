@@ -56,7 +56,7 @@ class LMSCMSSyncTests(TestCase):
         self.experience = Experience.objects.create(
             title="LMS Inbound Speaking",
             subject="Speaking & Listening",
-            status="PUBLISHED",
+            status="APPROVED",
             difficulty="MEDIUM",
             estimated_duration=20,
             created_by=self.student_user,

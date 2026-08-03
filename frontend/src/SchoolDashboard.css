@@ -54,8 +54,10 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
    ============================ */
 .sd-sidebar {
   width: var(--sidebar-width);
-  background: linear-gradient(180deg, var(--sidebar-bg-top) 0%, var(--sidebar-bg-bot) 100%);
-  border-right: 1px solid rgba(255, 255, 255, 0.03);
+  background: linear-gradient(180deg, rgba(0, 106, 166, 0.82) 0%, rgba(0, 80, 128, 0.9) 100%) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -223,6 +225,7 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
   min-width: 0;
   height: 100vh;
   overflow: hidden;
+  background-color: transparent !important;
 }
 
 /* ============================
@@ -233,11 +236,16 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
   align-items: center;
   justify-content: space-between;
   padding: 0.85rem 1.75rem;
-  background: var(--main-bg);
-  border-bottom: 1px solid var(--border);
+  background: rgba(248, 250, 252, 0.72) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.07);
   gap: 1rem;
   flex-shrink: 0;
-  z-index: 40;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  box-shadow: 0 1px 12px rgba(15, 23, 42, 0.05);
 }
 
 /* Search */
@@ -337,6 +345,7 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;   /* required so flex child can shrink below its content size */
+  background-color: transparent !important;
 }
 .sd-content::-webkit-scrollbar { width: 5px; }
 .sd-content::-webkit-scrollbar-thumb { background: #c8cfe0; border-radius: 3px; }

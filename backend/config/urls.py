@@ -21,6 +21,8 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from django.conf import settings
 from django.conf.urls.static import static
 
+from lms.packages.views import LMSPackageListAPIView, LMSPackageDownloadAPIView
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("api/", include("accounts.urls")),
@@ -30,6 +32,9 @@ urlpatterns = [
     path("api/v1/", include("content_studio.urls")),
     path("api/v1/", include("assessments.urls")),
     path("api/lms/", include("lms.urls")),
+    path("api/v1/lms/packages/", LMSPackageListAPIView.as_view(), name="lms-v1-packages"),
+    path("api/v1/lms/packages/<int:pk>/download/", LMSPackageDownloadAPIView.as_view(), name="lms-v1-package-download"),
+    path("api/v1/lms/published-packages/", LMSPackageListAPIView.as_view(), name="lms-published-packages"),
     path("api/v1/lms/sync/", include("lms.sync.urls")),
     path("api/v1/lms/auth/", include("lms.auth_urls")),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

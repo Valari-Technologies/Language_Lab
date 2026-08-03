@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 
-from accounts.permissions import IsContentCreatorOrSuperAdmin
+from accounts.permissions import IsContentCreatorOrSuperAdmin, IsSuperAdmin
 from .models import (
     Experience,
     LearningOutcome,
@@ -144,7 +144,7 @@ class ExperienceViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def archive(self, request, pk=None):
         experience = self.get_object()
-        experience.status = Experience.Status.ARCHIVED
+        experience.status = Experience.Status.REJECTED
         experience.save()
         serializer = ExperienceDetailSerializer(experience)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -152,9 +152,8 @@ class ExperienceViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def publish(self, request, pk=None):
         experience = self.get_object()
-        experience.status = Experience.Status.PUBLISHED
+        experience.status = Experience.Status.PENDING_APPROVAL
         experience.save()
-        # NOTE: Real packaging and exporting is Phase 7. For now we only flip the status.
         serializer = ExperienceDetailSerializer(experience)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -575,7 +574,7 @@ class DashboardSummaryAPIView(APIView):
     def get(self, request):
         total_experiences = Experience.objects.filter(is_deleted=False).count()
         draft_experiences = Experience.objects.filter(is_deleted=False, status=Experience.Status.DRAFT).count()
-        published_experiences = Experience.objects.filter(is_deleted=False, status=Experience.Status.PUBLISHED).count()
+        published_experiences = Experience.objects.filter(is_deleted=False, status=Experience.Status.APPROVED).count()
         total_media_assets = Media.objects.count()
 
         return Response({
@@ -766,44 +765,40 @@ class PublishViewSet(viewsets.ViewSet):
         version = request.data.get("version")  # optional
         release_notes = request.data.get("release_notes", "")
 
-        from content_studio.publish.publish_service import build_elab_package
-        try:
-            result = build_elab_package(
-                experience=experience,
-                version=version,
-                release_notes=release_notes,
-                published_by=request.user,
+        from content_studio.validation_engine import run_validation_engine
+        report_data = run_validation_engine(experience)
+        if report_data["status"] == "FAILED":
+            return Response(
+                {"error": "Experience failed validation. Fix errors before publishing.", "validation_report": report_data},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
-        except ValueError as exc:
-            args = exc.args[0] if exc.args else ()
-            if isinstance(args, tuple) and args[0] == "VALIDATION_FAILED":
-                report = args[1]
-                return Response(
-                    {"error": "Experience failed validation. Fix errors before publishing.", "validation_report": report},
-                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                )
-            if isinstance(args, tuple) and args[0] == "DUPLICATE_VERSION":
-                return Response(
-                    {"error": f"Version '{args[1]}' already exists for this experience."},
-                    status=status.HTTP_409_CONFLICT,
-                )
-            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        except RuntimeError as exc:
-            return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        version_obj = result["version_obj"]
-        response_data = {
-            "package_id": version_obj.published_package_id,
-            "version_id": version_obj.id,
-            "version": result["version"],
-            "build_number": result["build_number"],
-            "size": result["size"],
-            "checksum": result["checksum"],
-            "elab_filename": result["elab_filename"],
-            "download_url": version_obj.download_url,
-            "published_at": version_obj.published_at,
-        }
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        # Duplicate version check
+        if version:
+            try:
+                package = PublishedPackage.objects.get(experience=experience)
+                if PublishVersion.objects.filter(published_package=package, version_number=version).exists():
+                    return Response(
+                        {"error": f"Version '{version}' already exists for this experience."},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+            except PublishedPackage.DoesNotExist:
+                pass
+
+        experience.status = "PENDING_APPROVAL"
+        experience.pending_version = version or "1.0"
+        experience.pending_release_notes = release_notes
+        experience.save(update_fields=["status", "pending_version", "pending_release_notes"])
+
+        return Response(
+            {
+                "message": "Experience submitted to Super Admin for approval.",
+                "status": experience.status,
+                "pending_version": experience.pending_version,
+                "pending_release_notes": experience.pending_release_notes
+            },
+            status=status.HTTP_200_OK
+        )
 
     def status_view(self, request, experience_id=None):
         """GET /api/v1/content/publish/{experienceId}/"""
@@ -857,9 +852,9 @@ class PackageViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated, IsContentCreatorOrSuperAdmin]
 
     def get_permissions(self):
-        if self.action == "download":
-            from rest_framework import permissions
-            return [permissions.AllowAny()]
+        if self.action in ["download"]:
+            from accounts.permissions import IsAuthenticatedOrLMSClient
+            return [IsAuthenticatedOrLMSClient()]
         return super().get_permissions()
 
     def _get_version(self, package_id):
@@ -891,6 +886,9 @@ class PackageViewSet(viewsets.ViewSet):
         version = self._get_version(pk)
         if not version:
             return Response({"error": "Package not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if version.published_package.experience.status != "APPROVED":
+            return Response({"error": "Only approved experience packages can be downloaded."}, status=status.HTTP_403_FORBIDDEN)
 
         file_path = version.file_path
         if not file_path or not os.path.exists(file_path):
@@ -1058,4 +1056,102 @@ class AIGenerateView(APIView):
             return Response({"error": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"error": f"AI generation failed: {str(e)}"}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+class SuperAdminExperienceViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def list(self, request):
+        """GET /api/v1/super-admin/experiences/"""
+        status_param = request.query_params.get("status")
+        queryset = Experience.objects.filter(is_deleted=False).select_related("grade", "created_by")
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+        else:
+            # By default or if none, list experiences that are not draft
+            queryset = queryset.exclude(status="DRAFT")
+
+        # Serializer
+        serializer = ExperienceSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        """POST /api/v1/super-admin/experiences/{id}/approve/"""
+        try:
+            experience = Experience.objects.get(id=pk, is_deleted=False)
+        except Experience.DoesNotExist:
+            return Response({"error": "Experience not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Generate the final .elab package zip file
+        from content_studio.publish.publish_service import build_elab_package
+        try:
+            result = build_elab_package(
+                experience=experience,
+                version=experience.pending_version or "1.0",
+                release_notes=experience.pending_release_notes or "",
+                published_by=request.user,
+            )
+        except ValueError as exc:
+            args = exc.args[0] if exc.args else ()
+            if isinstance(args, tuple) and args[0] == "VALIDATION_FAILED":
+                report = args[1]
+                return Response(
+                    {"error": "Experience failed validation. Fix errors before approving.", "validation_report": report},
+                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
+            if isinstance(args, tuple) and args[0] == "DUPLICATE_VERSION":
+                return Response(
+                    {"error": f"Version '{args[1]}' already exists for this experience."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except RuntimeError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Clear pending metadata
+        experience.pending_version = None
+        experience.pending_release_notes = None
+        experience.review_remark = None
+        experience.save(update_fields=["pending_version", "pending_release_notes", "review_remark"])
+
+        version_obj = result["version_obj"]
+        response_data = {
+            "message": "Experience approved and package generated successfully.",
+            "package_id": version_obj.published_package_id,
+            "version_id": version_obj.id,
+            "version": result["version"],
+            "build_number": result["build_number"],
+            "size": result["size"],
+            "checksum": result["checksum"],
+            "elab_filename": result["elab_filename"],
+            "download_url": version_obj.download_url,
+            "published_at": version_obj.published_at,
+            "status": "APPROVED",
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        """POST /api/v1/super-admin/experiences/{id}/reject/"""
+        try:
+            experience = Experience.objects.get(id=pk, is_deleted=False)
+        except Experience.DoesNotExist:
+            return Response({"error": "Experience not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        remark = request.data.get("review_remark", "")
+        experience.status = "REJECTED"
+        experience.review_remark = remark
+        experience.pending_version = None
+        experience.pending_release_notes = None
+        experience.save(update_fields=["status", "review_remark", "pending_version", "pending_release_notes"])
+
+        return Response(
+            {
+                "message": "Experience rejected successfully.",
+                "status": experience.status,
+                "review_remark": remark,
+            },
+            status=status.HTTP_200_OK
+        )
 

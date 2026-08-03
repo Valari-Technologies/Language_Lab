@@ -53,16 +53,21 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
    ============================ */
 .sd-sidebar {
   width: var(--sidebar-width);
-  background: linear-gradient(180deg, var(--sidebar-bg-top) 0%, var(--sidebar-bg-bot) 100%);
-  border-right: 1px solid rgba(255, 255, 255, 0.03);
+  background: linear-gradient(180deg, rgba(1, 84, 128, 0.82) 0%, rgba(4, 56, 92, 0.9) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  position: relative;
+  position: sticky;
+  top: 0;
+  left: 0;
   height: 100vh;
   overflow: hidden;
   z-index: 50;
   transition: transform 0.28s ease;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.15);
 }
 
 /* Brand */
@@ -234,7 +239,7 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
   min-width: 0;
   height: 100vh;
   overflow: hidden;
-  background-color: var(--main-bg) !important;
+  background-color: transparent;
 }
 
 /* ============================
@@ -245,12 +250,18 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
   align-items: center;
   justify-content: space-between;
   padding: 1.1rem 2rem;
-  background: var(--main-bg);
-  border-bottom: 1px solid var(--border);
+  background: rgba(248, 250, 252, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.07);
   gap: 1rem;
   flex-shrink: 0;
-  z-index: 40;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  box-shadow: 0 1px 12px rgba(15, 23, 42, 0.05);
 }
+
 
 .sd-search {
   display: flex;
@@ -332,7 +343,7 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
-  background-color: var(--main-bg) !important;
+  background-color: transparent;
 }
 .sd-content::-webkit-scrollbar { width: 6px; }
 .sd-content::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }

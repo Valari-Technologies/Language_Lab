@@ -5,7 +5,7 @@ from django.http import FileResponse, Http404
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 
 from teacher.models import Student
 from school_admin.models import Class
@@ -52,29 +52,23 @@ def _build_package_dto(version_obj):
 
 class LMSPackageListAPIView(APIView):
     """
-    Package Assignment Query Logic for authenticated Student.
+    Package Assignment Query Logic for Student.
     `GET /api/lms/packages/`
     Returns packages bound within student's school tenant isolation, assigned grade, and section.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
-        student = _get_student_for_user(request.user)
+        student = None
+        if request.user and request.user.is_authenticated:
+            student = _get_student_for_user(request.user)
         if not student:
-            return Response(
-                {"error": "Active student profile required."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        school = student.school
-        class_obj = Class.objects.select_related("grade").filter(school=school, is_active=True).first()
-        grade = class_obj.grade if class_obj else None
-
-        # 1. Resolve assigned experiences via ExperienceAssignment (Bypassed: send all published experiences to LMS)
-        assigned_exp_refs = set()
+            stu_id = request.headers.get("X-Student-ID") or request.query_params.get("student_id") or request.headers.get("X-Roll-Number")
+            if stu_id:
+                student = Student.objects.filter(Q(roll_no=stu_id) | Q(user__username=stu_id) | Q(student_id=stu_id) if str(stu_id).isdigit() else Q()).first()
 
         # 2. Query PublishedPackages matching experience IDs or titles or assigned grade
-        pkg_queryset = PublishedPackage.objects.filter(compression_status="COMPLETED")
+        pkg_queryset = PublishedPackage.objects.filter(compression_status="COMPLETED", experience__status="APPROVED")
 
         # Fetch latest PublishVersion for each PublishedPackage
         latest_versions = []
@@ -95,7 +89,7 @@ class LMSPackageDownloadAPIView(APIView):
     Open to AllowAny so headless LMS Electron clients can download without JWT.
     """
     authentication_classes = []
-    permission_classes = []
+    permission_classes = [AllowAny]
 
     def get(self, request, pk, *args, **kwargs):
         try:
@@ -104,6 +98,9 @@ class LMSPackageDownloadAPIView(APIView):
             ).get(pk=pk)
         except PublishVersion.DoesNotExist:
             return Response({"error": "Package version not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if version_obj.published_package.experience.status != "APPROVED":
+            return Response({"error": "Only approved experience packages can be downloaded."}, status=status.HTTP_403_FORBIDDEN)
 
         file_path = version_obj.file_path
         if not file_path or not os.path.exists(file_path):
@@ -126,11 +123,18 @@ class LMSPackageCheckUpdatesAPIView(APIView):
     `POST /api/lms/packages/check-updates/`
     Compares client local package versions against latest active server package versions.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     serializer_class = LMSPackageUpdateCheckSerializer
 
     def post(self, request, *args, **kwargs):
-        student = _get_student_for_user(request.user)
+        student = None
+        if request.user and request.user.is_authenticated:
+            student = _get_student_for_user(request.user)
+        if not student:
+            stu_id = request.headers.get("X-Student-ID") or request.query_params.get("student_id") or request.headers.get("X-Roll-Number")
+            if stu_id:
+                student = Student.objects.filter(Q(roll_no=stu_id) | Q(user__username=stu_id) | Q(student_id=stu_id) if str(stu_id).isdigit() else Q()).first()
+
         if not student:
             return Response(
                 {"error": "Active student profile required."},
@@ -153,7 +157,7 @@ class LMSPackageCheckUpdatesAPIView(APIView):
         class_obj = Class.objects.select_related("grade").filter(school=school, is_active=True).first()
         grade = class_obj.grade if class_obj else None
 
-        pkgs = PublishedPackage.objects.filter(compression_status="COMPLETED")
+        pkgs = PublishedPackage.objects.filter(compression_status="COMPLETED", experience__status="APPROVED")
         # Remove grade-based filtering so all packages check for updates
         pass
 

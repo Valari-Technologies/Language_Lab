@@ -39,7 +39,7 @@ class ContentStudioAPITests(APITestCase):
             grade=self.grade3,
             subject="English",
             language="English",
-            difficulty=Experience.Difficulty.EASY,
+            difficulty=Experience.Difficulty.BEGINNER,
             estimated_duration=15,
             status=Experience.Status.DRAFT,
             created_by=self.content_creator,
@@ -50,9 +50,9 @@ class ContentStudioAPITests(APITestCase):
             grade=self.grade4,
             subject="English",
             language="English",
-            difficulty=Experience.Difficulty.MEDIUM,
+            difficulty=Experience.Difficulty.INTERMEDIATE,
             estimated_duration=25,
-            status=Experience.Status.PUBLISHED,
+            status=Experience.Status.APPROVED,
             created_by=self.content_creator,
         )
 
@@ -146,7 +146,7 @@ class ContentStudioAPITests(APITestCase):
         self.assertEqual(response.data["results"][0]["title"], "Greetings - Level 1")
 
         # Check status filter
-        response = self.client.get(reverse("experience-list"), {"status": "PUBLISHED"})
+        response = self.client.get(reverse("experience-list"), {"status": "APPROVED"})
         self.assertEqual(len(response.data["results"]), 1)
         self.assertEqual(response.data["results"][0]["title"], "At the Restaurant")
 
@@ -252,7 +252,7 @@ class ContentStudioAPITests(APITestCase):
             "grade": self.grade3.id,
             "subject": "Grammar",
             "language": "English",
-            "difficulty": "MEDIUM",
+            "difficulty": "INTERMEDIATE",
             "estimated_duration": 20,
             "status": "DRAFT",
             "tags": ["grammar", "verbs"]
@@ -303,7 +303,7 @@ class ContentStudioAPITests(APITestCase):
             "grade": self.grade4.id,
             "subject": "English",
             "language": "English",
-            "difficulty": "EASY",
+            "difficulty": "BEGINNER",
             "estimated_duration": 18,
             "status": "DRAFT",
             "tags": ["greetings"]
@@ -360,20 +360,20 @@ class ContentStudioAPITests(APITestCase):
         self.assertEqual(new_activity.skills.count(), 2)
 
     def test_archive_experience(self):
-        """POST to archive changes experience status to ARCHIVED."""
+        """POST to archive changes experience status to REJECTED."""
         self.client.force_authenticate(user=self.content_creator)
         url = reverse("experience-archive", args=[self.experience1.id])
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["status"], "ARCHIVED")
+        self.assertEqual(response.data["status"], "REJECTED")
 
     def test_publish_experience(self):
-        """POST to publish changes experience status to PUBLISHED."""
+        """POST to publish changes experience status to PENDING_APPROVAL."""
         self.client.force_authenticate(user=self.content_creator)
         url = reverse("experience-publish", args=[self.experience1.id])
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["status"], "PUBLISHED")
+        self.assertEqual(response.data["status"], "PENDING_APPROVAL")
 
     def test_school_admin_cannot_write_experience(self):
         """School Admin gets 403 Forbidden on writes."""
@@ -1072,7 +1072,7 @@ class PublishPipelineTests(APITestCase):
             grade=self.grade,
             subject="English",
             language="English",
-            difficulty="EASY",
+            difficulty="BEGINNER",
             estimated_duration=30,
             status="DRAFT",
             created_by=self.content_creator,
@@ -1101,7 +1101,7 @@ class PublishPipelineTests(APITestCase):
             grade=self.grade,
             subject="English",
             language="English",
-            difficulty="EASY",
+            difficulty="BEGINNER",
             estimated_duration=10,
             status="DRAFT",
             created_by=self.content_creator,
@@ -1143,15 +1143,21 @@ class PublishPipelineTests(APITestCase):
         self.assertEqual(len(elab_files), 0)
 
     def test_publish_valid_experience_creates_elab_on_disk(self):
-        """Publishing a valid experience → 201, .elab on disk, DB checksum matches file."""
+        """Publishing a valid experience → submits → Super Admin approves → 201, .elab on disk."""
         import hashlib, os
         from .models import PublishVersion
 
         self.client.force_authenticate(user=self.content_creator)
         url = reverse("publish-experience", kwargs={"experience_id": self.valid_experience.id})
-        response = self.client.post(url, {"release_notes": "First release"}, format="json")
+        response = self.client.post(url, {"version": "1.0", "release_notes": "First release"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # Super Admin approves
+        self.client.force_authenticate(user=self.super_admin)
+        approve_url = reverse("super-admin-experiences-approve", args=[self.valid_experience.id])
+        response = self.client.post(approve_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
         self.assertIn("version", response.data)
         self.assertIn("checksum", response.data)
         self.assertIn("download_url", response.data)
@@ -1169,24 +1175,39 @@ class PublishPipelineTests(APITestCase):
                 h.update(chunk)
         self.assertEqual(h.hexdigest(), version_obj.checksum)
 
-        # Verify experience status flipped to PUBLISHED
+        # Verify experience status flipped to APPROVED
         self.valid_experience.refresh_from_db()
-        self.assertEqual(self.valid_experience.status, "PUBLISHED")
+        self.assertEqual(self.valid_experience.status, "APPROVED")
 
     def test_version_auto_increment_and_duplicate_409(self):
         """Two publishes → 1.0 then 1.1.  Supplying duplicate version → 409."""
         self.client.force_authenticate(user=self.content_creator)
         url = reverse("publish-experience", kwargs={"experience_id": self.valid_experience.id})
 
-        r1 = self.client.post(url, {}, format="json")
-        self.assertEqual(r1.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(r1.data["version"], "1.0")
+        # Submit first version
+        r1 = self.client.post(url, {"version": "1.0"}, format="json")
+        self.assertEqual(r1.status_code, status.HTTP_200_OK)
 
-        r2 = self.client.post(url, {}, format="json")
-        self.assertEqual(r2.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(r2.data["version"], "1.1")
+        # Approve first version
+        self.client.force_authenticate(user=self.super_admin)
+        approve_url = reverse("super-admin-experiences-approve", args=[self.valid_experience.id])
+        r1_app = self.client.post(approve_url)
+        self.assertEqual(r1_app.status_code, status.HTTP_200_OK)
+        self.assertEqual(r1_app.data["version"], "1.0")
+
+        # Submit second version
+        self.client.force_authenticate(user=self.content_creator)
+        r2 = self.client.post(url, {"version": "1.1"}, format="json")
+        self.assertEqual(r2.status_code, status.HTTP_200_OK)
+
+        # Approve second version
+        self.client.force_authenticate(user=self.super_admin)
+        r2_app = self.client.post(approve_url)
+        self.assertEqual(r2_app.status_code, status.HTTP_200_OK)
+        self.assertEqual(r2_app.data["version"], "1.1")
 
         # Duplicate version → 409
+        self.client.force_authenticate(user=self.content_creator)
         r3 = self.client.post(url, {"version": "1.0"}, format="json")
         self.assertEqual(r3.status_code, status.HTTP_409_CONFLICT)
 
@@ -1196,9 +1217,17 @@ class PublishPipelineTests(APITestCase):
         self.client.force_authenticate(user=self.content_creator)
         pub_url = reverse("publish-experience", kwargs={"experience_id": self.valid_experience.id})
         pub_response = self.client.post(pub_url, {}, format="json")
-        self.assertEqual(pub_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(pub_response.status_code, status.HTTP_200_OK)
+
+        # Approve
+        self.client.force_authenticate(user=self.super_admin)
+        approve_url = reverse("super-admin-experiences-approve", args=[self.valid_experience.id])
+        pub_response = self.client.post(approve_url)
+        self.assertEqual(pub_response.status_code, status.HTTP_200_OK)
         version_id = pub_response.data["version_id"]
 
+        # Switch auth back to content creator
+        self.client.force_authenticate(user=self.content_creator)
         # Download
         dl_url = reverse("package-download", kwargs={"pk": version_id})
         response = self.client.get(dl_url)
@@ -1219,13 +1248,21 @@ class PublishPipelineTests(APITestCase):
         self.client.force_authenticate(user=self.content_creator)
         pub_url = reverse("publish-experience", kwargs={"experience_id": self.valid_experience.id})
         pub_r = self.client.post(pub_url, {}, format="json")
-        self.assertEqual(pub_r.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(pub_r.status_code, status.HTTP_200_OK)
+
+        # Approve
+        self.client.force_authenticate(user=self.super_admin)
+        approve_url = reverse("super-admin-experiences-approve", args=[self.valid_experience.id])
+        pub_r = self.client.post(approve_url)
+        self.assertEqual(pub_r.status_code, status.HTTP_200_OK)
 
         version_id = pub_r.data["version_id"]
         original_version = pub_r.data["version"]     # "1.0"
         original_build = pub_r.data["build_number"]  # 1
         original_checksum = pub_r.data["checksum"]
 
+        # Switch auth back to content creator
+        self.client.force_authenticate(user=self.content_creator)
         regen_url = reverse("package-regenerate", kwargs={"pk": version_id})
         regen_r = self.client.post(regen_url, {}, format="json")
         self.assertEqual(regen_r.status_code, status.HTTP_200_OK)
@@ -1246,8 +1283,14 @@ class PublishPipelineTests(APITestCase):
 
         self.client.force_authenticate(user=self.content_creator)
         url = reverse("publish-experience", kwargs={"experience_id": self.valid_experience.id})
-        response = self.client.post(url, {"release_notes": "Layout test"}, format="json")
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        response = self.client.post(url, {"version": "1.0", "release_notes": "Layout test"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Approve
+        self.client.force_authenticate(user=self.super_admin)
+        approve_url = reverse("super-admin-experiences-approve", args=[self.valid_experience.id])
+        response = self.client.post(approve_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         version_obj = PublishVersion.objects.get(id=response.data["version_id"])
 
@@ -1299,7 +1342,13 @@ class PublishPipelineTests(APITestCase):
         self.client.force_authenticate(user=self.content_creator)
         url = reverse("publish-experience", kwargs={"experience_id": self.valid_experience.id})
         response = self.client.post(url, {}, format="json")
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Approve
+        self.client.force_authenticate(user=self.super_admin)
+        approve_url = reverse("super-admin-experiences-approve", args=[self.valid_experience.id])
+        response = self.client.post(approve_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         version_obj = PublishVersion.objects.get(id=response.data["version_id"])
 

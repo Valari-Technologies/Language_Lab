@@ -984,7 +984,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
      RENDER
      ══════════════════════════════════════════════════ */
   return (
-    <div className="sd-layout">
+    <div className="sd-layout" style={{ backgroundImage: `url(${schoolBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}>
       <style>{`
         /* ── Page Header / Banner ── */
         .sd-dashboard-header-card {
@@ -1031,24 +1031,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         }
 
          .sd-main {
-          background-image: url(${schoolBg}) !important;
-          background-size: cover !important;
-          background-position: center !important;
-          background-repeat: no-repeat !important;
-        }
-        .sd-topbar {
-          background: rgba(229, 236, 244, 0.7) !important;
-          backdrop-filter: blur(12px) !important;
-          -webkit-backdrop-filter: blur(12px) !important;
-          border-bottom: 1px solid rgba(15, 23, 42, 0.05) !important;
-          position: sticky !important;
-          top: 0 !important;
-          z-index: 10 !important;
-        }
-        .sd-content {
-          background: transparent !important;
+          background-image: none !important;
           background-color: transparent !important;
         }
+
 
         /* Card shadows and style matches */
         .sd-card {
@@ -2407,8 +2393,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           </td>
                           <td>{s.grade_name || (s.grade && `Grade ${s.grade}`) || 'N/A'}</td>
                           <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
-                            <span className={`sd-badge ${s.difficulty === 'EASY' ? 'sd-badge-active' : s.difficulty === 'HARD' ? 'sd-badge-leave' : 'sd-badge-review'}`}>
-                              {s.difficulty || 'MEDIUM'}
+                            <span className={`sd-badge ${s.difficulty === 'BEGINNER' ? 'sd-badge-active' : s.difficulty === 'MASTER' ? 'sd-badge-leave' : 'sd-badge-review'}`}>
+                              {s.difficulty || 'INTERMEDIATE'}
                             </span>
                           </td>
                           <td style={{ overflow: 'visible', textOverflow: 'clip' }}>

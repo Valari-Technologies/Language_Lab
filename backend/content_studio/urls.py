@@ -16,10 +16,12 @@ from .views import (
     DashboardRecentActivityAPIView,
     DashboardNotificationsAPIView,
     AIGenerateView,
+    SuperAdminExperienceViewSet,
 )
 
 router = DefaultRouter()
 router.register("content/experiences", ExperienceViewSet, basename="experience")
+router.register("super-admin/experiences", SuperAdminExperienceViewSet, basename="super-admin-experiences")
 router.register("content/activities", ActivityViewSet, basename="activity")
 router.register("content/activity-skills", ActivitySkillViewSet, basename="activity-skill")
 router.register("content/screens", ScreenViewSet, basename="screen")
