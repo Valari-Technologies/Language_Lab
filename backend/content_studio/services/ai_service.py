@@ -89,6 +89,18 @@ def generate_ai_content(topic: str, target_level: str, content_type: str) -> dic
                 }
             },
             "required": ["title", "heading", "body"]
+        },
+        "remedial": {
+            "type": "object",
+            "properties": {
+                "hintText": {"type": "string"},
+                "foundationQuestion": {"type": "string"},
+                "foundationOptions": {
+                    "type": "array"
+                },
+                "correctAnswerIndex": {"type": "integer"}
+            },
+            "required": ["hintText", "foundationQuestion", "foundationOptions"]
         }
     }
 
@@ -96,14 +108,31 @@ def generate_ai_content(topic: str, target_level: str, content_type: str) -> dic
     if not schema:
         raise ValueError(f"Unsupported content_type: {content_type}")
 
-    prompt = f"""
-    Generate educational content for the topic "{topic}" targeted at level "{target_level}".
-    The content type requested is "{content_type}".
-    You must output a single valid JSON object matching this schema exactly:
-    {json.dumps(schema, indent=2)}
+    if content_type == "remedial":
+        prompt = f"""
+        Generate simplified remedial / foundation learning content based on the parent educational topic or question: "{topic}".
+        Target difficulty level: "{target_level}".
 
-    Do not wrap the JSON output in markdown code blocks like ```json ... ```, just return the raw JSON object string.
-    """
+        The remedial content must be a simplified foundation concept.
+        You must output a single valid JSON object matching this schema exactly:
+        {json.dumps(schema, indent=2)}
+
+        Guidelines for "foundationOptions":
+        1. If the parent question is a matching, drag & drop, or pair-association task, "foundationOptions" must be an array of objects, e.g. [{{"source": "a", "target": "1"}}, {{"source": "b", "target": "2"}}, {{"source": "c", "target": "3"}}].
+        2. If the parent question is a Multiple Choice / Quiz, "foundationOptions" must be an array of 4 simple option strings, and you should also include "correctAnswerIndex" (integer between 0 and 3) at the root level of the returned JSON.
+        3. For other types (fill in blanks, dictation, dialogue, sentence builder), "foundationOptions" must be a list containing a single correct answer string.
+
+        Do not wrap the JSON output in markdown code blocks like ```json ... ```, just return the raw JSON object string.
+        """
+    else:
+        prompt = f"""
+        Generate educational content for the topic "{topic}" targeted at level "{target_level}".
+        The content type requested is "{content_type}".
+        You must output a single valid JSON object matching this schema exactly:
+        {json.dumps(schema, indent=2)}
+
+        Do not wrap the JSON output in markdown code blocks like ```json ... ```, just return the raw JSON object string.
+        """
 
     model_names = ["gemini-1.5-flash-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
     response = None

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from './api';
 import { API_BASE_URL } from './config';
+import PreviewCanvasRenderer from './PreviewCanvasRenderer';
 import {
   FiGrid, FiBookOpen, FiActivity, FiMonitor, FiFileText,
   FiCheckCircle, FiDownload, FiSettings, FiHelpCircle, FiLogOut,
@@ -369,6 +370,41 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [previewAnswerIndex, setPreviewAnswerIndex] = useState(null);
   const [previewAnswers, setPreviewAnswers] = useState({});
   const [voiceRecordingStates, setVoiceRecordingStates] = useState({});
+
+  // Dynamic scale factor calculation for preview canvas (locks to 1440px base width)
+  const [previewScaleFactor, setPreviewScaleFactor] = useState(1);
+  const previewScaleRef = React.useRef(null);
+
+  useEffect(() => {
+    if (view !== 'preview' || !previewScaleRef.current) return;
+    const updateScale = () => {
+      if (previewScaleRef.current) {
+        const width = previewScaleRef.current.clientWidth;
+        setPreviewScaleFactor(width > 0 ? width / 1100 : 1);
+      }
+    };
+    // Run after a short timeout to make sure DOM is fully rendered
+    const timer = setTimeout(updateScale, 50);
+    window.addEventListener('resize', updateScale);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateScale);
+    };
+  }, [view, previewActivityIndex, previewScreenIndex]);
+
+  const getCanvasHeight = (elements) => {
+    if (!elements || elements.length === 0) return 600;
+    let maxBottom = 600;
+    elements.forEach(block => {
+      const top = parseInt(block.styles?.top) || 0;
+      const height = parseInt(block.styles?.minHeight) || 150;
+      if (top + height > maxBottom) {
+        maxBottom = top + height;
+      }
+    });
+    return maxBottom + 80;
+  };
+
 
   const loadExperiencesData = async () => {
     try {
@@ -918,6 +954,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   const [selectedBlockId, setSelectedBlockId] = useState(null);
   const [propertiesTab, setPropertiesTab] = useState('content'); // 'content' | 'style' | 'advanced'
+  const [remedialOpen, setRemedialOpen] = useState(false);
 
   const [previewScreenNum, setPreviewScreenNum] = useState(3);
   const [selectedAnswer, setSelectedAnswer] = useState('B');
@@ -1218,13 +1255,21 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     setActionLoading(true);
     try {
       const selectedSkillNames = Array.isArray(activityForm.skills) ? activityForm.skills : [];
+      if (selectedSkillNames.length === 0) {
+        showFeedback('Please select a Module for this activity first.', 'error');
+        setActionLoading(false);
+        return;
+      }
       const skillIds = activitySkillOptions
         .filter(s => selectedSkillNames.includes(s.name))
         .map(s => s.id);
 
+      const moduleName = selectedSkillNames[0];
+      const displayTitle = moduleName.charAt(0).toUpperCase() + moduleName.slice(1);
+
       const payload = {
         experience: selectedExperience.id,
-        title: activityForm.title,
+        title: displayTitle,
         description: activityForm.description || '',
         learning_objective: activityForm.objective || '',
         estimated_duration: parseInt(activityForm.duration) || 5,
@@ -1765,8 +1810,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           boxShadow: isSelected ? '0 4px 12px rgba(11,87,208,0.1)' : '0 1px 3px rgba(0,0,0,0.02)',
           cursor: 'pointer',
           transition: 'border 0.15s, box-shadow 0.15s, left 0.1s, top 0.1s',
+          display: 'flex',
+          flexDirection: 'column',
+          boxSizing: 'border-box',
           ...(block.styles?.blockWidth ? { width: block.styles.blockWidth } : {}),
-          ...(block.styles?.minHeight ? { minHeight: block.styles.minHeight } : {}),
+          ...(block.styles?.minHeight ? { minHeight: block.styles.minHeight, height: block.styles.minHeight } : {}),
         }}
       >
         {/* Selection Indicator / Action Toolbar */}
@@ -1828,7 +1876,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
         {/* Block Specific Previews */}
         {block.type === 'heading' && (
-          <div style={{ textAlign: (block.styles?.alignment || 'Center').toLowerCase() }}>
+          <div style={{ textAlign: (block.styles?.alignment || 'Center').toLowerCase(), flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <span style={{
               fontFamily: block.styles?.fontFamily || 'Poppins',
               fontSize: `${(parseInt(block.styles?.fontSize) || 28) * 0.7}px`,
@@ -1850,16 +1898,18 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             fontWeight: block.styles?.fontWeight === 'Bold' ? 700 : block.styles?.fontWeight === 'SemiBold' ? 600 : 400,
             color: block.styles?.color || '#334155',
             lineHeight: 1.5,
-            whiteSpace: 'pre-wrap'
+            whiteSpace: 'pre-wrap',
+            flex: 1,
+            height: '100%'
           }}>
             {block.content?.text || 'Standard paragraph writing text...'}
           </div>
         )}
 
         {block.type === 'image' && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', flex: 1, height: '100%', width: '100%' }}>
             {block.content?.url ? (
-              <div style={{ width: '100%', height: '140px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: '100%', height: '100%', flex: 1, borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <img
                   src={resolveMediaUrl(block.content.url)}
                   alt="Canvas block illustration"
@@ -1867,7 +1917,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 />
               </div>
             ) : (
-              <div style={{ width: '100%', padding: '1.25rem 0', border: '1px dashed #cbd5e1', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+              <div style={{ width: '100%', height: '100%', flex: 1, border: '1px dashed #cbd5e1', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
                 <FiImage style={{ fontSize: '1.8rem', marginBottom: '4px', opacity: 0.6 }} />
                 <span style={{ fontSize: '0.72rem', fontWeight: 600 }}>No Image Loaded</span>
               </div>
@@ -1879,8 +1929,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'audio' && (
-          <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#0ea5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.9rem' }}>
+          <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, height: '100%', boxSizing: 'border-box' }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#0ea5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.9rem', flexShrink: 0 }}>
               <FiVolume2 />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -1888,17 +1938,17 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               <div style={{ fontSize: '0.62rem', color: '#64748b', marginTop: 1 }}>{block.content?.url ? 'Audio track attached' : 'Click to select track'}</div>
             </div>
             {block.content?.url && (
-              <audio src={resolveMediaUrl(block.content.url)} controls style={{ width: '100px', height: '24px' }} />
+              <audio src={resolveMediaUrl(block.content.url)} controls style={{ width: '100px', height: '24px', flexShrink: 0 }} />
             )}
           </div>
         )}
 
         {block.type === 'video' && (
-          <div style={{ background: '#f3e8ff', border: '1px solid #d8b4fe', borderRadius: '8px', overflow: 'hidden' }}>
+          <div style={{ background: '#f3e8ff', border: '1px solid #d8b4fe', borderRadius: '8px', overflow: 'hidden', flex: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
             {block.content?.url ? (
-              <video src={resolveMediaUrl(block.content.url)} controls style={{ width: '100%', height: '140px', display: 'block' }} />
+              <video src={resolveMediaUrl(block.content.url)} controls style={{ width: '100%', height: '100%', flex: 1, display: 'block', objectFit: 'contain' }} />
             ) : (
-              <div style={{ padding: '2rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', gap: '0.35rem' }}>
+              <div style={{ padding: '2rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', gap: '0.35rem', flex: 1 }}>
                 <FiMonitor style={{ fontSize: '1.75rem' }} />
                 <span style={{ fontSize: '0.72rem', fontWeight: 600 }}>No Video Source Configured</span>
               </div>
@@ -1907,7 +1957,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'dialogue' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', flex: 1, height: '100%' }}>
             {(block.content?.steps || []).map((stepObj, sIdx) => {
               const isLeft = stepObj.side === 'left';
               return (
@@ -1940,11 +1990,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'quiz' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', flex: 1, height: '100%' }}>
             <div style={{ border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.78rem', fontWeight: 600, color: '#c2410c' }}>
               ❓ {block.content?.question || 'Empty Quiz Question Description'}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', flex: 1, height: '100%', justifyContent: 'space-between' }}>
               {(block.content?.options || ['', '', '', '']).map((opt, oIdx) => {
                 const isCorrect = parseInt(block.content?.correctAnswerIndex) === oIdx;
                 const optionText = typeof opt === 'object' ? opt?.text : opt;
@@ -1959,7 +2009,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       border: isCorrect ? '1.5px solid #16a34a' : '1px solid #cbd5e1',
                       borderRadius: '6px',
                       padding: '0.45rem 0.65rem',
-                      fontSize: '0.72rem'
+                      fontSize: '0.72rem',
+                      flex: 1,
+                      boxSizing: 'border-box'
                     }}
                   >
                     <span style={{
@@ -1986,7 +2038,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'dictation' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiVolume2 /> Dictation (Listening Module)
             </div>
@@ -2058,7 +2110,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'drag_drop' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af' }}>
               Drag & Drop: {block.content?.question || 'Match items by dragging'}
             </div>
@@ -2082,7 +2134,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'fill_blank' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #a7f3d0', background: '#ecfdf5', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #a7f3d0', background: '#ecfdf5', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46' }}>
               Fill in the Blanks: {block.content?.question || 'Complete the text template'}
             </div>
@@ -2124,7 +2176,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'match' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #e9d5ff', background: '#f3e8ff', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #e9d5ff', background: '#f3e8ff', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#6b21a8' }}>
               Match Items: {block.content?.question || 'Pair Column A with Column B'}
             </div>
@@ -2189,7 +2241,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'sentence_builder' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #b3e5fc', background: '#e1f5fe', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #b3e5fc', background: '#e1f5fe', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0277bd' }}>
               Sentence Builder: {block.content?.question || 'Order the scattered words'}
             </div>
@@ -2328,6 +2380,35 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             pointerEvents: 'none',
           };
 
+          const makeTopDragger = () => (
+            <div
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const startY = e.clientY;
+                const el = e.currentTarget.parentElement;
+                const initH = el.offsetHeight;
+                const initTop = parseInt(block.styles?.top) || 0;
+                const move = (mv) => {
+                  const deltaY = mv.clientY - startY;
+                  const newH = Math.max(60, initH - deltaY);
+                  const newTop = initTop + deltaY;
+                  el.style.minHeight = `${newH}px`;
+                  el.style.top = `${newTop}px`;
+                  const elements = (screenForm.elements || []).map(el2 =>
+                    el2.id === block.id ? { ...el2, styles: { ...el2.styles, minHeight: `${newH}px`, top: `${newTop}px` } } : el2
+                  );
+                  setScreenForm(prev => ({ ...prev, elements }));
+                };
+                const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', up);
+              }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '12px', cursor: 'ns-resize', zIndex: 15, background: 'transparent' }}
+              title="Drag top side to resize height"
+            />
+          );
+
           const makeBottomDragger = () => (
             <div
               onMouseDown={(e) => {
@@ -2443,6 +2524,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               <div style={{ ...handleH, top: 'calc(50% - 4px)', left: '-1px' }} />
               <div style={{ ...handleH, top: 'calc(50% - 4px)', right: '-1px' }} />
               {/* Drag zones */}
+              {makeTopDragger()}
               {makeBottomDragger()}
               {makeLeftDragger()}
               {makeRightDragger()}
@@ -2499,6 +2581,73 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       return el;
     });
     setScreenForm(prev => ({ ...prev, elements }));
+  };
+
+  const handleUpdateBlockRemedial = (field, value) => {
+    const elements = (screenForm.elements || []).map(el => {
+      if (el.id === selectedBlockId) {
+        if (field === 'enableRemedial') {
+          return {
+            ...el,
+            enableRemedial: value,
+            remedialConfig: el.remedialConfig || { mode: 'ai_runtime', hintText: '', foundationQuestion: '', foundationOptions: [] }
+          };
+        } else {
+          return {
+            ...el,
+            remedialConfig: {
+              ...(el.remedialConfig || { mode: 'ai_runtime', hintText: '', foundationQuestion: '', foundationOptions: [] }),
+              [field]: value
+            }
+          };
+        }
+      }
+      return el;
+    });
+    setScreenForm(prev => ({ ...prev, elements }));
+  };
+
+  const handleGenerateRemedialWithAI = async (block) => {
+    setActionLoading(true);
+    try {
+      const topicText = block.content?.question || block.content?.text || block.content?.prompt || block.type;
+      const targetLevel = selectedExperience?.difficulty || 'Intermediate';
+      const res = await apiFetch('/api/v1/cms/ai-generate/', {
+        method: 'POST',
+        body: JSON.stringify({
+          topic: topicText,
+          target_level: targetLevel,
+          content_type: 'remedial'
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const elements = (screenForm.elements || []).map(el => {
+          if (el.id === block.id) {
+            return {
+              ...el,
+              remedialConfig: {
+                ...(el.remedialConfig || {}),
+                hintText: data.hintText || '',
+                foundationQuestion: data.foundationQuestion || '',
+                foundationOptions: data.foundationOptions || [],
+                correctAnswerIndex: data.correctAnswerIndex !== undefined ? data.correctAnswerIndex : 0
+              }
+            };
+          }
+          return el;
+        });
+        setScreenForm(prev => ({ ...prev, elements }));
+        showFeedback('Remedial question pre-generated successfully!');
+      } else {
+        showFeedback(data.error || 'Failed to generate remedial question', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showFeedback('Network error occurred during remedial generation', 'error');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleUpdateBlockMultipleContent = (updates) => {
@@ -3093,7 +3242,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
 
   return (
-    <div className="cs-layout" style={{ backgroundImage: `url(${contentStudioBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}>
+    <div className="cs-layout" style={view === 'preview' ? { backgroundColor: '#ffffff' } : { backgroundImage: `url(${contentStudioBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}>
       {/* Scope CSS variables & scoped rules */}
       <style>{`
         .cs-layout {
@@ -3644,141 +3793,161 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       `}</style>
 
       {/* ── Sidebar ── */}
-      <aside className="cs-sidebar">
-        <div className="cs-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem 1.25rem' }}>
-          <img src={logoIcon} alt="Logo" style={{ width: '62px', height: '100px', objectFit: 'contain' }} />
-          <div>
-            <h2 className="cs-brand-title">LinguaLab</h2>
-            <span className="cs-brand-sub">Content Studio</span>
+      {view !== 'preview' && (
+        <aside className="cs-sidebar">
+          <div className="cs-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem 1.25rem' }}>
+            <img src={logoIcon} alt="Logo" style={{ width: '62px', height: '100px', objectFit: 'contain' }} />
+            <div>
+              <h2 className="cs-brand-title">LinguaLab</h2>
+              <span className="cs-brand-sub">Content Studio</span>
+            </div>
           </div>
-        </div>
 
-        <nav className="cs-nav">
-          {[
-            { key: 'dashboard', label: 'Dashboard', icon: <FiGrid /> },
-            { key: 'experiences', label: 'Experience Library', icon: <FiBookOpen /> },
-            { key: 'experience-builder', label: 'Experience Builder', icon: <FiActivity /> },
-            { key: 'activity-builder', label: 'Activity Builder', icon: <FiSettings /> },
-            { key: 'screen-builder', label: 'Screen Builder', icon: <FiMonitor /> },
-            { key: 'preview', label: 'Runtime Preview', icon: <FiPlay /> },
-            { key: 'publish', label: 'Publish Center', icon: <FiDownload /> },
-            { key: 'media', label: 'Media Library', icon: <FiImage /> },
-            { key: 'reports', label: 'Sync Reports', icon: <FiFileText /> },
-            { key: 'profile', label: 'Profile Settings', icon: <FiUser /> },
-          ].map(item => (
-            <button
-              key={item.key}
-              onClick={() => {
-                if (item.key === 'preview') {
-                  handleStartPreview();
-                } else {
-                  if (item.key === 'screen-builder') {
-                    setIsEditingScreen(false);
-                    if (selectedActivity && selectedActivity.id) {
-                      loadActivityDetail(selectedActivity.id, false);
+          <nav className="cs-nav">
+            {[
+              { key: 'dashboard', label: 'Dashboard', icon: <FiGrid /> },
+              { key: 'experiences', label: 'Experience Library', icon: <FiBookOpen /> },
+              { key: 'experience-builder', label: 'Experience Builder', icon: <FiActivity /> },
+              { key: 'activity-builder', label: 'Activity Builder', icon: <FiSettings /> },
+              { key: 'screen-builder', label: 'Screen Builder', icon: <FiMonitor /> },
+              { key: 'preview', label: 'Runtime Preview', icon: <FiPlay /> },
+              { key: 'publish', label: 'Publish Center', icon: <FiDownload /> },
+              { key: 'media', label: 'Media Library', icon: <FiImage /> },
+              { key: 'reports', label: 'Sync Reports', icon: <FiFileText /> },
+              { key: 'profile', label: 'Profile Settings', icon: <FiUser /> },
+            ].map(item => (
+              <button
+                key={item.key}
+                onClick={() => {
+                  if (item.key === 'preview') {
+                    handleStartPreview();
+                  } else {
+                    if (item.key === 'screen-builder') {
+                      setIsEditingScreen(false);
+                      if (selectedActivity && selectedActivity.id) {
+                        loadActivityDetail(selectedActivity.id, false);
+                      }
                     }
+                    setView(item.key);
                   }
-                  setView(item.key);
-                }
-              }}
-              className={`cs-nav-item ${view === item.key ? 'active' : ''}`}
-              data-testid={`cs-nav-${item.key}`}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
-
-        <div className="cs-sidebar-footer" style={{ position: 'relative' }}>
-          {showProfileDropdown && (
-            <div style={{
-              position: 'absolute',
-              bottom: '75px',
-              left: '0.75rem',
-              right: '0.75rem',
-              background: '#095d8f',
-              borderRadius: '12px',
-              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.3)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              padding: '6px',
-              zIndex: 1000,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '4px'
-            }} onClick={(e) => e.stopPropagation()}>
-              <button 
-                onClick={() => { setView('profile'); setShowProfileDropdown(false); }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  width: '100%',
-                  padding: '10px 12px',
-                  background: 'none',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: '#f1f5f9',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'background 0.15s'
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                className={`cs-nav-item ${view === item.key ? 'active' : ''}`}
+                data-testid={`cs-nav-${item.key}`}
               >
-                <FiUser style={{ fontSize: '1rem', color: '#cbd5e1' }} />
-                <span>View Profile</span>
+                {item.icon}
+                <span>{item.label}</span>
               </button>
-              <button 
-                onClick={() => { setShowProfileDropdown(false); onLogout(); }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  width: '100%',
-                  padding: '10px 12px',
-                  background: 'none',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: '#f87171',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'background 0.15s'
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'none'}
-              >
-                <FiLogOut style={{ fontSize: '1rem', color: '#f87171' }} />
-                <span>Logout</span>
-              </button>
-            </div>
-          )}
+            ))}
+          </nav>
 
-          <div className="cs-profile-card" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}>
-            <div className="cs-profile-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-              {currentUserState?.profile_picture ? (
-                <img src={resolveMediaUrl(currentUserState.profile_picture)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
-              ) : (
-                (currentUserState?.username || 'CC').slice(0, 2).toUpperCase()
-              )}
-            </div>
-            <div className="cs-profile-info" style={{ flex: 1 }}>
-              <div className="cs-profile-name">{currentUserState?.full_name || currentUserState?.username || 'Content Creator'}</div>
-              <div className="cs-profile-desc">Content Creator</div>
-            </div>
-            <div className="cs-dropdown-icon" style={{ color: 'rgba(255, 255, 255, 0.75)', display: 'flex', alignItems: 'center', fontSize: '1rem' }}>
-              <FiChevronDown />
+          <div className="cs-sidebar-footer" style={{ position: 'relative' }}>
+            {showProfileDropdown && (
+              <div style={{
+                position: 'absolute',
+                bottom: '75px',
+                left: '0.75rem',
+                right: '0.75rem',
+                background: '#095d8f',
+                borderRadius: '12px',
+                boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                padding: '6px',
+                zIndex: 1000,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }} onClick={(e) => e.stopPropagation()}>
+                <button 
+                  onClick={() => { setView('profile'); setShowProfileDropdown(false); }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    width: '100%',
+                    padding: '10px 12px',
+                    background: 'none',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#f1f5f9',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'background 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                >
+                  <FiUser style={{ fontSize: '1rem', color: '#cbd5e1' }} />
+                  <span>View Profile</span>
+                </button>
+                <button 
+                  onClick={() => { setShowProfileDropdown(false); onLogout(); }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    width: '100%',
+                    padding: '10px 12px',
+                    background: 'none',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#f87171',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'background 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                >
+                  <FiLogOut style={{ fontSize: '1rem', color: '#f87171' }} />
+                  <span>Logout</span>
+                </button>
+              </div>
+            )}
+
+            <div className="cs-profile-card" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}>
+              <div className="cs-profile-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                {currentUserState?.profile_picture ? (
+                  <img src={resolveMediaUrl(currentUserState.profile_picture)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
+                ) : (
+                  (currentUserState?.username || 'CC').slice(0, 2).toUpperCase()
+                )}
+              </div>
+              <div className="cs-profile-info" style={{ flex: 1 }}>
+                <div className="cs-profile-name">{currentUserState?.full_name || currentUserState?.username || 'Content Creator'}</div>
+                <div className="cs-profile-desc">Content Creator</div>
+              </div>
+              <div className="cs-dropdown-icon" style={{ color: 'rgba(255, 255, 255, 0.75)', display: 'flex', alignItems: 'center', fontSize: '1rem' }}>
+                <FiChevronDown />
+              </div>
             </div>
           </div>
-        </div>
-      </aside>
+        </aside>
+      )}
 
       {/* ── Main Area ── */}
-      <div className="cs-content-area" style={{ backgroundImage: `url(${contentStudioBg})`, backgroundSize: 'cover', backgroundPosition: 'center bottom', backgroundRepeat: 'no-repeat' }}>
+      <div 
+        className="cs-content-area" 
+        style={view === 'preview' ? {
+          flex: 1,
+          width: '100vw',
+          height: '100vh',
+          background: '#0f172a',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          padding: 0,
+          margin: 0
+        } : { 
+          backgroundImage: `url(${contentStudioBg})`, 
+          backgroundSize: 'cover', 
+          backgroundPosition: 'center bottom', 
+          backgroundRepeat: 'no-repeat' 
+        }}
+      >
         {/* Global feedback toast — visible across every view, not just Profile */}
         {feedbackMsg.text && (
           <div
@@ -3801,60 +3970,62 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {/* Header Bar */}
-        <header className="cs-header">
-          <div className="cs-header-search-wrap">
-            <FiSearch className="cs-header-search-icon" />
-            <input
-              className="cs-search-input"
-              type="text"
-              placeholder={view === 'experiences' ? "Search experiences by title, grade, subject" : "Search experiences, activities..."}
-            />
-          </div>
-          <div className="cs-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}>
-            <div className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.5rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600 }}>
-              <FiCalendar /> {formatDateTime(currentTime)}
+        {view !== 'preview' && (
+          <header className="cs-header">
+            <div className="cs-header-search-wrap">
+              <FiSearch className="cs-header-search-icon" />
+              <input
+                className="cs-search-input"
+                type="text"
+                placeholder={view === 'experiences' ? "Search experiences by title, grade, subject" : "Search experiences, activities..."}
+              />
             </div>
+            <div className="cs-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}>
+              <div className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.5rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600 }}>
+                <FiCalendar /> {formatDateTime(currentTime)}
+              </div>
 
-            <div style={{ position: 'relative' }}>
-              <button className="sd-icon-btn" style={{ position: 'relative' }} onClick={(e) => { e.stopPropagation(); setShowNotifDropdown(!showNotifDropdown); }}>
-                <FiBell />
-                {notifications.some(n => !(n.read || n.is_read)) && (
-                  <span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' }} />
+              <div style={{ position: 'relative' }}>
+                <button className="sd-icon-btn" style={{ position: 'relative' }} onClick={(e) => { e.stopPropagation(); setShowNotifDropdown(!showNotifDropdown); }}>
+                  <FiBell />
+                  {notifications.some(n => !(n.read || n.is_read)) && (
+                    <span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' }} />
+                  )}
+                </button>
+                {showNotifDropdown && (
+                  <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: '8px', width: '300px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', zIndex: 1000, padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>Notifications</span>
+                      <button style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }} onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true, is_read: true })))}>Mark all read</button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
+                      {notifications.length === 0 ? (
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>No new notifications.</div>
+                      ) : (
+                        notifications.map(n => {
+                          const text = n.text || n.message || 'Notification';
+                          const time = n.time || (n.created_at ? new Date(n.created_at).toLocaleTimeString() : 'Recently');
+                          const read = n.read !== undefined ? n.read : n.is_read;
+                          return (
+                            <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: read ? 'transparent' : '#f0fdf4', borderLeft: read ? 'none' : '3px solid #22c55e', display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
+                              <span style={{ fontSize: '0.8rem', color: '#334155' }}>{text}</span>
+                              <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{time}</span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
                 )}
-              </button>
-              {showNotifDropdown && (
-                <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: '8px', width: '300px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', zIndex: 1000, padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>Notifications</span>
-                    <button style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }} onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true, is_read: true })))}>Mark all read</button>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
-                    {notifications.length === 0 ? (
-                      <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>No new notifications.</div>
-                    ) : (
-                      notifications.map(n => {
-                        const text = n.text || n.message || 'Notification';
-                        const time = n.time || (n.created_at ? new Date(n.created_at).toLocaleTimeString() : 'Recently');
-                        const read = n.read !== undefined ? n.read : n.is_read;
-                        return (
-                          <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: read ? 'transparent' : '#f0fdf4', borderLeft: read ? 'none' : '3px solid #22c55e', display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
-                            <span style={{ fontSize: '0.8rem', color: '#334155' }}>{text}</span>
-                            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{time}</span>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>
 
-            <button className="sd-icon-btn" onClick={() => setShowHelpModal(true)} title="Help & Support"><FiHelpCircle /></button>
-          </div>
-        </header>
+              <button className="sd-icon-btn" onClick={() => setShowHelpModal(true)} title="Help & Support"><FiHelpCircle /></button>
+            </div>
+          </header>
+        )}
 
         {/* Content Body Router */}
-        <div className="cs-body">
+        <div className={view === 'preview' ? "" : "cs-body"} style={view === 'preview' ? { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' } : {}}>
 
           {/* ───────────────── VIEW 1: STUDIO DASHBOARD (Image 2) ───────────────── */}
           {view === 'dashboard' && (
@@ -4415,8 +4586,17 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     </div>
                     <div className="cs-form-group">
                       <label className="cs-form-label">Estimated Duration (min)</label>
-                      <input className="cs-form-input" type="number" value={experienceForm.duration}
-                        onChange={e => setExperienceForm({ ...experienceForm, duration: parseInt(e.target.value) || 0 })} />
+                      <input
+                        className="cs-form-input"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={experienceForm.duration === 0 ? '' : experienceForm.duration}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setExperienceForm({ ...experienceForm, duration: val === '' ? '' : Math.max(0, parseInt(val) || 0) });
+                        }}
+                      />
                     </div>
                   </div>
 
@@ -4515,11 +4695,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                      <div className="cs-form-group" style={{ gridColumn: '1 / -1' }}>
-                        <label className="cs-form-label">Activity Title <span style={{ color: '#ef4444' }}>*</span></label>
-                        <input className="cs-form-input" data-testid="activity-title-input" type="text" value={activityForm.title}
-                          onChange={e => setActivityForm({ ...activityForm, title: e.target.value })} />
-                      </div>
+                      {/* Activity Title field removed - Module serves as activity designation */}
                       <div className="cs-form-group" style={{ gridColumn: '1 / -1' }}>
                         <label className="cs-form-label">Modules</label>
                         <select
@@ -4563,13 +4739,37 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                       <div className="cs-form-group">
                         <label className="cs-form-label">Estimated Duration (min)</label>
-                        <input className="cs-form-input" type="number" value={activityForm.duration}
-                          onChange={e => setActivityForm({ ...activityForm, duration: parseInt(e.target.value) || 0 })} />
+                        <input
+                          className="cs-form-input"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={activityForm.duration === 0 ? '' : activityForm.duration}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setActivityForm({ ...activityForm, duration: val === '' ? '' : Math.max(0, parseInt(val) || 0) });
+                          }}
+                        />
                       </div>
                       <div className="cs-form-group">
                         <label className="cs-form-label">Mastery Threshold (%)</label>
-                        <input className="cs-form-input" type="number" value={activityForm.mastery}
-                          onChange={e => setActivityForm({ ...activityForm, mastery: parseInt(e.target.value) || 0 })} />
+                        <input
+                          className="cs-form-input"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="10"
+                          value={activityForm.mastery === 0 ? '' : activityForm.mastery}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val === '') {
+                              setActivityForm({ ...activityForm, mastery: '' });
+                            } else {
+                              const parsed = parseInt(val) || 0;
+                              setActivityForm({ ...activityForm, mastery: Math.min(100, Math.max(0, parsed)) });
+                            }
+                          }}
+                        />
                       </div>
                     </div>
                   </div>
@@ -4580,19 +4780,33 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
                     <div>
                       <h3 className="cs-card-title" style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0 }}>Activity Timeline</h3>
-                      <div className="cs-card-sub" style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>Sequence of activities within this experience</div>
+                      <div className="cs-card-sub" style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>
+                        Sequence of activities (1 to 5 allowed. Current: {activities.length}/5)
+                      </div>
                     </div>
                     <button
                       type="button"
                       className="cs-btn-outline"
-                      style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', background: '#fff', cursor: 'pointer', fontWeight: 600 }}
+                      disabled={activities.length >= 5}
+                      style={{
+                        padding: '0.4rem 0.75rem',
+                        fontSize: '0.75rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '8px',
+                        background: activities.length >= 5 ? '#f1f5f9' : '#fff',
+                        color: activities.length >= 5 ? '#94a3b8' : '#374151',
+                        cursor: activities.length >= 5 ? 'not-allowed' : 'pointer',
+                        fontWeight: 600,
+                        opacity: activities.length >= 5 ? 0.7 : 1
+                      }}
                       onClick={() => {
+                        if (activities.length >= 5) return;
                         setSelectedActivity(null);
                         setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
                         setScreens([]);
                       }}
                     >
-                      + Add New Activity
+                      {activities.length >= 5 ? 'Max 5 Reached' : '+ Add New Activity'}
                     </button>
                   </div>
 
@@ -4653,11 +4867,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                 <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>{act.title}</span>
                                 <span style={{ fontSize: '0.7rem', color: '#64748b' }}>({act.estimated_duration || 5} min)</span>
                               </div>
-                              {act.skills && act.skills.length > 0 && (
-                                <div style={{ fontSize: '0.68rem', color: '#0b57d0', fontWeight: 600, marginTop: '2px', textTransform: 'capitalize' }}>
-                                  Module: {typeof act.skills[0] === 'object' ? act.skills[0].name : act.skills[0]}
-                                </div>
-                              )}
+
                               <p style={{ fontSize: '0.72rem', color: '#64748b', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {act.learning_objective || act.description || 'No objective set.'}
                               </p>
@@ -6272,6 +6482,239 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                       </div>
                                     </div>
                                   )}
+
+                                  {/* Dedicated Collapsible Section for Remedial/Foundation Question */}
+                                  {['quiz', 'fill_blank', 'dialogue', 'match', 'drag_drop', 'dictation', 'sentence_builder', 'sequence'].includes(selectedBlock.type) && (
+                                    <div style={{
+                                      borderTop: '1.5px solid #e2e8f0',
+                                      marginTop: '1rem',
+                                      paddingTop: '0.75rem',
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      gap: '0.75rem'
+                                    }}>
+                                      <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        cursor: 'pointer',
+                                        background: '#f8fafc',
+                                        padding: '6px 10px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #e2e8f0'
+                                      }} onClick={() => setRemedialOpen(!remedialOpen)}>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#1e293b' }}>
+                                          🩹 Remedial / Foundation Setup
+                                        </span>
+                                        <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                                          {remedialOpen ? '▼' : '▶'}
+                                        </span>
+                                      </div>
+
+                                      {remedialOpen && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: '4px' }}>
+                                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
+                                            <input
+                                              type="checkbox"
+                                              checked={!!selectedBlock.enableRemedial}
+                                              onChange={e => handleUpdateBlockRemedial('enableRemedial', e.target.checked)}
+                                            />
+                                            Enable Remedial Branching
+                                          </label>
+
+                                          {selectedBlock.enableRemedial && (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', borderLeft: '2px solid #3b82f6', paddingLeft: '0.6rem', marginTop: '0.25rem' }}>
+                                              <div className="cs-form-group">
+                                                <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Remedial Mode</label>
+                                                <select
+                                                  className="cs-form-input"
+                                                  style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
+                                                  value={selectedBlock.remedialConfig?.mode || 'ai_runtime'}
+                                                  onChange={e => handleUpdateBlockRemedial('mode', e.target.value)}
+                                                >
+                                                  <option value="ai_runtime">🤖 AI Auto-Generate at Runtime</option>
+                                                  <option value="manual">✍️ Manual Entry</option>
+                                                  <option value="ai_pregenerated">🪄 AI Pre-Generate in CMS</option>
+                                                </select>
+                                              </div>
+
+                                              {(selectedBlock.remedialConfig?.mode === 'manual' || selectedBlock.remedialConfig?.mode === 'ai_pregenerated') && (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                                  <div className="cs-form-group">
+                                                    <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Remedial Hint / Concept Explanation</label>
+                                                    <textarea
+                                                      className="cs-form-input"
+                                                      style={{ minHeight: '50px', fontSize: '0.75rem' }}
+                                                      value={selectedBlock.remedialConfig?.hintText || ''}
+                                                      onChange={e => handleUpdateBlockRemedial('hintText', e.target.value)}
+                                                      placeholder="Provide a simple hint or concept explanation..."
+                                                    />
+                                                  </div>
+
+                                                  <div className="cs-form-group">
+                                                    <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Foundation Question Text</label>
+                                                    <input
+                                                      className="cs-form-input"
+                                                      style={{ height: '28px', fontSize: '0.75rem' }}
+                                                      type="text"
+                                                      value={selectedBlock.remedialConfig?.foundationQuestion || ''}
+                                                      onChange={e => handleUpdateBlockRemedial('foundationQuestion', e.target.value)}
+                                                      placeholder="Enter simplified foundation question..."
+                                                    />
+                                                  </div>
+
+                                                  {/* Foundation options fields based on type */}
+                                                  {selectedBlock.type === 'quiz' && (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', marginTop: '0.25rem' }}>
+                                                      <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Foundation Options (Select Correct Choice)</label>
+                                                      {[0, 1, 2, 3].map(i => (
+                                                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                          <input
+                                                            type="radio"
+                                                            name="remedial-correct-option"
+                                                            checked={selectedBlock.remedialConfig?.correctAnswerIndex === i}
+                                                            onChange={() => handleUpdateBlockRemedial('correctAnswerIndex', i)}
+                                                          />
+                                                          <input
+                                                            className="cs-form-input"
+                                                            style={{ height: '24px', fontSize: '0.75rem', flex: 1 }}
+                                                            type="text"
+                                                            value={selectedBlock.remedialConfig?.foundationOptions?.[i] || ''}
+                                                            placeholder={`Option ${i + 1}`}
+                                                            onChange={e => {
+                                                              const newOpts = [...(selectedBlock.remedialConfig?.foundationOptions || ['', '', '', ''])];
+                                                              newOpts[i] = e.target.value;
+                                                              handleUpdateBlockRemedial('foundationOptions', newOpts);
+                                                            }}
+                                                          />
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  )}
+
+                                                  {selectedBlock.type === 'fill_blank' && (
+                                                    <div className="cs-form-group">
+                                                      <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Foundation Blank Answer</label>
+                                                      <input
+                                                        className="cs-form-input"
+                                                        style={{ height: '28px', fontSize: '0.75rem' }}
+                                                        type="text"
+                                                        value={selectedBlock.remedialConfig?.foundationOptions?.[0] || ''}
+                                                        placeholder="e.g. correct word"
+                                                        onChange={e => handleUpdateBlockRemedial('foundationOptions', [e.target.value])}
+                                                      />
+                                                    </div>
+                                                  )}
+
+                                                  {selectedBlock.type === 'dialogue' && (
+                                                    <div className="cs-form-group">
+                                                      <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Foundation Dialogue Steps / Prompt</label>
+                                                      <textarea
+                                                        className="cs-form-input"
+                                                        style={{ minHeight: '45px', fontSize: '0.75rem' }}
+                                                        value={selectedBlock.remedialConfig?.foundationOptions?.[0] || ''}
+                                                        placeholder="Enter lines or speaker turns..."
+                                                        onChange={e => handleUpdateBlockRemedial('foundationOptions', [e.target.value])}
+                                                      />
+                                                    </div>
+                                                  )}
+
+                                                  {(selectedBlock.type === 'match' || selectedBlock.type === 'drag_drop') && (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                                                      <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Foundation Match Pairs</label>
+                                                      {[0, 1, 2].map(i => {
+                                                        const pair = selectedBlock.remedialConfig?.foundationOptions?.[i] || { source: '', target: '' };
+                                                        return (
+                                                          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem' }}>
+                                                            <input
+                                                              className="cs-form-input"
+                                                              style={{ height: '24px', fontSize: '0.72rem' }}
+                                                              type="text"
+                                                              value={pair.source || ''}
+                                                              placeholder={`Source ${i + 1}`}
+                                                              onChange={e => {
+                                                                const newOpts = [...(selectedBlock.remedialConfig?.foundationOptions || [])];
+                                                                newOpts[i] = { ...pair, source: e.target.value };
+                                                                handleUpdateBlockRemedial('foundationOptions', newOpts);
+                                                              }}
+                                                            />
+                                                            <input
+                                                              className="cs-form-input"
+                                                              style={{ height: '24px', fontSize: '0.72rem' }}
+                                                              type="text"
+                                                              value={pair.target || ''}
+                                                              placeholder={`Target ${i + 1}`}
+                                                              onChange={e => {
+                                                                const newOpts = [...(selectedBlock.remedialConfig?.foundationOptions || [])];
+                                                                newOpts[i] = { ...pair, target: e.target.value };
+                                                                handleUpdateBlockRemedial('foundationOptions', newOpts);
+                                                              }}
+                                                            />
+                                                          </div>
+                                                        );
+                                                      })}
+                                                    </div>
+                                                  )}
+
+                                                  {selectedBlock.type === 'dictation' && (
+                                                    <div className="cs-form-group">
+                                                      <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Foundation Dictation Text</label>
+                                                      <input
+                                                        className="cs-form-input"
+                                                        style={{ height: '28px', fontSize: '0.75rem' }}
+                                                        type="text"
+                                                        value={selectedBlock.remedialConfig?.foundationOptions?.[0] || ''}
+                                                        placeholder="e.g. The dog barked."
+                                                        onChange={e => handleUpdateBlockRemedial('foundationOptions', [e.target.value])}
+                                                      />
+                                                    </div>
+                                                  )}
+
+                                                  {(selectedBlock.type === 'sentence_builder' || selectedBlock.type === 'sequence') && (
+                                                    <div className="cs-form-group">
+                                                      <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Foundation Word Sequence / Sentence</label>
+                                                      <input
+                                                        className="cs-form-input"
+                                                        style={{ height: '28px', fontSize: '0.75rem' }}
+                                                        type="text"
+                                                        value={selectedBlock.remedialConfig?.foundationOptions?.[0] || ''}
+                                                        placeholder="e.g. red, green, blue or The quick brown fox"
+                                                        onChange={e => handleUpdateBlockRemedial('foundationOptions', [e.target.value])}
+                                                      />
+                                                    </div>
+                                                  )}
+
+                                                  {selectedBlock.remedialConfig?.mode === 'ai_pregenerated' && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleGenerateRemedialWithAI(selectedBlock)}
+                                                      style={{
+                                                        padding: '0.45rem 0.75rem',
+                                                        fontSize: '0.75rem',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '4px',
+                                                        background: '#eff6ff',
+                                                        color: '#1d4ed8',
+                                                        border: '1px solid #bfdbfe',
+                                                        borderRadius: '6px',
+                                                        cursor: 'pointer',
+                                                        fontWeight: 600,
+                                                        marginTop: '0.25rem'
+                                                      }}
+                                                    >
+                                                      {actionLoading ? '🪄 Generating...' : '🪄 Generate Remedial Question with AI'}
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </>
                               )}
 
@@ -6723,17 +7166,66 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
             return (
               <>
-                {/* Top Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                      Experience Library &nbsp;&gt;&nbsp; {previewPayload?.experience?.title || selectedExperience?.title || 'Experiences'} &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Runtime Simulator Preview</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '4px' }}>
-                      <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>Runtime Preview Simulator</h1>
-                      <span className="cs-badge" style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>Student App Mode</span>
+                {/* Top Header Toolbar */}
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  padding: '0 2rem', 
+                  height: '64px',
+                  backgroundColor: '#ffffff',
+                  borderBottom: '1px solid #cbd5e1',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                  flexShrink: 0,
+                  boxSizing: 'border-box'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+                    <button
+                      className="cs-btn-outline"
+                      onClick={() => setView('screen-builder')}
+                      style={{
+                        background: '#f1f5f9',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        padding: '0.4rem 0.8rem',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        color: '#334155',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <FiArrowLeft /> Back to Editor
+                    </button>
+                    <div style={{ borderLeft: '1px solid #cbd5e1', height: '24px' }} />
+                    <div>
+                      <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                        Previewing Experience:
+                      </div>
+                      <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#0f172a' }}>
+                        {previewPayload?.experience?.title || selectedExperience?.title || 'Experience Preview'}
+                      </div>
                     </div>
                   </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{
+                      background: '#e0f2fe',
+                      color: '#0369a1',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      padding: '6px 16px',
+                      borderRadius: '20px',
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      boxShadow: '0 2px 4px rgba(3,105,161,0.05)'
+                    }}>
+                      🖥️ Student App Simulator
+                    </span>
+                  </div>
+
                   <div style={{ display: 'flex', gap: '0.65rem' }}>
                     <button
                       className="cs-btn-outline"
@@ -6742,49 +7234,42 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         setPreviewActivityIndex(0);
                         setPreviewScreenIndex(0);
                         setPreviewAnswerIndex(null);
+                        setPreviewAnswers({});
+                        setVoiceRecordingStates({});
+                        setDragDropSelections({});
+                        setBlankAnswers({});
+                        setFlippedCards({});
                       }}
                     >
                       ↺ Restart Experience
                     </button>
                     <button
                       className="cs-btn-primary"
-                      style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', color: '#ffffff', border: 'none', borderRadius: '10px', padding: '0.5rem 1.25rem', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,197,94,0.25)', display: 'flex', alignItems: 'center', gap: '6px' }}
-                      onClick={() => {
-                        if (selectedExperience?.id) {
-                          loadPublishData(selectedExperience.id);
-                        }
-                        setView('publish');
-                      }}
-                    >
-                      <FiDownload style={{ fontSize: '1rem' }} /> Go to Publish
-                    </button>
-                    <button
-                      className="cs-btn-primary"
                       style={{ background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)', color: '#ffffff', border: 'none', borderRadius: '10px', padding: '0.5rem 1.25rem', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(11,87,208,0.25)', display: 'flex', alignItems: 'center', gap: '6px' }}
                       onClick={() => setView('experience-builder')}
                     >
-                      <FiX style={{ fontSize: '1rem' }} /> Exit Simulator
+                      <FiX style={{ fontSize: '1rem' }} /> Exit Preview
                     </button>
                   </div>
                 </div>
 
                 {/* Main Preview layout - side outline + center workspace */}
-                <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '1.25rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 0, flex: 1, overflow: 'hidden', height: 'calc(100vh - 64px)' }}>
 
                   {/* Left Side: Experience outline navigation */}
-                  <div className="cs-card" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', overflowY: 'auto' }}>
+                  <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', background: '#ffffff', borderRight: '1px solid #cbd5e1', overflowY: 'auto', boxSizing: 'border-box' }}>
                     <div>
-                      <h3 style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', margin: '0 0 2px 0' }}>Experience Outline</h3>
+                      <h3 style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', margin: '0 0 2px 0' }}>Experience Navigator</h3>
                       <p style={{ fontSize: '0.65rem', color: '#64748b', margin: 0 }}>Click to jump directly to any screen</p>
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                       {previewPayload?.activities && previewPayload.activities.map((act, actIdx) => (
                         <div key={act.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', background: '#f8fafc', padding: '4px 8px', borderRadius: '4px', borderLeft: previewActivityIndex === actIdx ? '3px solid #0b57d0' : '3px solid transparent' }}>
+                          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', background: '#f8fafc', padding: '6px 8px', borderRadius: '6px', borderLeft: previewActivityIndex === actIdx ? '3px solid #0b57d0' : '3px solid transparent' }}>
                             {actIdx + 1}. {act.title}
                           </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '0.5rem' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', paddingLeft: '0.5rem' }}>
                             {act.screens && act.screens.map((scr, scrIdx) => {
                               const isActive = previewActivityIndex === actIdx && previewScreenIndex === scrIdx;
                               return (
@@ -6799,10 +7284,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                     border: 'none',
                                     background: isActive ? '#f0f9ff' : 'none',
                                     color: isActive ? '#0b57d0' : '#64748b',
-                                    fontSize: '0.68rem',
+                                    fontSize: '0.7rem',
                                     fontWeight: isActive ? 700 : 500,
-                                    padding: '4px 8px',
-                                    borderRadius: '4px',
+                                    padding: '6px 10px',
+                                    borderRadius: '6px',
                                     cursor: 'pointer',
                                     textAlign: 'left',
                                     width: '100%',
@@ -6822,9 +7307,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     </div>
 
                     {/* Progress tracking information */}
-                    <div style={{ marginTop: 'auto', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.7rem' }}>
+                    <div style={{ marginTop: 'auto', borderTop: '1px solid #f1f5f9', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.72rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#64748b' }}>Current Activity:</span>
+                        <span style={{ color: '#64748b' }}>Current Act:</span>
                         <span style={{ fontWeight: 700, color: '#1e293b' }}>{previewActivityIndex + 1} of {previewPayload?.activities?.length || 1}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -6835,700 +7320,138 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
 
                   {/* Right Side: Center Simulator Canvas */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                  <div className="preview-viewport-main" style={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: 'calc(100vh - 80px)',
+                    overflow: 'hidden',
+                    position: 'relative'
+                  }}>
 
-                    {/* Device Simulator Shell frame wrapper */}
-                    <div style={{ width: '100%', background: '#ffffff', borderRadius: '16px', border: '6px solid #1e293b', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '480px', position: 'relative' }}>
-
-                      {/* Device top status bar */}
-                      <div style={{ height: '28px', background: '#1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 1.25rem', color: '#94a3b8', fontSize: '0.65rem' }}>
-                        <span>⚡ EnglishLab Desktop Application Simulator (Runtime v2.1)</span>
-                        <span>📶 5G &nbsp;•&nbsp; 100% 🔋</span>
-                      </div>
-
-                      {/* Content Preview Canvas body */}
-                      <div style={{ flex: 1, padding: '1.25rem', position: 'relative', overflowY: 'auto', background: '#ffffff', fontFamily: activeScreen?.content?.font || 'Poppins' }}>
-                        <style>{`
-                          @keyframes pulse {
-                            0% { transform: scale(1); }
-                            50% { transform: scale(1.08); }
-                            100% { transform: scale(1); }
-                          }
-                          @keyframes bounceWave {
-                            0% { height: 4px; }
-                            100% { height: 20px; }
-                          }
-                        `}</style>
-
-                        {(!activeScreen?.elements || activeScreen.elements.length === 0) ? (
-                          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px dashed #cbd5e1', borderRadius: '12px', color: '#94a3b8', fontSize: '0.78rem', minHeight: '120px' }}>
-                            This screen has no content elements configured.
-                          </div>
-                        ) : (
-                          activeScreen.elements.map((block) => {
-                            return (
-                              <div
-                                key={block.id}
-                                className={block.styles?.customClass || ''}
+                    {/* Scrollable Workspace Container */}
+                    <div className="preview-workspace-scrollable" style={{
+                      flex: 1,
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      padding: '2rem 1.5rem',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'flex-start',
+                      backgroundColor: '#ffffff'
+                    }}>
+                      {/* Device Simulator Card Wrapper */}
+                      <div 
+                        ref={previewScaleRef}
+                        style={{ 
+                          width: '1100px',
+                          maxWidth: '100%',
+                          backgroundColor: '#ffffff',
+                          borderRadius: '16px',
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05)',
+                          padding: '2.5rem',
+                          boxSizing: 'border-box',
+                          margin: '0 auto',
+                          position: 'relative'
+                        }}
+                      >
+                        {/* Content Preview Canvas body */}
+                        {(() => {
+                          const baseCanvasHeight = getCanvasHeight(activeScreen?.elements);
+                          const scaledHeight = baseCanvasHeight * previewScaleFactor;
+                          return (
+                            <div style={{ 
+                              width: '100%', 
+                              height: `${scaledHeight}px`, 
+                              position: 'relative',
+                              overflow: 'hidden'
+                            }}>
+                              <div 
+                                className="preview-canvas-viewport"
                                 style={{
+                                  width: '1100px',
+                                  height: `${baseCanvasHeight}px`,
+                                  padding: '2.5rem',
                                   position: 'absolute',
-                                  left: block.styles?.left || '0px',
-                                  top: block.styles?.top || '0px',
-                                  width: block.styles?.blockWidth || '100%',
-                                  minHeight: block.styles?.minHeight || 'auto',
-                                  marginBottom: '0.25rem',
-                                  transition: 'all 0.15s'
+                                  left: 0,
+                                  top: 0,
+                                  transform: `scale(${previewScaleFactor})`,
+                                  transformOrigin: 'top left',
+                                  background: '#ffffff',
+                                  fontFamily: activeScreen?.content?.font || 'Poppins',
+                                  boxSizing: 'border-box'
                                 }}
                               >
-                                {/* HEADING BLOCK */}
-                                {block.type === 'heading' && (
-                                  <div style={{ textAlign: (block.styles?.alignment || 'Center').toLowerCase(), marginBottom: '0.5rem' }}>
-                                    <span style={{
-                                      fontFamily: block.styles?.fontFamily || 'Poppins',
-                                      fontSize: `${(parseInt(block.styles?.fontSize) || 36) * 0.72}px`,
-                                      fontWeight: block.styles?.fontWeight === 'Bold' ? 800 : block.styles?.fontWeight === 'SemiBold' ? 600 : 400,
-                                      color: block.styles?.color || '#1e293b',
-                                      lineHeight: 1.25,
-                                      display: 'inline-block'
-                                    }}>
-                                      {block.content?.text || ''}
-                                    </span>
-                                  </div>
-                                )}
-
-                                {/* TEXT BLOCK */}
-                                {block.type === 'text' && (
-                                  <div style={{
-                                    textAlign: (block.styles?.alignment || 'Left').toLowerCase(),
-                                    fontFamily: block.styles?.fontFamily || 'Poppins',
-                                    fontSize: block.styles?.fontSize || '15px',
-                                    fontWeight: block.styles?.fontWeight === 'Bold' ? 700 : block.styles?.fontWeight === 'SemiBold' ? 600 : 400,
-                                    color: block.styles?.color || '#334155',
-                                    lineHeight: 1.5,
-                                    whiteSpace: 'pre-wrap',
-                                    marginBottom: '0.5rem'
-                                  }}>
-                                    {block.content?.text || ''}
-                                  </div>
-                                )}
-
-                                {/* IMAGE BLOCK */}
-                                {block.type === 'image' && (
-                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                                    {block.content?.url ? (
-                                      <div style={{ width: '100%', height: '220px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <img
-                                          src={resolveMediaUrl(block.content.url)}
-                                          alt="Visual presentation"
-                                          style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-                                        />
-                                      </div>
-                                    ) : (
-                                      <div style={{ width: '100%', height: '120px', border: '1.5px dashed #cbd5e1', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
-                                        <FiImage style={{ fontSize: '2rem', marginBottom: '4px', opacity: 0.6 }} />
-                                        <span style={{ fontSize: '0.72rem' }}>No image asset configured.</span>
-                                      </div>
-                                    )}
-                                    {block.content?.caption && (
-                                      <span style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic' }}>{block.content.caption}</span>
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* AUDIO BLOCK */}
-                                {block.type === 'audio' && (
-                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '0.5rem 0' }}>
-                                    <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '16px', padding: '1.25rem 1.5rem', width: '90%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', boxShadow: '0 4px 12px rgba(2,132,199,0.06)' }}>
-                                      <FiVolume2 style={{ fontSize: '2rem', color: '#0284c7' }} />
-                                      <div style={{ textAlign: 'center' }}>
-                                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0369a1' }}>{block.content?.title || 'Listening Clip'}</div>
-                                      </div>
-                                      {block.content?.url ? (
-                                        <audio src={resolveMediaUrl(block.content.url)} controls style={{ width: '100%' }} />
-                                      ) : (
-                                        <div style={{ fontSize: '0.68rem', color: '#64748b', fontStyle: 'italic' }}>Instruction voiceover is missing.</div>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* VIDEO BLOCK */}
-                                {block.type === 'video' && (
-                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                    {block.content?.url ? (
-                                      <div style={{ width: '100%', borderRadius: '12px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#000000' }}>
-                                        <video src={resolveMediaUrl(block.content.url)} controls style={{ width: '100%', height: '220px', display: 'block' }} />
-                                      </div>
-                                    ) : (
-                                      <div style={{ width: '100%', height: '120px', border: '1.5px dashed #cbd5e1', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
-                                        <FiMonitor style={{ fontSize: '2rem', marginBottom: '4px', opacity: 0.6 }} />
-                                        <span style={{ fontSize: '0.72rem' }}>No video asset configured.</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* DIALOGUE BLOCK */}
-                                {block.type === 'dialogue' && (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', padding: '0.5rem 0' }}>
-                                    {(block.content?.steps || []).map((st, i) => {
-                                      const isLeft = st.side !== 'right';
-                                      return (
-                                        <div
-                                          key={i}
-                                          style={{
-                                            display: 'flex',
-                                            justifyContent: isLeft ? 'flex-start' : 'flex-end',
-                                            alignItems: 'flex-start',
-                                            gap: '0.65rem',
-                                            flexDirection: isLeft ? 'row' : 'row-reverse'
-                                          }}
-                                        >
-                                          <div style={{
-                                            width: '36px',
-                                            height: '36px',
-                                            borderRadius: '50%',
-                                            background: st.avatarColor || '#0ea5e9',
-                                            color: '#ffffff',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            fontWeight: 700,
-                                            fontSize: '0.8rem',
-                                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                                            flexShrink: 0
-                                          }}>{st.name ? st.name.charAt(0).toUpperCase() : '?'}</div>
-                                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: isLeft ? 'flex-start' : 'flex-end' }}>
-                                            <span style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600, marginBottom: '2px', padding: '0 4px' }}>{st.name}</span>
-                                            <div style={{
-                                              background: isLeft ? '#f1f5f9' : '#0b57d0',
-                                              color: isLeft ? '#1e293b' : '#ffffff',
-                                              padding: '0.65rem 0.95rem',
-                                              borderRadius: isLeft ? '0 12px 12px 12px' : '12px 0 12px 12px',
-                                              fontSize: '0.82rem',
-                                              lineHeight: 1.45,
-                                              maxWidth: '340px',
-                                              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                                              border: isLeft ? '1px solid #e2e8f0' : 'none'
-                                            }}>{st.text}</div>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-
-                                {/* QUIZ MULTIPLE CHOICE BLOCK */}
-                                {block.type === 'quiz' && (() => {
-                                  const blockAnswerKey = `${activeScreen.id}_${block.id}`;
-                                  const selectedAnsIndex = previewAnswers[blockAnswerKey];
-                                  const hasSelected = selectedAnsIndex !== undefined;
-
-                                  return (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '0.5rem 0' }}>
-                                      <div style={{ border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '10px', padding: '1rem 1.25rem', fontSize: '0.9rem', fontWeight: 700, color: '#c2410c', boxShadow: '0 2px 4px rgba(249,115,22,0.04)' }}>
-                                        ❓ {block.content?.question || 'Quiz question text label...'}
-                                      </div>
-
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                                        {(block.content?.options || ['', '', '', '']).map((opt, oIdx) => {
-                                          const isCorrectAnswer = parseInt(block.content?.correctAnswerIndex) === oIdx;
-                                          const isSelected = selectedAnsIndex === oIdx;
-
-                                          let borderCol = '#cbd5e1';
-                                          let bgCol = '#ffffff';
-                                          let textCol = '#1e293b';
-
-                                          if (hasSelected) {
-                                            if (isCorrectAnswer) {
-                                              borderCol = '#16a34a';
-                                              bgCol = '#ecfdf5';
-                                              textCol = '#15803d';
-                                            } else if (isSelected) {
-                                              borderCol = '#ef4444';
-                                              bgCol = '#fef2f2';
-                                              textCol = '#b91c1c';
-                                            }
-                                          }
-
-                                          return (
-                                            <div
-                                              key={oIdx}
-                                              onClick={() => {
-                                                if (!hasSelected) {
-                                                  setPreviewAnswers(prev => ({
-                                                    ...prev,
-                                                    [blockAnswerKey]: oIdx
-                                                  }));
-                                                }
-                                              }}
-                                              style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '0.85rem',
-                                                background: bgCol,
-                                                border: `2px solid ${borderCol}`,
-                                                borderRadius: '10px',
-                                                padding: '0.85rem 1.1rem',
-                                                fontSize: '0.82rem',
-                                                cursor: hasSelected ? 'default' : 'pointer',
-                                                transition: 'all 0.15s',
-                                                boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
-                                              }}
-                                            >
-                                              <span style={{
-                                                width: '20px',
-                                                height: '20px',
-                                                borderRadius: '50%',
-                                                border: '1.5px solid #cbd5e1',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                fontSize: '0.72rem',
-                                                fontWeight: 'bold',
-                                                background: isSelected || (hasSelected && isCorrectAnswer) ? borderCol : 'none',
-                                                color: isSelected || (hasSelected && isCorrectAnswer) ? '#ffffff' : '#64748b',
-                                                borderColor: borderCol
-                                              }}>
-                                                {String.fromCharCode(65 + oIdx)}
-                                              </span>
-                                              <span style={{ fontWeight: 600, color: textCol }}>{(typeof opt === 'object' ? opt?.text : opt) || `Quiz Option ${oIdx + 1}`}</span>
-
-                                              {hasSelected && isCorrectAnswer && (
-                                                <span style={{ marginLeft: 'auto', color: '#16a34a', fontSize: '0.72rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                                  ✓ Correct Choice
-                                                </span>
-                                              )}
-                                              {hasSelected && isSelected && !isCorrectAnswer && (
-                                                <span style={{ marginLeft: 'auto', color: '#ef4444', fontSize: '0.72rem', fontWeight: 'bold' }}>
-                                                  ✗ Incorrect Choice
-                                                </span>
-                                              )}
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-
-                                      {hasSelected && (
-                                        <button
-                                          onClick={() => {
-                                            setPreviewAnswers(prev => {
-                                              const updated = { ...prev };
-                                              delete updated[blockAnswerKey];
-                                              return updated;
-                                            });
-                                          }}
-                                          style={{ alignSelf: 'flex-end', border: 'none', background: 'none', color: '#0b57d0', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}
-                                        >
-                                          ↺ Reset Answer Choice
-                                        </button>
-                                      )}
-                                    </div>
-                                  );
-                                })()}
-
-                                {/* VOICE RECORDING BLOCK */}
-                                {block.type === 'voice_recorder' && (() => {
-                                  const blockRecordKey = `${activeScreen.id}_${block.id}`;
-                                  const isRecording = voiceRecordingStates[blockRecordKey];
-
-                                  return (
-                                    <div style={{ border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '16px', padding: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', boxShadow: '0 4px 12px rgba(217,119,6,0.05)', margin: '0.5rem 0' }}>
-                                      <div style={{
-                                        width: '56px',
-                                        height: '56px',
-                                        borderRadius: '50%',
-                                        background: isRecording ? '#ef4444' : '#d97706',
-                                        color: '#ffffff',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: '1.5rem',
-                                        cursor: 'pointer',
-                                        boxShadow: isRecording ? '0 0 0 4px rgba(239,68,68,0.2)' : '0 2px 8px rgba(217,119,6,0.2)',
-                                        animation: isRecording ? 'pulse 1.5s infinite' : 'none',
-                                        transition: 'all 0.2s'
-                                      }} onClick={() => {
-                                        setVoiceRecordingStates(prev => ({
-                                          ...prev,
-                                          [blockRecordKey]: !isRecording
-                                        }));
-                                      }}>
-                                        <FiMic />
-                                      </div>
-
-                                      <div style={{ textAlign: 'center' }}>
-                                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#b45309' }}>
-                                          {isRecording ? 'Recording audio response...' : 'Microphone Speaking Practice'}
-                                        </div>
-                                        <p style={{ fontSize: '0.78rem', color: '#b45309', marginTop: '4px', maxWidth: '320px' }}>
-                                          {block.content?.prompt || 'Record your response now.'}
-                                        </p>
-                                      </div>
-
-                                      {isRecording && (
-                                        <div style={{ display: 'flex', gap: '3px', alignItems: 'center', height: '20px' }}>
-                                          {[1, 2, 3, 4, 5, 4, 3, 2, 1].map((h, i) => (
-                                            <span
-                                              key={i}
-                                              style={{
-                                                width: '3px',
-                                                height: `${h * 4}px`,
-                                                background: '#ef4444',
-                                                borderRadius: '3px',
-                                                animation: `bounceWave 0.6s infinite alternate ${i * 0.08}s`
-                                              }}
-                                            />
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })()}
-
-                                {/* DRAG & DROP BLOCK */}
-                                {block.type === 'drag_drop' && (() => {
-                                  const list = block.content?.pairs || [];
-                                  const question = block.content?.question || 'Match items by dragging';
-                                  return (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#eff6ff', padding: '1rem', borderRadius: '12px', border: '1px solid #bfdbfe', marginTop: '0.5rem' }}>
-                                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e40af' }}>
-                                        🔀 {question}
-                                      </div>
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                        {list.map((pair, pIdx) => {
-                                          const selected = dragDropSelections[`${block.id}_${pair.id || pIdx}`] || '';
-                                          return (
-                                            <div key={pair.id || pIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.72rem' }}>
-                                              <span style={{ fontWeight: 600, color: '#1e293b' }}>{pair.source || pair.left}</span>
-                                              <select
-                                                value={selected}
-                                                onChange={(e) => {
-                                                  const val = e.target.value;
-                                                  setDragDropSelections(prev => ({
-                                                    ...prev,
-                                                    [`${block.id}_${pair.id || pIdx}`]: val
-                                                  }));
-                                                }}
-                                                style={{ padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.7rem', color: '#1e293b', outline: 'none' }}
-                                              >
-                                                <option value="">Select match...</option>
-                                                {list.map((p, idx) => (
-                                                  <option key={idx} value={p.target || p.right}>{p.target || p.right}</option>
-                                                ))}
-                                              </select>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
-
-                                {/* FILL IN BLANKS BLOCK */}
-                                {(['fill_blank', 'fill_blanks'].includes(block.type)) && (() => {
-                                  const text = block.content?.text || 'Type the blanks [blank1]';
-                                  const question = block.content?.question || 'Fill in the missing words';
-                                  const parts = text.split(/(\[.*?\])/g);
-
-                                  return (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#f0fdfa', padding: '1rem', borderRadius: '12px', border: '1px solid #ccfbf1', marginTop: '0.5rem' }}>
-                                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f766e' }}>
-                                        ✏️ {question}
-                                      </div>
-                                      <div style={{ fontSize: '0.78rem', lineHeight: 1.8, color: '#1e293b', background: '#ffffff', padding: '0.75rem', borderRadius: '8px', border: '1px solid #ccfbf1' }}>
-                                        {parts.map((part, pIdx) => {
-                                          if (part.startsWith('[') && part.endsWith(']')) {
-                                            const key = `${block.id}-${pIdx}`;
-                                            const ans = blankAnswers[key] || '';
-                                            return (
-                                              <input
-                                                key={pIdx}
-                                                type="text"
-                                                value={ans}
-                                                onChange={(e) => {
-                                                  const val = e.target.value;
-                                                  setBlankAnswers(prev => ({
-                                                    ...prev,
-                                                    [key]: val
-                                                  }));
-                                                }}
-                                                placeholder="..."
-                                                style={{ width: '80px', borderBottom: '2px solid #0d9488', borderTop: 'none', borderLeft: 'none', borderRight: 'none', textAlign: 'center', fontWeight: 700, color: '#0f766e', outline: 'none', padding: '0 4px', margin: '0 4px', fontSize: '0.75rem' }}
-                                              />
-                                            );
-                                          }
-                                          return <span key={pIdx}>{part}</span>;
-                                        })}
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
-
-                                {/* MATCH ITEMS BLOCK */}
-                                {block.type === 'match' && (() => {
-                                  const leftItems = block.content?.leftItems || [];
-                                  const rightItems = block.content?.rightItems || [];
-                                  const question = block.content?.question || 'Match the columns';
-                                  return (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#fdf2f8', padding: '1rem', borderRadius: '12px', border: '1px solid #fbcfe8', marginTop: '0.5rem' }}>
-                                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#9d174d' }}>
-                                        🔗 {question}
-                                      </div>
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                        {leftItems.map((left, pIdx) => {
-                                          const selected = dragDropSelections[`${block.id}_${pIdx}`] || '';
-                                          return (
-                                            <div key={pIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #fbcfe8', fontSize: '0.72rem' }}>
-                                              <span style={{ fontWeight: 600, color: '#9d174d' }}>{left}</span>
-                                              <select
-                                                value={selected}
-                                                onChange={(e) => {
-                                                  const val = e.target.value;
-                                                  setDragDropSelections(prev => ({
-                                                    ...prev,
-                                                    [`${block.id}_${pIdx}`]: val
-                                                  }));
-                                                }}
-                                                style={{ padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #fbcfe8', fontSize: '0.7rem', color: '#9d174d', outline: 'none' }}
-                                              >
-                                                <option value="">Select match...</option>
-                                                {rightItems.map((right, idx) => (
-                                                  <option key={idx} value={right}>{right}</option>
-                                                ))}
-                                              </select>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
-
-                                {/* SEQUENCE BLOCK */}
-                                {block.type === 'sequence' && (() => {
-                                  const items = block.content?.items || [];
-                                  const question = block.content?.question || 'Sort items in correct sequence';
-                                  return (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#fffbeb', padding: '1rem', borderRadius: '12px', border: '1px solid #fde68a', marginTop: '0.5rem' }}>
-                                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#b45309' }}>
-                                        🔢 {question}
-                                      </div>
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                        {items.map((item, idx) => (
-                                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#ffffff', border: '1px solid #cbd5e1', padding: '0.55rem 0.75rem', borderRadius: '8px', fontSize: '0.72rem', color: '#1e293b' }}>
-                                            <span style={{ width: '20px', height: '20px', borderRadius: '50%', background: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.68rem' }}>
-                                              {idx + 1}
-                                            </span>
-                                            <span>{item}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
-
-                                {/* FLASHCARD BLOCK */}
-                                {block.type === 'flashcard' && (() => {
-                                  const cards = block.content?.cards || [];
-                                  return (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem' }}>
-                                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#be185d', textAlign: 'center' }}>🗂️ Interactive Flashcards</div>
-                                      <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '0.5rem', width: '100%' }}>
-                                        {cards.map((card, cIdx) => {
-                                          const isFlipped = flippedCards[`${block.id}-${cIdx}`];
-                                          return (
-                                            <div
-                                              key={card.id || cIdx}
-                                              onClick={() => {
-                                                setFlippedCards(prev => ({
-                                                  ...prev,
-                                                  [`${block.id}-${cIdx}`]: !prev[`${block.id}-${cIdx}`]
-                                                }));
-                                              }}
-                                              style={{
-                                                flexShrink: 0,
-                                                width: '130px',
-                                                height: '90px',
-                                                background: isFlipped ? '#fdf2f8' : '#ffffff',
-                                                border: isFlipped ? '2px solid #ec4899' : '1px solid #cbd5e1',
-                                                borderRadius: '12px',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                padding: '0.5rem',
-                                                textAlign: 'center',
-                                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                                                transition: 'all 0.2s'
-                                              }}
-                                            >
-                                              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isFlipped ? '#be185d' : '#1e293b' }}>
-                                                {isFlipped ? card.back : card.front}
-                                              </span>
-                                              <span style={{ fontSize: '0.55rem', color: '#94a3b8', marginTop: '8px' }}>
-                                                {isFlipped ? 'Show front' : 'Click to flip'}
-                                              </span>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
-
-                                {/* SENTENCE BUILDER BLOCK */}
-                                {block.type === 'sentence_builder' && (() => {
-                                  const question = block.content?.question || 'Reorder the words to make a correct sentence.';
-                                  const words = block.content?.words || [];
-                                  const selection = dragDropSelections[block.id] || [];
-
-                                  return (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#ecfeff', padding: '1rem', borderRadius: '12px', border: '1px solid #a5f3fc', marginTop: '0.5rem' }}>
-                                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0891b2' }}>
-                                        🧩 {question}
-                                      </div>
-
-                                      <div style={{ minHeight: '38px', padding: '0.5rem', background: '#ffffff', borderRadius: '8px', border: '1.5px dashed #06b6d4', display: 'flex', flexWrap: 'wrap', gap: '0.25rem', alignItems: 'center' }}>
-                                        {selection.length === 0 ? (
-                                          <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Click words below...</span>
-                                        ) : (
-                                          selection.map((word, wIdx) => (
-                                            <button
-                                              key={wIdx}
-                                              type="button"
-                                              onClick={() => {
-                                                setDragDropSelections(prev => ({
-                                                  ...prev,
-                                                  [block.id]: (prev[block.id] || []).filter((_, idx) => idx !== wIdx)
-                                                }));
-                                              }}
-                                              style={{ background: '#06b6d4', color: '#ffffff', border: 'none', borderRadius: '6px', padding: '2px 8px', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}
-                                            >
-                                              {word} ×
-                                            </button>
-                                          ))
-                                        )}
-                                      </div>
-
-                                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                                        {words.map((word, wIdx) => {
-                                          const isUsed = selection.includes(word);
-                                          return (
-                                            <button
-                                              key={wIdx}
-                                              type="button"
-                                              disabled={isUsed}
-                                              onClick={() => {
-                                                setDragDropSelections(prev => ({
-                                                  ...prev,
-                                                  [block.id]: [...(prev[block.id] || []), word]
-                                                }));
-                                              }}
-                                              style={{
-                                                background: isUsed ? '#e2e8f0' : '#ffffff',
-                                                border: '1px solid #cbd5e1',
-                                                borderRadius: '6px',
-                                                padding: '3px 8px',
-                                                fontSize: '0.7rem',
-                                                fontWeight: 600,
-                                                color: isUsed ? '#94a3b8' : '#0891b2',
-                                                cursor: isUsed ? 'default' : 'pointer'
-                                              }}
-                                            >
-                                              {word}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
-
-                                {/* WORD SEARCH / CROSSWORD BLOCK */}
-                                {(['word_search', 'crossword'].includes(block.type)) && (() => {
-                                  const question = block.content?.question || 'Word Search Puzzle';
-                                  const grid = [
-                                    ['L', 'A', 'N', 'G', 'U', 'A', 'G', 'E'],
-                                    ['E', 'X', 'P', 'E', 'R', 'I', 'E', 'N'],
-                                    ['A', 'C', 'T', 'I', 'V', 'I', 'T', 'Y'],
-                                    ['S', 'C', 'R', 'E', 'E', 'N', 'P', 'C']
-                                  ];
-                                  return (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#faf5ff', padding: '1rem', borderRadius: '12px', border: '1px solid #f3e8ff', marginTop: '0.5rem' }}>
-                                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#6b21a8' }}>
-                                        🔍 {question}
-                                      </div>
-                                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '4px', maxWidth: '240px', margin: '0 auto', background: '#f3e8ff', padding: '4px', borderRadius: '8px' }}>
-                                        {grid.flatMap((row, rIdx) => row.map((char, cIdx) => (
-                                          <div
-                                            key={`${rIdx}-${cIdx}`}
-                                            style={{
-                                              aspectRatio: '1',
-                                              background: '#ffffff',
-                                              borderRadius: '4px',
-                                              display: 'flex',
-                                              alignItems: 'center',
-                                              justifyContent: 'center',
-                                              fontSize: '0.68rem',
-                                              fontWeight: 800,
-                                              color: '#6b21a8',
-                                              border: '1px solid #cbd5e1',
-                                              cursor: 'pointer'
-                                            }}
-                                            onClick={(e) => {
-                                              const currBg = e.currentTarget.style.backgroundColor;
-                                              e.currentTarget.style.backgroundColor = currBg === 'rgb(216, 180, 254)' ? '#ffffff' : '#d8b4fe';
-                                            }}
-                                          >
-                                            {char}
-                                          </div>
-                                        )))}
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
+                                <PreviewCanvasRenderer
+                                  elements={activeScreen?.elements || []}
+                                  activeScreenId={activeScreen?.id || ''}
+                                  previewAnswers={previewAnswers}
+                                  setPreviewAnswers={setPreviewAnswers}
+                                  voiceRecordingStates={voiceRecordingStates}
+                                  setVoiceRecordingStates={setVoiceRecordingStates}
+                                  dragDropSelections={dragDropSelections}
+                                  setDragDropSelections={setDragDropSelections}
+                                  blankAnswers={blankAnswers}
+                                  setBlankAnswers={setBlankAnswers}
+                                  flippedCards={flippedCards}
+                                  setFlippedCards={setFlippedCards}
+                                  resolveUrl={resolveMediaUrl}
+                                />
                               </div>
-                            );
-                          })
-                        )}
-
+                            </div>
+                          );
+                        })()}
                       </div>
-
-                      {/* Device bottom navigation control bar */}
-                      <div style={{ borderTop: '1px solid #cbd5e1', padding: '0.75rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
-                        <button
-                          className="cs-btn-outline"
-                          disabled={previewScreenIndex <= 0}
-                          onClick={() => {
-                            setPreviewScreenIndex(prev => prev - 1);
-                            setPreviewAnswerIndex(null);
-                          }}
-                          style={{ padding: '0.45rem 1.1rem', fontSize: '0.78rem', background: '#ffffff', cursor: 'pointer', borderRadius: '8px', border: '1px solid #cbd5e1' }}
-                        >
-                          ← Previous Screen
-                        </button>
-                        <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
-                          Screen {previewScreenIndex + 1} of {totalScreens}
-                        </span>
-                        <button
-                          className="cs-btn-outline"
-                          disabled={previewScreenIndex >= totalScreens - 1}
-                          onClick={() => {
-                            setPreviewScreenIndex(prev => prev + 1);
-                            setPreviewAnswerIndex(null);
-                          }}
-                          style={{ padding: '0.45rem 1.1rem', fontSize: '0.78rem', background: '#ffffff', cursor: 'pointer', borderRadius: '8px', border: '1px solid #cbd5e1' }}
-                        >
-                          Next Screen →
-                        </button>
-                      </div>
-
                     </div>
-                  </div>
 
+                    {/* Device bottom navigation control bar */}
+                    <div className="preview-footer-sticky" style={{ 
+                      position: 'sticky',
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      background: '#ffffff',
+                      borderTop: '1px solid #e2e8f0',
+                      padding: '1rem 1.5rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      zIndex: 50,
+                      boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.05)',
+                      boxSizing: 'border-box',
+                      width: '100%'
+                    }}>
+                      <button
+                        className="cs-btn-outline"
+                        disabled={previewScreenIndex <= 0}
+                        onClick={() => {
+                          setPreviewScreenIndex(prev => prev - 1);
+                          setPreviewAnswerIndex(null);
+                        }}
+                        style={{ padding: '0.45rem 1.1rem', fontSize: '0.78rem', background: '#ffffff', cursor: previewScreenIndex <= 0 ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 600, color: '#334155' }}
+                      >
+                        ← Previous Screen
+                      </button>
+                      <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
+                        Screen {previewScreenIndex + 1} of {totalScreens}
+                      </span>
+                      <button
+                        className="cs-btn-outline"
+                        disabled={previewScreenIndex >= totalScreens - 1}
+                        onClick={() => {
+                          setPreviewScreenIndex(prev => prev + 1);
+                          setPreviewAnswerIndex(null);
+                        }}
+                        style={{ padding: '0.45rem 1.1rem', fontSize: '0.78rem', background: '#ffffff', cursor: previewScreenIndex >= totalScreens - 1 ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 600, color: '#334155' }}
+                      >
+                        Next Screen →
+                      </button>
+                    </div>
+
+                  </div>
                 </div>
+
               </>
             );
           })()}

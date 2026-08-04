@@ -73,6 +73,7 @@ class ActivitySerializer(serializers.ModelSerializer):
         source="skills", many=True, queryset=ActivitySkill.objects.all(),
         write_only=True, required=False
     )
+    title = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Activity
@@ -99,6 +100,17 @@ class ActivitySerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        skills = attrs.get("skills", [])
+        if skills:
+            attrs["title"] = skills[0].name.capitalize()
+        elif not self.instance:
+            attrs["title"] = "Activity"
+
+        experience = attrs.get("experience")
+        if experience and not self.instance:
+            if experience.activities.count() >= 5:
+                raise serializers.ValidationError("An experience cannot have more than 5 activities.")
+
         return validate_strict_fields(self, attrs)
 
 
@@ -109,6 +121,7 @@ class ActivityDetailSerializer(serializers.ModelSerializer):
         source="skills", many=True, queryset=ActivitySkill.objects.all(),
         write_only=True, required=False
     )
+    title = serializers.CharField(required=False, allow_blank=True)
     screens = ScreenSerializer(many=True, read_only=True)
 
     class Meta:
@@ -137,6 +150,17 @@ class ActivityDetailSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        skills = attrs.get("skills", [])
+        if skills:
+            attrs["title"] = skills[0].name.capitalize()
+        elif not self.instance:
+            attrs["title"] = "Activity"
+
+        experience = attrs.get("experience")
+        if experience and not self.instance:
+            if experience.activities.count() >= 5:
+                raise serializers.ValidationError("An experience cannot have more than 5 activities.")
+
         return validate_strict_fields(self, attrs)
 
 

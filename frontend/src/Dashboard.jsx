@@ -7,8 +7,9 @@ import {
   FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
   FiActivity, FiTrendingUp, FiAward, FiLock,
   FiChevronLeft, FiChevronRight, FiEye, FiEyeOff, FiList,
-  FiCornerDownRight, FiXCircle, FiMoreVertical, FiDownload, FiAlertTriangle, FiKey, FiInfo, FiRefreshCw, FiUpload
+  FiCornerDownRight, FiXCircle, FiMoreVertical, FiDownload, FiAlertTriangle, FiKey, FiInfo, FiRefreshCw, FiUpload, FiVolume2
 } from 'react-icons/fi';
+import PreviewCanvasRenderer from './PreviewCanvasRenderer';
 import './Dashboard.css';
 import { apiFetch } from './api';
 import { API_BASE_URL } from './config';
@@ -470,6 +471,15 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [students, setStudents] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({ total_schools: 0, total_school_admins: 0, total_publish_contents: 0, total_grades: 0 });
   const [previewExperience, setPreviewExperience] = useState(null);
+
+  // Interactive widget states for Super Admin preview
+  const [previewAnswers, setPreviewAnswers] = useState({});
+  const [voiceRecordingStates, setVoiceRecordingStates] = useState({});
+  const [dragDropSelections, setDragDropSelections] = useState({});
+  const [blankAnswers, setBlankAnswers] = useState({});
+  const [flippedCards, setFlippedCards] = useState({});
+
+
   const [selectedSchoolDetail, setSelectedSchoolDetail] = useState(null);
   const [showSchoolDetailModal, setShowSchoolDetailModal] = useState(false);
   const [selectedSchoolAdminDetail, setSelectedSchoolAdminDetail] = useState(null);
@@ -636,6 +646,40 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [selectedQuizOption, setSelectedQuizOption] = useState(null);
   const [quizChecked, setQuizChecked] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
+
+  // Dynamic scale factor calculation for preview canvas (locks to 1440px base width)
+  const [previewScaleFactor, setPreviewScaleFactor] = useState(1);
+  const previewScaleRef = React.useRef(null);
+
+  useEffect(() => {
+    if (!previewExperience || !previewScaleRef.current) return;
+    const updateScale = () => {
+      if (previewScaleRef.current) {
+        const width = previewScaleRef.current.clientWidth;
+        setPreviewScaleFactor(width > 0 ? width / 1100 : 1);
+      }
+    };
+    const timer = setTimeout(updateScale, 50);
+    window.addEventListener('resize', updateScale);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateScale);
+    };
+  }, [previewExperience, activePreviewScreen]);
+
+  const getCanvasHeight = (elements) => {
+    if (!elements || elements.length === 0) return 600;
+    let maxBottom = 600;
+    elements.forEach(block => {
+      const top = parseInt(block.styles?.top) || 0;
+      const height = parseInt(block.styles?.minHeight) || 150;
+      if (top + height > maxBottom) {
+        maxBottom = top + height;
+      }
+    });
+    return maxBottom + 80;
+  };
+
 
   /* ══════════════════════════════════
      DATA LOADERS (unchanged from original)
@@ -3332,17 +3376,44 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               </div>
 
               {/* Right Content Pane: Full canvas player simulator */}
-              <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', position: 'relative' }}>
+              <div className="preview-viewport-main" style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                height: 'calc(100vh - 120px)',
+                overflow: 'hidden',
+                position: 'relative'
+              }}>
                 {activePreviewScreen ? (
-                  <div style={{
-                    backgroundColor: '#ffffff',
-                    borderRadius: '16px',
-                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
-                    border: '1px solid #e2e8f0',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    flex: 1
-                  }}>
+                  <>
+                    {/* Scrollable Workspace Container */}
+                    <div className="preview-workspace-scrollable" style={{
+                      flex: 1,
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      padding: '2rem 1.5rem',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'flex-start',
+                      backgroundColor: '#ffffff'
+                    }}>
+                      <div 
+                        ref={previewScaleRef}
+                        style={{
+                          width: '1100px',
+                          maxWidth: '100%',
+                          backgroundColor: '#ffffff',
+                          borderRadius: '16px',
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05)',
+                          padding: '2.5rem',
+                          boxSizing: 'border-box',
+                          margin: '0 auto',
+                          position: 'relative',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          overflow: 'hidden'
+                        }}>
                     {/* Viewport Header */}
                     <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fafafa', flexShrink: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -3370,278 +3441,354 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     </div>
 
                     {/* Viewport Canvas Body */}
-                    <div style={{ flex: 1, padding: '2.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                      <div style={{ maxWidth: '800px', width: '100%', margin: '0 auto' }}>
-                        {activePreviewScreen.screen_type === 'INFORMATION' && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                            <div style={{ padding: '1.25rem', background: '#f0f9ff', borderRadius: '12px', borderLeft: '4px solid #0284c7', fontSize: '0.9rem', color: '#075985', lineHeight: 1.6, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                              {activePreviewScreen.content?.intro_text || activePreviewScreen.content?.text || 'Read the conversation dialogue below carefully.'}
+                    <div 
+                      style={{ 
+                        flex: 1, 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        position: 'relative',
+                        width: '100%',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      {activePreviewScreen.elements && activePreviewScreen.elements.length > 0 ? (
+                        (() => {
+                          const baseCanvasHeight = getCanvasHeight(activePreviewScreen.elements);
+                          const scaledHeight = baseCanvasHeight * previewScaleFactor;
+                          return (
+                            <div style={{ 
+                              width: '100%', 
+                              height: `${scaledHeight}px`, 
+                              position: 'relative', 
+                              background: '#ffffff',
+                              overflow: 'hidden'
+                            }}>
+                               <div 
+                                 className="preview-canvas-viewport"
+                                 style={{
+                                   width: '1100px',
+                                   height: `${baseCanvasHeight}px`,
+                                   padding: '1.25rem',
+                                   position: 'absolute',
+                                   left: 0,
+                                   top: 0,
+                                   transform: `scale(${previewScaleFactor})`,
+                                   transformOrigin: 'top left',
+                                   background: '#ffffff',
+                                   fontFamily: activePreviewScreen.content?.font || 'Poppins'
+                                 }}
+                               >
+                                 <PreviewCanvasRenderer
+                                   elements={activePreviewScreen.elements || []}
+                                   activeScreenId={activePreviewScreen.id || ''}
+                                   previewAnswers={previewAnswers}
+                                   setPreviewAnswers={setPreviewAnswers}
+                                   voiceRecordingStates={voiceRecordingStates}
+                                   setVoiceRecordingStates={setVoiceRecordingStates}
+                                   dragDropSelections={dragDropSelections}
+                                   setDragDropSelections={setDragDropSelections}
+                                   blankAnswers={blankAnswers}
+                                   setBlankAnswers={setBlankAnswers}
+                                   flippedCards={flippedCards}
+                                   setFlippedCards={setFlippedCards}
+                                   resolveUrl={resolvePreviewUrl}
+                                 />
+                              </div>
                             </div>
+                          );
+                        })()
+                      ) : (
+                        <div style={{ flex: 1, padding: '2.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                          <div style={{ maxWidth: '800px', width: '100%', margin: '0 auto' }}>
+                            {activePreviewScreen.screen_type === 'INFORMATION' && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                <div style={{ padding: '1.25rem', background: '#f0f9ff', borderRadius: '12px', borderLeft: '4px solid #0284c7', fontSize: '0.9rem', color: '#075985', lineHeight: 1.6, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                  {activePreviewScreen.content?.intro_text || activePreviewScreen.content?.text || 'Read the conversation dialogue below carefully.'}
+                                </div>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-                              {(activePreviewScreen.elements?.[0]?.content?.steps || activePreviewScreen.content?.steps || [
-                                { step: 1, name: "Instructor", text: "Welcome to this experience! Interact with the options below.", side: 'left' }
-                              ]).map((dlg, idx) => (
-                                <div key={idx} style={{
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+                                  {(activePreviewScreen.elements?.[0]?.content?.steps || activePreviewScreen.content?.steps || [
+                                    { step: 1, name: "Instructor", text: "Welcome to this experience! Interact with the options below.", side: 'left' }
+                                  ]).map((dlg, idx) => (
+                                    <div key={idx} style={{
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      alignItems: dlg.side === 'right' ? 'flex-end' : 'flex-start',
+                                      width: '100%'
+                                    }}>
+                                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', marginBottom: '4px', marginLeft: dlg.side === 'right' ? 0 : '8px', marginRight: dlg.side === 'right' ? '8px' : 0 }}>
+                                        {dlg.name}
+                                      </span>
+                                      <div style={{
+                                        padding: '0.8rem 1.2rem',
+                                        borderRadius: '16px',
+                                        borderTopLeftRadius: dlg.side === 'right' ? '16px' : '4px',
+                                        borderTopRightRadius: dlg.side === 'right' ? '4px' : '16px',
+                                        backgroundColor: dlg.side === 'right' ? '#0284c7' : '#f1f5f9',
+                                        color: dlg.side === 'right' ? '#ffffff' : '#1e293b',
+                                        fontSize: '0.85rem',
+                                        maxWidth: '75%',
+                                        lineHeight: 1.5,
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                      }}>
+                                        {dlg.text}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {activePreviewScreen.screen_type === 'IMAGE' && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center' }}>
+                                {getPreviewMediaUrl(activePreviewScreen, 'image') ? (
+                                  <img
+                                    src={getPreviewMediaUrl(activePreviewScreen, 'image')}
+                                    alt="Screen Image"
+                                    style={{ width: '100%', maxWidth: '600px', borderRadius: '16px', maxHeight: '350px', objectFit: 'cover', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                                  />
+                                ) : (
+                                  <div style={{ width: '100%', maxWidth: '600px', height: '220px', backgroundColor: '#f1f5f9', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '3rem', border: '2px dashed #cbd5e1' }}>🖼️</div>
+                                )}
+                                <p style={{ fontSize: '0.95rem', color: '#334155', textAlign: 'center', lineHeight: 1.6, margin: 0, maxWidth: '600px' }}>
+                                  {activePreviewScreen.content?.caption || activePreviewScreen.content?.text || 'Image asset preview.'}
+                                </p>
+                              </div>
+                            )}
+
+                            {activePreviewScreen.screen_type === 'VIDEO' && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', alignItems: 'center' }}>
+                                <div style={{
+                                  width: '100%',
+                                  maxWidth: '640px',
+                                  height: '360px',
+                                  backgroundColor: '#0f172a',
+                                  borderRadius: '16px',
+                                  overflow: 'hidden',
+                                  boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
+                                }}>
+                                  <video
+                                    src={getPreviewMediaUrl(activePreviewScreen, 'video')}
+                                    controls
+                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {activePreviewScreen.screen_type === 'SPEAKING' && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center' }}>
+                                <div style={{
+                                  width: '100%',
+                                  maxWidth: '500px',
+                                  padding: '2.5rem',
+                                  background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                                  borderRadius: '24px',
+                                  color: '#ffffff',
                                   display: 'flex',
                                   flexDirection: 'column',
-                                  alignItems: dlg.side === 'right' ? 'flex-end' : 'flex-start',
-                                  width: '100%'
-                                }}>
-                                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', marginBottom: '4px', marginLeft: dlg.side === 'right' ? 0 : '8px', marginRight: dlg.side === 'right' ? '8px' : 0 }}>
-                                    {dlg.name}
-                                  </span>
-                                  <div style={{
-                                    padding: '0.8rem 1.2rem',
-                                    borderRadius: '16px',
-                                    borderTopLeftRadius: dlg.side === 'right' ? '16px' : '4px',
-                                    borderTopRightRadius: dlg.side === 'right' ? '4px' : '16px',
-                                    backgroundColor: dlg.side === 'right' ? '#0284c7' : '#f1f5f9',
-                                    color: dlg.side === 'right' ? '#ffffff' : '#1e293b',
-                                    fontSize: '0.85rem',
-                                    maxWidth: '75%',
-                                    lineHeight: 1.5,
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                  }}>
-                                    {dlg.text}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {activePreviewScreen.screen_type === 'IMAGE' && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center' }}>
-                            {getPreviewMediaUrl(activePreviewScreen, 'image') ? (
-                              <img
-                                src={getPreviewMediaUrl(activePreviewScreen, 'image')}
-                                alt="Screen Image"
-                                style={{ width: '100%', maxWidth: '600px', borderRadius: '16px', maxHeight: '350px', objectFit: 'cover', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-                              />
-                            ) : (
-                              <div style={{ width: '100%', maxWidth: '600px', height: '220px', backgroundColor: '#f1f5f9', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '3rem', border: '2px dashed #cbd5e1' }}>🖼️</div>
-                            )}
-                            <p style={{ fontSize: '0.95rem', color: '#334155', textAlign: 'center', lineHeight: 1.6, margin: 0, maxWidth: '600px' }}>
-                              {activePreviewScreen.content?.caption || activePreviewScreen.content?.text || 'Image asset preview.'}
-                            </p>
-                          </div>
-                        )}
-
-                        {activePreviewScreen.screen_type === 'VIDEO' && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', alignItems: 'center' }}>
-                            <div style={{
-                              width: '100%',
-                              maxWidth: '640px',
-                              height: '360px',
-                              backgroundColor: '#0f172a',
-                              borderRadius: '16px',
-                              overflow: 'hidden',
-                              boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
-                            }}>
-                              <video
-                                src={getPreviewMediaUrl(activePreviewScreen, 'video')}
-                                controls
-                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {activePreviewScreen.screen_type === 'SPEAKING' && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center' }}>
-                            <div style={{
-                              width: '100%',
-                              maxWidth: '500px',
-                              padding: '2.5rem',
-                              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                              borderRadius: '24px',
-                              color: '#ffffff',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              gap: '20px',
-                              boxShadow: '0 20px 25px -5px rgba(2, 132, 199, 0.3)',
-                            }}>
-                              <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{activePreviewScreen.content?.title || 'Audio Pronunciation Practice'}</div>
-                                <div style={{ fontSize: '0.8rem', color: '#e0f2fe', marginTop: '4px', marginBottom: '1.5rem' }}>Use the controls below to play the dialogue audio clip</div>
-                              </div>
-
-                              <audio
-                                src={getPreviewMediaUrl(activePreviewScreen, 'audio')}
-                                controls
-                                style={{ width: '100%' }}
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {activePreviewScreen.screen_type === 'QUIZ' && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem', lineHeight: 1.5 }}>
-                              ❓ {activePreviewScreen.elements?.[0]?.content?.question || activePreviewScreen.content?.quiz_question || 'Choose the correct answer.'}
-                            </div>
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                              {(activePreviewScreen.elements?.[0]?.content?.options || activePreviewScreen.content?.quiz_options || ["Option A", "Option B", "Option C", "Option D"]).map((opt, oIdx) => {
-                                const isCorrectAnswer = oIdx === (activePreviewScreen.elements?.[0]?.content?.correctAnswerIndex ?? activePreviewScreen.content?.quiz_correct_index ?? 0);
-                                const isSelected = selectedQuizOption === oIdx;
-                                const optText = typeof opt === 'object' ? opt.text : opt;
-
-                                let cardBorder = '1px solid #cbd5e1';
-                                let cardBg = '#ffffff';
-                                let cardColor = '#334155';
-
-                                if (quizChecked) {
-                                  if (isCorrectAnswer) {
-                                    cardBorder = '2px solid #10b981';
-                                    cardBg = '#ecfdf5';
-                                    cardColor = '#065f46';
-                                  } else if (isSelected) {
-                                    cardBorder = '2px solid #ef4444';
-                                    cardBg = '#fef2f2';
-                                    cardColor = '#991b1b';
-                                  }
-                                } else if (isSelected) {
-                                  cardBorder = '2px solid #0284c7';
-                                  cardBg = '#f0f9ff';
-                                  cardColor = '#0369a1';
-                                }
-
-                                return (
-                                  <button
-                                    key={oIdx}
-                                    type="button"
-                                    disabled={quizChecked}
-                                    onClick={() => setSelectedQuizOption(oIdx)}
-                                    style={{
-                                      padding: '1rem 1.25rem',
-                                      borderRadius: '12px',
-                                      border: cardBorder,
-                                      backgroundColor: cardBg,
-                                      color: cardColor,
-                                      fontSize: '0.9rem',
-                                      display: 'flex',
-                                      justifyContent: 'space-between',
-                                      alignItems: 'center',
-                                      fontWeight: isSelected || (quizChecked && isCorrectAnswer) ? 600 : 500,
-                                      cursor: quizChecked ? 'default' : 'pointer',
-                                      textAlign: 'left',
-                                      transition: 'all 0.15s',
-                                      width: '100%',
-                                    }}
-                                  >
-                                    <span>{optText}</span>
-                                    {quizChecked && isCorrectAnswer && <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓ Correct Option</span>}
-                                    {quizChecked && isSelected && !isCorrectAnswer && <span style={{ color: '#ef4444', fontWeight: 'bold' }}>✗ Incorrect</span>}
-                                  </button>
-                                );
-                              })}
-                            </div>
-
-                            {/* Quiz Actions */}
-                            <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem' }}>
-                              {!quizChecked ? (
-                                <button
-                                  type="button"
-                                  className="sd-btn-primary"
-                                  disabled={selectedQuizOption === null}
-                                  onClick={() => setQuizChecked(true)}
-                                  style={{ padding: '0.65rem 1.5rem', fontSize: '0.85rem' }}
-                                >
-                                  Check Answer
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="sd-btn-outline"
-                                  onClick={() => {
-                                    setSelectedQuizOption(null);
-                                    setQuizChecked(false);
-                                  }}
-                                  style={{ padding: '0.65rem 1.5rem', fontSize: '0.85rem' }}
-                                >
-                                  Retry Quiz Attempt
-                                </button>
-                              )}
-
-                              {quizChecked && (
-                                <div style={{
-                                  display: 'flex',
                                   alignItems: 'center',
-                                  gap: '8px',
-                                  fontSize: '0.9rem',
-                                  fontWeight: 600,
-                                  color: selectedQuizOption === (activePreviewScreen.elements?.[0]?.content?.correctAnswerIndex ?? activePreviewScreen.content?.quiz_correct_index ?? 0) ? '#10b981' : '#ef4444'
+                                  gap: '20px',
+                                  boxShadow: '0 20px 25px -5px rgba(2, 132, 199, 0.3)',
                                 }}>
-                                  {selectedQuizOption === (activePreviewScreen.elements?.[0]?.content?.correctAnswerIndex ?? activePreviewScreen.content?.quiz_correct_index ?? 0)
-                                    ? "🎉 Excellent job! That is correct."
-                                    : "❌ Oops, that is not correct. Try again!"}
+                                  <div style={{ textAlign: 'center' }}>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{activePreviewScreen.content?.title || 'Audio Pronunciation Practice'}</div>
+                                    <div style={{ fontSize: '0.8rem', color: '#e0f2fe', marginTop: '4px', marginBottom: '1.5rem' }}>Use the controls below to play the dialogue audio clip</div>
+                                  </div>
+
+                                  <audio
+                                    src={getPreviewMediaUrl(activePreviewScreen, 'audio')}
+                                    controls
+                                    style={{ width: '100%' }}
+                                  />
                                 </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
+                              </div>
+                            )}
 
-                        {activePreviewScreen.screen_type === 'WRITING' && (
-                          <div style={{
-                            padding: '2.5rem',
-                            backgroundColor: '#fefcf6',
-                            border: '1px solid #fef08a',
-                            borderRadius: '16px',
-                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.02)',
-                            fontSize: '1rem',
-                            color: '#451a03',
-                            lineHeight: 1.8,
-                            fontFamily: activePreviewScreen.content?.font === 'Courier' ? 'Courier New, monospace' : 'Georgia, serif',
-                            position: 'relative'
-                          }}>
-                            {/* Mock line guide */}
-                            <div style={{ position: 'absolute', left: '10px', top: 0, bottom: 0, width: '1px', backgroundColor: '#fef08a' }} />
-                            {activePreviewScreen.content?.text || 'Custom styled writing text screen layout.'}
+                            {activePreviewScreen.screen_type === 'QUIZ' && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem', lineHeight: 1.5 }}>
+                                  ❓ {activePreviewScreen.elements?.[0]?.content?.question || activePreviewScreen.content?.quiz_question || 'Choose the correct answer.'}
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                  {(activePreviewScreen.elements?.[0]?.content?.options || activePreviewScreen.content?.quiz_options || ["Option A", "Option B", "Option C", "Option D"]).map((opt, oIdx) => {
+                                    const isCorrectAnswer = oIdx === (activePreviewScreen.elements?.[0]?.content?.correctAnswerIndex ?? activePreviewScreen.content?.quiz_correct_index ?? 0);
+                                    const isSelected = selectedQuizOption === oIdx;
+                                    const optText = typeof opt === 'object' ? opt.text : opt;
+
+                                    let cardBorder = '1px solid #cbd5e1';
+                                    let cardBg = '#ffffff';
+                                    let cardColor = '#334155';
+
+                                    if (quizChecked) {
+                                      if (isCorrectAnswer) {
+                                        cardBorder = '2px solid #10b981';
+                                        cardBg = '#ecfdf5';
+                                        cardColor = '#065f46';
+                                      } else if (isSelected) {
+                                        cardBorder = '2px solid #ef4444';
+                                        cardBg = '#fef2f2';
+                                        cardColor = '#991b1b';
+                                      }
+                                    } else if (isSelected) {
+                                      cardBorder = '2px solid #0284c7';
+                                      cardBg = '#f0f9ff';
+                                      cardColor = '#0369a1';
+                                    }
+
+                                    return (
+                                      <button
+                                        key={oIdx}
+                                        type="button"
+                                        disabled={quizChecked}
+                                        onClick={() => setSelectedQuizOption(oIdx)}
+                                        style={{
+                                          padding: '1rem 1.25rem',
+                                          borderRadius: '12px',
+                                          border: cardBorder,
+                                          backgroundColor: cardBg,
+                                          color: cardColor,
+                                          fontSize: '0.9rem',
+                                          display: 'flex',
+                                          justifyContent: 'space-between',
+                                          alignItems: 'center',
+                                          fontWeight: isSelected || (quizChecked && isCorrectAnswer) ? 600 : 500,
+                                          cursor: quizChecked ? 'default' : 'pointer',
+                                          textAlign: 'left',
+                                          transition: 'all 0.15s',
+                                          width: '100%',
+                                        }}
+                                      >
+                                        <span>{optText}</span>
+                                        {quizChecked && isCorrectAnswer && <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓ Correct Option</span>}
+                                        {quizChecked && isSelected && !isCorrectAnswer && <span style={{ color: '#ef4444', fontWeight: 'bold' }}>✗ Incorrect</span>}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+
+                                {/* Quiz Actions */}
+                                <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem' }}>
+                                  {!quizChecked ? (
+                                    <button
+                                      type="button"
+                                      className="sd-btn-primary"
+                                      disabled={selectedQuizOption === null}
+                                      onClick={() => setQuizChecked(true)}
+                                      style={{ padding: '0.65rem 1.5rem', fontSize: '0.85rem' }}
+                                    >
+                                      Check Answer
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="sd-btn-outline"
+                                      onClick={() => {
+                                        setSelectedQuizOption(null);
+                                        setQuizChecked(false);
+                                      }}
+                                      style={{ padding: '0.65rem 1.5rem', fontSize: '0.85rem' }}
+                                    >
+                                      Retry Quiz Attempt
+                                    </button>
+                                  )}
+
+                                  {quizChecked && (
+                                    <div style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '8px',
+                                      fontSize: '0.9rem',
+                                      fontWeight: 600,
+                                      color: selectedQuizOption === (activePreviewScreen.elements?.[0]?.content?.correctAnswerIndex ?? activePreviewScreen.content?.quiz_correct_index ?? 0) ? '#10b981' : '#ef4444'
+                                    }}>
+                                      {selectedQuizOption === (activePreviewScreen.elements?.[0]?.content?.correctAnswerIndex ?? activePreviewScreen.content?.quiz_correct_index ?? 0)
+                                        ? "🎉 Excellent job! That is correct."
+                                        : "❌ Oops, that is not correct. Try again!"}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {activePreviewScreen.screen_type === 'WRITING' && (
+                              <div style={{
+                                padding: '2.5rem',
+                                backgroundColor: '#fefcf6',
+                                border: '1px solid #fef08a',
+                                borderRadius: '16px',
+                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.02)',
+                                fontSize: '1rem',
+                                color: '#451a03',
+                                lineHeight: 1.8,
+                                fontFamily: activePreviewScreen.content?.font === 'Courier' ? 'Courier New, monospace' : 'Georgia, serif',
+                                position: 'relative'
+                              }}>
+                                {/* Mock line guide */}
+                                <div style={{ position: 'absolute', left: '10px', top: 0, bottom: 0, width: '1px', backgroundColor: '#fef08a' }} />
+                                {activePreviewScreen.content?.text || 'Custom styled writing text screen layout.'}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
-
-                    {/* Navigation Footer Inside Canvas */}
-                    <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, backgroundColor: '#fafafa' }}>
-                      {(() => {
-                        const flat = getFlatScreens();
-                        const idx = flat.findIndex(s => s.id === activePreviewScreen.id);
-                        return (
-                          <>
-                            <button
-                              type="button"
-                              className="sd-btn-outline"
-                              disabled={idx <= 0}
-                              onClick={handlePrevScreen}
-                              style={{ padding: '0.45rem 1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-                            >
-                              ← Previous Screen
-                            </button>
-
-                            <button
-                              type="button"
-                              className="sd-btn-outline"
-                              disabled={idx === -1 || idx === flat.length - 1}
-                              onClick={handleNextScreen}
-                              style={{ padding: '0.45rem 1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-                            >
-                              Next Screen →
-                            </button>
-                          </>
-                        );
-                      })()}
                     </div>
                   </div>
-                ) : (
-                  <div style={{ flex: 1, backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
-                    <span style={{ fontSize: '4rem' }}>📱</span>
-                    <h5 style={{ fontWeight: 600, marginTop: '1.5rem', color: '#1e293b' }}>Select a screen from the steps sidebar to preview</h5>
+
+                  {/* Navigation Footer Inside Canvas */}
+                  <div className="preview-footer-sticky" style={{ 
+                    position: 'sticky',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    background: '#ffffff',
+                    borderTop: '1px solid #e2e8f0',
+                    padding: '1rem 1.5rem',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    zIndex: 50,
+                    boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.05)',
+                    boxSizing: 'border-box',
+                    width: '100%'
+                  }}>
+                    {(() => {
+                      const flat = getFlatScreens();
+                      const idx = flat.findIndex(s => s.id === activePreviewScreen.id);
+                      return (
+                        <>
+                          <button
+                            type="button"
+                            className="sd-btn-outline"
+                            disabled={idx <= 0}
+                            onClick={handlePrevScreen}
+                            style={{ padding: '0.45rem 1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                          >
+                            ← Previous Screen
+                          </button>
+
+                          <button
+                            type="button"
+                            className="sd-btn-outline"
+                            disabled={idx === -1 || idx === flat.length - 1}
+                            onClick={handleNextScreen}
+                            style={{ padding: '0.45rem 1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                          >
+                            Next Screen →
+                          </button>
+                        </>
+                      );
+                    })()}
                   </div>
-                )}
+                </>
+              ) : (
+                <div style={{ flex: 1, backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+                  <span style={{ fontSize: '4rem' }}>📱</span>
+                  <h5 style={{ fontWeight: 600, marginTop: '1.5rem', color: '#1e293b' }}>Select a screen from the steps sidebar to preview</h5>
+                </div>
+              )}
               </div>
             </div>
 

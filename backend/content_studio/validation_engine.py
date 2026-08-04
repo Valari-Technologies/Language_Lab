@@ -98,18 +98,26 @@ def check_experience_metadata(experience):
 
 def check_experience_has_activities(experience, activities):
     results = []
-    if len(activities) == 0:
+    num_activities = len(activities)
+    if num_activities == 0:
         results.append({
             "rule": "experience_activities_required",
             "severity": "ERROR",
             "message": "Experience has zero activities. At least one activity is required.",
             "item": f"experience-{experience.id}"
         })
+    elif num_activities > 5:
+        results.append({
+            "rule": "experience_activities_required",
+            "severity": "ERROR",
+            "message": f"Experience has too many activities ({num_activities}). Maximum of 5 activities is allowed.",
+            "item": f"experience-{experience.id}"
+        })
     else:
         results.append({
             "rule": "experience_activities_required",
             "severity": "PASSED",
-            "message": f"Experience contains {len(activities)} activity/activities.",
+            "message": f"Experience contains {num_activities} activity/activities (1-5 limit satisfied).",
             "item": f"experience-{experience.id}"
         })
     return results
