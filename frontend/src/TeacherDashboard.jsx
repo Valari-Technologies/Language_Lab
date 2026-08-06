@@ -313,6 +313,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     { id: 3, text: 'Student completed an experience today.',  time: '4 hrs ago', read: true  },
   ]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [showNotifModal, setShowNotifModal] = useState(false);
   const [showHelpModal,     setShowHelpModal]     = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
@@ -1255,12 +1256,24 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <button style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }} onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true })))}>Mark all read</button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
-                    {notifications.map(n => (
-                      <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: n.read ? 'transparent' : '#f0fdf4', borderLeft: n.read ? 'none' : '3px solid #22c55e', display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
-                        <span style={{ fontSize: '0.8rem', color: '#334155' }}>{n.text}</span>
-                        <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time}</span>
-                      </div>
-                    ))}
+                    {notifications.length === 0 ? (
+                      <span style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '10px 0' }}>No new notifications.</span>
+                    ) : (
+                      notifications.map(n => (
+                        <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: n.read ? 'transparent' : '#f0fdf4', borderLeft: n.read ? 'none' : '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', textAlign: 'left' }}>
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span style={{ fontSize: '0.8rem', color: '#334155' }}>{n.text || n.message}</span>
+                            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
+                          </div>
+                          <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); setNotifications(notifications.filter(item => item.id !== n.id)); }} title="Delete">
+                            <FiX size={14} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div style={{ borderTop: '1px solid #f1f5f9', marginTop: '10px', paddingTop: '8px', textAlign: 'center' }}>
+                    <button style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }} onClick={() => { setShowNotifDropdown(false); setShowNotifModal(true); }}>View all notifications</button>
                   </div>
                 </div>
               )}
@@ -2548,6 +2561,98 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           onCrop={handleCropSave}
           onCancel={() => setCropImageSrc(null)}
         />
+      )}
+
+      {showNotifModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', width: '100%', maxWidth: '850px', height: '90%', maxHeight: '650px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ backgroundColor: '#4f46e5', color: '#ffffff', width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                  <FiBell />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Teacher Notifications & Announcements</h3>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Stay updated with class notifications and academic announcements</p>
+                </div>
+              </div>
+              <button style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s' }} onClick={() => setShowNotifModal(false)}>
+                <FiX size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', flex: 1, overflow: 'hidden' }}>
+              {/* Left Column: Notifications */}
+              <div style={{ borderRight: '1px solid #f1f5f9', padding: '24px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#334155' }}>Recent Activity</h4>
+                  {notifications.length > 0 && (
+                    <button style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setNotifications([])}>
+                      <FiTrash2 size={14} /> Clear all
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+                  {notifications.length === 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', gap: '8px' }}>
+                      <FiBell size={36} style={{ opacity: 0.5 }} />
+                      <span style={{ fontSize: '0.9rem' }}>All caught up! No notifications.</span>
+                    </div>
+                  ) : (
+                    notifications.map(n => (
+                      <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: n.read ? '#f8fafc' : '#f0fdf4', border: `1px solid ${n.read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative' }}>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: n.read ? 400 : 600 }}>{n.text || n.message}</span>
+                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          {!n.read && (
+                            <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={() => setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true } : item))}>
+                              Mark read
+                            </button>
+                          )}
+                          <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setNotifications(notifications.filter(item => item.id !== n.id))} title="Delete">
+                            <FiX size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Announcements */}
+              <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', backgroundColor: '#fafafa', overflowY: 'auto' }}>
+                <h4 style={{ margin: '0 0 16px 0', fontSize: '1rem', fontWeight: 600, color: '#334155' }}>Academic Announcements</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#e0e7ff', color: '#4f46e5', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Guideline</span>
+                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Lesson Plan Formatting Update</h5>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>School administrators have updated lesson plan guidelines for Grade 5 and 6 speaking sections. Please review the new speaking activities criteria in the resource center.</p>
+                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 3 hours ago</span>
+                  </div>
+
+                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#fee2e2', color: '#ef4444', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Submission</span>
+                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Term 1 speaking activity submission</h5>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>The deadline to lock grades and submit performance scores for Grade 4 has been extended. All submissions must be finalized by next Friday.</p>
+                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 1 day ago</span>
+                  </div>
+
+                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#dcfce7', color: '#16a34a', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Content Studio</span>
+                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>5 New Game-based Templates</h5>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>Super admin added 5 new memory game templates to the scenario builder, allowing teachers to create customized gamified spelling drills.</p>
+                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 5 days ago</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

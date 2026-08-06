@@ -1042,9 +1042,17 @@ class AIGenerateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if content_type not in ["quiz", "dialogue", "fill_in_blanks", "full_screen", "remedial"]:
+        allowed_types = [
+            "quiz", "dialogue", "fill_in_blanks", "full_screen", "remedial",
+            "dictation", "sequence_audio", "quiz_listening",
+            "roleplay", "pronunciation", "reading_passage", "match",
+            "flashcards", "wordsearch", "crossword", "fill_blank",
+            "writing_prompt", "sentence_builder", "grammar_correction",
+            "true_false", "drag_drop"
+        ]
+        if content_type not in allowed_types:
             return Response(
-                {"error": "Invalid content_type. Choices are: quiz, dialogue, fill_in_blanks, full_screen, remedial."},
+                {"error": f"Invalid content_type. Allowed choices are: {', '.join(allowed_types)}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 

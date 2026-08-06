@@ -101,6 +101,210 @@ def generate_ai_content(topic: str, target_level: str, content_type: str) -> dic
                 "correctAnswerIndex": {"type": "integer"}
             },
             "required": ["hintText", "foundationQuestion", "foundationOptions"]
+        },
+        "dictation": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "question": {"type": "string"}
+            },
+            "required": ["title", "question"]
+        },
+        "sequence_audio": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "question": {"type": "string"},
+                "items": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 3
+                }
+            },
+            "required": ["title", "question", "items"]
+        },
+        "quiz_listening": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "question": {"type": "string"},
+                "options": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 4,
+                    "maxItems": 4
+                },
+                "correct_option_index": {"type": "integer"},
+                "explanation": {"type": "string"}
+            },
+            "required": ["title", "question", "options", "correct_option_index", "explanation"]
+        },
+        "roleplay": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "prompt": {"type": "string"},
+                "script": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "speaker": {"type": "string"},
+                            "text": {"type": "string"}
+                        },
+                        "required": ["speaker", "text"]
+                    }
+                }
+            },
+            "required": ["title", "prompt", "script"]
+        },
+        "pronunciation": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "word": {"type": "string"},
+                "phonetic": {"type": "string"}
+            },
+            "required": ["title", "word", "phonetic"]
+        },
+        "reading_passage": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "passage": {"type": "string"},
+                "question": {"type": "string"}
+            },
+            "required": ["title", "passage", "question"]
+        },
+        "match": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "question": {"type": "string"},
+                "leftItems": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                },
+                "rightItems": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                }
+            },
+            "required": ["title", "question", "leftItems", "rightItems"]
+        },
+        "flashcards": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "cards": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "front": {"type": "string"},
+                            "back": {"type": "string"}
+                        },
+                        "required": ["id", "front", "back"]
+                    }
+                }
+            },
+            "required": ["title", "cards"]
+        },
+        "wordsearch": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "question": {"type": "string"},
+                "words": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                },
+                "gridSize": {"type": "integer"}
+            },
+            "required": ["title", "question", "words", "gridSize"]
+        },
+        "crossword": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "question": {"type": "string"},
+                "words": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                }
+            },
+            "required": ["title", "question", "words"]
+        },
+        "fill_blank": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "question": {"type": "string"},
+                "text": {"type": "string"}
+            },
+            "required": ["title", "question", "text"]
+        },
+        "writing_prompt": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "prompt": {"type": "string"},
+                "placeholder": {"type": "string"},
+                "minWords": {"type": "integer"}
+            },
+            "required": ["title", "prompt", "placeholder", "minWords"]
+        },
+        "sentence_builder": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "question": {"type": "string"},
+                "sentence": {"type": "string"},
+                "words": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                }
+            },
+            "required": ["title", "question", "sentence", "words"]
+        },
+        "grammar_correction": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "incorrectSentence": {"type": "string"},
+                "correctedSentence": {"type": "string"}
+            },
+            "required": ["title", "incorrectSentence", "correctedSentence"]
+        },
+        "true_false": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "question": {"type": "string"},
+                "correctAnswer": {"type": "boolean"}
+            },
+            "required": ["title", "question", "correctAnswer"]
+        },
+        "drag_drop": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "question": {"type": "string"},
+                "pairs": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "source": {"type": "string"},
+                            "target": {"type": "string"}
+                        },
+                        "required": ["id", "source", "target"]
+                    }
+                }
+            },
+            "required": ["title", "question", "pairs"]
         }
     }
 

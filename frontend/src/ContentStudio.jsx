@@ -11,7 +11,8 @@ import {
   FiArrowLeft, FiSmartphone, FiTablet, FiInfo, FiUpload,
   FiPlay, FiCheck, FiFolderPlus, FiShare2, FiHelpCircle as FiQuestion,
   FiUser, FiClock, FiMoreVertical, FiVolume2, FiMic, FiCopy, FiColumns,
-  FiMove, FiEdit, FiGitCommit, FiList, FiLayers, FiType, FiLock, FiRefreshCw
+  FiMove, FiEdit, FiGitCommit, FiList, FiLayers, FiType, FiLock, FiRefreshCw,
+  FiCornerUpLeft, FiCornerUpRight
 } from 'react-icons/fi';
 import './Dashboard.css';
 import contentCreatorHeaderBanner from './assets/3.jpeg';
@@ -176,45 +177,45 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
     const type = aiForm.content_type;
 
-    if (type === 'quiz') {
-      // Set legacy fields
-      updatedForm.quiz_question = aiPreviewData.question || '';
-      updatedForm.quiz_options = aiPreviewData.options || ['', '', '', ''];
-      updatedForm.quiz_correct_index = aiPreviewData.correct_option_index !== undefined ? aiPreviewData.correct_option_index : 0;
-      updatedForm.screen_type = 'QUIZ';
+    const addOrUpdateBlock = (blockType, newProps) => {
+      const activeBlock = (screenForm.elements || []).find(el => el.id === selectedBlockId);
+      if (activeBlock && activeBlock.type === blockType) {
+        updateElementProperties(selectedBlockId, newProps);
+      } else {
+        const newId = `block-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        let maxTop = 0;
+        if (screenForm.elements && screenForm.elements.length > 0) {
+          screenForm.elements.forEach(el => {
+            const topVal = parseInt(el.styles?.top) || 0;
+            const blockH = el.styles?.minHeight ? (parseInt(el.styles.minHeight) || 100) : 100;
+            if (topVal + blockH > maxTop) {
+              maxTop = topVal + blockH;
+            }
+          });
+        }
+        const nextTop = maxTop === 0 ? 20 : maxTop + 16;
+        const generatedBlock = {
+          id: newId,
+          type: blockType,
+          slot: 'left',
+          content: newProps,
+          styles: { top: `${nextTop}px`, left: '20px' }
+        };
+        updatedForm.elements = [...(screenForm.elements || []), generatedBlock];
+        setSelectedBlockId(newId);
+      }
+    };
 
+    if (type === 'quiz' || type === 'quiz_listening') {
       const newProps = {
         question: aiPreviewData.question || '',
-        options: aiPreviewData.options || ['', '', '', ''],
+        options: (aiPreviewData.options || ['', '', '', '']).map(opt => typeof opt === 'object' ? opt : { text: opt }),
         correctAnswerIndex: aiPreviewData.correct_option_index !== undefined ? aiPreviewData.correct_option_index : 0,
         explanation: aiPreviewData.explanation || ''
       };
-
-      const activeBlock = (screenForm.elements || []).find(el => el.id === selectedBlockId);
-      if (activeBlock && activeBlock.type === 'quiz') {
-        updateElementProperties(selectedBlockId, newProps);
-      } else {
-        const newId = Date.now();
-        const quizBlock = {
-          id: newId,
-          type: 'quiz',
-          slot: 'left',
-          content: newProps,
-          styles: { color: '#1F2937', alignment: 'Left' }
-        };
-        updatedForm.elements = [...(screenForm.elements || []), quizBlock];
-        setSelectedBlockId(newId);
-      }
+      addOrUpdateBlock('quiz', newProps);
     }
     else if (type === 'dialogue') {
-      // Set legacy fields
-      updatedForm.steps = (aiPreviewData.dialogue_steps || []).map((step, idx) => ({
-        id: idx + 1,
-        speaker: step.speaker || 'A',
-        text: step.text || ''
-      }));
-      updatedForm.screen_type = 'DIALOGUE';
-
       const newProps = {
         steps: (aiPreviewData.dialogue_steps || []).map((step, idx) => ({
           step: idx + 1,
@@ -224,72 +225,146 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           side: 'left'
         }))
       };
-
-      const activeBlock = (screenForm.elements || []).find(el => el.id === selectedBlockId);
-      if (activeBlock && activeBlock.type === 'dialogue') {
-        updateElementProperties(selectedBlockId, newProps);
-      } else {
-        const newId = Date.now();
-        const dialogueBlock = {
-          id: newId,
-          type: 'dialogue',
-          slot: 'left',
-          content: newProps,
-          styles: {}
-        };
-        updatedForm.elements = [...(screenForm.elements || []), dialogueBlock];
-        setSelectedBlockId(newId);
-      }
+      addOrUpdateBlock('dialogue', newProps);
     }
-    else if (type === 'fill_in_blanks') {
-      updatedForm.content = aiPreviewData.text_template || '';
-      updatedForm.screen_type = 'INFORMATION';
-
+    else if (type === 'fill_in_blanks' || type === 'fill_blank') {
       const newProps = {
-        question: aiPreviewData.question_instruction || '',
-        text: aiPreviewData.text_template || ''
+        question: aiPreviewData.question_instruction || aiPreviewData.question || '',
+        text: aiPreviewData.text_template || aiPreviewData.text || ''
       };
-
-      const activeBlock = (screenForm.elements || []).find(el => el.id === selectedBlockId);
-      if (activeBlock && activeBlock.type === 'fill_blank') {
-        updateElementProperties(selectedBlockId, newProps);
-      } else {
-        const newId = Date.now();
-        const fibBlock = {
-          id: newId,
-          type: 'fill_blank',
-          slot: 'left',
-          content: newProps,
-          styles: {}
-        };
-        updatedForm.elements = [...(screenForm.elements || []), fibBlock];
-        setSelectedBlockId(newId);
-      }
+      addOrUpdateBlock('fill_blank', newProps);
+    }
+    else if (type === 'dictation') {
+      const newProps = {
+        question: aiPreviewData.question || 'Listen and type what you hear.'
+      };
+      addOrUpdateBlock('dictation', newProps);
+    }
+    else if (type === 'sequence_audio') {
+      const newProps = {
+        question: aiPreviewData.question || 'Arrange the items in the correct order.',
+        items: aiPreviewData.items || []
+      };
+      addOrUpdateBlock('sequence', newProps);
+    }
+    else if (type === 'roleplay') {
+      const newProps = {
+        title: aiPreviewData.title || '',
+        prompt: aiPreviewData.prompt || '',
+        script: aiPreviewData.script || []
+      };
+      addOrUpdateBlock('role_play', newProps);
+    }
+    else if (type === 'pronunciation') {
+      const newProps = {
+        word: aiPreviewData.word || '',
+        phonetic: aiPreviewData.phonetic || ''
+      };
+      addOrUpdateBlock('pronunciation', newProps);
+    }
+    else if (type === 'reading_passage') {
+      const newProps = {
+        title: aiPreviewData.title || '',
+        passage: aiPreviewData.passage || '',
+        question: aiPreviewData.question || ''
+      };
+      addOrUpdateBlock('reading_passage', newProps);
+    }
+    else if (type === 'match') {
+      const newProps = {
+        question: aiPreviewData.question || '',
+        leftItems: aiPreviewData.leftItems || [],
+        rightItems: aiPreviewData.rightItems || []
+      };
+      addOrUpdateBlock('match', newProps);
+    }
+    else if (type === 'flashcards') {
+      const newProps = {
+        cards: (aiPreviewData.cards || []).map((card, i) => ({
+          id: card.id || `card-${i}`,
+          front: card.front || '',
+          back: card.back || ''
+        }))
+      };
+      addOrUpdateBlock('flashcard', newProps);
+    }
+    else if (type === 'wordsearch') {
+      const newProps = {
+        question: aiPreviewData.question || '',
+        words: aiPreviewData.words || [],
+        gridSize: aiPreviewData.gridSize || 8
+      };
+      addOrUpdateBlock('word_search', newProps);
+    }
+    else if (type === 'crossword') {
+      const newProps = {
+        question: aiPreviewData.question || '',
+        words: aiPreviewData.words || []
+      };
+      addOrUpdateBlock('crossword', newProps);
+    }
+    else if (type === 'writing_prompt') {
+      const newProps = {
+        prompt: aiPreviewData.prompt || '',
+        placeholder: aiPreviewData.placeholder || '',
+        minWords: aiPreviewData.minWords || 10
+      };
+      addOrUpdateBlock('writing_prompt', newProps);
+    }
+    else if (type === 'sentence_builder') {
+      const newProps = {
+        question: aiPreviewData.question || '',
+        sentence: aiPreviewData.sentence || '',
+        words: aiPreviewData.words || []
+      };
+      addOrUpdateBlock('sentence_builder', newProps);
+    }
+    else if (type === 'grammar_correction') {
+      const newProps = {
+        incorrectSentence: aiPreviewData.incorrectSentence || '',
+        correctedSentence: aiPreviewData.correctedSentence || ''
+      };
+      addOrUpdateBlock('grammar_correction', newProps);
+    }
+    else if (type === 'true_false') {
+      const newProps = {
+        question: aiPreviewData.question || '',
+        correctAnswer: aiPreviewData.correctAnswer !== undefined ? aiPreviewData.correctAnswer : true
+      };
+      addOrUpdateBlock('true_false', newProps);
+    }
+    else if (type === 'drag_drop') {
+      const newProps = {
+        question: aiPreviewData.question || '',
+        pairs: (aiPreviewData.pairs || []).map((pair, i) => ({
+          id: pair.id || `pair-${i}`,
+          source: pair.source || '',
+          target: pair.target || ''
+        }))
+      };
+      addOrUpdateBlock('drag_drop', newProps);
     }
     else if (type === 'full_screen') {
-      updatedForm.content = aiPreviewData.body || '';
-      updatedForm.screen_type = 'INFORMATION';
-
       const elements = [
         {
-          id: Date.now(),
+          id: `block-${Date.now()}-h`,
           type: 'heading',
           slot: 'left',
           content: { text: aiPreviewData.heading || aiPreviewData.title || '', tag: 'H1' },
-          styles: { color: '#0f172a', fontWeight: 'Bold', alignment: 'Center', fontSize: '36px' }
+          styles: { color: '#0f172a', fontWeight: 'Bold', alignment: 'Center', fontSize: '36px', top: '20px', left: '20px' }
         },
         {
-          id: Date.now() + 1,
+          id: `block-${Date.now()}-t`,
           type: 'text',
           slot: 'left',
           content: { text: aiPreviewData.body || '' },
-          styles: { color: '#334155', fontWeight: 'Normal', alignment: 'Left', fontSize: '16px' }
+          styles: { color: '#334155', fontWeight: 'Normal', alignment: 'Left', fontSize: '16px', top: '140px', left: '20px' }
         }
       ];
 
       if (aiPreviewData.dialogue_steps) {
         elements.push({
-          id: Date.now() + 2,
+          id: `block-${Date.now()}-d`,
           type: 'dialogue',
           slot: 'left',
           content: {
@@ -301,21 +376,21 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               side: 'left'
             }))
           },
-          styles: {}
+          styles: { top: '260px', left: '20px' }
         });
       }
 
       if (aiPreviewData.quiz) {
         elements.push({
-          id: Date.now() + 3,
+          id: `block-${Date.now()}-q`,
           type: 'quiz',
           slot: 'left',
           content: {
             question: aiPreviewData.quiz.question || '',
-            options: aiPreviewData.quiz.options || ['', '', '', ''],
+            options: (aiPreviewData.quiz.options || ['', '', '', '']).map(opt => typeof opt === 'object' ? opt : { text: opt }),
             correctAnswerIndex: aiPreviewData.quiz.correct_option_index !== undefined ? aiPreviewData.quiz.correct_option_index : 0
           },
-          styles: {}
+          styles: { top: '380px', left: '20px' }
         });
       }
 
@@ -323,6 +398,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
 
     setScreenForm(updatedForm);
+    pushHistory(updatedForm.elements);
     setShowAiModal(false);
     showFeedback('Editor populated with generated AI content!');
   };
@@ -397,12 +473,20 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     let maxBottom = 600;
     elements.forEach(block => {
       const top = parseInt(block.styles?.top) || 0;
-      const height = parseInt(block.styles?.minHeight) || 150;
+      let height = parseInt(block.styles?.minHeight);
+      if (isNaN(height)) {
+        if (block.type === 'video') height = 240;
+        else if (block.type === 'dialogue') height = 300;
+        else if (block.type === 'quiz' || block.type === 'quiz_listening') height = 280;
+        else if (block.type === 'match' || block.type === 'drag_drop') height = 260;
+        else if (block.type === 'reading_passage') height = 320;
+        else height = 150;
+      }
       if (top + height > maxBottom) {
         maxBottom = top + height;
       }
     });
-    return maxBottom + 80;
+    return maxBottom + 120;
   };
 
 
@@ -963,6 +1047,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [dragDropSelections, setDragDropSelections] = useState({});
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [showNotifModal, setShowNotifModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [currentUserState, setCurrentUserState] = useState(user);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -1365,19 +1450,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
 
     if (activeElements.length === 0) {
-      if (sc.screen_type === 'INFORMATION') {
-        activeElements.push({
-          id: 'block-' + Date.now() + '-1',
-          type: 'dialogue',
-          slot: 'left',
-          content: {
-            steps: content.steps || [
-              { step: 1, name: 'Ben', text: 'Hi! What would you like to order?', avatarColor: '#0ea5e9', side: 'left' },
-              { step: 2, name: 'Anna', text: "I'd like a cup of coffee, please.", avatarColor: '#ea580c', side: 'right' }
-            ]
-          }
-        });
-      } else if (sc.screen_type === 'IMAGE') {
+      if (sc.screen_type === 'IMAGE') {
         activeElements.push({
           id: 'block-' + Date.now() + '-2',
           type: 'image',
@@ -1461,6 +1534,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       quiz_correct_index: content.quiz_correct_index !== undefined ? content.quiz_correct_index : 0,
       elements: activeElements
     });
+
+    setElementsHistory([JSON.parse(JSON.stringify(activeElements))]);
+    setHistoryIndex(0);
 
     if (activeElements.length > 0) {
       setSelectedBlockId(activeElements[0].id);
@@ -1595,11 +1671,29 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       newBlock.content = { question: 'Is this statement true?', correctAnswer: true };
     }
 
+    let maxTop = 0;
+    if (screenForm.elements && screenForm.elements.length > 0) {
+      screenForm.elements.forEach(el => {
+        const topVal = parseInt(el.styles?.top) || 0;
+        const blockH = el.styles?.minHeight ? (parseInt(el.styles.minHeight) || 100) : 100;
+        if (topVal + blockH > maxTop) {
+          maxTop = topVal + blockH;
+        }
+      });
+    }
+    const nextTop = maxTop === 0 ? 20 : maxTop + 16;
+    newBlock.styles = {
+      ...newBlock.styles,
+      top: `${nextTop}px`,
+      left: '20px'
+    };
+
     const updatedElements = [...(screenForm.elements || []), newBlock];
     setScreenForm(prev => ({
       ...prev,
       elements: updatedElements
     }));
+    pushHistory(updatedElements);
     setSelectedBlockId(newBlock.id);
     showFeedback(`Added ${type.replace('_', ' ')} block`);
   };
@@ -1722,11 +1816,29 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       newBlock.content = { question: 'Is this statement true?', correctAnswer: true };
     }
 
+    let maxTop = 0;
+    if (screenForm.elements && screenForm.elements.length > 0) {
+      screenForm.elements.forEach(el => {
+        const topVal = parseInt(el.styles?.top) || 0;
+        const blockH = el.styles?.minHeight ? (parseInt(el.styles.minHeight) || 100) : 100;
+        if (topVal + blockH > maxTop) {
+          maxTop = topVal + blockH;
+        }
+      });
+    }
+    const nextTop = maxTop === 0 ? 20 : maxTop + 16;
+    newBlock.styles = {
+      ...newBlock.styles,
+      top: `${nextTop}px`,
+      left: '20px'
+    };
+
     const updatedElements = [...(screenForm.elements || []), newBlock];
     setScreenForm(prev => ({
       ...prev,
       elements: updatedElements
     }));
+    pushHistory(updatedElements);
     setSelectedBlockId(newBlock.id);
     showFeedback(`Added ${type.replace('_', ' ')} block`);
   };
@@ -1759,15 +1871,32 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           const startY = e.clientY;
           const initLeft = parseInt(block.styles?.left) || 0;
           const initTop = parseInt(block.styles?.top) || 0;
+          // Capture DOM references at mousedown time (before synthetic event is recycled)
+          const draggerEl = e.currentTarget;
+          const canvasEl = draggerEl.closest('[data-canvas-area="true"]');
+          const elWrapper = draggerEl.closest('[data-block-id]');
           const move = (mv) => {
-            const newLeft = initLeft + (mv.clientX - startX);
-            const newTop = initTop + (mv.clientY - startY);
+            const canvasW = canvasEl ? canvasEl.offsetWidth : 9999;
+            const canvasH = canvasEl ? canvasEl.offsetHeight : 9999;
+            const elW = elWrapper ? elWrapper.offsetWidth : 200;
+            const elH = elWrapper ? elWrapper.offsetHeight : 60;
+            const rawLeft = initLeft + (mv.clientX - startX);
+            const rawTop = initTop + (mv.clientY - startY);
+            const newLeft = Math.max(0, Math.min(rawLeft, canvasW - elW));
+            const newTop = Math.max(0, Math.min(rawTop, canvasH - elH));
             const elements = (screenForm.elements || []).map(el2 =>
               el2.id === block.id ? { ...el2, styles: { ...el2.styles, left: `${newLeft}px`, top: `${newTop}px` } } : el2
             );
             setScreenForm(prev => ({ ...prev, elements }));
           };
-          const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+          const up = () => {
+            window.removeEventListener('mousemove', move);
+            window.removeEventListener('mouseup', up);
+            setScreenForm(prev => {
+              pushHistory(prev.elements);
+              return prev;
+            });
+          };
           window.addEventListener('mousemove', move);
           window.addEventListener('mouseup', up);
         }}
@@ -1781,11 +1910,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     return (
       <div
         key={block.id}
-        draggable={true}
-        onDragStart={e => {
-          e.dataTransfer.setData("text/plain", `block:${block.id}`);
-          e.dataTransfer.effectAllowed = "move";
-        }}
+        data-block-id={block.id}
         onDragOver={e => {
           e.preventDefault();
           e.stopPropagation();
@@ -1809,12 +1934,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           background: isSelected ? '#f8fafc' : '#ffffff',
           boxShadow: isSelected ? '0 4px 12px rgba(11,87,208,0.1)' : '0 1px 3px rgba(0,0,0,0.02)',
           cursor: 'pointer',
-          transition: 'border 0.15s, box-shadow 0.15s, left 0.1s, top 0.1s',
+          transition: 'border 0.15s, box-shadow 0.15s',
           display: 'flex',
           flexDirection: 'column',
           boxSizing: 'border-box',
-          ...(block.styles?.blockWidth ? { width: block.styles.blockWidth } : {}),
-          ...(block.styles?.minHeight ? { minHeight: block.styles.minHeight, height: block.styles.minHeight } : {}),
+          ...(block.styles?.blockWidth ? { width: block.styles.blockWidth } : { width: '100%' }),
+          ...(block.styles?.minHeight ? { minHeight: block.styles.minHeight, height: block.styles.minHeight } : { minHeight: '80px' }),
         }}
       >
         {/* Selection Indicator / Action Toolbar */}
@@ -1907,17 +2032,17 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'image' && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', flex: 1, height: '100%', width: '100%' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', flex: 1, minHeight: 0, height: '100%', width: '100%' }}>
             {block.content?.url ? (
-              <div style={{ width: '100%', height: '100%', flex: 1, borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: '100%', flex: 1, minHeight: 0, borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <img
                   src={resolveMediaUrl(block.content.url)}
                   alt="Canvas block illustration"
-                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                  style={{ width: '100%', height: '100%', objectFit: block.styles?.objectFit || 'contain', display: 'block' }}
                 />
               </div>
             ) : (
-              <div style={{ width: '100%', height: '100%', flex: 1, border: '1px dashed #cbd5e1', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+              <div style={{ width: '100%', flex: 1, minHeight: '60px', border: '1px dashed #cbd5e1', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
                 <FiImage style={{ fontSize: '1.8rem', marginBottom: '4px', opacity: 0.6 }} />
                 <span style={{ fontSize: '0.72rem', fontWeight: 600 }}>No Image Loaded</span>
               </div>
@@ -2392,15 +2517,23 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 const move = (mv) => {
                   const deltaY = mv.clientY - startY;
                   const newH = Math.max(60, initH - deltaY);
-                  const newTop = initTop + deltaY;
+                  const newTop = Math.max(0, initTop + deltaY);
                   el.style.minHeight = `${newH}px`;
+                  el.style.height = `${newH}px`;
                   el.style.top = `${newTop}px`;
                   const elements = (screenForm.elements || []).map(el2 =>
                     el2.id === block.id ? { ...el2, styles: { ...el2.styles, minHeight: `${newH}px`, top: `${newTop}px` } } : el2
                   );
                   setScreenForm(prev => ({ ...prev, elements }));
                 };
-                const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+                const up = () => {
+                  window.removeEventListener('mousemove', move);
+                  window.removeEventListener('mouseup', up);
+                  setScreenForm(prev => {
+                    pushHistory(prev.elements);
+                    return prev;
+                  });
+                };
                 window.addEventListener('mousemove', move);
                 window.addEventListener('mouseup', up);
               }}
@@ -2417,12 +2550,27 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 const startY = e.clientY;
                 const el = e.currentTarget.parentElement;
                 const initH = el.offsetHeight;
+                const canvasEl = el.closest('[data-canvas-area="true"]');
+                const canvasH = canvasEl ? canvasEl.offsetHeight : 9999;
+                const elTop = parseInt(block.styles?.top) || 0;
                 const move = (mv) => {
-                  const newH = Math.max(60, initH + (mv.clientY - startY));
+                  const maxH = Math.max(60, canvasH - elTop);
+                  const newH = Math.min(maxH, Math.max(60, initH + (mv.clientY - startY)));
                   el.style.minHeight = `${newH}px`;
-                  handleUpdateBlockStyles('minHeight', `${newH}px`);
+                  el.style.height = `${newH}px`;
+                  const elements = (screenForm.elements || []).map(el2 =>
+                    el2.id === block.id ? { ...el2, styles: { ...el2.styles, minHeight: `${newH}px` } } : el2
+                  );
+                  setScreenForm(prev => ({ ...prev, elements }));
                 };
-                const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+                const up = () => {
+                  window.removeEventListener('mousemove', move);
+                  window.removeEventListener('mouseup', up);
+                  setScreenForm(prev => {
+                    pushHistory(prev.elements);
+                    return prev;
+                  });
+                };
                 window.addEventListener('mousemove', move);
                 window.addEventListener('mouseup', up);
               }}
@@ -2451,7 +2599,14 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   );
                   setScreenForm(prev => ({ ...prev, elements }));
                 };
-                const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+                const up = () => {
+                  window.removeEventListener('mousemove', move);
+                  window.removeEventListener('mouseup', up);
+                  setScreenForm(prev => {
+                    pushHistory(prev.elements);
+                    return prev;
+                  });
+                };
                 window.addEventListener('mousemove', move);
                 window.addEventListener('mouseup', up);
               }}
@@ -2468,12 +2623,26 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 const startX = e.clientX;
                 const el = e.currentTarget.parentElement;
                 const initW = el.offsetWidth;
+                const canvasEl = el.closest('[data-canvas-area="true"]');
+                const canvasW = canvasEl ? canvasEl.offsetWidth : 9999;
+                const elLeft = parseInt(block.styles?.left) || 0;
                 const move = (mv) => {
-                  const newW = Math.max(120, initW + (mv.clientX - startX));
+                  const maxW = Math.max(120, canvasW - elLeft);
+                  const newW = Math.min(maxW, Math.max(120, initW + (mv.clientX - startX)));
                   el.style.width = `${newW}px`;
-                  handleUpdateBlockStyles('blockWidth', `${newW}px`);
+                  const elements = (screenForm.elements || []).map(el2 =>
+                    el2.id === block.id ? { ...el2, styles: { ...el2.styles, blockWidth: `${newW}px` } } : el2
+                  );
+                  setScreenForm(prev => ({ ...prev, elements }));
                 };
-                const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+                const up = () => {
+                  window.removeEventListener('mousemove', move);
+                  window.removeEventListener('mouseup', up);
+                  setScreenForm(prev => {
+                    pushHistory(prev.elements);
+                    return prev;
+                  });
+                };
                 window.addEventListener('mousemove', move);
                 window.addEventListener('mouseup', up);
               }}
@@ -2492,17 +2661,32 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 const el = e.currentTarget.parentElement;
                 const initW = el.offsetWidth;
                 const initH = el.offsetHeight;
+                const canvasEl = el.closest('[data-canvas-area="true"]');
+                const canvasW = canvasEl ? canvasEl.offsetWidth : 9999;
+                const canvasH = canvasEl ? canvasEl.offsetHeight : 9999;
+                const elLeft = parseInt(block.styles?.left) || 0;
+                const elTop = parseInt(block.styles?.top) || 0;
                 const move = (mv) => {
-                  const newW = Math.max(120, initW + (mv.clientX - startX));
-                  const newH = Math.max(60, initH + (mv.clientY - startY));
+                  const maxW = Math.max(120, canvasW - elLeft);
+                  const maxH = Math.max(60, canvasH - elTop);
+                  const newW = Math.min(maxW, Math.max(120, initW + (mv.clientX - startX)));
+                  const newH = Math.min(maxH, Math.max(60, initH + (mv.clientY - startY)));
                   el.style.width = `${newW}px`;
                   el.style.minHeight = `${newH}px`;
+                  el.style.height = `${newH}px`;
                   const elements = (screenForm.elements || []).map(el2 =>
                     el2.id === block.id ? { ...el2, styles: { ...el2.styles, blockWidth: `${newW}px`, minHeight: `${newH}px` } } : el2
                   );
                   setScreenForm(prev => ({ ...prev, elements }));
                 };
-                const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+                const up = () => {
+                  window.removeEventListener('mousemove', move);
+                  window.removeEventListener('mouseup', up);
+                  setScreenForm(prev => {
+                    pushHistory(prev.elements);
+                    return prev;
+                  });
+                };
                 window.addEventListener('mousemove', move);
                 window.addEventListener('mouseup', up);
               }}
@@ -2544,6 +2728,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     elements[index] = elements[index + direction];
     elements[index + direction] = temp;
     setScreenForm(prev => ({ ...prev, elements }));
+    pushHistory(elements);
   };
 
   const handleCloneBlock = (block) => {
@@ -2554,6 +2739,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     cloned.id = `block-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     elements.splice(idx + 1, 0, cloned);
     setScreenForm(prev => ({ ...prev, elements }));
+    pushHistory(elements);
     setSelectedBlockId(cloned.id);
     showFeedback(`Cloned block`);
   };
@@ -2561,6 +2747,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const handleDeleteBlock = (blockId) => {
     const elements = (screenForm.elements || []).filter(el => el.id !== blockId);
     setScreenForm(prev => ({ ...prev, elements }));
+    pushHistory(elements);
     if (selectedBlockId === blockId) {
       setSelectedBlockId(elements.length > 0 ? elements[0].id : null);
     }
@@ -2581,6 +2768,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       return el;
     });
     setScreenForm(prev => ({ ...prev, elements }));
+    pushHistory(elements);
   };
 
   const handleUpdateBlockRemedial = (field, value) => {
@@ -2664,6 +2852,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         }
         return el;
       });
+      pushHistory(elements);
       return { ...prev, elements };
     });
   };
@@ -2682,6 +2871,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       return el;
     });
     setScreenForm(prev => ({ ...prev, elements }));
+    pushHistory(elements);
   };
 
   const handleSaveScreen = async (redirectToLibrary = true) => {
@@ -3812,7 +4002,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               { key: 'screen-builder', label: 'Screen Builder', icon: <FiMonitor /> },
               { key: 'preview', label: 'Runtime Preview', icon: <FiPlay /> },
               { key: 'publish', label: 'Publish Center', icon: <FiDownload /> },
-              { key: 'media', label: 'Media Library', icon: <FiImage /> },
               { key: 'reports', label: 'Sync Reports', icon: <FiFileText /> },
               { key: 'profile', label: 'Profile Settings', icon: <FiUser /> },
             ].map(item => (
@@ -4007,13 +4196,21 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           const time = n.time || (n.created_at ? new Date(n.created_at).toLocaleTimeString() : 'Recently');
                           const read = n.read !== undefined ? n.read : n.is_read;
                           return (
-                            <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: read ? 'transparent' : '#f0fdf4', borderLeft: read ? 'none' : '3px solid #22c55e', display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
-                              <span style={{ fontSize: '0.8rem', color: '#334155' }}>{text}</span>
-                              <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{time}</span>
+                            <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: read ? 'transparent' : '#f0fdf4', borderLeft: read ? 'none' : '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', textAlign: 'left' }}>
+                              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <span style={{ fontSize: '0.8rem', color: '#334155' }}>{text}</span>
+                                <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{time}</span>
+                              </div>
+                              <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); setNotifications(notifications.filter(item => item.id !== n.id)); }} title="Delete">
+                                <FiX size={14} />
+                              </button>
                             </div>
                           );
                         })
                       )}
+                    </div>
+                    <div style={{ borderTop: '1px solid #f1f5f9', marginTop: '10px', paddingTop: '8px', textAlign: 'center' }}>
+                      <button style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }} onClick={() => { setShowNotifDropdown(false); setShowNotifModal(true); }}>View all notifications</button>
                     </div>
                   </div>
                 )}
@@ -4789,15 +4986,33 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       className="cs-btn-outline"
                       disabled={activities.length >= 5}
                       style={{
-                        padding: '0.4rem 0.75rem',
-                        fontSize: '0.75rem',
-                        border: '1px solid #d1d5db',
+                        padding: '0.45rem 1rem',
+                        fontSize: '0.78rem',
+                        border: '1px solid #7c3aed',
                         borderRadius: '8px',
-                        background: activities.length >= 5 ? '#f1f5f9' : '#fff',
-                        color: activities.length >= 5 ? '#94a3b8' : '#374151',
+                        background: activities.length >= 5 ? '#f1f5f9' : '#f5f3ff',
+                        color: activities.length >= 5 ? '#94a3b8' : '#7c3aed',
                         cursor: activities.length >= 5 ? 'not-allowed' : 'pointer',
                         fontWeight: 600,
-                        opacity: activities.length >= 5 ? 0.7 : 1
+                        opacity: activities.length >= 5 ? 0.7 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (activities.length < 5) {
+                          e.currentTarget.style.background = '#7c3aed';
+                          e.currentTarget.style.color = '#ffffff';
+                          e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(124, 58, 237, 0.2)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (activities.length < 5) {
+                          e.currentTarget.style.background = '#f5f3ff';
+                          e.currentTarget.style.color = '#7c3aed';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }
                       }}
                       onClick={() => {
                         if (activities.length >= 5) return;
@@ -4806,7 +5021,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         setScreens([]);
                       }}
                     >
-                      {activities.length >= 5 ? 'Max 5 Reached' : '+ Add New Activity'}
+                      {activities.length >= 5 ? (
+                        'Max 5 Reached'
+                      ) : (
+                        <>
+                          <FiPlus style={{ fontSize: '0.9rem' }} /> Add New Activity
+                        </>
+                      )}
                     </button>
                   </div>
 
@@ -5335,10 +5556,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <div className="fss-toolbar-center">
                       {/* Undo/Redo */}
                       <button className="fss-toolbar-btn" title="Undo (Ctrl+Z)" disabled={historyIndex <= 0} onClick={handleUndo}>
-                        <span style={{ fontSize: '1rem' }}>↩</span>
+                        <FiCornerUpLeft style={{ fontSize: '0.9rem' }} />
                       </button>
                       <button className="fss-toolbar-btn" title="Redo (Ctrl+Y)" disabled={historyIndex >= elementsHistory.length - 1} onClick={handleRedo}>
-                        <span style={{ fontSize: '1rem' }}>↪</span>
+                        <FiCornerUpRight style={{ fontSize: '0.9rem' }} />
                       </button>
                       <div className="fss-toolbar-divider" />
 
@@ -5581,9 +5802,17 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           {/* Canvas content */}
                           <div className="fss-canvas-content">
                             <div
+                              data-canvas-area="true"
                               onDragOver={e => e.preventDefault()}
                               onDrop={e => handleDropOnSlot(e)}
-                              style={{ flex: 1, position: 'relative', background: '#ffffff', minHeight: '600px' }}
+                              style={{
+                                flex: 1,
+                                position: 'relative',
+                                background: '#ffffff',
+                                minHeight: '600px',
+                                height: `${getCanvasHeight(screenForm.elements)}px`,
+                                overflow: 'visible',
+                              }}
                             >
                               {(!screenForm.elements || screenForm.elements.length === 0) ? (
                                 <div
@@ -5848,67 +6077,149 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                   {(selectedBlock.type === 'image' || selectedBlock.type === 'video' || selectedBlock.type === 'audio') && (
                                     <>
                                       <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Choose Media Asset</label>
-                                        <select
-                                          className="cs-form-input"
-                                          style={{ height: '30px', fontSize: '0.75rem', padding: '0 0.25rem' }}
-                                          value={selectedBlock.content?.media_id || ''}
-                                          onChange={e => {
-                                            const selectedAsset = mediaAssets.find(m => String(m.id) === String(e.target.value));
-                                            if (selectedAsset) {
-                                              const assetUrl = selectedAsset.file || selectedAsset.url || '';
-                                              handleUpdateBlockMultipleContent({
-                                                url: assetUrl,
-                                                media_id: selectedAsset.id,
-                                                media_type: selectedAsset.media_type
+                                        <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 600, color: '#475569' }}>
+                                          Media Asset
+                                        </label>
+                                        <input
+                                          type="file"
+                                          id={`screen-editor-upload-${selectedBlock.id}`}
+                                          style={{ display: 'none' }}
+                                          accept={
+                                            selectedBlock.type === 'image' ? 'image/*' :
+                                            selectedBlock.type === 'video' ? 'video/*' :
+                                            selectedBlock.type === 'audio' ? 'audio/*' : '*'
+                                          }
+                                          onChange={async (e) => {
+                                            const file = e.target.files[0];
+                                            if (!file) return;
+                                            e.target.value = null;
+
+                                            const formData = new FormData();
+                                            formData.append('file', file);
+                                            formData.append('name', file.name);
+                                            formData.append('folder', 'screen_builder');
+
+                                            setActionLoading(true);
+                                            try {
+                                              const res = await apiFetch('/api/v1/content/media/upload/', {
+                                                method: 'POST',
+                                                body: formData
                                               });
-                                            } else {
-                                              handleUpdateBlockMultipleContent({
-                                                url: '',
-                                                media_id: '',
-                                                media_type: ''
-                                              });
+                                              if (res.ok || res.status === 201) {
+                                                const uploadedAsset = await res.json();
+                                                showFeedback('Media uploaded and assigned successfully!');
+                                                await loadMediaData();
+                                                const assetUrl = uploadedAsset.file || uploadedAsset.url || '';
+                                                handleUpdateBlockMultipleContent({
+                                                  url: assetUrl,
+                                                  media_id: uploadedAsset.id,
+                                                  media_type: uploadedAsset.media_type
+                                                });
+                                              } else {
+                                                const errData = await res.json().catch(() => ({}));
+                                                showFeedback(errData.error || 'Failed to upload media', 'error');
+                                              }
+                                            } catch (err) {
+                                              console.error(err);
+                                              showFeedback('Upload error occurred', 'error');
+                                            } finally {
+                                              setActionLoading(false);
                                             }
                                           }}
-                                        >
-                                          <option value="">-- Select File --</option>
-                                          {mediaAssets
-                                            .filter(m => {
-                                              if (selectedBlock.type === 'image') return m.media_type === 'IMAGE';
-                                              if (selectedBlock.type === 'video') return m.media_type === 'VIDEO';
-                                              if (selectedBlock.type === 'audio') return m.media_type === 'AUDIO';
-                                              return true;
-                                            })
-                                            .map(m => (
-                                              <option key={m.id} value={m.id}>{m.name} ({m.media_type})</option>
-                                            ))
-                                          }
-                                        </select>
-                                      </div>
-
-                                      <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Or Enter External URL</label>
-                                        <input
-                                          className="cs-form-input"
-                                          style={{ height: '28px', fontSize: '0.78rem' }}
-                                          type="text"
-                                          value={selectedBlock.content?.url && !mediaAssets.some(m => (m.file === selectedBlock.content.url || m.url === selectedBlock.content.url)) ? selectedBlock.content.url : ''}
-                                          onChange={e => {
-                                            handleUpdateBlockMultipleContent({
-                                              url: e.target.value,
-                                              media_id: ''
-                                            });
-                                          }}
-                                          placeholder="https://example.com/asset.mp3"
                                         />
-                                      </div>
 
-                                      {selectedBlock.content?.url && (
-                                        <div style={{ background: '#f8fafc', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.65rem', wordBreak: 'break-all' }}>
-                                          <span style={{ fontWeight: 'bold', color: '#475569' }}>Selected Asset URL:</span><br />
-                                          <span style={{ color: '#0b57d0' }}>{selectedBlock.content.url}</span>
-                                        </div>
-                                      )}
+                                        {selectedBlock.content?.url ? (
+                                          // Uploaded state preview card
+                                          <div style={{
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: '8px',
+                                            padding: '0.75rem',
+                                            background: '#ffffff',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '0.5rem',
+                                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                          }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                              {selectedBlock.type === 'image' && (
+                                                <img
+                                                  src={resolveMediaUrl(selectedBlock.content.url)}
+                                                  alt="Preview"
+                                                  style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #f1f5f9' }}
+                                                />
+                                              )}
+                                              {selectedBlock.type === 'audio' && (
+                                                <div style={{ width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e0f2fe', color: '#0284c7', borderRadius: '4px', fontSize: '1.25rem' }}>
+                                                  🎵
+                                                </div>
+                                              )}
+                                              {selectedBlock.type === 'video' && (
+                                                <div style={{ width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fef3c7', color: '#d97706', borderRadius: '4px', fontSize: '1.25rem' }}>
+                                                  🎬
+                                                </div>
+                                              )}
+                                              <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                  {selectedBlock.content.url.split('/').pop()}
+                                                </div>
+                                                <div style={{ fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>
+                                                  {selectedBlock.type} file
+                                                </div>
+                                              </div>
+                                            </div>
+                                            <button
+                                              type="button"
+                                              className="cs-btn-outline"
+                                              style={{
+                                                fontSize: '0.72rem',
+                                                padding: '4px 8px',
+                                                width: '100%',
+                                                textAlign: 'center',
+                                                justifyContent: 'center',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                              }}
+                                              disabled={actionLoading}
+                                              onClick={() => document.getElementById(`screen-editor-upload-${selectedBlock.id}`).click()}
+                                            >
+                                              <FiUpload style={{ fontSize: '0.8rem' }} /> {actionLoading ? 'Uploading...' : 'Replace File'}
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          // Empty upload state drop-zone style
+                                          <div
+                                            onClick={() => document.getElementById(`screen-editor-upload-${selectedBlock.id}`).click()}
+                                            style={{
+                                              border: '2px dashed #cbd5e1',
+                                              borderRadius: '10px',
+                                              padding: '1.25rem 0.75rem',
+                                              textAlign: 'center',
+                                              background: '#f8fafc',
+                                              cursor: 'pointer',
+                                              transition: 'border-color 0.2s, background-color 0.2s',
+                                            }}
+                                            onMouseEnter={(e) => {
+                                              e.currentTarget.style.borderColor = '#6366f1';
+                                              e.currentTarget.style.backgroundColor = '#f5f3ff';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                              e.currentTarget.style.borderColor = '#cbd5e1';
+                                              e.currentTarget.style.backgroundColor = '#f8fafc';
+                                            }}
+                                          >
+                                            <div style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>
+                                              {selectedBlock.type === 'image' ? '🌅' : selectedBlock.type === 'audio' ? '🎵' : '🎬'}
+                                            </div>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#4f46e5', display: 'block', marginBottom: '2px' }}>
+                                              {actionLoading ? 'Uploading...' : `Upload ${selectedBlock.type}`}
+                                            </span>
+                                            <span style={{ fontSize: '0.62rem', color: '#64748b' }}>
+                                              Click to select local file
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
 
                                       {selectedBlock.type === 'image' && (
                                         <div className="cs-form-group">
@@ -7456,216 +7767,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             );
           })()}
 
-          {/* ───────────────── VIEW 7: MEDIA LIBRARY ───────────────── */}
-          {view === 'media' && (
-            <>
-              {/* Layout grid for media library */}
-              <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr 300px', gap: '1.25rem', height: 'calc(100vh - 110px)', minHeight: 540 }}>
-
-                {/* Column 1: Left folder list pane */}
-                <div className="cs-card" style={{ padding: '0.85rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>FOLDERS</span>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                    <button style={{ display: 'flex', justifySelf: 'stretch', justifyContent: 'space-between', background: '#e0f2fe', color: '#0369a1', border: 'none', padding: '0.5rem 0.65rem', borderRadius: 6, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', textAlign: 'left', alignItems: 'center' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><FiFolder /> All Files</span>
-                      <span style={{ fontSize: '0.72rem', opacity: 0.8 }}>{mediaAssets.length}</span>
-                    </button>
-                  </div>
-
-                  {/* Folders Tree hierarchy */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }}>
-                    <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' }}>- CATEGORIES</span>
-                    {[
-                      { name: 'Images', count: mediaAssets.filter(m => m.media_type === 'IMAGE').length },
-                      { name: 'Audio', count: mediaAssets.filter(m => m.media_type === 'AUDIO').length },
-                      { name: 'Videos', count: mediaAssets.filter(m => m.media_type === 'VIDEO').length }
-                    ].map(fld => (
-                      <div key={fld.name} style={{ display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0.5rem', fontSize: '0.78rem', color: '#475569', fontWeight: 600 }}>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><FiFolder /> {fld.name}</span>
-                          <span style={{ color: '#94a3b8' }}>{fld.count}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Storage Usage meter */}
-                  <div style={{ marginTop: 'auto', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem', fontSize: '0.72rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontWeight: 600 }}>
-                      <span style={{ color: '#64748b' }}>Storage Used</span>
-                      <span>1%</span>
-                    </div>
-                    <div style={{ width: '100%', height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden', marginBottom: 4 }}>
-                      <div style={{ width: '1%', height: '100%', background: '#6366f1' }} />
-                    </div>
-                    <span style={{ color: '#94a3b8' }}>Realtime Cloud Enabled</span>
-                  </div>
-                </div>
-
-                {/* Column 2: Center assets grid workspace */}
-                <div className="cs-card" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflow: 'hidden' }}>
-                  {/* Top toolbar */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>
-                    <div>
-                      <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>Media Library</h2>
-                      <p style={{ fontSize: '0.78rem', color: '#64748b', margin: '2px 0 0 0' }}>Manage and reuse media assets across all experiences.</p>
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.55rem' }}>
-                      {/* Hidden file input – triggered by Upload button below */}
-                      <input
-                        type="file"
-                        id="media-file-input"
-                        style={{ display: 'none' }}
-                        accept="image/*,audio/*,video/*,.pdf,.docx,.doc,.txt"
-                        onChange={handleMediaUpload}
-                      />
-                      <button
-                        className="cs-btn-primary"
-                        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                        disabled={actionLoading}
-                        onClick={() => document.getElementById('media-file-input').click()}
-                      >
-                        <FiUpload /> {actionLoading ? 'Uploading…' : 'Upload'}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Filtering / controls row */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.55rem', fontSize: '0.8rem' }}>
-                    <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center' }}>
-                      <span style={{ color: '#64748b', fontWeight: 600 }}>SORT BY</span>
-                      <select className="cs-filter-select" style={{ height: 26, fontSize: '0.78rem', padding: '0 0.5rem' }} defaultValue="Newest First">
-                        <option>Newest First</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Grid layout of media files */}
-                  <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridAutoRows: 'max-content', gap: '0.85rem', overflowY: 'auto', paddingRight: '0.25rem' }}>
-                    {mediaAssets.length === 0 ? (
-                      <div style={{ gridColumn: 'span 4', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', padding: '3rem' }}>
-                        No media assets found. Click "Upload" to add some!
-                      </div>
-                    ) : (
-                      mediaAssets.map(item => (
-                        <div
-                          key={item.id}
-                          onClick={() => setSelectedAsset(item)}
-                          style={{
-                            border: (selectedAsset?.id === item.id) ? '2px solid #6366f1' : '1px solid #e2e8f0',
-                            borderRadius: 8,
-                            background: '#ffffff',
-                            padding: '0.65rem',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            height: '145px',
-                            justifyContent: 'space-between',
-                            position: 'relative',
-                            overflow: 'hidden'
-                          }}
-                        >
-                          {/* Thumbnail placeholder */}
-                          <div style={{ height: 80, background: '#f8fafc', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: '0.35rem', border: '1px solid #f1f5f9' }}>
-                            {item.media_type === 'IMAGE' ? (
-                              item.url ? (
-                                <img src={item.url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              ) : item.file ? (
-                                <img src={item.file} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              ) : (
-                                <div style={{ width: '100%', height: '100%', background: '#bae6fd', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0369a1', fontSize: '1rem', fontWeight: 'bold' }}>
-                                  🌅 Image
-                                </div>
-                              )
-                            ) : item.media_type === 'AUDIO' ? (
-                              <span style={{ fontSize: '1.5rem' }}>🎵</span>
-                            ) : item.media_type === 'VIDEO' ? (
-                              <span style={{ fontSize: '1.5rem' }}>🎬</span>
-                            ) : (
-                              <span style={{ fontSize: '1.5rem' }}>📄</span>
-                            )}
-                          </div>
-
-                          {/* Title details */}
-                          <div>
-                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 2, fontSize: '0.62rem', color: '#64748b' }}>
-                              <span>{item.file_size ? `${(item.file_size / 1024).toFixed(1)} KB` : 'N/A'} • {new Date(item.uploaded_at || item.upload_date || new Date()).toLocaleDateString()}</span>
-                              <span style={{ background: '#f1f5f9', padding: '1px 4px', borderRadius: 4, fontWeight: 700, fontSize: '7px' }}>{item.media_type}</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {/* Grid Footer pagination */}
-                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Showing {mediaAssets.length} of {mediaAssets.length} items</span>
-                  </div>
-                </div>
-
-                {/* Column 3: Right selected asset preview sidebar */}
-                <div className="cs-card" style={{ padding: '0.85rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155' }}>Preview</span>
-                  </div>
-
-                  {selectedAsset ? (
-                    <>
-                      {/* Large preview image */}
-                      <div style={{ height: 140, background: '#bae6fd', borderRadius: 8, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0369a1', border: '1px solid #e2e8f0' }}>
-                        {selectedAsset.media_type === 'IMAGE' && (selectedAsset.url || selectedAsset.file) ? (
-                          <img src={selectedAsset.url || selectedAsset.file} alt={selectedAsset.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                        ) : (
-                          <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '2rem', marginBottom: 4 }}>
-                              {selectedAsset.media_type === 'AUDIO' ? '🎵' : selectedAsset.media_type === 'VIDEO' ? '🎬' : '📄'}
-                            </div>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 700, maxWidth: '240px', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedAsset.name}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Media Details */}
-                      <div>
-                        <h4 style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.5rem 0' }}>MEDIA INFORMATION</h4>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', fontSize: '0.75rem' }}>
-                          {[
-                            { label: 'Name', value: selectedAsset.name },
-                            { label: 'Type', value: selectedAsset.media_type },
-                            { label: 'Size', value: selectedAsset.file_size ? `${(selectedAsset.file_size / 1024).toFixed(1)} KB` : 'N/A' },
-                            { label: 'Upload Date', value: new Date(selectedAsset.uploaded_at || selectedAsset.upload_date || new Date()).toLocaleString() }
-                          ].map(inf => (
-                            <div key={inf.label} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <span style={{ color: '#64748b' }}>{inf.label}</span>
-                              <span style={{ fontWeight: 600, color: '#1e293b', maxWidth: '70%', wordBreak: 'break-all', textAlign: 'right' }}>{inf.value}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Action buttons */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }}>
-                        <button className="cs-btn-outline" style={{ color: '#ef4444', borderColor: '#fca5a5', background: '#fef2f2', fontSize: '0.75rem', padding: '0.4rem 0', width: '100%' }} onClick={() => handleDeleteMedia(selectedAsset.id)}>
-                          🗑 Delete Asset
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '2rem' }}>
-                      Select an asset to view preview and options.
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            </>
-          )}
-
           {/* ───────────────── VIEW 8: PUBLISH CENTER ───────────────── */}
           {view === 'publish' && (
             <>
@@ -8602,9 +8703,33 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         onChange={e => setAiForm({ ...aiForm, content_type: e.target.value })}
                         style={{ height: '36px' }}
                       >
-                        <option value="quiz">Quiz Question</option>
-                        <option value="dialogue">Dialogue / Conversation</option>
-                        <option value="fill_in_blanks">Fill in the Blanks</option>
+                        <optgroup label="Listening Module">
+                          <option value="dictation">Dictation / Type What You Hear</option>
+                          <option value="sequence_audio">Audio Sequence / Ordering</option>
+                          <option value="quiz_listening">Listening Quiz</option>
+                        </optgroup>
+                        <optgroup label="Speaking Module">
+                          <option value="dialogue">Dialogue / Conversation Practice</option>
+                          <option value="roleplay">Role Play Prompt</option>
+                          <option value="pronunciation">Pronunciation Practice</option>
+                        </optgroup>
+                        <optgroup label="Reading Module">
+                          <option value="reading_passage">Reading Passage & Questions</option>
+                          <option value="match">Match the Following / Pairs</option>
+                          <option value="flashcards">Flashcard Deck</option>
+                          <option value="wordsearch">Word Search Puzzle</option>
+                          <option value="crossword">Crossword Puzzle</option>
+                        </optgroup>
+                        <optgroup label="Writing Module">
+                          <option value="fill_blank">Fill in the Blanks</option>
+                          <option value="writing_prompt">Writing Prompt & Essay</option>
+                          <option value="sentence_builder">Sentence Builder / Unscramble</option>
+                        </optgroup>
+                        <optgroup label="Grammar Module">
+                          <option value="grammar_correction">Grammar Correction</option>
+                          <option value="true_false">True / False Challenge</option>
+                          <option value="drag_drop">Drag & Drop Classification</option>
+                        </optgroup>
                         <option value="full_screen">Full Screen Template</option>
                       </select>
                     </div>
@@ -8936,6 +9061,96 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           onCrop={handleCropSave}
           onCancel={() => setCropImageSrc(null)}
         />
+      )}
+
+      {showNotifModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', width: '100%', maxWidth: '850px', height: '90%', maxHeight: '650px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ backgroundColor: '#4f46e5', color: '#ffffff', width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                  <FiBell />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Content Studio Notifications & Announcements</h3>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Stay updated with scenario building and media assets alerts</p>
+                </div>
+              </div>
+              <button style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s' }} onClick={() => setShowNotifModal(false)}>
+                <FiX size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', flex: 1, overflow: 'hidden' }}>
+              {/* Left Column: Notifications */}
+              <div style={{ borderRight: '1px solid #f1f5f9', padding: '24px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#334155' }}>Recent Studio Alerts</h4>
+                  {notifications.length > 0 && (
+                    <button style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setNotifications([])}>
+                      <FiTrash2 size={14} /> Clear all
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+                  {notifications.length === 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', gap: '8px' }}>
+                      <FiBell size={36} style={{ opacity: 0.5 }} />
+                      <span style={{ fontSize: '0.9rem' }}>All caught up! No notifications.</span>
+                    </div>
+                  ) : (
+                    notifications.map(n => {
+                      const text = n.text || n.message || 'Notification';
+                      const time = n.time || (n.created_at ? new Date(n.created_at).toLocaleDateString() : 'Recently');
+                      const read = n.read !== undefined ? n.read : n.is_read;
+                      return (
+                        <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: read ? '#f8fafc' : '#f0fdf4', border: `1px solid ${read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative' }}>
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: read ? 400 : 600 }}>{text}</span>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{time}</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            {!read && (
+                              <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={() => setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true, is_read: true } : item))}>
+                                Mark read
+                              </button>
+                            )}
+                            <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setNotifications(notifications.filter(item => item.id !== n.id))} title="Delete">
+                              <FiX size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Announcements */}
+              <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', backgroundColor: '#fafafa', overflowY: 'auto' }}>
+                <h4 style={{ margin: '0 0 16px 0', fontSize: '1rem', fontWeight: 600, color: '#334155' }}>Studio Announcements</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#e0e7ff', color: '#4f46e5', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Studio Guide</span>
+                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Media Asset Optimization Guidelines</h5>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>All uploaded audio files should be in MP3/WAV format under 5MB, and images should be optimized to preserve fast loading times on client devices.</p>
+                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 1 day ago</span>
+                  </div>
+
+                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#fee2e2', color: '#ef4444', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Build Notice</span>
+                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Package Verification Failure Fixes</h5>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>If package build validation fails due to unlinked audio tracks, check the block elements properties and re-run verification before publishing.</p>
+                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 3 days ago</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
