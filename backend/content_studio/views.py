@@ -45,8 +45,12 @@ class StandardResultsSetPagination(PageNumberPagination):
 
 
 class ExperienceViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, IsContentCreatorOrSuperAdmin]
     pagination_class = StandardResultsSetPagination
+
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsContentCreatorOrSuperAdmin()]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["title", "description", "subject"]
     ordering_fields = ["updated_at", "created_at", "title"]
@@ -54,6 +58,11 @@ class ExperienceViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = Experience.objects.filter(is_deleted=False).select_related("grade", "created_by")
+
+        # Filter for school tenants (only show published experiences)
+        role = getattr(self.request.user, "role", None)
+        if role in ["SCHOOL_ADMIN", "TEACHER", "STUDENT"]:
+            queryset = queryset.filter(status="APPROVED")
         
         # Exclude draft experiences that have no activities or no screens
         # (meaning they only completed Experience Builder but not Activity/Screen Builder)

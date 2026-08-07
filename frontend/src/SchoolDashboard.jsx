@@ -2393,7 +2393,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <th>Experience Title</th>
                         <th>Grade Level</th>
                         <th>Difficulty</th>
-                        <th>Status</th>
                         <th>Duration</th>
                       </tr>
                     </thead>
@@ -2410,16 +2409,11 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               {s.difficulty || 'INTERMEDIATE'}
                             </span>
                           </td>
-                          <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
-                            <span className={`sd-badge ${s.status === 'PUBLISHED' ? 'sd-badge-published' : s.status === 'REVIEW' ? 'sd-badge-review' : 'sd-badge-draft'}`}>
-                              {s.status || 'DRAFT'}
-                            </span>
-                          </td>
                           <td>{s.estimated_duration ? `${s.estimated_duration} min` : '—'}</td>
                         </tr>
                       ))}
                       {filterList(experiences).length === 0 && (
-                        <tr><td colSpan="5" className="sd-empty-state">No experiences found.</td></tr>
+                        <tr><td colSpan="4" className="sd-empty-state">No experiences found.</td></tr>
                       )}
                     </tbody>
                   </table>
