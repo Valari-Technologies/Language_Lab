@@ -1046,7 +1046,7 @@ class AIGenerateView(APIView):
             "quiz", "dialogue", "fill_in_blanks", "full_screen", "remedial",
             "dictation", "sequence_audio", "quiz_listening",
             "roleplay", "pronunciation", "reading_passage", "match",
-            "flashcards", "wordsearch", "crossword", "fill_blank",
+            "flashcards", "wordsearch", "fill_blank",
             "writing_prompt", "sentence_builder", "grammar_correction",
             "true_false", "drag_drop"
         ]

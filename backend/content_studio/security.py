@@ -3,7 +3,7 @@ import uuid
 from django.core.exceptions import ValidationError
 
 # Size limits in bytes
-LIMIT_IMAGE = 5 * 1024 * 1024      # 5MB
+LIMIT_IMAGE = 10 * 1024 * 1024      # 10MB
 LIMIT_AUDIO = 20 * 1024 * 1024     # 20MB
 LIMIT_VIDEO = 200 * 1024 * 1024    # 200MB
 LIMIT_DOCUMENT = 10 * 1024 * 1024  # 10MB
@@ -62,7 +62,7 @@ def validate_file_security(uploaded_file):
     # 2. Enforce size limit
     file_size = uploaded_file.size
     if media_type == "IMAGE" and file_size > LIMIT_IMAGE:
-        raise ValidationError(f"Image file exceeds maximum limit of 5MB.")
+        raise ValidationError(f"Image file exceeds maximum limit of 10MB.")
     elif media_type == "AUDIO" and file_size > LIMIT_AUDIO:
         raise ValidationError(f"Audio file exceeds maximum limit of 20MB.")
     elif media_type == "VIDEO" and file_size > LIMIT_VIDEO:

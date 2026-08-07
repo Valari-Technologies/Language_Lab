@@ -224,18 +224,6 @@ def generate_ai_content(topic: str, target_level: str, content_type: str) -> dic
             },
             "required": ["title", "question", "words", "gridSize"]
         },
-        "crossword": {
-            "type": "object",
-            "properties": {
-                "title": {"type": "string"},
-                "question": {"type": "string"},
-                "words": {
-                    "type": "array",
-                    "items": {"type": "string"}
-                }
-            },
-            "required": ["title", "question", "words"]
-        },
         "fill_blank": {
             "type": "object",
             "properties": {

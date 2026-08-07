@@ -456,7 +456,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     const updateScale = () => {
       if (previewScaleRef.current) {
         const width = previewScaleRef.current.clientWidth;
-        setPreviewScaleFactor(width > 0 ? width / 1100 : 1);
+        setPreviewScaleFactor(width > 0 ? width / 1440 : 1);
       }
     };
     // Run after a short timeout to make sure DOM is fully rendered
@@ -1303,7 +1303,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     });
   };
 
-  const loadActivityDetail = async (actObjOrId, shouldChangeView = true) => {
+  const loadActivityDetail = async (actObjOrId, targetView = 'activity-builder') => {
     const actId = typeof actObjOrId === 'object' ? actObjOrId.id : actObjOrId;
     try {
       const res = await apiFetch(`/api/v1/content/activities/${actId}/`);
@@ -1319,9 +1319,17 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           duration: data.estimated_duration || 5,
           mastery: data.mastery_threshold || 80
         });
-        setScreens(data.screens || []);
-        if (shouldChangeView) {
-          setView('activity-builder');
+        const activityScreens = data.screens || [];
+        setScreens(activityScreens);
+        if (targetView === 'screen-builder') {
+          if (activityScreens.length > 0) {
+            loadScreenDetail(activityScreens[0]);
+          } else {
+            setView('screen-builder');
+            setIsEditingScreen(false);
+          }
+        } else if (targetView) {
+          setView(targetView);
         }
       } else {
         showFeedback('Failed to load activity details', 'error');
@@ -1614,7 +1622,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       newBlock.type = 'fill_blank';
       newBlock.content = {
         question: 'Complete the sentence by filling in the blanks.',
-        text: 'The quick brown [fox] jumps over the lazy [dog].'
+        items: [{ id: 'item-1', text: 'The quick brown [fox] jumps over the lazy [dog].' }]
       };
     } else if (type.toLowerCase() === 'match_items' || type.toLowerCase() === 'match items' || type.toLowerCase() === 'match') {
       newBlock.type = 'match';
@@ -1653,7 +1661,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       };
     } else if (type.toLowerCase() === 'pronunciation') {
       newBlock.type = 'pronunciation';
-      newBlock.content = { word: 'Hello', phonetic: '/həˈloʊ/' };
+      newBlock.content = {
+        question: 'Practice pronouncing words correctly',
+        items: [{ id: 'item-1', word: 'Hello', phonetic: '/həˈloʊ/' }]
+      };
     } else if (type.toLowerCase() === 'role_play' || type.toLowerCase() === 'role play') {
       newBlock.type = 'role_play';
       newBlock.content = { title: 'Introduction', prompt: 'Introduce yourself.', script: [{ speaker: 'A', text: 'Hi! How are you?' }, { speaker: 'B', text: 'Im good, thanks!' }] };
@@ -1759,7 +1770,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       newBlock.type = 'fill_blank';
       newBlock.content = {
         question: 'Complete the sentence by filling in the blanks.',
-        text: 'The quick brown [fox] jumps over the lazy [dog].'
+        items: [{ id: 'item-1', text: 'The quick brown [fox] jumps over the lazy [dog].' }]
       };
     } else if (type.toLowerCase() === 'match_items' || type.toLowerCase() === 'match items' || type.toLowerCase() === 'match') {
       newBlock.type = 'match';
@@ -1798,7 +1809,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       };
     } else if (type.toLowerCase() === 'pronunciation') {
       newBlock.type = 'pronunciation';
-      newBlock.content = { word: 'Hello', phonetic: '/həˈloʊ/' };
+      newBlock.content = {
+        question: 'Practice pronouncing words correctly',
+        items: [{ id: 'item-1', word: 'Hello', phonetic: '/həˈloʊ/' }]
+      };
     } else if (type.toLowerCase() === 'role_play' || type.toLowerCase() === 'role play') {
       newBlock.type = 'role_play';
       newBlock.content = { title: 'Introduction', prompt: 'Introduce yourself.', script: [{ speaker: 'A', text: 'Hi! How are you?' }, { speaker: 'B', text: 'Im good, thanks!' }] };
@@ -1963,23 +1977,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             {makeMoveDragger()}
             <span style={{ marginRight: '4px', textTransform: 'uppercase', fontSize: '0.58rem' }}>{block.type}</span>
 
-            <button
-              disabled={idx === 0}
-              onClick={(e) => { e.stopPropagation(); handleMoveBlock(idx, -1); }}
-              style={{ background: 'none', border: 'none', color: '#ffffff', cursor: idx === 0 ? 'not-allowed' : 'pointer', display: 'flex', padding: '1px' }}
-              title="Move Up"
-            >
-              <FiChevronUp style={{ fontSize: '0.8rem' }} />
-            </button>
 
-            <button
-              disabled={idx === screenForm.elements.length - 1}
-              onClick={(e) => { e.stopPropagation(); handleMoveBlock(idx, 1); }}
-              style={{ background: 'none', border: 'none', color: '#ffffff', cursor: idx === screenForm.elements.length - 1 ? 'not-allowed' : 'pointer', display: 'flex', padding: '1px' }}
-              title="Move Down"
-            >
-              <FiChevronDown style={{ fontSize: '0.8rem' }} />
-            </button>
 
             <button
               onClick={(e) => { e.stopPropagation(); handleCloneBlock(block); }}
@@ -2263,37 +2261,44 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46' }}>
               Fill in the Blanks: {block.content?.question || 'Complete the text template'}
             </div>
-            <div style={{ fontSize: '0.75rem', color: '#374151', background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '0.5rem', lineHeight: 1.6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {(() => {
-                const text = block.content?.text || '';
-                const parts = text.split(/(\[[^\]]+\])/);
-                return parts.map((part, pIdx) => {
-                  if (part.startsWith('[') && part.endsWith(']')) {
-                    const word = part.slice(1, -1);
-                    return (
-                      <input
-                        key={pIdx}
-                        type="text"
-                        disabled
-                        placeholder={word}
-                        style={{
-                          width: `${Math.max(word.length * 8 + 12, 50)}px`,
-                          height: '18px',
-                          border: 'none',
-                          borderBottom: '2px solid #059669',
-                          background: '#f0fdf4',
-                          textAlign: 'center',
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          color: '#059669',
-                          margin: '0 4px',
-                          outline: 'none',
-                          padding: 0
-                        }}
-                      />
-                    );
-                  }
-                  return <span key={pIdx}>{part}</span>;
+                const items = block.content?.items || (block.content?.text ? [{ id: 'migrated', text: block.content.text }] : []);
+                return items.map((item, itemIdx) => {
+                  const text = item.text || '';
+                  const parts = text.split(/(\[[^\]]+\])/);
+                  return (
+                    <div key={item.id || itemIdx} style={{ fontSize: '0.75rem', color: '#374151', background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '0.5rem', lineHeight: 1.6 }}>
+                      {parts.map((part, pIdx) => {
+                        if (part.startsWith('[') && part.endsWith(']')) {
+                          const word = part.slice(1, -1);
+                          return (
+                            <input
+                              key={pIdx}
+                              type="text"
+                              disabled
+                              placeholder={word}
+                              style={{
+                                width: `${Math.max(word.length * 8 + 12, 50)}px`,
+                                height: '18px',
+                                border: 'none',
+                                borderBottom: '2px solid #059669',
+                                background: '#f0fdf4',
+                                textAlign: 'center',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                color: '#059669',
+                                margin: '0 4px',
+                                outline: 'none',
+                                padding: 0
+                              }}
+                            />
+                          );
+                        }
+                        return <span key={pIdx}>{part}</span>;
+                      })}
+                    </div>
+                  );
                 });
               })()}
             </div>
@@ -2413,13 +2418,22 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         {block.type === 'pronunciation' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiMic /> Pronunciation Block
+              <FiMic /> Pronunciation: {block.content?.question || 'Practice pronouncing words correctly'}
             </div>
-            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>
-              Word: {block.content?.word || 'Hello'}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic' }}>
-              Phonetic: {block.content?.phonetic || '/həˈloʊ/'}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {(() => {
+                const items = block.content?.items || (block.content?.word ? [{ id: 'migrated', word: block.content.word, phonetic: block.content.phonetic }] : []);
+                return items.map((item, itemIdx) => (
+                  <div key={item.id || itemIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '6px', padding: '0.4rem 0.6rem' }}>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b' }}>
+                      Word: {item.word || 'Hello'}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic' }}>
+                      Phonetic: {item.phonetic || '/həˈloʊ/'}
+                    </div>
+                  </div>
+                ));
+              })()}
             </div>
           </div>
         )}
@@ -2464,18 +2478,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           </div>
         )}
 
-        {block.type === 'crossword' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #dcfce7', background: '#ecfdf5', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiGrid /> Crossword: {block.content?.question || 'Solve the crossword'}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 20px)', gap: '2px', width: 'fit-content' }}>
-              {Array.from({ length: 25 }).map((_, idx) => (
-                <div key={idx} style={{ width: '20px', height: '20px', background: idx % 3 === 0 ? '#1e293b' : '#fff', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700 }}></div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {block.type === 'true_false' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '8px', padding: '0.75rem' }}>
@@ -4857,31 +4859,34 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-                  {selectedExperience?.id && (
-                    <button
-                      onClick={() => setView('experience-builder')}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '5px',
-                        background: '#ffffff', color: '#374151',
-                        border: '1px solid #d1d5db', borderRadius: '10px',
-                        padding: '0.5rem 1rem', fontWeight: 600, fontSize: '0.82rem',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <span style={{ fontSize: '1rem' }}>←</span>&nbsp; Back to Experience
-                    </button>
-                  )}
                   <button
-                    onClick={handleSaveActivity}
+                    type="button"
+                    disabled={activities.length >= 5}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '6px',
-                      background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
-                      color: '#ffffff', border: 'none', borderRadius: '10px',
+                      background: activities.length >= 5 ? '#f1f5f9' : 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
+                      color: activities.length >= 5 ? '#94a3b8' : '#ffffff',
+                      border: 'none', borderRadius: '10px',
                       padding: '0.5rem 1.25rem', fontWeight: 700, fontSize: '0.82rem',
-                      cursor: 'pointer', boxShadow: '0 2px 8px rgba(11,87,208,0.25)'
+                      cursor: activities.length >= 5 ? 'not-allowed' : 'pointer',
+                      opacity: activities.length >= 5 ? 0.7 : 1,
+                      boxShadow: activities.length >= 5 ? 'none' : '0 2px 8px rgba(11,87,208,0.25)',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onClick={() => {
+                      if (activities.length >= 5) return;
+                      setSelectedActivity(null);
+                      setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
+                      setScreens([]);
                     }}
                   >
-                    Save Activity
+                    {activities.length >= 5 ? (
+                      'Max 5 Reached'
+                    ) : (
+                      <>
+                        <FiPlus style={{ fontSize: '0.9rem' }} /> Add New Activity
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -4969,6 +4974,20 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         />
                       </div>
                     </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '1.25rem', borderTop: '1px solid #f1f5f9', paddingTop: '1.25rem' }}>
+                      <button
+                        onClick={handleSaveActivity}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '6px',
+                          background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
+                          color: '#ffffff', border: 'none', borderRadius: '10px',
+                          padding: '0.5rem 1.25rem', fontWeight: 700, fontSize: '0.82rem',
+                          cursor: 'pointer', boxShadow: '0 2px 8px rgba(11,87,208,0.25)'
+                        }}
+                      >
+                        Save Activity
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -4981,54 +5000,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         Sequence of activities (1 to 5 allowed. Current: {activities.length}/5)
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className="cs-btn-outline"
-                      disabled={activities.length >= 5}
-                      style={{
-                        padding: '0.45rem 1rem',
-                        fontSize: '0.78rem',
-                        border: '1px solid #7c3aed',
-                        borderRadius: '8px',
-                        background: activities.length >= 5 ? '#f1f5f9' : '#f5f3ff',
-                        color: activities.length >= 5 ? '#94a3b8' : '#7c3aed',
-                        cursor: activities.length >= 5 ? 'not-allowed' : 'pointer',
-                        fontWeight: 600,
-                        opacity: activities.length >= 5 ? 0.7 : 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        transition: 'all 0.2s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (activities.length < 5) {
-                          e.currentTarget.style.background = '#7c3aed';
-                          e.currentTarget.style.color = '#ffffff';
-                          e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(124, 58, 237, 0.2)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (activities.length < 5) {
-                          e.currentTarget.style.background = '#f5f3ff';
-                          e.currentTarget.style.color = '#7c3aed';
-                          e.currentTarget.style.boxShadow = 'none';
-                        }
-                      }}
-                      onClick={() => {
-                        if (activities.length >= 5) return;
-                        setSelectedActivity(null);
-                        setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
-                        setScreens([]);
-                      }}
-                    >
-                      {activities.length >= 5 ? (
-                        'Max 5 Reached'
-                      ) : (
-                        <>
-                          <FiPlus style={{ fontSize: '0.9rem' }} /> Add New Activity
-                        </>
-                      )}
-                    </button>
                   </div>
 
                   {activities.length === 0 ? (
@@ -5099,7 +5070,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               <button
                                 type="button"
                                 className="cs-icon-btn"
-                                onClick={() => loadActivityDetail(act)}
+                                onClick={() => loadActivityDetail(act, 'screen-builder')}
                                 title="Edit Activity"
                                 style={{ padding: '4px' }}
                               >
@@ -5527,8 +5498,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         title="Back to Activity Builder (saves first)"
                         onClick={() => {
                           handleSaveScreen(false);
-                          window.history.pushState({}, '', '/content-studio');
-                          setCurrentPath('/content-studio');
+                          setView('activity-builder');
                         }}
                       >
                         <FiArrowLeft style={{ fontSize: '1rem' }} />
@@ -5555,11 +5525,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     {/* Center: Tools */}
                     <div className="fss-toolbar-center">
                       {/* Undo/Redo */}
-                      <button className="fss-toolbar-btn" title="Undo (Ctrl+Z)" disabled={historyIndex <= 0} onClick={handleUndo}>
-                        <FiCornerUpLeft style={{ fontSize: '0.9rem' }} />
+                      <button className="fss-toolbar-btn" title="Undo (Ctrl+Z)" disabled={historyIndex <= 0} onClick={handleUndo} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', padding: '0.35rem 0.6rem' }}>
+                        <FiCornerUpLeft style={{ fontSize: '0.85rem' }} />
+                        <span>Undo</span>
                       </button>
-                      <button className="fss-toolbar-btn" title="Redo (Ctrl+Y)" disabled={historyIndex >= elementsHistory.length - 1} onClick={handleRedo}>
-                        <FiCornerUpRight style={{ fontSize: '0.9rem' }} />
+                      <button className="fss-toolbar-btn" title="Redo (Ctrl+Y)" disabled={historyIndex >= elementsHistory.length - 1} onClick={handleRedo} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', padding: '0.35rem 0.6rem' }}>
+                        <FiCornerUpRight style={{ fontSize: '0.85rem' }} />
+                        <span>Redo</span>
                       </button>
                       <div className="fss-toolbar-divider" />
 
@@ -5693,8 +5665,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                       { type: 'Flashcard', desc: 'Flip cards for front & back', icon: <FiLayers style={{ color: '#db2777' }} />, bg: '#fce7f3' },
                                       { type: 'Sentence_Builder', desc: 'Build sentences with word badges', icon: <FiType style={{ color: '#0284c7' }} />, bg: '#e0f2fe' },
                                       { type: 'Word_Search', desc: 'Simulated letter-grid puzzle', icon: <FiGrid style={{ color: '#4f46e5' }} />, bg: '#e0e7ff' },
-                                      { type: 'Memory', desc: 'Card matching memory game', icon: <FiGrid style={{ color: '#4f46e5' }} />, bg: '#e0e7ff' },
-                                      { type: 'Crossword', desc: 'Educational crossword puzzle', icon: <FiGrid style={{ color: '#16a34a' }} />, bg: '#dcfce7' }
+                                      { type: 'Memory', desc: 'Card matching memory game', icon: <FiGrid style={{ color: '#4f46e5' }} />, bg: '#e0e7ff' }
                                     ]
                                   }
                                 ].map(cat => {
@@ -5715,7 +5686,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                   const MODULE_ELEMENTS = {
                                     listening: ['heading', 'audio', 'video', 'sequence', 'dictation', 'quiz', 'mcq', 'text', 'image'],
                                     speaking: ['heading', 'dialogue', 'input', 'voice_recorder', 'pronunciation', 'role_play', 'audio', 'image', 'video', 'text'],
-                                    reading: ['text', 'heading', 'image', 'quiz', 'mcq', 'match', 'flashcard', 'memory', 'crossword', 'word_search', 'reading_passage', 'audio', 'video'],
+                                    reading: ['text', 'heading', 'image', 'quiz', 'mcq', 'match', 'flashcard', 'memory', 'word_search', 'reading_passage', 'audio', 'video'],
                                     writing: ['fill_blank', 'sentence_builder', 'writing_prompt', 'text', 'heading', 'image', 'video', 'audio'],
                                     grammar: ['heading', 'true_false', 'drag_drop', 'grammar_correction', 'quiz', 'mcq', 'fill_blank', 'match', 'sequence', 'image', 'video', 'audio', 'text']
                                   };
@@ -6092,6 +6063,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                           onChange={async (e) => {
                                             const file = e.target.files[0];
                                             if (!file) return;
+                                            if ((selectedBlock.type === 'image' || file.type.startsWith('image/')) && file.size > 10 * 1024 * 1024) {
+                                              showFeedback("Image is too large. Max size is 10MB.", "error");
+                                              e.target.value = null;
+                                              return;
+                                            }
                                             e.target.value = null;
 
                                             const formData = new FormData();
@@ -6553,13 +6529,45 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
                                           onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Complete the sentences with correct terms" />
                                       </div>
-                                      <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Text Template (Use [ ] for blanks)</label>
-                                        <textarea className="cs-form-input" style={{ minHeight: '80px', fontSize: '0.75rem', lineHeight: 1.4 }} value={selectedBlock.content?.text || ''}
-                                          onChange={e => handleUpdateBlockContent('text', e.target.value)} placeholder="e.g. The quick brown [fox] jumps over the lazy [dog]." />
-                                        <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '4px', lineHeight: 1.3 }}>
-                                          Wrap correct answers in square brackets. Users will see empty input boxes.
-                                        </div>
+                                      
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Sentences List (Use [ ] for blanks)</span>
+                                        <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0', background: 'none', cursor: 'pointer' }}
+                                          onClick={() => {
+                                            const oldItems = selectedBlock.content?.items || (selectedBlock.content?.text ? [{ id: 'migrated', text: selectedBlock.content.text }] : []);
+                                            const items = [...oldItems, { id: `item-${Date.now()}`, text: 'Sentence with [blank].' }];
+                                            handleUpdateBlockContent('items', items);
+                                          }}
+                                        >
+                                          + Add Sentence
+                                        </button>
+                                      </div>
+                                      
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto', paddingRight: '4px' }}>
+                                        {(() => {
+                                          const items = selectedBlock.content?.items || (selectedBlock.content?.text ? [{ id: 'migrated', text: selectedBlock.content.text }] : []);
+                                          return items.map((item, idx) => (
+                                            <div key={item.id || idx} style={{ display: 'flex', gap: '0.35rem', alignItems: 'start', background: '#f8fafc', padding: '0.35rem', borderRadius: '6px', border: '1px solid #e2e8f0', flexDirection: 'column' }}>
+                                              <div style={{ display: 'flex', width: '100%', gap: '0.35rem', alignItems: 'center' }}>
+                                                <span style={{ fontSize: '0.65rem', fontWeight: 600, color: '#64748b' }}>Sentence #{idx + 1}</span>
+                                                <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', marginLeft: 'auto', padding: '2px' }}
+                                                  onClick={() => {
+                                                    const newItems = items.filter((_, i) => i !== idx);
+                                                    handleUpdateBlockContent('items', newItems);
+                                                  }}
+                                                >
+                                                  🗑️
+                                                </button>
+                                              </div>
+                                              <textarea className="cs-form-input" style={{ minHeight: '50px', fontSize: '0.72rem', width: '100%', lineHeight: 1.3 }} value={item.text || ''}
+                                                onChange={e => {
+                                                  const newItems = [...items];
+                                                  newItems[idx] = { ...item, text: e.target.value };
+                                                  handleUpdateBlockContent('items', newItems);
+                                                }} placeholder="e.g. The quick [fox] jumps." />
+                                            </div>
+                                          ));
+                                        })()}
                                       </div>
                                     </div>
                                   )}
@@ -6724,8 +6732,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                       <div className="cs-form-group">
                                         <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Words List (Comma Separated)</label>
                                         <input className="cs-form-input" style={{ height: '28px', fontSize: '0.78rem' }} type="text"
-                                          value={selectedBlock.content?.words?.join(', ') || ''}
-                                          onChange={e => { const list = e.target.value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean); handleUpdateBlockContent('words', list); }}
+                                          value={selectedBlock.content?.wordsRawText !== undefined ? selectedBlock.content.wordsRawText : (selectedBlock.content?.words?.join(', ') || '')}
+                                          onChange={e => {
+                                            const val = e.target.value;
+                                            const list = val.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+                                            handleUpdateBlockMultipleContent({
+                                              words: list,
+                                              wordsRawText: val
+                                            });
+                                          }}
                                           placeholder="e.g. DASHBOARD, STUDIO, TEACHER" />
                                       </div>
                                     </div>
@@ -6736,14 +6751,52 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                       <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Pronunciation Settings</span>
                                       <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Target Word</label>
-                                        <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.word || ''}
-                                          onChange={e => handleUpdateBlockContent('word', e.target.value)} placeholder="e.g. Hello" />
+                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question Instruction</label>
+                                        <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.question || 'Practice pronouncing words correctly'}
+                                          onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Pronounce the words" />
                                       </div>
-                                      <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Phonetic representation</label>
-                                        <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.phonetic || ''}
-                                          onChange={e => handleUpdateBlockContent('phonetic', e.target.value)} placeholder="e.g. /həˈloʊ/" />
+                                      
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Words List</span>
+                                        <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0', background: 'none', cursor: 'pointer' }}
+                                          onClick={() => {
+                                            const oldItems = selectedBlock.content?.items || (selectedBlock.content?.word ? [{ id: 'migrated', word: selectedBlock.content.word, phonetic: selectedBlock.content.phonetic }] : []);
+                                            const items = [...oldItems, { id: `item-${Date.now()}`, word: 'Word', phonetic: '/phonetic/' }];
+                                            handleUpdateBlockContent('items', items);
+                                          }}
+                                        >
+                                          + Add Word
+                                        </button>
+                                      </div>
+                                      
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto', paddingRight: '4px' }}>
+                                        {(() => {
+                                          const items = selectedBlock.content?.items || (selectedBlock.content?.word ? [{ id: 'migrated', word: selectedBlock.content.word, phonetic: selectedBlock.content.phonetic }] : []);
+                                          return items.map((item, idx) => (
+                                            <div key={item.id || idx} style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', background: '#f8fafc', padding: '0.35rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                              <input className="cs-form-input" style={{ height: '24px', fontSize: '0.7rem', flex: 1 }} type="text" value={item.word || ''}
+                                                onChange={e => {
+                                                  const newItems = [...items];
+                                                  newItems[idx] = { ...item, word: e.target.value };
+                                                  handleUpdateBlockContent('items', newItems);
+                                                }} placeholder="Word" />
+                                              <input className="cs-form-input" style={{ height: '24px', fontSize: '0.7rem', flex: 1 }} type="text" value={item.phonetic || ''}
+                                                onChange={e => {
+                                                  const newItems = [...items];
+                                                  newItems[idx] = { ...item, phonetic: e.target.value };
+                                                  handleUpdateBlockContent('items', newItems);
+                                                }} placeholder="Phonetic" />
+                                              <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
+                                                onClick={() => {
+                                                  const newItems = items.filter((_, i) => i !== idx);
+                                                  handleUpdateBlockContent('items', newItems);
+                                                }}
+                                              >
+                                                🗑️
+                                              </button>
+                                            </div>
+                                          ));
+                                        })()}
                                       </div>
                                     </div>
                                   )}
@@ -7227,13 +7280,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
 
                   <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                    <button
-                      className="cs-btn-outline"
-                      onClick={() => setView('activity-builder')}
-                      style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '0.5rem 1rem', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', color: '#334155' }}
-                    >
-                      Back to Activity
-                    </button>
+
                     <button
                       onClick={handleAddNewScreen}
                       disabled={!selectedActivity?.id}
@@ -7655,13 +7702,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <div 
                         ref={previewScaleRef}
                         style={{ 
-                          width: '1100px',
+                          width: '1440px',
                           maxWidth: '100%',
                           backgroundColor: '#ffffff',
                           borderRadius: '16px',
                           border: '1px solid #e2e8f0',
                           boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05)',
-                          padding: '2.5rem',
+                          padding: '0',
                           boxSizing: 'border-box',
                           margin: '0 auto',
                           position: 'relative'
@@ -7681,9 +7728,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               <div 
                                 className="preview-canvas-viewport"
                                 style={{
-                                  width: '1100px',
+                                  width: '1440px',
                                   height: `${baseCanvasHeight}px`,
-                                  padding: '2.5rem',
+                                  padding: '2rem',
                                   position: 'absolute',
                                   left: 0,
                                   top: 0,
@@ -8718,7 +8765,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           <option value="match">Match the Following / Pairs</option>
                           <option value="flashcards">Flashcard Deck</option>
                           <option value="wordsearch">Word Search Puzzle</option>
-                          <option value="crossword">Crossword Puzzle</option>
                         </optgroup>
                         <optgroup label="Writing Module">
                           <option value="fill_blank">Fill in the Blanks</option>

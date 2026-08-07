@@ -1,7 +1,8 @@
 import React from 'react';
 import { 
   FiVolume2, FiImage, FiMonitor, FiFileText, FiEdit2, FiMic, 
-  FiMove, FiCheckCircle, FiList, FiPlusCircle, FiLayers 
+  FiMove, FiCheckCircle, FiList, FiPlusCircle, FiLayers,
+  FiActivity, FiType, FiGrid
 } from 'react-icons/fi';
 import { API_BASE_URL } from './config';
 
@@ -175,12 +176,12 @@ export default function PreviewCanvasRenderer({
         const hasSelected = selectedAnsIndex !== undefined;
 
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '0.5rem 0' }}>
-            <div style={{ border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '10px', padding: '1rem 1.25rem', fontSize: '0.9rem', fontWeight: 700, color: '#c2410c', boxShadow: '0 2px 4px rgba(249,115,22,0.04)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', height: '100%', padding: '2px 0' }}>
+            <div style={{ border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.78rem', fontWeight: 600, color: '#c2410c', boxShadow: '0 2px 4px rgba(249,115,22,0.04)' }}>
               ❓ {block.content?.question || 'Quiz question text label...'}
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', height: '100%', justifyContent: 'space-between' }}>
               {(block.content?.options || ['', '', '', '']).map((opt, oIdx) => {
                 const isCorrectAnswer = parseInt(block.content?.correctAnswerIndex) === oIdx;
                 const isSelected = selectedAnsIndex === oIdx;
@@ -215,26 +216,27 @@ export default function PreviewCanvasRenderer({
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.85rem',
+                      gap: '0.5rem',
                       background: bgCol,
-                      border: `2px solid ${borderCol}`,
-                      borderRadius: '10px',
-                      padding: '0.85rem 1.1rem',
-                      fontSize: '0.82rem',
+                      border: `1.5px solid ${borderCol}`,
+                      borderRadius: '6px',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.72rem',
                       cursor: hasSelected ? 'default' : 'pointer',
                       transition: 'all 0.15s',
+                      boxSizing: 'border-box',
                       boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
                     }}
                   >
                     <span style={{
-                      width: '20px',
-                      height: '20px',
+                      width: '14px',
+                      height: '14px',
                       borderRadius: '50%',
-                      border: '1.5px solid #cbd5e1',
+                      border: '1px solid #cbd5e1',
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: '0.72rem',
+                      fontSize: '0.55rem',
                       fontWeight: 'bold',
                       background: isSelected || (hasSelected && isCorrectAnswer) ? borderCol : 'none',
                       color: isSelected || (hasSelected && isCorrectAnswer) ? '#ffffff' : '#64748b',
@@ -245,12 +247,12 @@ export default function PreviewCanvasRenderer({
                     <span style={{ fontWeight: 600, color: textCol }}>{(typeof opt === 'object' ? opt?.text : opt) || `Quiz Option ${oIdx + 1}`}</span>
 
                     {hasSelected && isCorrectAnswer && (
-                      <span style={{ marginLeft: 'auto', color: '#16a34a', fontSize: '0.72rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                      <span style={{ marginLeft: 'auto', color: '#16a34a', fontSize: '0.58rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '3px' }}>
                         ✓ Correct Choice
                       </span>
                     )}
                     {hasSelected && isSelected && !isCorrectAnswer && (
-                      <span style={{ marginLeft: 'auto', color: '#ef4444', fontSize: '0.72rem', fontWeight: 'bold' }}>
+                      <span style={{ marginLeft: 'auto', color: '#ef4444', fontSize: '0.58rem', fontWeight: 'bold' }}>
                         ✗ Incorrect Choice
                       </span>
                     )}
@@ -268,7 +270,7 @@ export default function PreviewCanvasRenderer({
                     return updated;
                   });
                 }}
-                style={{ alignSelf: 'flex-end', border: 'none', background: 'none', color: '#0b57d0', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}
+                style={{ alignSelf: 'flex-end', border: 'none', background: 'none', color: '#0b57d0', fontSize: '0.65rem', fontWeight: 600, cursor: 'pointer', marginTop: '2px' }}
               >
                 ↺ Reset Answer Choice
               </button>
@@ -371,38 +373,45 @@ export default function PreviewCanvasRenderer({
 
       case 'fill_blank':
       case 'fill_blanks':
-        const fillText = block.content?.text || 'Type the blanks [blank1]';
         const fillQuestion = block.content?.question || 'Fill in the missing words';
-        const parts = fillText.split(/(\[.*?\])/g);
+        const fillItems = block.content?.items || (block.content?.text ? [{ id: 'migrated', text: block.content.text }] : []);
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#f0fdfa', padding: '1rem', borderRadius: '12px', border: '1px solid #ccfbf1', marginTop: '0.5rem' }}>
             <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f766e' }}>
               ✏️ {fillQuestion}
             </div>
-            <div style={{ fontSize: '0.78rem', lineHeight: 1.8, color: '#1e293b', background: '#ffffff', padding: '0.75rem', borderRadius: '8px', border: '1px solid #ccfbf1' }}>
-              {parts.map((part, pIdx) => {
-                if (part.startsWith('[') && part.endsWith(']')) {
-                  const key = `${block.id}-${pIdx}`;
-                  const ans = blankAnswers[key] || '';
-                  return (
-                    <input
-                      key={pIdx}
-                      type="text"
-                      value={ans}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setBlankAnswers(prev => ({
-                          ...prev,
-                          [key]: val
-                        }));
-                      }}
-                      placeholder="..."
-                      style={{ width: '80px', borderBottom: '2px solid #0d9488', borderTop: 'none', borderLeft: 'none', borderRight: 'none', textAlign: 'center', fontWeight: 700, color: '#0f766e', outline: 'none', padding: '0 4px', margin: '0 4px', fontSize: '0.75rem' }}
-                    />
-                  );
-                }
-                return <span key={pIdx}>{part}</span>;
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {fillItems.map((item, itemIdx) => {
+                const itemText = item.text || '';
+                const itemParts = itemText.split(/(\[.*?\])/g);
+                return (
+                  <div key={item.id || itemIdx} style={{ fontSize: '0.78rem', lineHeight: 1.8, color: '#1e293b', background: '#ffffff', padding: '0.75rem', borderRadius: '8px', border: '1px solid #ccfbf1' }}>
+                    {itemParts.map((part, pIdx) => {
+                      if (part.startsWith('[') && part.endsWith(']')) {
+                        const key = `${block.id}-${itemIdx}-${pIdx}`;
+                        const ans = blankAnswers[key] || '';
+                        return (
+                          <input
+                            key={pIdx}
+                            type="text"
+                            value={ans}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setBlankAnswers(prev => ({
+                                ...prev,
+                                [key]: val
+                              }));
+                            }}
+                            placeholder="..."
+                            style={{ width: '80px', borderBottom: '2px solid #0d9488', borderTop: 'none', borderLeft: 'none', borderRight: 'none', textAlign: 'center', fontWeight: 700, color: '#0f766e', outline: 'none', padding: '0 4px', margin: '0 4px', fontSize: '0.75rem' }}
+                          />
+                        );
+                      }
+                      return <span key={pIdx}>{part}</span>;
+                    })}
+                  </div>
+                );
               })}
             </div>
           </div>
@@ -450,17 +459,15 @@ export default function PreviewCanvasRenderer({
         const items = block.content?.items || [];
         const seqQuestion = block.content?.question || 'Sort items in correct sequence';
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#fffbeb', padding: '1rem', borderRadius: '12px', border: '1px solid #fde68a', marginTop: '0.5rem' }}>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#b45309' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#92400e' }}>
               🔢 {seqQuestion}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.25rem' }}>
               {items.map((item, idx) => (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#ffffff', border: '1px solid #cbd5e1', padding: '0.55rem 0.75rem', borderRadius: '8px', fontSize: '0.72rem', color: '#1e293b' }}>
-                  <span style={{ width: '20px', height: '20px', borderRadius: '50%', background: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.68rem' }}>
-                    {idx + 1}
-                  </span>
-                  <span>{item}</span>
+                <div key={idx} style={{ background: '#ffffff', border: '1px solid #fef3c7', borderRadius: '6px', padding: '6px 8px', fontSize: '0.72rem', fontWeight: 600, color: '#451a03', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ background: '#fef3c7', color: '#b45309', borderRadius: '4px', padding: '1px 5px', fontSize: '0.62rem', fontWeight: 800 }}>{idx + 1}</span>
+                  <span>{item || `Step description ${idx + 1}`}</span>
                 </div>
               ))}
             </div>
@@ -582,7 +589,6 @@ export default function PreviewCanvasRenderer({
         );
 
       case 'word_search':
-      case 'crossword':
         const wordQuestion = block.content?.question || 'Word Search Puzzle';
         const grid = [
           ['L', 'A', 'N', 'G', 'U', 'A', 'G', 'E'],
@@ -689,6 +695,174 @@ export default function PreviewCanvasRenderer({
             </div>
           </div>
         );
+
+      case 'pronunciation':
+        {
+          const pronQuestion = block.content?.question || 'Practice pronouncing words correctly';
+          const pronItems = block.content?.items || (block.content?.word ? [{ id: 'migrated', word: block.content.word, phonetic: block.content.phonetic }] : []);
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem', marginTop: '0.5rem' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiMic /> Pronunciation: {pronQuestion}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {pronItems.map((item, itemIdx) => (
+                  <div key={item.id || itemIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '6px', padding: '0.4rem 0.6rem' }}>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b' }}>
+                      Word: {item.word || 'Hello'}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>Phonetic: {item.phonetic || '/həˈloʊ/'}</span>
+                      <button type="button" style={{ background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', padding: '2px 6px', fontSize: '0.65rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                        <FiMic size={10} /> Speak
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+      case 'role_play':
+        {
+          const rpTitle = block.content?.title || 'Introduction';
+          const rpPrompt = block.content?.prompt || 'Introduce yourself.';
+          const rpScript = block.content?.script || [{ speaker: 'A', text: 'Hi! How are you?' }];
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fdf2f8', borderRadius: '8px', padding: '0.75rem', marginTop: '0.5rem' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#9d174d', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiActivity /> Role Play: {rpTitle}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#475569', fontStyle: 'italic' }}>
+                Scenario: {rpPrompt}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {rpScript.map((line, lIdx) => (
+                  <div key={lIdx} style={{ fontSize: '0.72rem', color: '#1e293b' }}>
+                    <strong>{line.speaker}:</strong> {line.text}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+      case 'input':
+        {
+          const inputPlaceholder = block.content?.placeholder || 'Type your answer here...';
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem', marginTop: '0.5rem' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiType /> Text Input Area
+              </div>
+              <input 
+                type="text" 
+                placeholder={inputPlaceholder} 
+                value={previewAnswers[block.id] || ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPreviewAnswers(prev => ({ ...prev, [block.id]: val }));
+                }}
+                style={{ width: '100%', height: '36px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 8px', fontSize: '0.75rem', background: '#ffffff' }} 
+              />
+            </div>
+          );
+        }
+
+      case 'memory':
+        {
+          const memoryCards = block.content?.cards || ['Card 1', 'Match 1', 'Card 2', 'Match 2'];
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #e0e7ff', background: '#f5f3ff', borderRadius: '8px', padding: '0.75rem', marginTop: '0.5rem' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#4f46e5', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiGrid /> Memory matching game
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.35rem' }}>
+                {memoryCards.map((card, idx) => {
+                  const isFlipped = flippedCards[`${block.id}-${idx}`];
+                  return (
+                    <div 
+                      key={idx} 
+                      onClick={() => {
+                        setFlippedCards(prev => ({ ...prev, [`${block.id}-${idx}`]: !prev[`${block.id}-${idx}`] }));
+                      }}
+                      style={{ 
+                        height: '50px', 
+                        background: isFlipped ? '#e0e7ff' : '#fff', 
+                        borderRadius: '6px', 
+                        border: '1px solid #cbd5e1', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        fontSize: '0.7rem', 
+                        fontWeight: 700, 
+                        color: '#4f46e5',
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                        padding: '2px'
+                      }}
+                    >
+                      {isFlipped ? card : '?'}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        }
+
+      case 'true_false':
+        {
+          const tfQuestion = block.content?.question || 'Is this statement true?';
+          const tfSelection = previewAnswers[block.id];
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '8px', padding: '0.75rem', marginTop: '0.5rem' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#c2410c', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiCheckCircle /> True / False question
+              </div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>
+                {tfQuestion}
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button 
+                  type="button"
+                  onClick={() => setPreviewAnswers(prev => ({ ...prev, [block.id]: 'true' }))}
+                  style={{ 
+                    flex: 1, 
+                    padding: '6px', 
+                    borderRadius: '6px', 
+                    border: tfSelection === 'true' ? '1.5px solid #16a34a' : '1px solid #cbd5e1', 
+                    background: tfSelection === 'true' ? '#dcfce7' : '#fff', 
+                    color: tfSelection === 'true' ? '#16a34a' : '#64748b', 
+                    fontSize: '0.68rem', 
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  True
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setPreviewAnswers(prev => ({ ...prev, [block.id]: 'false' }))}
+                  style={{ 
+                    flex: 1, 
+                    padding: '6px', 
+                    borderRadius: '6px', 
+                    border: tfSelection === 'false' ? '1.5px solid #16a34a' : '1px solid #cbd5e1', 
+                    background: tfSelection === 'false' ? '#dcfce7' : '#fff', 
+                    color: tfSelection === 'false' ? '#16a34a' : '#64748b', 
+                    fontSize: '0.68rem', 
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  False
+                </button>
+              </div>
+            </div>
+          );
+        }
 
       default:
         return null;

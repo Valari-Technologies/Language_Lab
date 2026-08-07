@@ -401,11 +401,12 @@ class ContentStudioAPITests(APITestCase):
             "title": "New Activity 2",
             "description": "desc",
             "estimated_duration": 10,
-            "mastery_threshold": 80
+            "mastery_threshold": 80,
+            "skill_ids": [self.skill_speaking.id]
         }
         response = self.client.post(reverse("activity-list"), payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["title"], "New Activity 2")
+        self.assertEqual(response.data["title"], "Speaking")
         # display_order should be auto-assigned to 1 since experience1 has no other activities
         self.assertEqual(response.data["display_order"], 1)
         new_act_id = response.data["id"]
@@ -421,7 +422,7 @@ class ContentStudioAPITests(APITestCase):
         payload["title"] = "New Activity 2 Updated"
         response = self.client.put(reverse("activity-detail", args=[new_act_id]), payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["title"], "New Activity 2 Updated")
+        self.assertEqual(response.data["title"], "Speaking")
 
         # Patch
         response = self.client.patch(reverse("activity-detail", args=[new_act_id]), {"title": "New Activity 2 Patched"}, format="json")
@@ -692,7 +693,7 @@ class ContentStudioAPITests(APITestCase):
         from django.core.files.uploadedfile import SimpleUploadedFile
         self.client.force_authenticate(user=self.content_creator)
 
-        oversize_data = b"\xff\xd8\xff" + (b"\x00" * (5 * 1024 * 1024 + 100))
+        oversize_data = b"\xff\xd8\xff" + (b"\x00" * (10 * 1024 * 1024 + 100))
         file_big = SimpleUploadedFile("too_large.jpg", oversize_data, content_type="image/jpeg")
         response = self.client.post(reverse("media-upload"), {"file": file_big}, format="multipart")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
