@@ -657,7 +657,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     const updateScale = () => {
       if (previewScaleRef.current) {
         const width = previewScaleRef.current.clientWidth;
-        setPreviewScaleFactor(width > 0 ? width / 1440 : 1);
+        setPreviewScaleFactor(width > 0 ? width / 1000 : 1);
       }
     };
     const timer = setTimeout(updateScale, 50);
@@ -3420,7 +3420,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       <div 
                         ref={previewScaleRef}
                         style={{
-                          width: '1440px',
+                          width: '1000px',
                           maxWidth: '100%',
                           backgroundColor: '#ffffff',
                           borderRadius: '16px',
@@ -3461,7 +3461,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                <div 
                                  className="preview-canvas-viewport"
                                  style={{
-                                   width: '1440px',
+                                   width: '1000px',
                                    height: `${baseCanvasHeight}px`,
                                    padding: '2rem',
                                    boxSizing: 'border-box',

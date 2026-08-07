@@ -447,7 +447,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [previewAnswers, setPreviewAnswers] = useState({});
   const [voiceRecordingStates, setVoiceRecordingStates] = useState({});
 
-  // Dynamic scale factor calculation for preview canvas (locks to 1440px base width)
+  // Dynamic scale factor calculation for preview canvas (locks to 1000px base width)
   const [previewScaleFactor, setPreviewScaleFactor] = useState(1);
   const previewScaleRef = React.useRef(null);
 
@@ -456,7 +456,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     const updateScale = () => {
       if (previewScaleRef.current) {
         const width = previewScaleRef.current.clientWidth;
-        setPreviewScaleFactor(width > 0 ? width / 1440 : 1);
+        setPreviewScaleFactor(width > 0 ? width / 1000 : 1);
       }
     };
     // Run after a short timeout to make sure DOM is fully rendered
@@ -765,6 +765,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(true);
   const [viewportMode, setViewportMode] = useState('desktop'); // 'desktop' | 'tablet' | 'mobile'
   const [zoomLevel, setZoomLevel] = useState(100);
+
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [elementsHistory, setElementsHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -1035,6 +1036,27 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     quiz_correct_index: 0,
     elements: []
   });
+
+  const workspaceRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (view !== 'experience-builder' || !workspaceRef.current) return;
+    const updateZoomToFit = () => {
+      if (workspaceRef.current) {
+        const availableWidth = workspaceRef.current.clientWidth - 80;
+        if (availableWidth > 0) {
+          const fitZoom = Math.min(100, Math.floor((availableWidth / 1000) * 100));
+          setZoomLevel(Math.max(30, fitZoom));
+        }
+      }
+    };
+    const timer = setTimeout(updateZoomToFit, 100);
+    window.addEventListener('resize', updateZoomToFit);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateZoomToFit);
+    };
+  }, [view, leftPanelCollapsed, screenForm?.id]);
 
   const [selectedBlockId, setSelectedBlockId] = useState(null);
   const [propertiesTab, setPropertiesTab] = useState('content'); // 'content' | 'style' | 'advanced'
@@ -5376,7 +5398,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 /* Center workspace */
                 .fss-workspace {
                   flex: 1;
-                  background: #ECEFF3;
+                  background: #ffffff;
                   display: flex;
                   flex-direction: column;
                   overflow: hidden;
@@ -5385,7 +5407,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 .fss-workspace-inner {
                   flex: 1;
                   overflow-y: auto;
-                  overflow-x: auto;
+                  overflow-x: hidden;
+                  display: flex;
+                  align-items: flex-start;
+                  justify-content: center;
                   padding: 2rem 2rem 4rem 2rem;
                   scrollbar-width: thin;
                   scrollbar-color: #94a3b8 transparent;
@@ -5394,13 +5419,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 .fss-workspace-inner::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
                 .fss-canvas-shell {
                   background: #ffffff;
-                  border-radius: 12px;
-                  box-shadow: 0 4px 24px rgba(15,23,42,0.08), 0 1px 4px rgba(15,23,42,0.04), 0 0 0 1px rgba(15,23,42,0.06);
                   min-height: 600px;
                   position: relative;
                   flex-shrink: 0;
-                  width: 1440px;
-                  margin: 0 auto;
+                  width: 1000px;
+                  border: 1px solid #e2e8f0;
                 }
                 .fss-canvas-content {
                   padding: 2rem;
@@ -5741,7 +5764,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       </div>
 
                       {/* Scrollable canvas area */}
-                      <div className="fss-workspace-inner">
+                      <div ref={workspaceRef} className="fss-workspace-inner">
                         <div className={`fss-canvas-shell ${viewportMode}`} style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}>
                           {/* Browser chrome bar */}
                           <div className="fss-canvas-bar">
@@ -7685,7 +7708,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <div 
                         ref={previewScaleRef}
                         style={{ 
-                          width: '1440px',
+                          width: '1000px',
                           maxWidth: '100%',
                           backgroundColor: '#ffffff',
                           borderRadius: '16px',
@@ -7711,7 +7734,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               <div 
                                 className="preview-canvas-viewport"
                                 style={{
-                                  width: '1440px',
+                                  width: '1000px',
                                   height: `${baseCanvasHeight}px`,
                                   padding: '2rem',
                                   position: 'absolute',
