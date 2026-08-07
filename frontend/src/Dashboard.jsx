@@ -657,7 +657,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     const updateScale = () => {
       if (previewScaleRef.current) {
         const width = previewScaleRef.current.clientWidth;
-        setPreviewScaleFactor(width > 0 ? width / 1100 : 1);
+        setPreviewScaleFactor(width > 0 ? width / 1440 : 1);
       }
     };
     const timer = setTimeout(updateScale, 50);
@@ -2662,8 +2662,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                   </div>
                 </div>
 
-                <div className="sd-table-wrap">
-                  <table className="sd-table">
+                <div className="sd-table-wrap sd-table-wrap-scrollable">
+                  <table className="sd-table sd-table-compact">
                     <thead>
                       <tr>
                         <th>Title</th>
@@ -2672,7 +2672,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         <th>Status</th>
                         <th>Pending/Active Version</th>
                         <th>Date Submitted</th>
-                        <th style={{ textAlign: 'right' }}>Actions</th>
+                        <th style={{ textAlign: 'right', width: '160px', minWidth: '160px', paddingRight: '1rem' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2718,14 +2718,21 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                               </div>
                             </td>
                             <td>{new Date(exp.updated_at).toLocaleDateString()}</td>
-                            <td>
-                              <div className="sd-action-cell" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                            <td style={{ textAlign: 'right', width: '160px', minWidth: '160px', paddingRight: '1rem' }}>
+                              <div className="sd-action-cell" style={{ display: 'inline-flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
                                 <button
                                   className="sd-btn-outline"
-                                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                                  style={{ 
+                                    padding: '0.35rem 0.75rem', 
+                                    fontSize: '0.78rem', 
+                                    display: 'inline-flex', 
+                                    alignItems: 'center', 
+                                    gap: '0.35rem' 
+                                  }}
                                   onClick={() => handlePreviewExperience(exp)}
                                 >
-                                  👁️ Preview Screen
+                                  <span style={{ fontSize: '0.9rem' }}>👁️</span>
+                                  <span>Preview Screen</span>
                                 </button>
                               </div>
                             </td>
@@ -3413,13 +3420,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       <div 
                         ref={previewScaleRef}
                         style={{
-                          width: '1100px',
+                          width: '1440px',
                           maxWidth: '100%',
                           backgroundColor: '#ffffff',
                           borderRadius: '16px',
                           border: '1px solid #e2e8f0',
                           boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05)',
-                          padding: '2.5rem',
+                          padding: '0',
                           boxSizing: 'border-box',
                           margin: '0 auto',
                           position: 'relative',
@@ -3427,31 +3434,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                           flexDirection: 'column',
                           overflow: 'hidden'
                         }}>
-                    {/* Viewport Header */}
-                    <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fafafa', flexShrink: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span className="sd-badge sd-badge-active" style={{ fontSize: '0.7rem', padding: '2px 8px', textTransform: 'uppercase', fontWeight: 700 }}>
-                          {activePreviewScreen.screen_type}
-                        </span>
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                          {activePreviewScreen.title || 'Untitled Screen'}
-                        </h3>
-                      </div>
-
-                      {/* Nav counter */}
-                      {(() => {
-                        const flat = getFlatScreens();
-                        const idx = flat.findIndex(s => s.id === activePreviewScreen.id);
-                        if (idx !== -1) {
-                          return (
-                            <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
-                              Screen {idx + 1} of {flat.length}
-                            </span>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </div>
 
                     {/* Viewport Canvas Body */}
                     <div 
@@ -3479,9 +3461,10 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                <div 
                                  className="preview-canvas-viewport"
                                  style={{
-                                   width: '1100px',
+                                   width: '1440px',
                                    height: `${baseCanvasHeight}px`,
-                                   padding: '1.25rem',
+                                   padding: '2rem',
+                                   boxSizing: 'border-box',
                                    position: 'absolute',
                                    left: 0,
                                    top: 0,

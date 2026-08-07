@@ -1645,3 +1645,18 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
   padding: 1.25rem;
 }
 
+/* Scrollable wrapper to prevent tables from visual overflowing */
+.sd-table-wrap-scrollable {
+  overflow-x: auto !important;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Compact table styling to fit contents inside card */
+.sd-table-compact th {
+  padding: 0.65rem 0.5rem !important;
+}
+.sd-table-compact td {
+  padding: 0.75rem 0.5rem !important;
+}
+

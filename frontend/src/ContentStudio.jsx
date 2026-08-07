@@ -5386,9 +5386,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   flex: 1;
                   overflow-y: auto;
                   overflow-x: auto;
-                  display: flex;
-                  align-items: flex-start;
-                  justify-content: center;
                   padding: 2rem 2rem 4rem 2rem;
                   scrollbar-width: thin;
                   scrollbar-color: #94a3b8 transparent;
@@ -5399,15 +5396,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   background: #ffffff;
                   border-radius: 12px;
                   box-shadow: 0 4px 24px rgba(15,23,42,0.08), 0 1px 4px rgba(15,23,42,0.04), 0 0 0 1px rgba(15,23,42,0.06);
-                  width: 100%;
                   min-height: 600px;
                   position: relative;
                   flex-shrink: 0;
-                  transition: max-width 0.3s ease;
+                  width: 1440px;
+                  margin: 0 auto;
                 }
-                .fss-canvas-shell.desktop { max-width: 1440px; }
-                .fss-canvas-shell.tablet { max-width: 768px; }
-                .fss-canvas-shell.mobile { max-width: 390px; }
                 .fss-canvas-content {
                   padding: 2rem;
                   min-height: 580px;
@@ -5535,18 +5529,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       </button>
                       <div className="fss-toolbar-divider" />
 
-                      {/* Viewport Switcher */}
-                      <button className={`fss-viewport-btn${viewportMode === 'desktop' ? ' active' : ''}`} onClick={() => setViewportMode('desktop')} title="Desktop view">
-                        <FiMonitor style={{ fontSize: '0.9rem' }} /> Desktop
-                      </button>
-                      <button className={`fss-viewport-btn${viewportMode === 'tablet' ? ' active' : ''}`} onClick={() => setViewportMode('tablet')} title="Tablet view">
-                        <FiTablet style={{ fontSize: '0.9rem' }} /> Tablet
-                      </button>
-                      <button className={`fss-viewport-btn${viewportMode === 'mobile' ? ' active' : ''}`} onClick={() => setViewportMode('mobile')} title="Mobile view">
-                        <FiSmartphone style={{ fontSize: '0.9rem' }} /> Mobile
-                      </button>
 
-                      <div className="fss-toolbar-divider" />
 
                       {/* Zoom */}
                       <button className="fss-toolbar-btn" onClick={() => setZoomLevel(z => Math.max(50, z - 10))} title="Zoom out" style={{ padding: '0.3rem 0.5rem' }}>−</button>
