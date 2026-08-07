@@ -18,7 +18,6 @@ import './Dashboard.css';
 import contentCreatorHeaderBanner from './assets/3.jpeg';
 import contentStudioBg from './assets/contentbg.png';
 import logoIcon from './assets/icon.png';
-import ReportsAnalytics from './ReportsAnalytics';
 import AvatarCropperModal from './AvatarCropperModal';
 
 const incrementVersion = (versionStr) => {
@@ -4026,7 +4025,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               { key: 'screen-builder', label: 'Screen Builder', icon: <FiMonitor /> },
               { key: 'preview', label: 'Runtime Preview', icon: <FiPlay /> },
               { key: 'publish', label: 'Publish Center', icon: <FiDownload /> },
-              { key: 'reports', label: 'Sync Reports', icon: <FiFileText /> },
               { key: 'profile', label: 'Profile Settings', icon: <FiUser /> },
             ].map(item => (
               <button
@@ -8093,12 +8091,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             </>
           )}
 
-          {/* ── View 10: Sync Reports & Analytics ── */}
-          {view === 'reports' && (
-            <div style={{ padding: '0.5rem', width: '100%', margin: '0 auto' }}>
-              <ReportsAnalytics />
-            </div>
-          )}
 
           {/* ── View 9: Profile Settings ── */}
           {view === 'profile' && (

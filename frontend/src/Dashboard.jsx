@@ -1486,9 +1486,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           <button className={`sd-nav-item${activeTab === 'experiences' ? ' active' : ''}`} onClick={() => goTo('experiences')}>
             <FiFileText /><span>Manage Experiences</span>
           </button>
-          <button className={`sd-nav-item${activeTab === 'reports' ? ' active' : ''}`} onClick={() => goTo('reports')}>
-            <FiFileText /><span>Reports</span>
-          </button>
           <button className={`sd-nav-item${activeTab === 'subscriptions' ? ' active' : ''}`} onClick={() => goTo('subscriptions')}>
             <FiCheckCircle /><span>Subscriptions</span>
           </button>
@@ -2593,34 +2590,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             </>
           )}
 
-          {/* ══════════ REPORTS TAB ══════════ */}
-          {activeTab === 'reports' && (
-            <>
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>Academic Performance &amp; Reports</h1>
-                <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' }}>Overall assessment scores, average scores, student evaluations, and workload reports.</p>
-              </div>
-
-              <div className="sd-card" style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '5rem 2rem',
-                textAlign: 'center',
-                background: '#ffffff',
-                borderRadius: '16px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
-              }}>
-                <FiFileText style={{ fontSize: '3.5rem', color: '#94a3b8', marginBottom: '1.5rem' }} />
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b', marginBottom: '0.5rem' }}>No assessment data synced yet</h3>
-                <p style={{ fontSize: '0.88rem', color: '#64748b', maxWidth: '420px', margin: 0, lineHeight: 1.6 }}>
-                  Data will appear here once the Electron LMS runs its monthly sync sequence.
-                </p>
-              </div>
-            </>
-          )}
 
           {/* ══════════ MANAGE EXPERIENCES TAB ══════════ */}
           {activeTab === 'experiences' && (

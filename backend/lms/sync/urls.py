@@ -5,7 +5,6 @@ from .views import (
     LMSSyncCompletionAPIView,
     LMSIngestReportsAPIView,
     LMSPullUpdatesAPIView,
-    LMSAnalyticsAPIView,
 )
 
 urlpatterns = [
@@ -20,6 +19,4 @@ urlpatterns = [
     path("ingest-reports", LMSIngestReportsAPIView.as_view()),
     path("pull-updates/", LMSPullUpdatesAPIView.as_view(), name="lms-pull-updates"),
     path("pull-updates", LMSPullUpdatesAPIView.as_view()),
-    path("analytics/", LMSAnalyticsAPIView.as_view(), name="lms-analytics"),
-    path("analytics", LMSAnalyticsAPIView.as_view()),
 ]
