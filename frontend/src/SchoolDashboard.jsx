@@ -1179,7 +1179,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             <FiBookOpen/><span>Classes</span>
           </button>
           <button className={`sd-nav-item${activeSubTab==='experiences' ? ' active' : ''}`} onClick={() => goTo('experiences')}>
-            <FiFileText/><span>Experiences</span>
+            <FiFileText/><span>Lessons</span>
           </button>
           <button className={`sd-nav-item${activeSubTab==='reports' ? ' active' : ''}`} onClick={() => goTo('reports')}>
             <FiBarChart2/><span>Reports</span>
@@ -1289,7 +1289,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                activeSubTab === 'teachers' ? 'Teachers Management' :
                activeSubTab === 'students' ? 'Students Management' :
                activeSubTab === 'classes' ? 'Class Management' :
-               activeSubTab === 'experiences' ? 'Experience Library' :
+               activeSubTab === 'experiences' ? 'Lesson Library' :
                activeSubTab === 'reports' ? 'Reports & Analytics' :
                activeSubTab === 'profile' ? 'Profile Settings' : 'Dashboard Overview'
                }
@@ -2377,7 +2377,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <FiSearch/>
                     <input
                       type="text"
-                      placeholder="Search experiences..."
+                      placeholder="Search lessons..."
                       value={searchQuery}
                       onChange={e => { setSearchQuery(e.target.value); setExperiencePage(1); }}
                     />
@@ -2390,7 +2390,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                   <table className="sd-table">
                     <thead>
                       <tr>
-                        <th>Experience Title</th>
+                        <th>Lesson Title</th>
                         <th>Grade Level</th>
                         <th>Difficulty</th>
                         <th>Duration</th>
@@ -2413,7 +2413,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         </tr>
                       ))}
                       {filterList(experiences).length === 0 && (
-                        <tr><td colSpan="4" className="sd-empty-state">No experiences found.</td></tr>
+                        <tr><td colSpan="4" className="sd-empty-state">No lessons found.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -2465,14 +2465,14 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                   {/* Experience Report Table */}
                   <div className="sd-card">
                     <div className="sd-card-header">
-                      <div className="sd-card-title">Experience Performance Analysis</div>
+                      <div className="sd-card-title">Lesson Performance Analysis</div>
                       <button className="sd-btn-outline" onClick={() => handleExportCSV('experiences')}>Export CSV</button>
                     </div>
                     <div className="sd-table-wrap">
                       <table className="sd-table">
                         <thead>
                           <tr>
-                            <th>Experience Title</th><th>Experience Ref</th><th>Attempts</th>
+                            <th>Lesson Title</th><th>Lesson Ref</th><th>Attempts</th>
                             <th>Completed</th><th>Avg Score</th><th>Pass Rate</th>
                             <th>High / Low</th><th>Avg Time</th>
                           </tr>
@@ -2537,7 +2537,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <thead>
                           <tr>
                             <th>Student</th><th>Class</th><th>Attempts</th><th>Completed</th>
-                            <th>Avg Score</th><th>Best Experience</th><th>Worst Experience</th><th>Last Attempt</th>
+                            <th>Avg Score</th><th>Best Lesson</th><th>Worst Lesson</th><th>Last Attempt</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2561,14 +2561,14 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                   {/* Student Experience Completion Table */}
                   <div className="sd-card">
                     <div className="sd-card-header">
-                      <div className="sd-card-title">Student Experience Completion</div>
+                      <div className="sd-card-title">Student Lesson Completion</div>
                       <span className="sd-card-meta">{studentCompletionReport.length} student{studentCompletionReport.length !== 1 ? 's' : ''}</span>
                     </div>
                     {studentCompletionReport.length === 0 ? (
                       <div className="sd-reports-empty" style={{ padding: '2rem 1rem' }}>
                         <FiFileText/>
-                        <h3>No experience assignments yet</h3>
-                        <p>Completion data will appear once experiences are assigned and synced from the LMS.</p>
+                        <h3>No lesson assignments yet</h3>
+                        <p>Completion data will appear once lessons are assigned and synced from the LMS.</p>
                       </div>
                     ) : (
                       <div className="sd-table-wrap">
@@ -2576,7 +2576,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           <thead>
                             <tr>
                               <th>Student Profile</th>
-                              <th>Assigned Experiences</th>
+                              <th>Assigned Lessons</th>
                               <th>Completed</th>
                               <th>Completion Progress</th>
                             </tr>
@@ -3115,7 +3115,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowExperienceDetailModal(false); }}>
           <div className="sd-modal" style={{ maxWidth:700 }}>
             <div className="sd-modal-header">
-              <span className="sd-modal-title">Experience: {selectedExperienceDetail.experience_title}</span>
+              <span className="sd-modal-title">Lesson: {selectedExperienceDetail.experience_title}</span>
               <button className="sd-modal-close" onClick={() => setShowExperienceDetailModal(false)}><FiX/></button>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(120px,1fr))', gap:'0.75rem', marginBottom:'1.25rem', padding:'0.85rem', background:'#f8fafc', borderRadius:8, fontSize:'0.84rem' }}>

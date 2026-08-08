@@ -1484,7 +1484,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             <FiBookOpen /><span>Manage Schools</span>
           </button>
           <button className={`sd-nav-item${activeTab === 'experiences' ? ' active' : ''}`} onClick={() => goTo('experiences')}>
-            <FiFileText /><span>Manage Experiences</span>
+            <FiFileText /><span>Manage Lessons</span>
           </button>
           <button className={`sd-nav-item${activeTab === 'subscriptions' ? ' active' : ''}`} onClick={() => goTo('subscriptions')}>
             <FiCheckCircle /><span>Subscriptions</span>
@@ -1639,7 +1639,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             <h2 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
               {activeTab === 'dashboard' ? 'Dashboard Overview' :
                 activeTab === 'schools' ? (isAddingSchool ? 'Add New School' : 'Manage Schools') :
-                  activeTab === 'experiences' ? 'Manage Experiences' :
+                  activeTab === 'experiences' ? 'Manage Lessons' :
                     activeTab === 'subscriptions' ? (subPage === 'create-plan' ? 'Create New Plan' : 'Subscriptions & Plans') :
 
                       activeTab === 'reports' ? 'Reports & Releases' :
@@ -2598,7 +2598,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '1rem' }}>
                   <div>
                     <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' }}>
-                      Review and approve experience publishing requests for LMS synchronization.
+                      Review and approve lesson publishing requests for LMS synchronization.
                     </p>
                   </div>
                 </div>
@@ -2610,7 +2610,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     <FiSearch />
                     <input
                       type="text"
-                      placeholder="Search experiences..."
+                      placeholder="Search lessons..."
                       value={searchQuery}
                       onChange={e => { setSearchQuery(e.target.value); setSaExpPage(1); }}
                     />
@@ -2649,7 +2649,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         <tr>
                           <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
                             <FiFileText style={{ fontSize: '2.5rem', color: '#cbd5e1', marginBottom: '1rem' }} />
-                            <div style={{ fontWeight: 600 }}>No experiences found</div>
+                            <div style={{ fontWeight: 600 }}>No lessons found</div>
                             <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Try changing the filter criteria.</div>
                           </td>
                         </tr>
@@ -2715,7 +2715,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 {submittedExperiences.length > PER_PAGE && (
                   <div className="sd-pagination" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.25rem' }}>
                     <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                      Showing {(saExpPage - 1) * PER_PAGE + 1} to {Math.min(saExpPage * PER_PAGE, submittedExperiences.length)} of {submittedExperiences.length} experiences
+                      Showing {(saExpPage - 1) * PER_PAGE + 1} to {Math.min(saExpPage * PER_PAGE, submittedExperiences.length)} of {submittedExperiences.length} lessons
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button
@@ -3297,7 +3297,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               <div>
                 <span className="sd-modal-title" style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Interactive Student Player Simulator</span>
                 <span style={{ fontSize: '0.85rem', color: '#64748b', marginLeft: '12px', paddingLeft: '12px', borderLeft: '1px solid #cbd5e1' }}>
-                  <strong>Experience:</strong> {previewExperience.title} • <strong>Grade:</strong> {previewExperience.grade_name || `Grade ${previewExperience.grade}`} • <strong>Difficulty:</strong> {previewExperience.difficulty}
+                  <strong>Lesson:</strong> {previewExperience.title} • <strong>Grade:</strong> {previewExperience.grade_name || `Grade ${previewExperience.grade}`} • <strong>Difficulty:</strong> {previewExperience.difficulty}
                 </span>
               </div>
               <button className="sd-modal-close" onClick={() => { setPreviewExperience(null); setActivePreviewScreen(null); }}><FiX /></button>

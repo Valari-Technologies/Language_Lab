@@ -4019,8 +4019,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           <nav className="cs-nav">
             {[
               { key: 'dashboard', label: 'Dashboard', icon: <FiGrid /> },
-              { key: 'experiences', label: 'Experience Library', icon: <FiBookOpen /> },
-              { key: 'experience-builder', label: 'Experience Builder', icon: <FiActivity /> },
+              { key: 'experiences', label: 'Lesson Library', icon: <FiBookOpen /> },
+              { key: 'experience-builder', label: 'Lesson Builder', icon: <FiActivity /> },
               { key: 'activity-builder', label: 'Activity Builder', icon: <FiSettings /> },
               { key: 'screen-builder', label: 'Screen Builder', icon: <FiMonitor /> },
               { key: 'preview', label: 'Runtime Preview', icon: <FiPlay /> },
@@ -4188,7 +4188,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               <input
                 className="cs-search-input"
                 type="text"
-                placeholder={view === 'experiences' ? "Search experiences by title, grade, subject" : "Search experiences, activities..."}
+                placeholder={view === 'experiences' ? "Search lessons by title, grade, subject" : "Search lessons, activities..."}
               />
             </div>
             <div className="cs-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}>
@@ -4260,9 +4260,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               {/* 4 Stats Cards */}
               <div className="cs-stat-row">
                 {[
-                  { label: 'Total Experiences', value: dashboardSummary?.total_experiences || 0, trend: 'Active', trendBg: '#dcfce7', trendColor: '#15803d', icon: <FiBookOpen />, iconBg: '#e0f2fe', iconColor: '#0284c7' },
-                  { label: 'Draft Experiences', value: dashboardSummary?.draft_experiences || 0, trend: 'Editing', trendBg: '#ffedd5', trendColor: '#ea580c', icon: <FiFileText />, iconBg: '#ffedd5', iconColor: '#ea580c' },
-                  { label: 'Published Experiences', value: dashboardSummary?.published_experiences || 0, trend: 'Live', trendBg: '#dcfce7', trendColor: '#16a34a', icon: <FiActivity />, iconBg: '#dcfce7', iconColor: '#16a34a' },
+                  { label: 'Total Lessons', value: dashboardSummary?.total_experiences || 0, trend: 'Active', trendBg: '#dcfce7', trendColor: '#15803d', icon: <FiBookOpen />, iconBg: '#e0f2fe', iconColor: '#0284c7' },
+                  { label: 'Draft Lessons', value: dashboardSummary?.draft_experiences || 0, trend: 'Editing', trendBg: '#ffedd5', trendColor: '#ea580c', icon: <FiFileText />, iconBg: '#ffedd5', iconColor: '#ea580c' },
+                  { label: 'Published Lessons', value: dashboardSummary?.published_experiences || 0, trend: 'Live', trendBg: '#dcfce7', trendColor: '#16a34a', icon: <FiActivity />, iconBg: '#dcfce7', iconColor: '#16a34a' },
                   { label: 'Total Media Assets', value: dashboardSummary?.total_media_assets || 0, trend: 'Library', trendBg: '#f3e8ff', trendColor: '#7c3aed', icon: <FiImage />, iconBg: '#f3e8ff', iconColor: '#7c3aed' },
                 ].map((stat, idx) => (
                   <div 
@@ -4291,14 +4291,14 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   {/* Recent Experiences Card */}
                   <div className="cs-card">
                     <div className="cs-card-header">
-                      <h3 className="cs-card-title">Recent Experiences</h3>
+                      <h3 className="cs-card-title">Recent Lessons</h3>
                       <button className="cs-btn-outline" style={{ padding: '0.25rem 0.6rem', fontSize: '0.72rem' }} onClick={() => setView('experiences')}>View All</button>
                     </div>
                     <div className="cs-table-wrap" style={{ overflowX: 'auto' }}>
                       <table className="cs-table">
                         <thead>
                           <tr>
-                            <th>Experience Name</th>
+                            <th>Lessons Name</th>
                             <th>Grade</th>
                             <th>Status</th>
                             <th>Last Modified</th>
@@ -4381,7 +4381,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           {view === 'experiences' && (
             <>
               <div style={{ marginBottom: '1.5rem' }}>
-                <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>Experience Library</h1>
+                <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>Lesson Library</h1>
                 <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' }}>Create, manage and organize all learning experiences.</p>
               </div>
 
@@ -4511,7 +4511,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         setView('experience-builder');
                       }}
                     >
-                      + New Experience
+                      + New Lesson
                     </button>
                   </div>
 
@@ -4531,7 +4531,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           style={{ cursor: 'pointer' }}
                         />
                       </th>
-                      <th>Experience</th>
+                      <th>Lessons</th>
                       <th>Grade</th>
                       <th>Subject</th>
                       <th>Difficulty</th>
@@ -4544,7 +4544,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   <tbody>
                     {experiences.length === 0 ? (
                       <tr>
-                        <td colSpan="9" style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No experiences found. Click "+ New Experience" to create one!</td>
+                        <td colSpan="9" style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No lessons found. Click "+ New Lesson" to create one!</td>
                       </tr>
                     ) : (
                       experiences.map((row) => (
@@ -4674,12 +4674,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   <div>
                     {isNewExperience && (
                       <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                        <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Experience Library</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Experience Builder</span>
+                        <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Lessons Library</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Lessons Builder</span>
                       </div>
                     )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: isNewExperience ? '4px' : 0 }}>
                       <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>
-                        {isNewExperience ? 'New Experience' : 'Experience Builder'}
+                        {isNewExperience ? 'New Lesson' : 'Lessons Builder'}
                       </h1>
                     </div>
                     {experienceForm.grade && (
@@ -4714,14 +4714,14 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
               {/* Layout: full-width single column */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                {/* Experience Information Card */}
+                {/* Lesson Information Card */}
                 <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                  <h3 style={{ fontSize: '0.92rem', fontWeight: 700, borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', margin: 0 }}>Experience Information</h3>
+                  <h3 style={{ fontSize: '0.92rem', fontWeight: 700, borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', margin: 0 }}>Lesson Information</h3>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '1.5rem' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
                       <div className="cs-form-group">
-                        <label className="cs-form-label">Experience Title <span style={{ color: '#ef4444' }}>*</span></label>
+                        <label className="cs-form-label">Lesson Title <span style={{ color: '#ef4444' }}>*</span></label>
                         <input className="cs-form-input" type="text" value={experienceForm.title}
                           onChange={e => setExperienceForm({ ...experienceForm, title: e.target.value })} />
                       </div>
@@ -4861,8 +4861,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   <div>
                     {selectedExperience?.id && (
                       <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                        <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Experience Library</span> &nbsp;&gt;&nbsp;
-                        <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>Experience Builder</span> &nbsp;&gt;&nbsp;
+                        <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Lessons Library</span> &nbsp;&gt;&nbsp;
+                        <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>Lessons Builder</span> &nbsp;&gt;&nbsp;
                         <span style={{ fontWeight: 600 }}>Activity Builder</span>
                       </div>
                     )}
@@ -4937,7 +4937,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               </option>
                             ))
                           ) : (
-                            ['listening', 'speaking', 'reading', 'writing', 'grammar'].map(name => (
+                            ['listening', 'speaking', 'reading', 'writing', 'grammar', 'phonetics'].map(name => (
                               <option key={name} value={name}>
                                 {name.charAt(0).toUpperCase() + name.slice(1)}
                               </option>
@@ -5692,7 +5692,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                     speaking: ['heading', 'dialogue', 'input', 'voice_recorder', 'pronunciation', 'role_play', 'audio', 'image', 'video', 'text'],
                                     reading: ['text', 'heading', 'image', 'quiz', 'mcq', 'match', 'flashcard', 'memory', 'word_search', 'reading_passage', 'audio', 'video'],
                                     writing: ['fill_blank', 'sentence_builder', 'writing_prompt', 'text', 'heading', 'image', 'video', 'audio'],
-                                    grammar: ['heading', 'true_false', 'drag_drop', 'grammar_correction', 'quiz', 'mcq', 'fill_blank', 'match', 'sequence', 'image', 'video', 'audio', 'text']
+                                    grammar: ['heading', 'true_false', 'drag_drop', 'grammar_correction', 'quiz', 'mcq', 'fill_blank', 'match', 'sequence', 'image', 'video', 'audio', 'text'],
+                                    phonetics: ['heading', 'pronunciation', 'audio', 'video', 'quiz', 'mcq', 'text', 'image', 'voice_recorder', 'drag_drop', 'fill_blank']
                                   };
 
                                   const allowedTypes = MODULE_ELEMENTS[activeModule] || [];
@@ -7278,7 +7279,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
                   <div>
                     <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                      <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Experience Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Experience Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('activity-builder')}>{selectedActivity?.title || 'Activity Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Screen Builder Overview</span>
+                      <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Lessons Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Lesson Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('activity-builder')}>{selectedActivity?.title || 'Activity Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Screen Builder Overview</span>
                     </div>
                     <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '6px 0 0 0', color: '#0f172a', letterSpacing: '-0.02em' }}>Screen Library</h1>
                   </div>
@@ -7564,7 +7565,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <div style={{ borderLeft: '1px solid #cbd5e1', height: '24px' }} />
                     <div>
                       <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                        Previewing Experience:
+                        Previewing Lesson:
                       </div>
                       <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#0f172a' }}>
                         {previewPayload?.experience?.title || selectedExperience?.title || 'Experience Preview'}
@@ -7825,7 +7826,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
                 <div>
                   <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                    <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Experience Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Experience'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Publish Center</span>
+                    <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Lesson Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Lesson'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Publish Center</span>
                   </div>
                   <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: 8, color: '#0f172a' }}>
                     Publish Center
@@ -7874,7 +7875,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         {getThumbnailUrl(selectedExperience?.thumbnail) ? (
                           <img
                             src={getThumbnailUrl(selectedExperience.thumbnail)}
-                            alt={selectedExperience?.title || 'Experience'}
+                            alt={selectedExperience?.title || 'Lesson'}
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                           />
                         ) : (
@@ -7883,7 +7884,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       </div>
                       <div style={{ flex: 1 }}>
                         <h4 style={{ fontSize: '0.85rem', fontWeight: 700, margin: '0 0 4px 0', color: '#1e293b' }}>
-                          {selectedExperience?.title || 'Experience'}
+                          {selectedExperience?.title || 'Lesson'}
                         </h4>
                         <p style={{ fontSize: '0.75rem', color: '#64748b', margin: '0 0 8px 0', lineHeight: 1.4 }}>
                           {selectedExperience?.description || 'No description provided.'}
@@ -8528,7 +8529,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 onClick={e => e.stopPropagation()}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Experience Details</h3>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Lesson Details</h3>
                   <button
                     onClick={() => setShowDetailModal(false)}
                     style={{ background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center' }}

@@ -310,7 +310,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [notifications, setNotifications]         = useState([
     { id: 1, text: 'New student enrolled in your class.',     time: '5 min ago', read: false },
     { id: 2, text: 'Lesson plan approved by school admin.',   time: '2 hrs ago', read: false },
-    { id: 3, text: 'Student completed an experience today.',  time: '4 hrs ago', read: true  },
+    { id: 3, text: 'Student completed a lesson today.',  time: '4 hrs ago', read: true  },
   ]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
@@ -1316,7 +1316,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 {[
                   { label: 'Assigned Classes', value: statClasses, color: '#22c55e', bg: '#dcfce7', icon: <FiBookOpen /> },
                   { label: 'Total Students', value: statStudents, color: '#3b82f6', bg: '#dbeafe', icon: <FiUsers /> },
-                  { label: 'Active Experiences', value: statExperiences, color: '#a855f7', bg: '#f3e8ff', icon: <FiFileText /> },
+                  { label: 'Active Lessons', value: statExperiences, color: '#a855f7', bg: '#f3e8ff', icon: <FiFileText /> },
                   { label: "Today's Lessons",   value: statLessons,   color: '#f97316', bg: '#ffedd5', icon: <FiClock/> },
                   { label: 'Completion Rate',   value: '—',           color: '#10b981', bg: '#d1fae5', icon: <FiTrendingUp/> },
                 ].map((s, i) => (
@@ -1932,7 +1932,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div className="sd-reports-empty" style={{ padding:'2.5rem 1rem' }}>
                   <FiFileText/>
                   <h3>No pending submissions</h3>
-                  <p>Grading data will appear here once students complete their experience assessments.</p>
+                  <p>Grading data will appear here once students complete their lesson assessments.</p>
                 </div>
               </div>
             </>
