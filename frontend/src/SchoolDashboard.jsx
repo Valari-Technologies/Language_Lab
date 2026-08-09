@@ -338,6 +338,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const isAnyOverlayOpen = showModal || showExperienceDetailModal || showClassDetailModal || showStudentDetailModal || showTeacherDetailModal || showStudentCrudDetailModal || showClassCrudDetailModal;
 
   const [activeDropdown, setActiveDropdown] = useState(null); // { id, type }
+  const [classDropdownOpen, setClassDropdownOpen] = useState(false);
 
   /* ── Forms ── */
   const [teacherForm, setTeacherForm] = useState({
@@ -981,6 +982,13 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     setExperiencePage(1);
     setImportActive(false);
     setUploadSummary(null);
+    setShowModal(false);
+    setShowExperienceDetailModal(false);
+    setShowClassDetailModal(false);
+    setShowStudentDetailModal(false);
+    setShowTeacherDetailModal(false);
+    setShowStudentCrudDetailModal(false);
+    setShowClassCrudDetailModal(false);
   };
 
   /* ── Loading screen ── */
@@ -1690,14 +1698,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 )}
                 <div className="sd-table-wrap">
                   <table className="sd-table">
-                    <colgroup>
-                      {isSelectModeTeachers && <col style={{ width: '4%' }} />}
-                      <col style={{ width: '28%' }} />
-                      <col style={{ width: '26%' }} />
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '12%' }} />
-                      <col style={{ width: '14%' }} />
-                    </colgroup>
+
                     <thead>
                       <tr>
                         {isSelectModeTeachers && (
@@ -2013,15 +2014,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
                 <div className="sd-table-wrap">
                   <table className="sd-table">
-                    <colgroup>
-                      {isSelectModeStudents && <col style={{ width: '4%' }} />}
-                      <col style={{ width: '23%' }} />
-                      <col style={{ width: '15%' }} />
-                      <col style={{ width: '15%' }} />
-                      <col style={{ width: '15%' }} />
-                      <col style={{ width: '13%' }} />
-                      <col style={{ width: '15%' }} />
-                    </colgroup>
+
                     <thead>
                       <tr>
                         {isSelectModeStudents && (
@@ -2264,15 +2257,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 </div>
                 <div className="sd-table-wrap">
                   <table className="sd-table">
-                    <colgroup>
-                      {isSelectModeClasses && <col style={{ width: '3%' }} />}
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '10%' }} />
-                      <col style={{ width: '32%' }} />
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '12%' }} />
-                      <col style={{ width: '14%' }} />
-                    </colgroup>
+
                     <thead>
                       <tr>
                         {isSelectModeClasses && (
@@ -2955,20 +2940,136 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <input className="sd-form-input" type="text" value={teacherForm.qualification}
                         onChange={e => setTeacherForm({...teacherForm, qualification:e.target.value})} placeholder="e.g. B.Ed, M.A. English"/>
                     </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Assign Classes (Multiple)</label>
-                      <select className="sd-form-input" multiple style={{ minHeight:'100px' }}
-                        value={teacherForm.assigned_classes || []}
-                        onChange={e => {
-                          const opts = Array.from(e.target.selectedOptions, o => parseInt(o.value));
-                          setTeacherForm({...teacherForm, assigned_classes:opts});
+                    <div className="sd-form-group" style={{ position: 'relative' }}>
+                      <label className="sd-form-label">Assign Classes</label>
+                      <div
+                        style={{
+                          minHeight: '42px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '8px',
+                          padding: '0.5rem 0.85rem',
+                          fontSize: '0.85rem',
+                          background: '#ffffff',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '4px',
+                          position: 'relative'
                         }}
+                        onClick={() => setClassDropdownOpen(!classDropdownOpen)}
                       >
-                        {classes.map(c => (
-                          <option key={c.class_id || c.id} value={c.class_id || c.id}>{c.class_name}</option>
-                        ))}
-                      </select>
-                      <span style={{ fontSize:'0.75rem', color:'#64748b', marginTop:4 }}>Hold Ctrl/Cmd to select multiple classes.</span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', maxWidth: '90%' }}>
+                          {(teacherForm.assigned_class_ids || []).length === 0 ? (
+                            <span style={{ color: '#94a3b8' }}>-- Select Classes --</span>
+                          ) : (
+                            (teacherForm.assigned_class_ids || []).map(cid => {
+                              const cls = classes.find(c => (c.class_id || c.id) === cid);
+                              return cls ? (
+                                <span
+                                  key={cid}
+                                  style={{
+                                    background: '#ede9fe',
+                                    color: '#4f46e5',
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 600,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                >
+                                  {cls.class_name}
+                                  <span
+                                    style={{ cursor: 'pointer', fontWeight: 'bold', marginLeft: '2px' }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setTeacherForm({
+                                        ...teacherForm,
+                                        assigned_class_ids: (teacherForm.assigned_class_ids || []).filter(id => id !== cid)
+                                      });
+                                    }}
+                                  >
+                                    ×
+                                  </span>
+                                </span>
+                              ) : null;
+                            })
+                          )}
+                        </div>
+                        <span style={{ color: '#64748b', fontSize: '0.8rem' }}>{classDropdownOpen ? '▲' : '▼'}</span>
+                      </div>
+                      {classDropdownOpen && (
+                        <>
+                          <div 
+                            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setClassDropdownOpen(false);
+                            }}
+                          />
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '100%',
+                              left: 0,
+                              right: 0,
+                              background: '#ffffff',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                              zIndex: 1000,
+                              maxHeight: '200px',
+                              overflowY: 'auto',
+                              marginTop: '4px',
+                              padding: '4px 0'
+                            }}
+                          >
+                            {classes.length === 0 ? (
+                              <div style={{ padding: '8px 12px', color: '#64748b', fontSize: '0.85rem' }}>No classes available</div>
+                            ) : (
+                              classes.map(c => {
+                                const cid = c.class_id || c.id;
+                                const isChecked = (teacherForm.assigned_class_ids || []).includes(cid);
+                                return (
+                                  <label
+                                    key={cid}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '8px',
+                                      padding: '8px 12px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.85rem',
+                                      transition: 'background 0.2s',
+                                      userSelect: 'none'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const nextIds = isChecked
+                                        ? (teacherForm.assigned_class_ids || []).filter(id => id !== cid)
+                                        : [...(teacherForm.assigned_class_ids || []), cid];
+                                      setTeacherForm({ ...teacherForm, assigned_class_ids: nextIds });
+                                    }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      readOnly
+                                      style={{ cursor: 'pointer' }}
+                                    />
+                                    <span>{c.class_name}</span>
+                                  </label>
+                                );
+                              })
+                            )}
+                          </div>
+                        </>
+                      )}
                     </div>
                     {modalType === 'add' && (<>
                       <div className="sd-form-group">
@@ -3095,20 +3196,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <input className="sd-form-input" type="text" value={classForm.academic_year}
                         onChange={e => setClassForm({...classForm, academic_year:e.target.value})} placeholder="e.g. 2026" required/>
                     </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Assign Teachers</label>
-                      <select className="sd-form-input"
-                        value={classForm.teacher || ''}
-                        onChange={e => setClassForm({...classForm, teacher: e.target.value ? parseInt(e.target.value) : ''})}
-                      >
-                        <option value="">-- Select Teacher --</option>
-                        {teachers.map(t => (
-                          <option key={t.teacher_id || t.id} value={t.teacher_id || t.id}>
-                            {t.full_name || t.username}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+
                     <label className="sd-checkbox-label">
                       <input type="checkbox" checked={classForm.is_active}
                         onChange={e => setClassForm({...classForm, is_active:e.target.checked})}/>

@@ -92,6 +92,13 @@ class LoginAPIView(APIView):
                     status=status.HTTP_403_FORBIDDEN
                 )
 
+        school_obj = get_user_school(user)
+        if school_obj and not school_obj.is_active:
+            return Response(
+                {"message": "Access denied. Your school is inactive or has been blocked."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         refresh = RefreshToken.for_user(user)
 
         school_obj = get_user_school(user)
@@ -613,6 +620,13 @@ class GoogleLoginAPIView(APIView):
                     {"message": "Access denied. Your Teacher profile was not found or has been deleted."},
                     status=status.HTTP_403_FORBIDDEN
                 )
+
+        school_obj = get_user_school(user)
+        if school_obj and not school_obj.is_active:
+            return Response(
+                {"message": "Access denied. Your school is inactive or has been blocked."},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         refresh = RefreshToken.for_user(user)
 

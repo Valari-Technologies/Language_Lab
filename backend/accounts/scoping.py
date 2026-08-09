@@ -18,6 +18,11 @@ def get_user_school(user):
         teacher = Teacher.objects.filter(user=user).select_related("school").first()
         return teacher.school if teacher else None
         
+    if user.role == "STUDENT":
+        Student = apps.get_model('teacher', 'Student')
+        student = Student.objects.filter(user=user).select_related("school").first()
+        return student.school if student else None
+
     return None
 
 

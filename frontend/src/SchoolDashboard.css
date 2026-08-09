@@ -712,7 +712,6 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
   width: 100%;
   border-collapse: collapse;
   font-size: 0.83rem;
-  table-layout: fixed;
 }
 .sd-table thead tr {
   background: #f8fafd;
@@ -727,16 +726,12 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
   letter-spacing: 0.05em;
   white-space: nowrap;
   text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .sd-table td {
   padding: 0.85rem 1rem;
   border-bottom: 1px solid #f1f5f9;
   color: var(--text-mid);
   vertical-align: middle;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .sd-table td:last-child,

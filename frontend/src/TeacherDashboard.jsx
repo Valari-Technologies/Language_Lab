@@ -732,7 +732,15 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const paginate = (list, page) => list.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   /* ── Nav helper ── */
-  const goTo = (tab) => { setActiveSubTab(tab); setSearchQuery(''); setIsSidebarOpen(false); setStudentPage(1); setClassPage(1); };
+  const goTo = (tab) => {
+    setActiveSubTab(tab);
+    setSearchQuery('');
+    setIsSidebarOpen(false);
+    setStudentPage(1);
+    setClassPage(1);
+    setShowClassCrudDetailModal(false);
+    setShowStudentCrudDetailModal(false);
+  };
 
   /* ── Stat values ── */
   const statClasses  = data?.assigned_classes?.length || classes.length;
@@ -1878,12 +1886,12 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div className="sd-table-wrap">
                   <table className="sd-table" style={{ tableLayout: 'fixed', width: '100%' }}>
                     <colgroup>
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '10%' }} />
-                      <col style={{ width: '32%' }} />
-                      <col style={{ width: '16%' }} />
-                      <col style={{ width: '12%' }} />
-                      <col style={{ width: '14%' }} />
+                      <col style={{ width: '16.6%' }} />
+                      <col style={{ width: '16.6%' }} />
+                      <col style={{ width: '16.7%' }} />
+                      <col style={{ width: '16.7%' }} />
+                      <col style={{ width: '16.7%' }} />
+                      <col style={{ width: '16.7%' }} />
                     </colgroup>
                     <thead>
                       <tr>

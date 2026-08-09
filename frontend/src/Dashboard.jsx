@@ -650,7 +650,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [selectedQuizOption, setSelectedQuizOption] = useState(null);
   const [quizChecked, setQuizChecked] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
-  const isAnyOverlayOpen = showModal || showSchoolDetailModal || showSchoolAdminDetailModal;
+  const isAnyOverlayOpen = showModal;
+  const isSchoolDetailOpen = showSchoolDetailModal || showSchoolAdminDetailModal;
 
   // Dynamic scale factor calculation for preview canvas (locks to 1440px base width)
   const [previewScaleFactor, setPreviewScaleFactor] = useState(1);
@@ -1441,6 +1442,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     setSelectedLocationFilter('');
     setSchoolSubTab('schools-list');
     setIsAddingSchool(false);
+    setShowSchoolDetailModal(false);
+    setShowSchoolAdminDetailModal(false);
+    setShowModal(false);
     setSchoolsPage(1); setUsersPage(1); setGradesPage(1);
     setExperiencesPage(1); setExperienceBuildersPage(1); setPublishPage(1);
     setIsSidebarOpen(false);
@@ -1898,7 +1902,75 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
 
           {/* ══════════ MANAGE SCHOOLS TAB ══════════ */}
-          {activeTab === 'schools' && !isAnyOverlayOpen && (
+          {activeTab === 'schools' && !isAnyOverlayOpen && !isAddingSchool && isSchoolDetailOpen ? (
+            /* ══════════ SCHOOL DETAIL INLINE VIEW ══════════ */
+            <div style={{ padding: '0' }}>
+              {showSchoolDetailModal && selectedSchoolDetail ? (
+                <div style={{ background: 'transparent', width: '100%' }}>
+                  <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center' }}>
+                    <button
+                      onClick={() => setShowSchoolDetailModal(false)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        color: '#0f766e',
+                        fontWeight: 600,
+                        fontSize: '0.9rem',
+                        padding: 0
+                      }}
+                    >
+                      ← Back to Schools
+                    </button>
+                  </div>
+                  
+                  <div className="sd-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>School Details</h3>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: '#ccfbf1', color: '#0f766e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 'bold' }}>
+                        {selectedSchoolDetail.school_name ? selectedSchoolDetail.school_name[0].toUpperCase() : 'S'}
+                      </div>
+                      <div>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>{selectedSchoolDetail.school_name}</h3>
+                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{selectedSchoolDetail.email || 'No email provided'}</span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.55rem', fontSize: '0.85rem', color: '#334155' }}>
+                      <div>
+                        <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>School Code</span>
+                        <strong style={{ fontSize: '0.9rem', color: '#0f172a', fontFamily: 'monospace' }}>{selectedSchoolDetail.school_code || '—'}</strong>
+                      </div>
+                      <div>
+                        <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Location / Address</span>
+                        <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.address || selectedSchoolDetail.city || '—'}</strong>
+                      </div>
+                      <div>
+                        <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Phone</span>
+                        <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.phone || '—'}</strong>
+                      </div>
+                      <div>
+                        <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Active Status</span>
+                        <span className={`sd-badge ${selectedSchoolDetail.is_active !== false ? 'sd-badge-active' : 'sd-badge-inactive'}`} style={{ display: 'inline-flex', marginTop: '4px' }}>
+                          {selectedSchoolDetail.is_active !== false ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Total Teachers</span>
+                        <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{teachers.filter(t => t.school === selectedSchoolDetail.school_id || t.school_id === selectedSchoolDetail.school_id).length} Teachers</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : activeTab === 'schools' && !isAnyOverlayOpen && (
             <>
               {isAddingSchool ? (
                 /* ───────────────── ADD NEW SCHOOL SCREEN (Image 2) ───────────────── */
@@ -2020,71 +2092,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               ) : (
                 /* ───────────────── MANAGE SCHOOLS SCREEN (Image 2) ───────────────── */
                 <>
-                  {showSchoolDetailModal && selectedSchoolDetail ? (
-                    <div style={{ background: 'transparent', width: '100%' }}>
-                      <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center' }}>
-                        <button
-                          onClick={() => setShowSchoolDetailModal(false)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            color: '#0f766e',
-                            fontWeight: 600,
-                            fontSize: '0.9rem',
-                            padding: 0
-                          }}
-                        >
-                          ← Back to Schools
-                        </button>
-                      </div>
-                      
-                      <div className="sd-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
-                          <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>School Details</h3>
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #f1f5f9' }}>
-                          <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: '#ccfbf1', color: '#0f766e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 'bold' }}>
-                            {selectedSchoolDetail.school_name ? selectedSchoolDetail.school_name[0].toUpperCase() : 'S'}
-                          </div>
-                          <div>
-                            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>{selectedSchoolDetail.school_name}</h3>
-                            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{selectedSchoolDetail.email || 'No email provided'}</span>
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.55rem', fontSize: '0.85rem', color: '#334155' }}>
-                          <div>
-                            <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>School Code</span>
-                            <strong style={{ fontSize: '0.9rem', color: '#0f172a', fontFamily: 'monospace' }}>{selectedSchoolDetail.school_code || '—'}</strong>
-                          </div>
-                          <div>
-                            <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Location / Address</span>
-                            <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.address || selectedSchoolDetail.city || '—'}</strong>
-                          </div>
-                          <div>
-                            <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Phone</span>
-                            <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.phone || '—'}</strong>
-                          </div>
-                          <div>
-                            <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Active Status</span>
-                            <span className={`sd-badge ${selectedSchoolDetail.is_active !== false ? 'sd-badge-active' : 'sd-badge-inactive'}`} style={{ display: 'inline-flex', marginTop: '4px' }}>
-                              {selectedSchoolDetail.is_active !== false ? 'Active' : 'Inactive'}
-                            </span>
-                          </div>
-                          <div>
-                            <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Total Teachers</span>
-                            <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{teachers.filter(t => t.school === selectedSchoolDetail.school_id || t.school_id === selectedSchoolDetail.school_id).length} Teachers</strong>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
 
 
                   <div className="sd-card" style={{ padding: '1.25rem 1.5rem' }}>
@@ -2332,8 +2339,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                   </div>
                 </>
               )}
-            </>
-          )}
             </>
           )}
 
