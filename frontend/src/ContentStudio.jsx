@@ -99,6 +99,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   // Multi-select and View Details states for Experiences
   const [selectedExperienceIds, setSelectedExperienceIds] = useState([]);
+  const [isSelectMode, setIsSelectMode] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [detailExperience, setDetailExperience] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -3787,7 +3788,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         /* ── Grid/Layout lists ── */
         .cs-stat-row {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
+          grid-template-columns: repeat(3, 1fr);
           gap: 1.25rem;
           margin-bottom: 1.5rem;
         }
@@ -4263,7 +4264,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   { label: 'Total Lessons', value: dashboardSummary?.total_experiences || 0, trend: 'Active', trendBg: '#dcfce7', trendColor: '#15803d', icon: <FiBookOpen />, iconBg: '#e0f2fe', iconColor: '#0284c7' },
                   { label: 'Draft Lessons', value: dashboardSummary?.draft_experiences || 0, trend: 'Editing', trendBg: '#ffedd5', trendColor: '#ea580c', icon: <FiFileText />, iconBg: '#ffedd5', iconColor: '#ea580c' },
                   { label: 'Published Lessons', value: dashboardSummary?.published_experiences || 0, trend: 'Live', trendBg: '#dcfce7', trendColor: '#16a34a', icon: <FiActivity />, iconBg: '#dcfce7', iconColor: '#16a34a' },
-                  { label: 'Total Media Assets', value: dashboardSummary?.total_media_assets || 0, trend: 'Library', trendBg: '#f3e8ff', trendColor: '#7c3aed', icon: <FiImage />, iconBg: '#f3e8ff', iconColor: '#7c3aed' },
                 ].map((stat, idx) => (
                   <div 
                     className="cs-stat-card" 
@@ -4377,13 +4377,155 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             </>
           )}
 
-          {/* ───────────────── VIEW 2: EXPERIENCE LIBRARY (Image 1) ───────────────── */}
           {view === 'experiences' && (
             <>
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>Lesson Library</h1>
-                <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' }}>Create, manage and organize all learning experiences.</p>
-              </div>
+              {showDetailModal && detailExperience ? (
+                <div style={{ background: 'transparent', width: '100%', minHeight: '500px' }}>
+                  <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center' }}>
+                    <button
+                      onClick={() => setShowDetailModal(false)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        color: '#0b57d0',
+                        fontWeight: 600,
+                        fontSize: '0.9rem',
+                        padding: 0
+                      }}
+                    >
+                      ← Back to Lessons
+                    </button>
+                  </div>
+                  
+                  <div className="cs-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Lesson Details</h3>
+                    </div>
+
+                    {detailLoading ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem', gap: '0.75rem' }}>
+                        <FiRefreshCw className="spin" style={{ fontSize: '2rem', color: '#0b57d0' }} />
+                        <span style={{ fontSize: '0.9rem', color: '#64748b' }}>Loading details...</span>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        {/* Header Summary */}
+                        <div style={{ display: 'flex', gap: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '12px' }}>
+                          <div style={{ width: 80, height: 60, background: '#e2e8f0', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
+                            {getThumbnailUrl(detailExperience.thumbnail) ? (
+                              <img
+                                src={getThumbnailUrl(detailExperience.thumbnail)}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
+                            ) : null}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>{detailExperience.title}</h4>
+                            <p style={{ fontSize: '0.85rem', color: '#475569', margin: 0 }}>{detailExperience.description || 'No description provided.'}</p>
+                          </div>
+                        </div>
+
+                        {/* Metadata Grid */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                          <div>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Grade</span>
+                            <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px' }}>{detailExperience.grade_name || `Grade ${detailExperience.grade}`}</div>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Subject</span>
+                            <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px' }}>{Array.isArray(detailExperience.subject) ? detailExperience.subject.join(', ') : (detailExperience.subject || 'N/A')}</div>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Difficulty</span>
+                            <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: detailExperience.difficulty === 'BEGINNER' ? '#10b981' : detailExperience.difficulty === 'MASTER' ? '#ef4444' : '#3b82f6' }} />
+                              {detailExperience.difficulty}
+                            </div>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Language</span>
+                            <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px' }}>{detailExperience.language || 'English'}</div>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Duration</span>
+                            <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px' }}>{detailExperience.estimated_duration || 0} mins</div>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Status</span>
+                            <div style={{ marginTop: '2px' }}>
+                              <span className={`cs-badge ${detailExperience.status === 'APPROVED' || detailExperience.status === 'PUBLISHED' ? 'cs-badge-approved' : detailExperience.status === 'PENDING_APPROVAL' ? 'cs-badge-pending' : detailExperience.status === 'REJECTED' ? 'cs-badge-rejected' : 'cs-badge-draft'}`} style={{ display: 'inline-block' }}>
+                                {detailExperience.status === 'PENDING_APPROVAL' ? 'PENDING' : detailExperience.status}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Tags */}
+                        {detailExperience.tags && detailExperience.tags.length > 0 && (
+                          <div>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Tags</span>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '4px' }}>
+                              {detailExperience.tags.map(t => (
+                                <span key={t} style={{ background: '#e2e8f0', color: '#475569', fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px' }}>{t}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Learning Outcomes */}
+                        {detailExperience.learning_outcomes && detailExperience.learning_outcomes.length > 0 && (
+                          <div>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Learning Outcomes</span>
+                            <ul style={{ margin: '4px 0 0 0', paddingLeft: '1.25rem', fontSize: '0.85rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {detailExperience.learning_outcomes.map((o, idx) => (
+                                <li key={idx}>{typeof o === 'string' ? o : (o.text || o.description || o.outcome || o.name || '')}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Activities list */}
+                        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem' }}>
+                          <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.75rem 0' }}>Activities ({detailExperience.activities?.length || 0})</h4>
+                          {!detailExperience.activities || detailExperience.activities.length === 0 ? (
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0, fontStyle: 'italic' }}>No activities in this experience.</p>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                              {detailExperience.activities.map((act, idx) => (
+                                <div key={act.id || idx} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.85rem' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                    <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1e293b' }}>{act.title}</span>
+                                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{act.estimated_duration || 5} mins | {act.screens?.length || 0} screens</span>
+                                  </div>
+                                  {act.description && <p style={{ fontSize: '0.8rem', color: '#475569', margin: '0 0 6px 0' }}>{act.description}</p>}
+                                  {act.skills && act.skills.length > 0 && (
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                      {act.skills.map((sk, sidx) => (
+                                        <span key={sidx} style={{ background: '#f0fdf4', color: '#166534', fontSize: '9px', fontWeight: 600, padding: '1px 5px', borderRadius: '4px', border: '1px solid #bbf7d0' }}>
+                                          {typeof sk === 'string' ? sk : (sk.name || '')}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>Lesson Library</h1>
+                    <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' }}>Create, manage and organize all learning experiences.</p>
+                  </div>
 
               {/* Filters list row */}
               <div style={{ marginBottom: '1.5rem', padding: '0' }}>
@@ -4404,15 +4546,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         </select>
                       </div>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: 160, minWidth: 130 }}>
-                        <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', letterSpacing: '0.02em' }}>Subject</span>
-                        <select className="cs-filter-select" style={{ width: '100%', height: '36px', fontSize: '0.78rem', background: '#ffffff', border: '1px solid #d1d5db', borderRadius: '8px', padding: '0 0.5rem', color: '#1e293b', cursor: 'pointer' }} value={filterSubject} onChange={e => setFilterSubject(e.target.value)}>
-                          <option value="">All Subjects</option>
-                          <option value="Speaking & Listening">Speaking & Listening</option>
-                          <option value="Reading">Reading</option>
-                          <option value="Writing">Writing</option>
-                        </select>
-                      </div>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: 160, minWidth: 130 }}>
                         <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', letterSpacing: '0.02em' }}>Difficulty</span>
@@ -4435,41 +4568,32 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       </div>
                     </div>
 
-                    {/* Row 2: Tags + Reset */}
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: 160, minWidth: 130 }}>
-                        <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', letterSpacing: '0.02em' }}>Tags</span>
-                        <select className="cs-filter-select" style={{ width: '100%', height: '36px', fontSize: '0.78rem', background: '#ffffff', border: '1px solid #d1d5db', borderRadius: '8px', padding: '0 0.5rem', color: '#1e293b', cursor: 'pointer' }} value={filterTag} onChange={e => setFilterTag(e.target.value)}>
-                          <option value="">All Tags</option>
-                          {Array.from(new Set(experiences.flatMap(e => e.tags || []))).map(t => (
-                            <option key={t} value={t}>{t}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <button
-                        style={{
-                          border: '1px solid #d1d5db', background: '#ffffff', color: '#374151', fontSize: '0.78rem',
-                          cursor: 'pointer', fontWeight: 500, display: 'flex', alignItems: 'center',
-                          gap: '5px', height: '36px', padding: '0 0.85rem', borderRadius: '8px',
-                          whiteSpace: 'nowrap'
-                        }}
-                        onClick={() => {
-                          setFilterGrade('');
-                          setFilterSubject('');
-                          setFilterDifficulty('');
-                          setFilterStatus('');
-                          setFilterTag('');
-                        }}
-                      >
-                        ↺ Reset
-                      </button>
-                    </div>
 
                   </div>
 
                   {/* Right Side: Action Button */}
                   <div style={{ paddingBottom: '4px', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    <button
+                      onClick={() => {
+                        setIsSelectMode(!isSelectMode);
+                        if (isSelectMode) setSelectedExperienceIds([]);
+                      }}
+                      style={{
+                        background: isSelectMode ? '#e2e8f0' : '#ffffff',
+                        border: '1px solid #d1d5db',
+                        color: '#374151',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                        padding: '0.55rem 1.25rem',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      {isSelectMode ? '✓ Done Selecting' : 'Select'}
+                    </button>
                     {selectedExperienceIds.length > 0 && (
                       <button
                         style={{
@@ -4523,14 +4647,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 <table className="cs-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '40px', paddingLeft: '1.5rem' }}>
-                        <input
-                          type="checkbox"
-                          checked={experiences.length > 0 && selectedExperienceIds.length === experiences.length}
-                          onChange={handleSelectAllExperiences}
-                          style={{ cursor: 'pointer' }}
-                        />
-                      </th>
+                      {isSelectMode && (
+                        <th style={{ width: '40px', paddingLeft: '1.5rem' }}>
+                          <input
+                            type="checkbox"
+                            checked={experiences.length > 0 && selectedExperienceIds.length === experiences.length}
+                            onChange={handleSelectAllExperiences}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        </th>
+                      )}
                       <th>Lessons</th>
                       <th>Grade</th>
                       <th>Subject</th>
@@ -4544,26 +4670,28 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   <tbody>
                     {experiences.length === 0 ? (
                       <tr>
-                        <td colSpan="9" style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No lessons found. Click "+ New Lesson" to create one!</td>
+                        <td colSpan={isSelectMode ? "9" : "8"} style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No lessons found. Click "+ New Lesson" to create one!</td>
                       </tr>
                     ) : (
                       experiences.map((row) => (
                         <tr key={row.id} style={{ cursor: 'pointer' }} onClick={() => loadExperienceDetail(row, true)}>
-                          <td style={{ paddingLeft: '1.5rem' }} onClick={e => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              checked={selectedExperienceIds.includes(row.id)}
-                              onChange={() => handleSelectExperience(row.id)}
-                              style={{ cursor: 'pointer' }}
-                            />
-                          </td>
+                          {isSelectMode && (
+                            <td style={{ paddingLeft: '1.5rem' }} onClick={e => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={selectedExperienceIds.includes(row.id)}
+                                onChange={() => handleSelectExperience(row.id)}
+                                style={{ cursor: 'pointer' }}
+                              />
+                            </td>
+                          )}
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                               <div style={{ width: 48, height: 34, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden' }}>
                                 {getThumbnailUrl(row.thumbnail) ? <img src={getThumbnailUrl(row.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
                               </div>
                               <div>
-                                <div style={{ fontWeight: 700, color: '#0f172a' }}>{row.title}</div>
+                                <div style={{ fontWeight: 700, color: '#0f172a', textTransform: 'uppercase' }}>{row.title}</div>
                                 <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                   {row.description || 'No description provided.'} &nbsp;
                                   {row.tags && row.tags.map(t => (
@@ -4659,6 +4787,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
                 </div>
               </div>
+            </>
+          )}
             </>
           )}
 
@@ -8490,189 +8620,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             </div>
           )}
 
-          {/* ── Experience Details View Modal ── */}
-          {showDetailModal && (
-            <div
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                width: '100vw',
-                height: '100vh',
-                backgroundColor: 'rgba(15, 23, 42, 0.45)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 99999,
-                padding: '1rem'
-              }}
-              onClick={() => setShowDetailModal(false)}
-            >
-              <div
-                style={{
-                  width: '100%',
-                  maxWidth: '750px',
-                  maxHeight: '90vh',
-                  backgroundColor: '#ffffff',
-                  borderRadius: '16px',
-                  padding: '2rem',
-                  boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.3)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '1.5rem',
-                  overflowY: 'auto'
-                }}
-                onClick={e => e.stopPropagation()}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Lesson Details</h3>
-                  <button
-                    onClick={() => setShowDetailModal(false)}
-                    style={{ background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center' }}
-                  >
-                    <FiX />
-                  </button>
-                </div>
 
-                {detailLoading ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem', gap: '0.75rem' }}>
-                    <FiRefreshCw className="spin" style={{ fontSize: '2rem', color: '#0b57d0' }} />
-                    <span style={{ fontSize: '0.9rem', color: '#64748b' }}>Loading details...</span>
-                  </div>
-                ) : detailExperience ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                    {/* Header Summary */}
-                    <div style={{ display: 'flex', gap: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '12px' }}>
-                      <div style={{ width: 80, height: 60, background: '#e2e8f0', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
-                        {getThumbnailUrl(detailExperience.thumbnail) ? (
-                          <img
-                            src={getThumbnailUrl(detailExperience.thumbnail)}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          />
-                        ) : null}
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>{detailExperience.title}</h4>
-                        <p style={{ fontSize: '0.85rem', color: '#475569', margin: 0 }}>{detailExperience.description || 'No description provided.'}</p>
-                      </div>
-                    </div>
-
-                    {/* Metadata Grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                      <div>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Grade</span>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px' }}>{detailExperience.grade_name || `Grade ${detailExperience.grade}`}</div>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Subject</span>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px' }}>{Array.isArray(detailExperience.subject) ? detailExperience.subject.join(', ') : (detailExperience.subject || 'N/A')}</div>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Difficulty</span>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: detailExperience.difficulty === 'BEGINNER' ? '#10b981' : detailExperience.difficulty === 'MASTER' ? '#ef4444' : '#3b82f6' }} />
-                          {detailExperience.difficulty}
-                        </div>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Language</span>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px' }}>{detailExperience.language || 'English'}</div>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Duration</span>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px' }}>{detailExperience.estimated_duration || 0} mins</div>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Status</span>
-                        <div style={{ marginTop: '2px' }}>
-                          <span className={`cs-badge ${detailExperience.status === 'APPROVED' || detailExperience.status === 'PUBLISHED' ? 'cs-badge-approved' : detailExperience.status === 'PENDING_APPROVAL' ? 'cs-badge-pending' : detailExperience.status === 'REJECTED' ? 'cs-badge-rejected' : 'cs-badge-draft'}`} style={{ display: 'inline-block' }}>
-                            {detailExperience.status === 'PENDING_APPROVAL' ? 'PENDING' : detailExperience.status}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Tags */}
-                    {detailExperience.tags && detailExperience.tags.length > 0 && (
-                      <div>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Tags</span>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '4px' }}>
-                          {detailExperience.tags.map(t => (
-                            <span key={t} style={{ background: '#e2e8f0', color: '#475569', fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px' }}>{t}</span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Learning Outcomes */}
-                    {detailExperience.learning_outcomes && detailExperience.learning_outcomes.length > 0 && (
-                      <div>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Learning Outcomes</span>
-                        <ul style={{ margin: '4px 0 0 0', paddingLeft: '1.25rem', fontSize: '0.85rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          {detailExperience.learning_outcomes.map((o, idx) => (
-                            <li key={idx}>{typeof o === 'string' ? o : (o.text || o.description || o.outcome || o.name || '')}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Activities list */}
-                    <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem' }}>
-                      <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.75rem 0' }}>Activities ({detailExperience.activities?.length || 0})</h4>
-                      {!detailExperience.activities || detailExperience.activities.length === 0 ? (
-                        <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0, fontStyle: 'italic' }}>No activities in this experience.</p>
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                          {detailExperience.activities.map((act, idx) => (
-                            <div key={act.id || idx} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.85rem' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1e293b' }}>{act.title}</span>
-                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{act.estimated_duration || 5} mins | {act.screens?.length || 0} screens</span>
-                              </div>
-                              {act.description && <p style={{ fontSize: '0.8rem', color: '#475569', margin: '0 0 6px 0' }}>{act.description}</p>}
-                              {act.skills && act.skills.length > 0 && (
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                  {act.skills.map((sk, sidx) => (
-                                    <span key={sidx} style={{ background: '#f0fdf4', color: '#166534', fontSize: '9px', fontWeight: 600, padding: '1px 5px', borderRadius: '4px', border: '1px solid #bbf7d0' }}>
-                                      {typeof sk === 'string' ? sk : (sk.name || '')}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <p style={{ textAlign: 'center', color: '#64748b', fontSize: '0.9rem', margin: 0 }}>No details available.</p>
-                )}
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: '1rem', marginTop: '0.5rem' }}>
-                  <button
-                    onClick={() => setShowDetailModal(false)}
-                    style={{
-                      background: '#0b57d0',
-                      color: '#ffffff',
-                      border: 'none',
-                      padding: '0.5rem 1.25rem',
-                      borderRadius: '8px',
-                      fontWeight: 600,
-                      fontSize: '0.85rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* ── AI Content Generator Assistant Modal ── */}
           {showAiModal && (

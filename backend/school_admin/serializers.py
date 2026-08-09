@@ -146,11 +146,12 @@ class ClassSerializer(serializers.ModelSerializer):
     school_name = serializers.CharField(source='school.school_name', read_only=True)
     grade_name = serializers.CharField(source='grade.grade_name', read_only=True)
     teacher_name = serializers.SerializerMethodField()
+    section = serializers.SerializerMethodField()
     assigned_teacher_ids = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
 
     class Meta:
         model = Class
-        fields = ['class_id', 'school', 'school_name', 'class_name', 'grade', 'grade_name', 'academic_year', 'is_active', 'teacher_name', 'assigned_teacher_ids', 'created_at', 'updated_at']
+        fields = ['class_id', 'school', 'school_name', 'class_name', 'grade', 'grade_name', 'section', 'academic_year', 'is_active', 'teacher_name', 'assigned_teacher_ids', 'created_at', 'updated_at']
 
     def get_teacher_name(self, obj):
         teachers = Teacher.objects.filter(teacherclass__class_obj=obj)
@@ -159,6 +160,18 @@ class ClassSerializer(serializers.ModelSerializer):
             if t.user:
                 names.append(t.user.full_name or t.user.username)
         return ", ".join(names) if names else None
+
+    def get_section(self, obj):
+        """Extract section letter from class_name e.g. 'Class 3-A' -> 'A'"""
+        name = obj.class_name or ''
+        if '-' in name:
+            part = name.split('-')[-1].strip().upper()
+            if part and part.isalpha() and len(part) == 1:
+                return part
+        # fallback: last character if alpha
+        if name and name[-1].isalpha():
+            return name[-1].upper()
+        return ''
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)

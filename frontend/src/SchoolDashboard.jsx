@@ -289,6 +289,9 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [selectedTeacherIds, setSelectedTeacherIds] = useState([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   const [selectedClassIds,   setSelectedClassIds]   = useState([]);
+  const [isSelectModeTeachers, setIsSelectModeTeachers] = useState(false);
+  const [isSelectModeStudents, setIsSelectModeStudents] = useState(false);
+  const [isSelectModeClasses, setIsSelectModeClasses] = useState(false);
 
   /* ── Bulk Upload ── */
   const [importActive, setImportActive]   = useState(false);
@@ -332,6 +335,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [selectedClassCrudDetail, setSelectedClassCrudDetail] = useState(null);
   const [showClassCrudDetailModal, setShowClassCrudDetailModal] = useState(false);
 
+  const isAnyOverlayOpen = showModal || showExperienceDetailModal || showClassDetailModal || showStudentDetailModal || showTeacherDetailModal || showStudentCrudDetailModal || showClassCrudDetailModal;
+
   const [activeDropdown, setActiveDropdown] = useState(null); // { id, type }
 
   /* ── Forms ── */
@@ -342,7 +347,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     username:'', password:'', email:'', full_name:'', roll_no:'', grade:'', section:'', is_active:true
   });
   const [classForm, setClassForm] = useState({
-    class_name:'', school:'', grade:'', academic_year: new Date().getFullYear().toString(), is_active:true, assigned_teacher_ids: []
+    class_name:'', school:'', grade:'', section: 'A', academic_year: '2025 - 2026', is_active:true, assigned_teacher_ids: []
   });
   const [profileForm, setProfileForm] = useState({
     username: user?.username || '', email: user?.email || '', full_name: user?.full_name || '',
@@ -542,8 +547,16 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
   /* ── Feedback helpers ── */
   const showFeedback = (success, error) => {
-    if (success) { setSuccessMsg(success); }
-    if (error)   { setErrorMsg(formatErrorMsg(error)); }
+    if (success) { 
+      setSuccessMsg(success); 
+      const t = setTimeout(() => setSuccessMsg(''), 3000);
+      return () => clearTimeout(t);
+    }
+    if (error) { 
+      setErrorMsg(formatErrorMsg(error)); 
+      const t = setTimeout(() => setErrorMsg(''), 4000);
+      return () => clearTimeout(t);
+    }
   };
 
   const getSelectedSchoolId = () => {
@@ -588,21 +601,25 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         username: entity.username || '', password: '', email: entity.email || '',
         full_name: entity.full_name || '',
         roll_no: entity.roll_no || '',
-        grade: entity.grade || '',
+        grade: entity.grade ? (entity.grade.startsWith('Grade') ? entity.grade.replace('Grade', 'Class') : entity.grade) : '',
         section: entity.section || '',
         is_active: entity.is_active !== undefined ? entity.is_active : true
       } : { username:'', password:'', email:'', full_name:'', roll_no:'', grade:'', section:'', is_active:true });
     } else if (tab === 'classes') {
+      const extractedSec = entity && entity.class_name && ['A','B','C','D'].includes(entity.class_name.slice(-1).toUpperCase()) ? entity.class_name.slice(-1).toUpperCase() : 'A';
+      const defaultGradeId = grades[0]?.id || '';
+      const defaultGradeNum = grades[0] ? (grades[0].grade_name.match(/\d+/)?.[0] || '3') : '3';
       setClassForm(entity ? {
         class_name: entity.class_name || '',
         school: entity.school || defaultSchool,
-        grade: entity.grade || (grades[0]?.id || ''),
-        academic_year: entity.academic_year || new Date().getFullYear().toString(),
+        grade: entity.grade || defaultGradeId,
+        section: extractedSec,
+        academic_year: entity.academic_year || '2025 - 2026',
         is_active: entity.is_active !== undefined ? entity.is_active : true,
         assigned_teacher_ids: entity.assigned_teacher_ids || []
       } : {
-        class_name:'', school: defaultSchool,
-        grade: grades[0]?.id || '', academic_year: new Date().getFullYear().toString(), is_active:true,
+        class_name: `Class ${defaultGradeNum}-A`, school: defaultSchool,
+        grade: defaultGradeId, section: 'A', academic_year: '2025 - 2026', is_active: true,
         assigned_teacher_ids: []
       });
     }
@@ -1342,24 +1359,62 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         </div>
 
         {/* ── Page Content ── */}
-        <div className={`sd-content${activeSubTab === 'overview' ? ' sd-content--dashboard' : ''}`}>
+        <div className={`sd-content${activeSubTab === 'overview' ? ' sd-content--dashboard' : ''}`} style={{ position: 'relative' }}>
 
-          {/* Alerts */}
+          {/* Floating Toast Alerts */}
           {successMsg && (
-            <div className="sd-alert sd-alert-success" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <FiCheckCircle/> <span>{successMsg}</span>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setSuccessMsg('')}><FiX/></button>
+            <div
+              style={{
+                position: 'fixed',
+                top: '24px',
+                right: '24px',
+                zIndex: 99999,
+                padding: '12px 20px',
+                borderRadius: '12px',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                background: '#f0fdf4',
+                color: '#15803d',
+                border: '1px solid #bbf7d0',
+              }}
+            >
+              <span>✅</span>
+              <span>{successMsg}</span>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: '8px', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setSuccessMsg('')}><FiX/></button>
             </div>
           )}
           {errorMsg && (
-            <div className="sd-alert sd-alert-error" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div
+              style={{
+                position: 'fixed',
+                top: '24px',
+                right: '24px',
+                zIndex: 99999,
+                padding: '12px 20px',
+                borderRadius: '12px',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                background: '#fef2f2',
+                color: '#ef4444',
+                border: '1px solid #fecaca',
+              }}
+            >
+              <span>⚠️</span>
               <span>{errorMsg}</span>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setErrorMsg('')}><FiX/></button>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: '8px', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setErrorMsg('')}><FiX/></button>
             </div>
           )}
 
           {/* ══════════ OVERVIEW / DASHBOARD TAB ══════════ */}
-          {activeSubTab === 'overview' && (
+          {activeSubTab === 'overview' && !isAnyOverlayOpen && (
             <>
               {/* Premium Dashboard Header Card with Background Image */}
               <div className="sd-dashboard-header-card" style={{ backgroundImage: `url(${teacherHeaderBanner})`, position: 'relative' }}>
@@ -1527,7 +1582,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           )}
 
           {/* ══════════ TEACHERS TAB ══════════ */}
-          {activeSubTab === 'teachers' && (
+          {activeSubTab === 'teachers' && !isAnyOverlayOpen && (
             <>
              
               <div className="sd-card" style={{ padding:'1.25rem 1.5rem' }}>
@@ -1542,6 +1597,20 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     />
                   </div>
                   <div className="sd-table-actions">
+                    <button
+                      className="sd-btn-outline"
+                      style={{
+                        background: isSelectModeTeachers ? '#e2e8f0' : '#ffffff',
+                        color: '#374151',
+                        borderColor: '#cbd5e1'
+                      }}
+                      onClick={() => {
+                        setIsSelectModeTeachers(!isSelectModeTeachers);
+                        if (isSelectModeTeachers) setSelectedTeacherIds([]);
+                      }}
+                    >
+                      {isSelectModeTeachers ? '✓ Done Selecting' : 'Select'}
+                    </button>
                     {selectedTeacherIds.length > 0 && (
                       <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteTeachers}>
                         <FiTrash2/> Delete Selected ({selectedTeacherIds.length})
@@ -1622,7 +1691,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div className="sd-table-wrap">
                   <table className="sd-table">
                     <colgroup>
-                      <col style={{ width: '4%' }} />
+                      {isSelectModeTeachers && <col style={{ width: '4%' }} />}
                       <col style={{ width: '28%' }} />
                       <col style={{ width: '26%' }} />
                       <col style={{ width: '16%' }} />
@@ -1631,13 +1700,15 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     </colgroup>
                     <thead>
                       <tr>
-                        <th className="sd-checkbox-cell">
-                          <input
-                            type="checkbox"
-                            checked={teachers.length > 0 && selectedTeacherIds.length === filterList(teachers).length}
-                            onChange={handleSelectAllTeachers}
-                          />
-                        </th>
+                        {isSelectModeTeachers && (
+                          <th className="sd-checkbox-cell">
+                            <input
+                              type="checkbox"
+                              checked={teachers.length > 0 && selectedTeacherIds.length === filterList(teachers).length}
+                              onChange={handleSelectAllTeachers}
+                            />
+                          </th>
+                        )}
                         <th>Name</th>
                         <th>Assigned Classes</th>
                         <th>Qualification</th>
@@ -1650,13 +1721,15 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         const tid = t.teacher_id || t.id;
                         return (
                           <tr key={tid || i}>
-                            <td className="sd-checkbox-cell">
-                              <input
-                                type="checkbox"
-                                checked={selectedTeacherIds.includes(tid)}
-                                onChange={() => handleSelectTeacherRow(tid)}
-                              />
-                            </td>
+                            {isSelectModeTeachers && (
+                              <td className="sd-checkbox-cell">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedTeacherIds.includes(tid)}
+                                  onChange={() => handleSelectTeacherRow(tid)}
+                                />
+                              </td>
+                            )}
                             <td>
                               <span className="sd-name-cell-primary">{t.full_name || t.username || 'N/A'}</span>
                               <span className="sd-name-cell-email">{t.email}</span>
@@ -1815,7 +1888,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         );
                       })}
                       {filterList(teachers).length === 0 && (
-                        <tr><td colSpan="6" className="sd-empty-state">No teachers found.</td></tr>
+                        <tr><td colSpan={isSelectModeTeachers ? "6" : "5"} className="sd-empty-state">No teachers found.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -1831,7 +1904,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           )}
 
           {/* ══════════ STUDENTS TAB ══════════ */}
-          {activeSubTab === 'students' && (
+          {activeSubTab === 'students' && !isAnyOverlayOpen && (
             <>
               
               <div className="sd-card" style={{ padding:'1.25rem 1.5rem' }}>
@@ -1846,6 +1919,20 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     />
                   </div>
                   <div className="sd-table-actions">
+                    <button
+                      className="sd-btn-outline"
+                      style={{
+                        background: isSelectModeStudents ? '#e2e8f0' : '#ffffff',
+                        color: '#374151',
+                        borderColor: '#cbd5e1'
+                      }}
+                      onClick={() => {
+                        setIsSelectModeStudents(!isSelectModeStudents);
+                        if (isSelectModeStudents) setSelectedStudentIds([]);
+                      }}
+                    >
+                      {isSelectModeStudents ? '✓ Done Selecting' : 'Select'}
+                    </button>
                     {selectedStudentIds.length > 0 && (
                       <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteStudents}>
                         <FiTrash2/> Delete Selected ({selectedStudentIds.length})
@@ -1927,7 +2014,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div className="sd-table-wrap">
                   <table className="sd-table">
                     <colgroup>
-                      <col style={{ width: '4%' }} />
+                      {isSelectModeStudents && <col style={{ width: '4%' }} />}
                       <col style={{ width: '23%' }} />
                       <col style={{ width: '15%' }} />
                       <col style={{ width: '15%' }} />
@@ -1937,16 +2024,18 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     </colgroup>
                     <thead>
                       <tr>
-                        <th className="sd-checkbox-cell">
-                          <input
-                            type="checkbox"
-                            checked={students.length > 0 && selectedStudentIds.length === filterList(students).length}
-                            onChange={handleSelectAllStudents}
-                          />
-                        </th>
+                        {isSelectModeStudents && (
+                          <th className="sd-checkbox-cell">
+                            <input
+                              type="checkbox"
+                              checked={students.length > 0 && selectedStudentIds.length === filterList(students).length}
+                              onChange={handleSelectAllStudents}
+                            />
+                          </th>
+                        )}
                         <th>Full Name</th>
                         <th>Roll No</th>
-                        <th>Grade</th>
+                        <th>Class</th>
                         <th>Section</th>
                         <th>Status</th>
                         <th style={{ textAlign:'center' }}>Actions</th>
@@ -1957,13 +2046,15 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         const sid = s.student_id || s.id;
                         return (
                           <tr key={sid || i}>
-                            <td className="sd-checkbox-cell">
-                              <input
-                                type="checkbox"
-                                checked={selectedStudentIds.includes(sid)}
-                                onChange={() => handleSelectStudentRow(sid)}
-                              />
-                            </td>
+                            {isSelectModeStudents && (
+                              <td className="sd-checkbox-cell">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedStudentIds.includes(sid)}
+                                  onChange={() => handleSelectStudentRow(sid)}
+                                />
+                              </td>
+                            )}
                             <td>
                               <span className="sd-name-cell-primary">{s.full_name || s.username || 'N/A'}</span>
                             </td>
@@ -2118,7 +2209,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         );
                       })}
                       {filterList(students).length === 0 && (
-                        <tr><td colSpan="7" className="sd-empty-state">No students found.</td></tr>
+                        <tr><td colSpan={isSelectModeStudents ? "7" : "6"} className="sd-empty-state">No students found.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -2134,7 +2225,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           )}
 
           {/* ══════════ CLASSES TAB ══════════ */}
-          {activeSubTab === 'classes' && (
+          {activeSubTab === 'classes' && !isAnyOverlayOpen && (
             <>
              
               <div className="sd-card" style={{ padding:'1.25rem 1.5rem' }}>
@@ -2149,6 +2240,20 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     />
                   </div>
                   <div className="sd-table-actions">
+                    <button
+                      className="sd-btn-outline"
+                      style={{
+                        background: isSelectModeClasses ? '#e2e8f0' : '#ffffff',
+                        color: '#374151',
+                        borderColor: '#cbd5e1'
+                      }}
+                      onClick={() => {
+                        setIsSelectModeClasses(!isSelectModeClasses);
+                        if (isSelectModeClasses) setSelectedClassIds([]);
+                      }}
+                    >
+                      {isSelectModeClasses ? '✓ Done Selecting' : 'Select'}
+                    </button>
                     {selectedClassIds.length > 0 && (
                       <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteClasses}>
                         <FiTrash2/> Delete Selected ({selectedClassIds.length})
@@ -2160,29 +2265,31 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div className="sd-table-wrap">
                   <table className="sd-table">
                     <colgroup>
-                      <col style={{ width: '4%' }} />
-                      <col style={{ width: '26%' }} />
+                      {isSelectModeClasses && <col style={{ width: '3%' }} />}
                       <col style={{ width: '16%' }} />
-                      <col style={{ width: '24%' }} />
-                      <col style={{ width: '12%' }} />
                       <col style={{ width: '10%' }} />
-                      <col style={{ width: '8%' }} />
+                      <col style={{ width: '32%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '14%' }} />
                     </colgroup>
                     <thead>
                       <tr>
-                        <th className="sd-checkbox-cell">
-                          <input
-                            type="checkbox"
-                            checked={classes.length > 0 && selectedClassIds.length === filterList(classes).length}
-                            onChange={handleSelectAllClasses}
-                          />
-                        </th>
-                        <th>Class Name</th>
-                        <th>Grade Level</th>
+                        {isSelectModeClasses && (
+                          <th className="sd-checkbox-cell">
+                            <input
+                              type="checkbox"
+                              checked={classes.length > 0 && selectedClassIds.length === filterList(classes).length}
+                              onChange={handleSelectAllClasses}
+                            />
+                          </th>
+                        )}
+                        <th>Class</th>
+                        <th style={{ textAlign: 'center' }}>Section</th>
                         <th>Assigned Teachers</th>
-                        <th>Academic Year</th>
-                        <th>Status</th>
-                        <th style={{ textAlign:'center' }}>Actions</th>
+                        <th style={{ textAlign: 'center' }}>Academic Year</th>
+                        <th style={{ textAlign: 'center' }}>Status</th>
+                        <th style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2190,21 +2297,26 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         const cid = c.class_id || c.id;
                         return (
                           <tr key={cid || i}>
-                            <td className="sd-checkbox-cell">
-                              <input
-                                type="checkbox"
-                                checked={selectedClassIds.includes(cid)}
-                                onChange={() => handleSelectClassRow(cid)}
-                              />
-                            </td>
+                            {isSelectModeClasses && (
+                              <td className="sd-checkbox-cell">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedClassIds.includes(cid)}
+                                  onChange={() => handleSelectClassRow(cid)}
+                                />
+                              </td>
+                            )}
                             <td>
                               <span className="sd-name-cell-primary">{c.class_name}</span>
-                              <span className="sd-name-cell-email">{c.school_name || ''}</span>
                             </td>
-                            <td>{c.grade_name || 'N/A'}</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span style={{ fontWeight: 600, color: '#4f46e5', background: '#ede9fe', padding: '2px 10px', borderRadius: '20px', fontSize: '0.82rem' }}>
+                                {c.section || (c.class_name && c.class_name.includes('-') ? c.class_name.split('-').pop().trim() : '—')}
+                              </span>
+                            </td>
                             <td>{c.teacher_name || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Unassigned</span>}</td>
-                            <td>{c.academic_year}</td>
-                            <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
+                            <td style={{ textAlign: 'center' }}>{c.academic_year}</td>
+                            <td style={{ textAlign: 'center', overflow: 'visible', textOverflow: 'clip' }}>
                               <span className={`sd-badge ${c.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
                                 {c.is_active ? 'Active' : 'Inactive'}
                               </span>
@@ -2352,7 +2464,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         );
                       })}
                       {filterList(classes).length === 0 && (
-                        <tr><td colSpan="6" className="sd-empty-state">No classes found.</td></tr>
+                        <tr><td colSpan={isSelectModeClasses ? "7" : "6"} className="sd-empty-state">No classes found.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -2368,7 +2480,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           )}
 
           {/* ══════════ EXPERIENCES TAB ══════════ */}
-          {activeSubTab === 'experiences' && (
+          {activeSubTab === 'experiences' && !isAnyOverlayOpen && (
             <>
             
               <div className="sd-card" style={{ padding:'1.25rem 1.5rem' }}>
@@ -2391,7 +2503,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <thead>
                       <tr>
                         <th>Lesson Title</th>
-                        <th>Grade Level</th>
+                        <th>Class</th>
                         <th>Difficulty</th>
                         <th>Duration</th>
                       </tr>
@@ -2429,7 +2541,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           )}
 
           {/* ══════════ REPORTS TAB ══════════ */}
-          {activeSubTab === 'reports' && (
+          {activeSubTab === 'reports' && !isAnyOverlayOpen && (
             <>
               <div className="sd-page-header">
                 <h1 className="sd-page-title">Academic Performance &amp; Reports</h1>
@@ -2625,7 +2737,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             </>
           )}
 
-          {activeSubTab === 'profile' && (
+          {activeSubTab === 'profile' && !isAnyOverlayOpen && (
             <div style={{ padding: '0.5rem', width: '100%', maxWidth: '1100px', margin: '0 auto' }}>
               <form onSubmit={handleProfileUpdate} style={{ width: '100%' }}>
                 <div style={{ display: 'flex', flexDirection: 'row', gap: '2rem', flexWrap: 'wrap', alignItems: 'stretch' }}>
@@ -2804,13 +2916,473 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             </div>
           )}
 
+          {/* ════════════════════════
+              CRUD MODAL (Teachers / Classes) - RENDERED AS INLINE PAGE
+              ════════════════════════ */}
+          {showModal && (
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', minHeight: '600px', backgroundColor: 'transparent', zIndex: 900, display: 'flex', flexDirection: 'column', padding: '1.5rem' }}>
+              <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#4f46e5', fontWeight: 600, fontSize: '0.9rem', padding: 0 }}
+                >
+                  ← Back to {activeSubTab === 'teachers' ? 'Teachers' : activeSubTab === 'students' ? 'Students' : 'Classes'}
+                </button>
+              </div>
+              <div className="sd-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                    {modalType === 'add' ? 'Add' : 'Edit'} {activeSubTab === 'teachers' ? 'Teacher' : activeSubTab === 'students' ? 'Student' : 'Class'}
+                  </h3>
+                </div>
+                {errorMsg && <div className="sd-alert sd-alert-error" style={{ marginBottom:'1rem' }}><FiX/>{errorMsg}</div>}
+                <form className="sd-modal-form" onSubmit={handleFormSubmit}>
+                  {/* Teacher fields */}
+                  {activeSubTab === 'teachers' && (<>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Full Name *</label>
+                      <input className="sd-form-input" type="text" value={teacherForm.full_name}
+                        onChange={e => setTeacherForm({...teacherForm, full_name:e.target.value})} required/>
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Email Address *</label>
+                      <input className="sd-form-input" type="email" value={teacherForm.email}
+                        onChange={e => setTeacherForm({...teacherForm, email:e.target.value})} required/>
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Qualification</label>
+                      <input className="sd-form-input" type="text" value={teacherForm.qualification}
+                        onChange={e => setTeacherForm({...teacherForm, qualification:e.target.value})} placeholder="e.g. B.Ed, M.A. English"/>
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Assign Classes (Multiple)</label>
+                      <select className="sd-form-input" multiple style={{ minHeight:'100px' }}
+                        value={teacherForm.assigned_classes || []}
+                        onChange={e => {
+                          const opts = Array.from(e.target.selectedOptions, o => parseInt(o.value));
+                          setTeacherForm({...teacherForm, assigned_classes:opts});
+                        }}
+                      >
+                        {classes.map(c => (
+                          <option key={c.class_id || c.id} value={c.class_id || c.id}>{c.class_name}</option>
+                        ))}
+                      </select>
+                      <span style={{ fontSize:'0.75rem', color:'#64748b', marginTop:4 }}>Hold Ctrl/Cmd to select multiple classes.</span>
+                    </div>
+                    {modalType === 'add' && (<>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Username *</label>
+                        <input className="sd-form-input" type="text" value={teacherForm.username}
+                          onChange={e => setTeacherForm({...teacherForm, username:e.target.value})} required/>
+                      </div>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Password *</label>
+                        <input className="sd-form-input" type="password" value={teacherForm.password}
+                          onChange={e => setTeacherForm({...teacherForm, password:e.target.value})} required/>
+                      </div>
+                    </>)}
+                    <label className="sd-checkbox-label">
+                      <input type="checkbox" checked={teacherForm.is_active}
+                        onChange={e => setTeacherForm({...teacherForm, is_active:e.target.checked})}/>
+                      Active Status
+                    </label>
+                  </>)}
+
+                  {/* Student fields */}
+                  {activeSubTab === 'students' && (<>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Full Name *</label>
+                      <input className="sd-form-input" type="text" value={studentForm.full_name}
+                        onChange={e => setStudentForm({...studentForm, full_name:e.target.value})} required/>
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Class *</label>
+                      <select className="sd-form-input" value={studentForm.grade || ''}
+                        onChange={e => setStudentForm({...studentForm, grade: e.target.value})} required>
+                        <option value="">-- Select Class --</option>
+                        {[3, 4, 5, 6, 7, 8].map(num => (
+                          <option key={num} value={`Class ${num}`}>Class {num}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Section *</label>
+                      <select className="sd-form-input" value={studentForm.section || ''}
+                        onChange={e => setStudentForm({...studentForm, section: e.target.value})} required>
+                        <option value="">-- Select Section --</option>
+                        {['A', 'B', 'C', 'D'].map(letter => (
+                          <option key={letter} value={letter}>Section {letter}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Email Address</label>
+                      <input className="sd-form-input" type="email" value={studentForm.email}
+                        onChange={e => setStudentForm({...studentForm, email:e.target.value})}/>
+                    </div>
+                    {modalType === 'add' && (<>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Username *</label>
+                        <input className="sd-form-input" type="text" value={studentForm.username}
+                          onChange={e => setStudentForm({...studentForm, username:e.target.value})} required/>
+                      </div>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Password *</label>
+                        <input className="sd-form-input" type="password" value={studentForm.password}
+                          onChange={e => setStudentForm({...studentForm, password:e.target.value})} required/>
+                      </div>
+                    </>)}
+                    <label className="sd-checkbox-label">
+                      <input type="checkbox" checked={studentForm.is_active}
+                        onChange={e => setStudentForm({...studentForm, is_active:e.target.checked})}/>
+                      Active Status
+                    </label>
+                  </>)}
+
+                  {/* Class fields */}
+                  {activeSubTab === 'classes' && (<>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Class *</label>
+                      <select className="sd-form-input" value={classForm.grade || ''}
+                        onChange={e => {
+                          const selectedGradeId = parseInt(e.target.value);
+                          const gObj = grades.find(g => g.id === selectedGradeId);
+                          const match = gObj ? gObj.grade_name.match(/\d+/) : null;
+                          const num = match ? match[0] : selectedGradeId;
+                          const sec = classForm.section || 'A';
+                          setClassForm({
+                            ...classForm,
+                            grade: selectedGradeId,
+                            class_name: `Class ${num}-${sec}`
+                          });
+                        }} required>
+                        <option value="">-- Select Class --</option>
+                        {grades.map(g => {
+                          const match = g.grade_name.match(/\d+/);
+                          const num = match ? match[0] : g.id;
+                          return (
+                            <option key={g.id} value={g.id}>Class {num}</option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Section *</label>
+                      <select className="sd-form-input" value={classForm.section || 'A'}
+                        onChange={e => {
+                          const selectedSecVal = e.target.value;
+                          const gObj = grades.find(g => g.id === classForm.grade);
+                          const match = gObj ? gObj.grade_name.match(/\d+/) : null;
+                          const num = match ? match[0] : (classForm.grade || 3);
+                          setClassForm({
+                            ...classForm,
+                            section: selectedSecVal,
+                            class_name: `Class ${num}-${selectedSecVal}`
+                          });
+                        }} required>
+                        {['A', 'B', 'C', 'D'].map(letter => (
+                          <option key={letter} value={letter}>Section {letter}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">School Name</label>
+                      <input className="sd-form-input" type="text" value={user?.school_name || profileForm.school_name || ''} readOnly style={{ backgroundColor:'#e2e8f0', cursor:'not-allowed' }}/>
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Academic Year *</label>
+                      <input className="sd-form-input" type="text" value={classForm.academic_year}
+                        onChange={e => setClassForm({...classForm, academic_year:e.target.value})} placeholder="e.g. 2026" required/>
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Assign Teachers</label>
+                      <select className="sd-form-input"
+                        value={classForm.teacher || ''}
+                        onChange={e => setClassForm({...classForm, teacher: e.target.value ? parseInt(e.target.value) : ''})}
+                      >
+                        <option value="">-- Select Teacher --</option>
+                        {teachers.map(t => (
+                          <option key={t.teacher_id || t.id} value={t.teacher_id || t.id}>
+                            {t.full_name || t.username}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <label className="sd-checkbox-label">
+                      <input type="checkbox" checked={classForm.is_active}
+                        onChange={e => setClassForm({...classForm, is_active:e.target.checked})}/>
+                      Active Status
+                    </label>
+                  </>)}
+
+                  <div className="sd-modal-footer" style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem', marginTop: '1.5rem', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                    <button type="button" className="sd-btn-cancel" onClick={() => setShowModal(false)}>Cancel</button>
+                    <button type="submit" className="sd-btn-save" disabled={actionLoading}>
+                      {actionLoading ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ── Experience Detail Modal ── */}
+          {showExperienceDetailModal && selectedExperienceDetail && (
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', minHeight: '600px', backgroundColor: 'transparent', zIndex: 900, display: 'flex', flexDirection: 'column', padding: '1.5rem' }}>
+              <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center' }}>
+                <button
+                  onClick={() => setShowExperienceDetailModal(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#4f46e5', fontWeight: 600, fontSize: '0.9rem', padding: 0 }}
+                >
+                  ← Back to Lessons
+                </button>
+              </div>
+              <div className="sd-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Lesson: {selectedExperienceDetail.experience_title}</h3>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(120px,1fr))', gap:'0.75rem', marginBottom:'1.25rem', padding:'0.85rem', background:'#f1f5f9', borderRadius:8, fontSize:'0.84rem' }}>
+                  <div><strong>Attempts:</strong> {selectedExperienceDetail.total_attempts}</div>
+                  <div><strong>Completed:</strong> {selectedExperienceDetail.completed}</div>
+                  <div><strong>Avg Score:</strong> {selectedExperienceDetail.average_score}%</div>
+                  <div><strong>Pass Rate:</strong> {selectedExperienceDetail.pass_rate}%</div>
+                  <div><strong>High/Low:</strong> {selectedExperienceDetail.highest_score}% / {selectedExperienceDetail.lowest_score}%</div>
+                </div>
+                <div className="sd-table-wrap">
+                  <table className="sd-table">
+                    <thead><tr><th>Student</th><th>Class</th><th>Score</th><th>Status</th><th>Time</th></tr></thead>
+                    <tbody>
+                      {selectedExperienceDetail.attempts?.map((att, i) => (
+                        <tr key={i}>
+                          <td style={{ fontWeight:600 }}>{att.student_name}</td>
+                          <td>{att.class_name}</td>
+                          <td style={{ fontWeight:700 }}>{att.percentage != null ? att.percentage+'%' : 'N/A'}</td>
+                          <td>{att.status}</td>
+                          <td>{att.time_spent_seconds ? Math.round(att.time_spent_seconds/60)+'m' : 'N/A'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Class Detail Modal ── */}
+          {showClassDetailModal && selectedClassDetail && (
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', minHeight: '600px', backgroundColor: 'transparent', zIndex: 900, display: 'flex', flexDirection: 'column', padding: '1.5rem' }}>
+              <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center' }}>
+                <button
+                  onClick={() => setShowClassDetailModal(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#4f46e5', fontWeight: 600, fontSize: '0.9rem', padding: 0 }}
+                >
+                  ← Back to Classes
+                </button>
+              </div>
+              <div className="sd-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Class: {selectedClassDetail.class_name}</h3>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))', gap:'0.75rem', marginBottom:'1.25rem', padding:'0.85rem', background:'#f1f5f9', borderRadius:8, fontSize:'0.84rem' }}>
+                  <div><strong>Students:</strong> {selectedClassDetail.total_students}</div>
+                  <div><strong>Completed:</strong> {selectedClassDetail.completed}</div>
+                  <div><strong>Avg Score:</strong> {selectedClassDetail.average_score}%</div>
+                  <div><strong>Pass Rate:</strong> {selectedClassDetail.pass_rate}%</div>
+                </div>
+                <div className="sd-table-wrap">
+                  <table className="sd-table">
+                    <thead><tr><th>Student</th><th>Attempts</th><th>Completed</th><th>Avg Score</th><th>Last Attempt</th></tr></thead>
+                    <tbody>
+                      {selectedClassDetail.students?.map((st, i) => (
+                        <tr key={i}>
+                          <td style={{ fontWeight:600 }}>{st.student_name}</td>
+                          <td>{st.total_attempts}</td>
+                          <td>{st.completed}</td>
+                          <td style={{ fontWeight:700, color:'#10b981' }}>{st.average_score}%</td>
+                          <td>{st.last_attempt_date ? new Date(st.last_attempt_date).toLocaleDateString() : 'N/A'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Student Detail Modal ── */}
+          {showStudentDetailModal && selectedStudentDetail && (
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', minHeight: '600px', backgroundColor: 'transparent', zIndex: 900, display: 'flex', flexDirection: 'column', padding: '1.5rem' }}>
+              <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center' }}>
+                <button
+                  onClick={() => setShowStudentDetailModal(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#4f46e5', fontWeight: 600, fontSize: '0.9rem', padding: 0 }}
+                >
+                  ← Back to Students
+                </button>
+              </div>
+              <div className="sd-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Student: {selectedStudentDetail.student_name}</h3>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))', gap:'0.75rem', marginBottom:'1.25rem', padding:'0.85rem', background:'#f1f5f9', borderRadius:8, fontSize:'0.84rem' }}>
+                  <div><strong>Attempts:</strong> {selectedStudentDetail.total_attempts}</div>
+                  <div><strong>Completed:</strong> {selectedStudentDetail.completed}</div>
+                  <div><strong>Avg Score:</strong> {selectedStudentDetail.average_score}%</div>
+                </div>
+                <div className="sd-table-wrap">
+                  <table className="sd-table">
+                    <thead><tr><th>Experience</th><th>Class</th><th>Score</th><th>Status</th><th>Started At</th></tr></thead>
+                    <tbody>
+                      {selectedStudentDetail.attempts?.map((att, i) => (
+                        <tr key={i}>
+                          <td style={{ fontWeight:600 }}>{att.experience_title}</td>
+                          <td>{att.class_name}</td>
+                          <td style={{ fontWeight:700, color:'#3b82f6' }}>{att.percentage != null ? att.percentage+'%' : 'N/A'}</td>
+                          <td>{att.status}</td>
+                          <td>{new Date(att.started_at).toLocaleDateString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Teacher Detail Modal ── */}
+          {showTeacherDetailModal && selectedTeacherDetail && (
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', minHeight: '600px', backgroundColor: 'transparent', zIndex: 900, display: 'flex', flexDirection: 'column', padding: '1.5rem' }}>
+              <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center' }}>
+                <button
+                  onClick={() => setShowTeacherDetailModal(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#4f46e5', fontWeight: 600, fontSize: '0.9rem', padding: 0 }}
+                >
+                  ← Back to Teachers
+                </button>
+              </div>
+              <div className="sd-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Teacher Profile Details</h3>
+                </div>
+                <div style={{ padding: '0.5rem 0', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Full Name:</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedTeacherDetail.full_name || 'N/A'}</span>
+                    
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Email Address:</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedTeacherDetail.email || 'N/A'}</span>
+                    
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Qualification:</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedTeacherDetail.qualification || 'N/A'}</span>
+                    
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Assigned Classes:</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedTeacherDetail.assigned_classes || 'Unassigned'}</span>
+                    
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Status:</span>
+                    <span>
+                      <span className={`sd-badge ${selectedTeacherDetail.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                        {selectedTeacherDetail.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Student CRUD Detail Modal ── */}
+          {showStudentCrudDetailModal && selectedStudentCrudDetail && (
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', minHeight: '600px', backgroundColor: 'transparent', zIndex: 900, display: 'flex', flexDirection: 'column', padding: '1.5rem' }}>
+              <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center' }}>
+                <button
+                  onClick={() => setShowStudentCrudDetailModal(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#4f46e5', fontWeight: 600, fontSize: '0.9rem', padding: 0 }}
+                >
+                  ← Back to Students
+                </button>
+              </div>
+              <div className="sd-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Student Profile Details</h3>
+                </div>
+                <div style={{ padding: '0.5rem 0', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Full Name:</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.full_name || 'N/A'}</span>
+                    
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Roll Number:</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.roll_no || 'N/A'}</span>
+                    
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Class:</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.grade || 'N/A'}</span>
+                    
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Section:</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.section || 'N/A'}</span>
+                    
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Email Address:</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.email || 'N/A'}</span>
+                    
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Status:</span>
+                    <span>
+                      <span className={`sd-badge ${selectedStudentCrudDetail.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                        {selectedStudentCrudDetail.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Class CRUD Detail Modal ── */}
+          {showClassCrudDetailModal && selectedClassCrudDetail && (
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', minHeight: '600px', backgroundColor: 'transparent', zIndex: 900, display: 'flex', flexDirection: 'column', padding: '1.5rem' }}>
+              <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center' }}>
+                <button
+                  onClick={() => setShowClassCrudDetailModal(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#4f46e5', fontWeight: 600, fontSize: '0.9rem', padding: 0 }}
+                >
+                  ← Back to Classes
+                </button>
+              </div>
+              <div className="sd-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Class Details</h3>
+                </div>
+                <div style={{ padding: '0.5rem 0', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Class Name:</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.class_name || 'N/A'}</span>
+                    
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Class:</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.grade_name || `Grade ID: ${selectedClassCrudDetail.grade}`}</span>
+                    
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Assigned Teachers:</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.teacher_name || 'Unassigned'}</span>
+                    
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Academic Year:</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.academic_year || 'N/A'}</span>
+                    
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Status:</span>
+                    <span>
+                      <span className={`sd-badge ${selectedClassCrudDetail.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                        {selectedClassCrudDetail.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>{/* /sd-content */}
       </main>
 
       {/* ════════════════════════
-          CRUD MODAL (Teachers / Classes)
+          CRUD MODAL (Teachers / Classes) - REMOVED
           ════════════════════════ */}
-      {showModal && (
+      {false && (
         <div className="sd-modal-backdrop" onClick={e => { if(e.target === e.currentTarget) setShowModal(false); }}>
           <div className="sd-modal">
             <div className="sd-modal-header">
@@ -3110,230 +3682,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         </div>
       )}
 
-      {/* ── Experience Detail Modal ── */}
-      {showExperienceDetailModal && selectedExperienceDetail && (
-        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowExperienceDetailModal(false); }}>
-          <div className="sd-modal" style={{ maxWidth:700 }}>
-            <div className="sd-modal-header">
-              <span className="sd-modal-title">Lesson: {selectedExperienceDetail.experience_title}</span>
-              <button className="sd-modal-close" onClick={() => setShowExperienceDetailModal(false)}><FiX/></button>
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(120px,1fr))', gap:'0.75rem', marginBottom:'1.25rem', padding:'0.85rem', background:'#f8fafc', borderRadius:8, fontSize:'0.84rem' }}>
-              <div><strong>Attempts:</strong> {selectedExperienceDetail.total_attempts}</div>
-              <div><strong>Completed:</strong> {selectedExperienceDetail.completed}</div>
-              <div><strong>Avg Score:</strong> {selectedExperienceDetail.average_score}%</div>
-              <div><strong>Pass Rate:</strong> {selectedExperienceDetail.pass_rate}%</div>
-              <div><strong>High/Low:</strong> {selectedExperienceDetail.highest_score}% / {selectedExperienceDetail.lowest_score}%</div>
-            </div>
-            <div className="sd-table-wrap">
-              <table className="sd-table">
-                <thead><tr><th>Student</th><th>Class</th><th>Score</th><th>Status</th><th>Time</th></tr></thead>
-                <tbody>
-                  {selectedExperienceDetail.attempts?.map((att, i) => (
-                    <tr key={i}>
-                      <td style={{ fontWeight:600 }}>{att.student_name}</td>
-                      <td>{att.class_name}</td>
-                      <td style={{ fontWeight:700 }}>{att.percentage != null ? att.percentage+'%' : 'N/A'}</td>
-                      <td>{att.status}</td>
-                      <td>{att.time_spent_seconds ? Math.round(att.time_spent_seconds/60)+'m' : 'N/A'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="sd-modal-footer">
-              <button className="sd-btn-cancel" onClick={() => setShowExperienceDetailModal(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Class Detail Modal ── */}
-      {showClassDetailModal && selectedClassDetail && (
-        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowClassDetailModal(false); }}>
-          <div className="sd-modal" style={{ maxWidth:700 }}>
-            <div className="sd-modal-header">
-              <span className="sd-modal-title">Class: {selectedClassDetail.class_name}</span>
-              <button className="sd-modal-close" onClick={() => setShowClassDetailModal(false)}><FiX/></button>
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))', gap:'0.75rem', marginBottom:'1.25rem', padding:'0.85rem', background:'#f8fafc', borderRadius:8, fontSize:'0.84rem' }}>
-              <div><strong>Students:</strong> {selectedClassDetail.total_students}</div>
-              <div><strong>Completed:</strong> {selectedClassDetail.completed}</div>
-              <div><strong>Avg Score:</strong> {selectedClassDetail.average_score}%</div>
-              <div><strong>Pass Rate:</strong> {selectedClassDetail.pass_rate}%</div>
-            </div>
-            <div className="sd-table-wrap">
-              <table className="sd-table">
-                <thead><tr><th>Student</th><th>Attempts</th><th>Completed</th><th>Avg Score</th><th>Last Attempt</th></tr></thead>
-                <tbody>
-                  {selectedClassDetail.students?.map((st, i) => (
-                    <tr key={i}>
-                      <td style={{ fontWeight:600 }}>{st.student_name}</td>
-                      <td>{st.total_attempts}</td>
-                      <td>{st.completed}</td>
-                      <td style={{ fontWeight:700, color:'#10b981' }}>{st.average_score}%</td>
-                      <td>{st.last_attempt_date ? new Date(st.last_attempt_date).toLocaleDateString() : 'N/A'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="sd-modal-footer">
-              <button className="sd-btn-cancel" onClick={() => setShowClassDetailModal(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Student Detail Modal ── */}
-      {showStudentDetailModal && selectedStudentDetail && (
-        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowStudentDetailModal(false); }}>
-          <div className="sd-modal" style={{ maxWidth:700 }}>
-            <div className="sd-modal-header">
-              <span className="sd-modal-title">Student: {selectedStudentDetail.student_name}</span>
-              <button className="sd-modal-close" onClick={() => setShowStudentDetailModal(false)}><FiX/></button>
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))', gap:'0.75rem', marginBottom:'1.25rem', padding:'0.85rem', background:'#f8fafc', borderRadius:8, fontSize:'0.84rem' }}>
-              <div><strong>Attempts:</strong> {selectedStudentDetail.total_attempts}</div>
-              <div><strong>Completed:</strong> {selectedStudentDetail.completed}</div>
-              <div><strong>Avg Score:</strong> {selectedStudentDetail.average_score}%</div>
-            </div>
-            <div className="sd-table-wrap">
-              <table className="sd-table">
-                <thead><tr><th>Experience</th><th>Class</th><th>Score</th><th>Status</th><th>Started At</th></tr></thead>
-                <tbody>
-                  {selectedStudentDetail.attempts?.map((att, i) => (
-                    <tr key={i}>
-                      <td style={{ fontWeight:600 }}>{att.experience_title}</td>
-                      <td>{att.class_name}</td>
-                      <td style={{ fontWeight:700, color:'#3b82f6' }}>{att.percentage != null ? att.percentage+'%' : 'N/A'}</td>
-                      <td>{att.status}</td>
-                      <td>{new Date(att.started_at).toLocaleDateString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="sd-modal-footer">
-              <button className="sd-btn-cancel" onClick={() => setShowStudentDetailModal(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Teacher Detail Modal ── */}
-      {showTeacherDetailModal && selectedTeacherDetail && (
-        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowTeacherDetailModal(false); }}>
-          <div className="sd-modal" style={{ maxWidth:500 }}>
-            <div className="sd-modal-header">
-              <span className="sd-modal-title">Teacher Profile Details</span>
-              <button className="sd-modal-close" onClick={() => setShowTeacherDetailModal(false)}><FiX/></button>
-            </div>
-            <div style={{ padding: '1rem', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Full Name:</span>
-                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedTeacherDetail.full_name || 'N/A'}</span>
-                
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Email Address:</span>
-                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedTeacherDetail.email || 'N/A'}</span>
-                
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Qualification:</span>
-                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedTeacherDetail.qualification || 'N/A'}</span>
-                
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Assigned Classes:</span>
-                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedTeacherDetail.assigned_classes || 'Unassigned'}</span>
-                
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Status:</span>
-                <span>
-                  <span className={`sd-badge ${selectedTeacherDetail.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
-                    {selectedTeacherDetail.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                </span>
-              </div>
-            </div>
-            <div className="sd-modal-footer">
-              <button className="sd-btn-cancel" onClick={() => setShowTeacherDetailModal(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Student CRUD Detail Modal ── */}
-      {showStudentCrudDetailModal && selectedStudentCrudDetail && (
-        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowStudentCrudDetailModal(false); }}>
-          <div className="sd-modal" style={{ maxWidth:500 }}>
-            <div className="sd-modal-header">
-              <span className="sd-modal-title">Student Profile Details</span>
-              <button className="sd-modal-close" onClick={() => setShowStudentCrudDetailModal(false)}><FiX/></button>
-            </div>
-            <div style={{ padding: '1rem', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Full Name:</span>
-                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.full_name || 'N/A'}</span>
-                
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Roll Number:</span>
-                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.roll_no || 'N/A'}</span>
-                
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Grade Level:</span>
-                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.grade || 'N/A'}</span>
-                
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Section:</span>
-                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.section || 'N/A'}</span>
-                
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Email Address:</span>
-                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.email || 'N/A'}</span>
-                
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Status:</span>
-                <span>
-                  <span className={`sd-badge ${selectedStudentCrudDetail.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
-                    {selectedStudentCrudDetail.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                </span>
-              </div>
-            </div>
-            <div className="sd-modal-footer">
-              <button className="sd-btn-cancel" onClick={() => setShowStudentCrudDetailModal(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Class CRUD Detail Modal ── */}
-      {showClassCrudDetailModal && selectedClassCrudDetail && (
-        <div className="sd-modal-backdrop" onClick={e => { if(e.target===e.currentTarget) setShowClassCrudDetailModal(false); }}>
-          <div className="sd-modal" style={{ maxWidth:500 }}>
-            <div className="sd-modal-header">
-              <span className="sd-modal-title">Class Details</span>
-              <button className="sd-modal-close" onClick={() => setShowClassCrudDetailModal(false)}><FiX/></button>
-            </div>
-            <div style={{ padding: '1rem', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Class Name:</span>
-                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.class_name || 'N/A'}</span>
-                
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Grade Level:</span>
-                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.grade_name || `Grade ID: ${selectedClassCrudDetail.grade}`}</span>
-                
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Assigned Teachers:</span>
-                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.teacher_name || 'Unassigned'}</span>
-                
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Academic Year:</span>
-                <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.academic_year || 'N/A'}</span>
-                
-                <span style={{ color: '#64748b', fontWeight: 600 }}>Status:</span>
-                <span>
-                  <span className={`sd-badge ${selectedClassCrudDetail.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
-                    {selectedClassCrudDetail.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                </span>
-              </div>
-            </div>
-            <div className="sd-modal-footer">
-              <button className="sd-btn-cancel" onClick={() => setShowClassCrudDetailModal(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Custom Delete Confirmation Modal ── */}
       {deleteConfirm.show && (

@@ -8,18 +8,18 @@ class Grade(models.Model):
     grade_name = models.CharField(
         max_length=50,
         unique=True,
-        verbose_name=_("Grade Name"),
-        help_text=_("Unique name identifying the grade level (up to 50 characters).")
+        verbose_name=_("Class Name"),
+        help_text=_("Unique name identifying the class level (up to 50 characters).")
     )
     description = models.TextField(
         blank=True,
         null=True,
         verbose_name=_("Description"),
-        help_text=_("A detailed description of the grade requirements or standards.")
+        help_text=_("A detailed description of the class requirements or standards.")
     )
     sort_order = models.IntegerField(
         verbose_name=_("Sort Order"),
-        help_text=_("Defines the sequence in which grades are listed.")
+        help_text=_("Defines the sequence in which classes are listed.")
     )
     created_at = models.DateTimeField(
         auto_now_add=True,
@@ -31,8 +31,8 @@ class Grade(models.Model):
     )
 
     class Meta:
-        verbose_name = _("Grade")
-        verbose_name_plural = _("Grades")
+        verbose_name = _("Class")
+        verbose_name_plural = _("Classes")
         ordering = ["sort_order", "grade_name"]
         db_table = "cms_grade"
 

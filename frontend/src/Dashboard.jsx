@@ -484,6 +484,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [showSchoolDetailModal, setShowSchoolDetailModal] = useState(false);
   const [selectedSchoolAdminDetail, setSelectedSchoolAdminDetail] = useState(null);
   const [showSchoolAdminDetailModal, setShowSchoolAdminDetailModal] = useState(false);
+
   const [activeDropdown, setActiveDropdown] = useState(null); // { id, type }
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
@@ -634,6 +635,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   /* ── Selection State ── */
   const [selectedSchoolIds, setSelectedSchoolIds] = useState([]);
   const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [isSelectModeSchools, setIsSelectModeSchools] = useState(false);
+  const [isSelectModeUsers, setIsSelectModeUsers] = useState(false);
 
   /* ── Modal management ── */
   const [showModal, setShowModal] = useState(false);
@@ -647,6 +650,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [selectedQuizOption, setSelectedQuizOption] = useState(null);
   const [quizChecked, setQuizChecked] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
+  const isAnyOverlayOpen = showModal || showSchoolDetailModal || showSchoolAdminDetailModal;
 
   // Dynamic scale factor calculation for preview canvas (locks to 1440px base width)
   const [previewScaleFactor, setPreviewScaleFactor] = useState(1);
@@ -1012,8 +1016,16 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   };
 
   const showFeedback = (success, error) => {
-    if (success) { setSuccessMsg(success); }
-    if (error) { setErrorMsg(formatErrorMsg(error)); }
+    if (success) { 
+      setSuccessMsg(success); 
+      const t = setTimeout(() => setSuccessMsg(''), 3000);
+      return () => clearTimeout(t);
+    }
+    if (error) { 
+      setErrorMsg(formatErrorMsg(error)); 
+      const t = setTimeout(() => setErrorMsg(''), 4000);
+      return () => clearTimeout(t);
+    }
   };
 
   /* ── Form Clean/Init ── */
@@ -1693,24 +1705,62 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         </div>
 
         {/* ── Page Content ── */}
-        <div className={`sd-content${activeTab === 'dashboard' ? ' sd-content--dashboard' : ''}`}>
+        <div className={`sd-content${activeTab === 'dashboard' ? ' sd-content--dashboard' : ''}`} style={{ position: 'relative' }}>
 
-          {/* Alerts */}
+          {/* Floating Toast Alerts */}
           {successMsg && (
-            <div className="sd-alert sd-alert-success" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <FiCheckCircle /> <span>{successMsg}</span>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setSuccessMsg('')}><FiX /></button>
+            <div
+              style={{
+                position: 'fixed',
+                top: '24px',
+                right: '24px',
+                zIndex: 99999,
+                padding: '12px 20px',
+                borderRadius: '12px',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                background: '#f0fdf4',
+                color: '#15803d',
+                border: '1px solid #bbf7d0',
+              }}
+            >
+              <span>✅</span>
+              <span>{successMsg}</span>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: '8px', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setSuccessMsg('')}><FiX /></button>
             </div>
           )}
           {errorMsg && (
-            <div className="sd-alert sd-alert-error" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div
+              style={{
+                position: 'fixed',
+                top: '24px',
+                right: '24px',
+                zIndex: 99999,
+                padding: '12px 20px',
+                borderRadius: '12px',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                background: '#fef2f2',
+                color: '#ef4444',
+                border: '1px solid #fecaca',
+              }}
+            >
+              <span>⚠️</span>
               <span>{errorMsg}</span>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setErrorMsg('')}><FiX /></button>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: '8px', color: 'inherit', display: 'flex', alignItems: 'center' }} onClick={() => setErrorMsg('')}><FiX /></button>
             </div>
           )}
 
           {/* ══════════ OVERVIEW / DASHBOARD TAB ══════════ */}
-          {activeTab === 'dashboard' && (
+          {activeTab === 'dashboard' && !isAnyOverlayOpen && (
             <>
               {/* Premium Dashboard Header Card with Background Image */}
               <div className="sd-dashboard-header-card" style={{ backgroundImage: `url(${dashboardHeaderBanner})`, position: 'relative' }}>
@@ -1848,7 +1898,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
 
           {/* ══════════ MANAGE SCHOOLS TAB ══════════ */}
-          {activeTab === 'schools' && (
+          {activeTab === 'schools' && !isAnyOverlayOpen && (
             <>
               {isAddingSchool ? (
                 /* ───────────────── ADD NEW SCHOOL SCREEN (Image 2) ───────────────── */
@@ -1970,6 +2020,71 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               ) : (
                 /* ───────────────── MANAGE SCHOOLS SCREEN (Image 2) ───────────────── */
                 <>
+                  {showSchoolDetailModal && selectedSchoolDetail ? (
+                    <div style={{ background: 'transparent', width: '100%' }}>
+                      <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center' }}>
+                        <button
+                          onClick={() => setShowSchoolDetailModal(false)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            color: '#0f766e',
+                            fontWeight: 600,
+                            fontSize: '0.9rem',
+                            padding: 0
+                          }}
+                        >
+                          ← Back to Schools
+                        </button>
+                      </div>
+                      
+                      <div className="sd-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                          <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>School Details</h3>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #f1f5f9' }}>
+                          <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: '#ccfbf1', color: '#0f766e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 'bold' }}>
+                            {selectedSchoolDetail.school_name ? selectedSchoolDetail.school_name[0].toUpperCase() : 'S'}
+                          </div>
+                          <div>
+                            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>{selectedSchoolDetail.school_name}</h3>
+                            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{selectedSchoolDetail.email || 'No email provided'}</span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.55rem', fontSize: '0.85rem', color: '#334155' }}>
+                          <div>
+                            <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>School Code</span>
+                            <strong style={{ fontSize: '0.9rem', color: '#0f172a', fontFamily: 'monospace' }}>{selectedSchoolDetail.school_code || '—'}</strong>
+                          </div>
+                          <div>
+                            <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Location / Address</span>
+                            <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.address || selectedSchoolDetail.city || '—'}</strong>
+                          </div>
+                          <div>
+                            <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Phone</span>
+                            <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.phone || '—'}</strong>
+                          </div>
+                          <div>
+                            <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Active Status</span>
+                            <span className={`sd-badge ${selectedSchoolDetail.is_active !== false ? 'sd-badge-active' : 'sd-badge-inactive'}`} style={{ display: 'inline-flex', marginTop: '4px' }}>
+                              {selectedSchoolDetail.is_active !== false ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
+                          <div>
+                            <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Total Teachers</span>
+                            <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{teachers.filter(t => t.school === selectedSchoolDetail.school_id || t.school_id === selectedSchoolDetail.school_id).length} Teachers</strong>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
 
 
                   <div className="sd-card" style={{ padding: '1.25rem 1.5rem' }}>
@@ -1984,6 +2099,20 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         />
                       </div>
                       <div className="sd-table-actions">
+                        <button
+                          className="sd-btn-outline"
+                          style={{
+                            background: isSelectModeSchools ? '#e2e8f0' : '#ffffff',
+                            color: '#374151',
+                            borderColor: '#d1d5db'
+                          }}
+                          onClick={() => {
+                            setIsSelectModeSchools(!isSelectModeSchools);
+                            if (isSelectModeSchools) setSelectedSchoolIds([]);
+                          }}
+                        >
+                          {isSelectModeSchools ? '✓ Done Selecting' : 'Select'}
+                        </button>
                         {selectedSchoolIds.length > 0 && (
                           <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteSchools}>
                             <FiTrash2 /> Delete Selected ({selectedSchoolIds.length})
@@ -1996,7 +2125,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     <div className="sd-table-wrap">
                       <table className="sd-table">
                         <colgroup>
-                          <col style={{ width: '4%' }} />
+                          {isSelectModeSchools && <col style={{ width: '4%' }} />}
                           <col style={{ width: '22%' }} />
                           <col style={{ width: '15%' }} />
                           <col style={{ width: '15%' }} />
@@ -2006,13 +2135,15 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         </colgroup>
                         <thead>
                           <tr>
-                            <th className="sd-checkbox-cell">
-                              <input
-                                type="checkbox"
-                                checked={schools.length > 0 && selectedSchoolIds.length === filterList(schools).length}
-                                onChange={handleSelectAllSchools}
-                              />
-                            </th>
+                            {isSelectModeSchools && (
+                              <th className="sd-checkbox-cell">
+                                <input
+                                  type="checkbox"
+                                  checked={schools.length > 0 && selectedSchoolIds.length === filterList(schools).length}
+                                  onChange={handleSelectAllSchools}
+                                />
+                              </th>
+                            )}
                             <th>SCHOOL NAME</th>
                             <th>SCHOOL CODE</th>
                             <th>ADMIN NAME</th>
@@ -2031,13 +2162,15 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
                             return (
                               <tr key={sid || i}>
-                                <td className="sd-checkbox-cell">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedSchoolIds.includes(sid)}
-                                    onChange={() => handleSelectSchoolRow(sid)}
-                                  />
-                                </td>
+                                {isSelectModeSchools && (
+                                  <td className="sd-checkbox-cell">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedSchoolIds.includes(sid)}
+                                      onChange={() => handleSelectSchoolRow(sid)}
+                                    />
+                                  </td>
+                                )}
                                 <td style={{ fontWeight: 600, color: '#1e293b' }}>{s.school_name}</td>
                                 <td style={{ fontFamily: 'monospace', fontWeight: 600, color: '#475569' }}>{s.school_code || '—'}</td>
                                 <td>{adminName}</td>
@@ -2190,7 +2323,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             );
                           })}
                           {filterList(schools).length === 0 && (
-                            <tr><td colSpan="7" className="sd-empty-state">No schools found.</td></tr>
+                            <tr><td colSpan={isSelectModeSchools ? "7" : "6"} className="sd-empty-state">No schools found.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -2201,9 +2334,11 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               )}
             </>
           )}
+            </>
+          )}
 
           {/* ══════════ SUBSCRIPTIONS TAB ══════════ */}
-          {activeTab === 'subscriptions' && (
+          {activeTab === 'subscriptions' && !isAnyOverlayOpen && (
             <>
               {/* Header with action button (except on Create Plan page) */}
               {subPage !== 'create-plan' ? (
@@ -2592,7 +2727,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
 
           {/* ══════════ MANAGE EXPERIENCES TAB ══════════ */}
-          {activeTab === 'experiences' && (
+          {activeTab === 'experiences' && !isAnyOverlayOpen && (
             <>
               <div className="sd-page-header">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '1rem' }}>
@@ -2742,7 +2877,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           )}
 
           {/* ══════════ SYSTEM SETTINGS / PROFILE TAB ══════════ */}
-          {activeTab === 'profile' && (
+          {activeTab === 'profile' && !isAnyOverlayOpen && (
             <>
               <div style={{ padding: '0.5rem', width: '100%', maxWidth: '1100px', margin: '0 auto' }}>
                 <form onSubmit={handleProfileUpdate} style={{ width: '100%' }}>
@@ -2924,7 +3059,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           )}
 
           {/* ══════════ GRADES TAB ══════════ */}
-          {activeTab === 'grades' && (
+          {activeTab === 'grades' && !isAnyOverlayOpen && (
             <>
               <div className="sd-page-header">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '1rem' }}>
@@ -2990,13 +3125,125 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
 
 
+
+          {/* ════════════════════
+              CRUD MODAL OVERLAY - RENDERED AS INLINE PAGE
+              ════════════════════ */}
+          {showModal && (
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', minHeight: '600px', backgroundColor: 'transparent', zIndex: 900, display: 'flex', flexDirection: 'column', padding: '1.5rem' }}>
+              <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#0f766e', fontWeight: 600, fontSize: '0.9rem', padding: 0 }}
+                >
+                  ← Back to {activeTab === 'schools' ? 'Schools' : activeTab === 'school-admins' ? 'School Admins' : 'Content Creators'}
+                </button>
+              </div>
+              <div className="sd-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                    {modalType === 'add' ? 'Create' : 'Edit'} {activeTab.slice(0, -1).toUpperCase()}
+                  </h3>
+                </div>
+                {errorMsg && <div className="sd-alert sd-alert-error" style={{ marginBottom: '1rem' }}><FiX />{errorMsg}</div>}
+                <form className="sd-modal-form" onSubmit={handleFormSubmit}>
+
+                  {/* Schools Form */}
+                  {activeTab === 'schools' && (<>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">School Name *</label>
+                      <input className="sd-form-input" type="text" required value={schoolForm.school_name} onChange={e => {
+                        const name = e.target.value;
+                        const code = generateSchoolCode(name);
+                        setSchoolForm({ ...schoolForm, school_name: name, school_code: code });
+                      }} />
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">School ID / Slug *</label>
+                      <input className="sd-form-input" type="text" required placeholder="e.g. nirmala (no spaces/special chars)" disabled={modalType === 'edit'} value={schoolForm.school_id} onChange={e => setSchoolForm({ ...schoolForm, school_id: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })} />
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Unique School Code *</label>
+                      <input className="sd-form-input" type="text" required placeholder="Auto-generated" value={schoolForm.school_code} onChange={e => setSchoolForm({ ...schoolForm, school_code: e.target.value })} />
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Email Address *</label>
+                      <input className="sd-form-input" type="email" required value={schoolForm.email} onChange={e => setSchoolForm({ ...schoolForm, email: e.target.value })} />
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Phone Number</label>
+                      <input className="sd-form-input" type="text" value={schoolForm.phone} onChange={e => setSchoolForm({ ...schoolForm, phone: e.target.value })} />
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">City Scope</label>
+                      <input className="sd-form-input" type="text" value={schoolForm.city} onChange={e => setSchoolForm({ ...schoolForm, city: e.target.value })} />
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Address</label>
+                      <input className="sd-form-input" type="text" value={schoolForm.address} onChange={e => setSchoolForm({ ...schoolForm, address: e.target.value })} />
+                    </div>
+                    <label className="sd-checkbox-label">
+                      <input type="checkbox" checked={schoolForm.is_active} onChange={e => setSchoolForm({ ...schoolForm, is_active: e.target.checked })} />
+                      Active / Enable Tenant Scoping
+                    </label>
+                  </>)}
+
+                  {/* School Admins Form */}
+                  {activeTab === 'school-admins' && !isAnyOverlayOpen && (<>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Full Name *</label>
+                      <input className="sd-form-input" type="text" required value={schoolAdminForm.full_name} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, full_name: e.target.value })} />
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Username *</label>
+                      <input className="sd-form-input" type="text" required disabled={modalType === 'edit'} value={schoolAdminForm.username} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, username: e.target.value })} />
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Password {modalType === 'add' ? '*' : '(Leave blank to keep unchanged)'}</label>
+                      <input className="sd-form-input" type="password" required={modalType === 'add'} value={schoolAdminForm.password} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, password: e.target.value })} />
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Email Address *</label>
+                      <input className="sd-form-input" type="email" required value={schoolAdminForm.email} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, email: e.target.value })} />
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Select Role *</label>
+                      <select className="sd-form-input" required disabled={modalType === 'edit'} value={schoolAdminForm.role || 'school-admins'} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, role: e.target.value })}>
+                        <option value="school-admins">School Admin</option>
+                        <option value="teachers">Teacher</option>
+                        <option value="students">Student</option>
+                      </select>
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">School Scope *</label>
+                      <select className="sd-form-input" required value={schoolAdminForm.school} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, school: e.target.value })}>
+                        <option value="">Select School</option>
+                        {schools.map(s => <option key={s.school_id} value={s.school_id}>{s.school_name}</option>)}
+                      </select>
+                    </div>
+                    <label className="sd-checkbox-label">
+                      <input type="checkbox" checked={schoolAdminForm.is_active} onChange={e => setSchoolAdminForm({ ...schoolAdminForm, is_active: e.target.checked })} />
+                      Active User Account
+                    </label>
+                  </>)}
+
+                  <div className="sd-modal-footer" style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem', marginTop: '1.5rem', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                    <button type="button" className="sd-btn-cancel" onClick={() => setShowModal(false)}>Cancel</button>
+                    <button type="submit" className="sd-btn-save">Save Changes</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
         </div>{/* /sd-content */}
       </main>
 
       {/* ════════════════════
-          CRUD MODAL OVERLAY
+          CRUD MODAL OVERLAY - REMOVED
           ════════════════════ */}
-      {showModal && (
+      {false && (
         <div className="sd-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
           <div className="sd-modal">
             <div className="sd-modal-header">
@@ -3794,103 +4041,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         </div>
       )}
 
-      {/* ── School Details Modal ── */}
-      {showSchoolDetailModal && selectedSchoolDetail && (
-        <div className="sd-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) setShowSchoolDetailModal(false); }}>
-          <div className="sd-modal" style={{ maxWidth: 500 }}>
-            <div className="sd-modal-header">
-              <span className="sd-modal-title">School Details</span>
-              <button className="sd-modal-close" onClick={() => setShowSchoolDetailModal(false)}><FiX /></button>
-            </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid #f1f5f9' }}>
-              <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: '#dbeafe', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 'bold' }}>
-                {selectedSchoolDetail.school_name ? selectedSchoolDetail.school_name[0].toUpperCase() : 'S'}
-              </div>
-              <div>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>{selectedSchoolDetail.school_name}</h3>
-                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{selectedSchoolDetail.email || 'No email provided'}</span>
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', fontSize: '0.85rem', color: '#334155', marginBottom: '1.5rem' }}>
-              <div>
-                <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>School Code</span>
-                <strong style={{ fontSize: '0.9rem', color: '#0f172a', fontFamily: 'monospace' }}>{selectedSchoolDetail.school_code || '—'}</strong>
-              </div>
-              <div>
-                <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Location / Address</span>
-                <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.address || selectedSchoolDetail.city || '—'}</strong>
-              </div>
-              <div>
-                <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Phone</span>
-                <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.phone || '—'}</strong>
-              </div>
-              <div>
-                <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Active Status</span>
-                <span className={`sd-badge ${selectedSchoolDetail.is_active !== false ? 'sd-badge-active' : 'sd-badge-inactive'}`} style={{ display: 'inline-flex', marginTop: '4px' }}>
-                  {selectedSchoolDetail.is_active !== false ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-              <div>
-                <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Total Teachers</span>
-                <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{teachers.filter(t => t.school === selectedSchoolDetail.school_id || t.school_id === selectedSchoolDetail.school_id).length} Teachers</strong>
-              </div>
-            </div>
-
-            <div className="sd-modal-footer">
-              <button className="sd-btn-cancel" onClick={() => setShowSchoolDetailModal(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── School Admin Details Modal ── */}
-      {showSchoolAdminDetailModal && selectedSchoolAdminDetail && (
-        <div className="sd-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) setShowSchoolAdminDetailModal(false); }}>
-          <div className="sd-modal" style={{ maxWidth: 500 }}>
-            <div className="sd-modal-header">
-              <span className="sd-modal-title">School Admin Details</span>
-              <button className="sd-modal-close" onClick={() => setShowSchoolAdminDetailModal(false)}><FiX /></button>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid #f1f5f9' }}>
-              <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: '#e0e7ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 'bold' }}>
-                {selectedSchoolAdminDetail.full_name ? selectedSchoolAdminDetail.full_name[0].toUpperCase() : 'A'}
-              </div>
-              <div>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>{selectedSchoolAdminDetail.full_name}</h3>
-                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{selectedSchoolAdminDetail.email || 'No email provided'}</span>
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', fontSize: '0.85rem', color: '#334155', marginBottom: '1.5rem' }}>
-              <div>
-                <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Username</span>
-                <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolAdminDetail.username || '—'}</strong>
-              </div>
-              <div>
-                <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Role</span>
-                <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolAdminDetail.role || '—'}</strong>
-              </div>
-              <div>
-                <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>School Link</span>
-                <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolAdminDetail.school_name || '—'}</strong>
-              </div>
-              <div>
-                <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Active Status</span>
-                <span className={`sd-badge ${selectedSchoolAdminDetail.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`} style={{ display: 'inline-flex', marginTop: '4px' }}>
-                  {selectedSchoolAdminDetail.is_active ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-            </div>
-
-            <div className="sd-modal-footer">
-              <button className="sd-btn-cancel" onClick={() => setShowSchoolAdminDetailModal(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Help & Support Modal ── */}
       {showHelpModal && (
