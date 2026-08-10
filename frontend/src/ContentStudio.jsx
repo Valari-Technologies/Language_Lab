@@ -81,7 +81,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [activitySkillOptions, setActivitySkillOptions] = useState([]);
   const [recentExperiences, setRecentExperiences] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
-  const [notifications, setNotifications] = useState([]);
+  const [notifications, setNotifications] = useState([
+    { id: 1, title: "Lesson Published", message: "Lesson 'Present Continuous Tense - Speaking' published to Library successfully.", time: "15 mins ago", type: "success", read: false, is_read: false },
+    { id: 2, title: "AI Assistant Ready", message: "AI generated 8 interactive quiz items for 'Reading Passage - Chapter 3'.", time: "1 hour ago", type: "info", read: false, is_read: false },
+    { id: 3, title: "Validation Warning", message: "Draft Lesson 'Audio Listening 1' is missing a media attachment in Screen 2.", time: "3 hours ago", type: "warning", read: true, is_read: true },
+    { id: 4, title: "Platform Update", message: "Lesson Builder v2.4 features and new speech blocks are now live.", time: "2 days ago", type: "system", read: true, is_read: true },
+  ]);
 
   const [publishStatus, setPublishStatus] = useState(null);
   const [publishHistory, setPublishHistory] = useState([]);
@@ -4215,13 +4220,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>No new notifications.</div>
                       ) : (
                         notifications.map(n => {
-                          const text = n.text || n.message || 'Notification';
+                          const title = n.title || 'Notification';
+                          const message = n.message || n.text || '';
                           const time = n.time || (n.created_at ? new Date(n.created_at).toLocaleTimeString() : 'Recently');
                           const read = n.read !== undefined ? n.read : n.is_read;
                           return (
                             <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: read ? 'transparent' : '#f0fdf4', borderLeft: read ? 'none' : '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', textAlign: 'left' }}>
                               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                <span style={{ fontSize: '0.8rem', color: '#334155' }}>{text}</span>
+                                <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: read ? 600 : 700 }}>{title}</span>
+                                <span style={{ fontSize: '0.75rem', color: '#475569' }}>{message}</span>
                                 <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{time}</span>
                               </div>
                               <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); setNotifications(notifications.filter(item => item.id !== n.id)); }} title="Delete">
@@ -9030,9 +9037,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {[
-                { icon: '📧', title: 'Email Support', desc: 'support@languagelab.edu', action: 'mailto:support@languagelab.edu' },
-                { icon: '📚', title: 'Documentation', desc: 'Browse our knowledge base and guides', action: '#' },
-                { icon: '💬', title: 'Live Chat', desc: 'Chat with our support team', action: '#' },
+                { icon: '🤖', title: 'AI Assistant Tutorial', desc: 'How to generate Quizzes, Dialogues, and Fill-in-the-Blanks with AI prompts.', action: '#' },
+                { icon: '🎙️', title: 'Media & Speech Block Guide', desc: 'Recommended audio/video specs and voice recorder setup.', action: '#' },
+                { icon: '🧩', title: 'Adaptive Remedial Flow', desc: 'Setting up foundation sub-questions for student incorrect attempts.', action: '#' },
+                { icon: '⌨️', title: 'Keyboard Shortcuts', desc: 'Ctrl+S (Save), Ctrl+Z (Undo), Space (Preview Mode).', action: '#' },
               ].map((item, idx) => (
                 <a key={idx} href={item.action} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', textDecoration: 'none', color: '#334155', transition: 'background 0.15s' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
@@ -9096,13 +9104,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     </div>
                   ) : (
                     notifications.map(n => {
-                      const text = n.text || n.message || 'Notification';
+                      const title = n.title || 'Notification';
+                      const message = n.message || n.text || '';
                       const time = n.time || (n.created_at ? new Date(n.created_at).toLocaleDateString() : 'Recently');
                       const read = n.read !== undefined ? n.read : n.is_read;
                       return (
                         <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: read ? '#f8fafc' : '#f0fdf4', border: `1px solid ${read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative' }}>
                           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: read ? 400 : 600 }}>{text}</span>
+                            <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: read ? 600 : 700 }}>{title}</span>
+                            <span style={{ fontSize: '0.8rem', color: '#475569' }}>{message}</span>
                             <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{time}</span>
                           </div>
                           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>

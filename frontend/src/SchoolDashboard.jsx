@@ -360,9 +360,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [pwModalError, setPwModalError] = useState('');
   const [currentTime, setCurrentTime]             = useState(new Date());
   const [notifications, setNotifications]         = useState([
-    { id: 1, text: 'New teacher registered in your school.', time: '2 min ago', read: false },
-    { id: 2, text: 'Class assignment updated successfully.',  time: '1 hr ago',  read: false },
-    { id: 3, text: 'Student report is ready for review.',    time: '3 hrs ago',  read: true  },
+    { id: 1, title: "Teacher Activity Alert", message: "Mr. Ramesh assigned 2 new Speaking lessons to Grade 8.", time: "45 mins ago", type: "info", read: false },
+    { id: 2, title: "Lab Sync Health", message: "Lab 2 Server successfully synced 120 student sessions to cloud.", time: "3 hours ago", type: "success", read: false },
+    { id: 3, title: "Student Enrolment", message: "12 new students enrolled in Grade 5-B roster.", time: "1 day ago", type: "info", read: true },
+    { id: 4, title: "Library Update", message: "15 new English Lab modules added by Central Curriculum Team.", time: "3 days ago", type: "system", read: true },
   ]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
@@ -1345,7 +1346,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       notifications.map(n => (
                         <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: n.read ? 'transparent' : '#f0fdf4', borderLeft: n.read ? 'none' : '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', textAlign: 'left' }}>
                           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <span style={{ fontSize: '0.8rem', color: '#334155' }}>{n.text || n.message}</span>
+                            <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
+                            <span style={{ fontSize: '0.75rem', color: '#475569' }}>{n.message || n.text}</span>
                             <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
                           </div>
                           <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); setNotifications(notifications.filter(item => item.id !== n.id)); }} title="Delete">
@@ -3968,9 +3970,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {[
-                { icon: '📧', title: 'Email Support', desc: 'support@languagelab.edu', action: 'mailto:support@languagelab.edu' },
-                { icon: '📚', title: 'Documentation', desc: 'Browse our knowledge base and guides', action: '#' },
-                { icon: '💬', title: 'Live Chat', desc: 'Chat with our support team', action: '#' },
+                { icon: '👥', title: 'Teacher & Roster Management', desc: 'Adding teachers, creating class sections, and managing student rosters.', action: '#' },
+                { icon: '⚙️', title: 'Lab Hardware & Server Setup', desc: 'Configuring local offline servers and tablet Wi-Fi sync.', action: '#' },
+                { icon: '📊', title: 'Usage & Adoption Analytics', desc: 'Tracking weekly student practice hours and teacher platform adoption.', action: '#' },
+                { icon: '🎫', title: 'Raise Admin Ticket', desc: 'Contacting central technical support for hardware/network issues.', action: '#' },
               ].map((item, idx) => (
                 <a key={idx} href={item.action} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', textDecoration: 'none', color: '#334155', transition: 'background 0.15s' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
@@ -4037,7 +4040,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     notifications.map(n => (
                       <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: n.read ? '#f8fafc' : '#f0fdf4', border: `1px solid ${n.read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative' }}>
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: n.read ? 400 : 600 }}>{n.text || n.message}</span>
+                          <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
+                          <span style={{ fontSize: '0.8rem', color: '#475569' }}>{n.message || n.text}</span>
                           <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
                         </div>
                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>

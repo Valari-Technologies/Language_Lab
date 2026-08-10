@@ -311,9 +311,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [pwModalError, setPwModalError] = useState('');
   const [currentTime, setCurrentTime]             = useState(new Date());
   const [notifications, setNotifications]         = useState([
-    { id: 1, text: 'New student enrolled in your class.',     time: '5 min ago', read: false },
-    { id: 2, text: 'Lesson plan approved by school admin.',   time: '2 hrs ago', read: false },
-    { id: 3, text: 'Student completed a lesson today.',  time: '4 hrs ago', read: true  },
+    { id: 1, title: "Class Activity Submission", message: "35 students from Grade 6-A completed 'Reading Chapter 2 - Quiz'.", time: "10 mins ago", type: "success", read: false },
+    { id: 2, title: "Remedial Alert", message: "5 students scored low in 'Grammar - Past Perfect Tense'. View remedial report.", time: "1 hour ago", type: "warning", read: false },
+    { id: 3, title: "Offline Sync Health", message: "Classroom Tablet Station 3 successfully synced with local server.", time: "4 hours ago", type: "info", read: true },
+    { id: 4, title: "New Lesson Dispatched", message: "New Lesson 'Pronunciation Practice' assigned to your class.", time: "Yesterday", type: "info", read: true },
   ]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
@@ -1285,7 +1286,8 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       notifications.map(n => (
                         <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: n.read ? 'transparent' : '#f0fdf4', borderLeft: n.read ? 'none' : '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', textAlign: 'left' }}>
                           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <span style={{ fontSize: '0.8rem', color: '#334155' }}>{n.text || n.message}</span>
+                            <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
+                            <span style={{ fontSize: '0.75rem', color: '#475569' }}>{n.message || n.text}</span>
                             <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
                           </div>
                           <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); setNotifications(notifications.filter(item => item.id !== n.id)); }} title="Delete">
@@ -2691,9 +2693,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {[
-                { icon: '📧', title: 'Email Support', desc: 'support@languagelab.edu', action: 'mailto:support@languagelab.edu' },
-                { icon: '📚', title: 'Documentation', desc: 'Browse our knowledge base and guides', action: '#' },
-                { icon: '💬', title: 'Live Chat', desc: 'Chat with our support team', action: '#' },
+                { icon: '📝', title: 'Assigning Lessons', desc: 'How to dispatch lessons and quizzes to specific classes or student groups.', action: '#' },
+                { icon: '💡', title: 'Understanding Remedial Insights', desc: 'Identifying struggling students and reviewing AI foundation hints.', action: '#' },
+                { icon: '📡', title: 'Offline Classroom Sync', desc: 'Connecting classroom tablets to local offline LMS sync station.', action: '#' },
+                { icon: '💁', title: 'Teacher Support Desk', desc: 'Raise an issue regarding student progress logs or missing lesson packs.', action: '#' },
               ].map((item, idx) => (
                 <a key={idx} href={item.action} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', textDecoration: 'none', color: '#334155' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
@@ -2760,7 +2763,8 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     notifications.map(n => (
                       <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: n.read ? '#f8fafc' : '#f0fdf4', border: `1px solid ${n.read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative' }}>
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: n.read ? 400 : 600 }}>{n.text || n.message}</span>
+                          <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
+                          <span style={{ fontSize: '0.8rem', color: '#475569' }}>{n.message || n.text}</span>
                           <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
                         </div>
                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>

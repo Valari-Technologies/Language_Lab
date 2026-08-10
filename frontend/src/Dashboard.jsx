@@ -469,7 +469,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [schoolAdmins, setSchoolAdmins] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [students, setStudents] = useState([]);
-  const [dashboardStats, setDashboardStats] = useState({ total_schools: 0, total_school_admins: 0, total_publish_contents: 0, total_grades: 0 });
+  const [dashboardStats, setDashboardStats] = useState({ total_schools: 0, total_school_admins: 0, total_publish_contents: 0, total_grades: 0, total_experiences: 0, draft_experiences: 0, published_experiences: 0 });
   const [previewExperience, setPreviewExperience] = useState(null);
 
   // Interactive widget states for Super Admin preview
@@ -492,11 +492,32 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [notifications, setNotifications] = useState([
-    { id: 1, text: 'System backup completed successfully.', time: '10 mins ago', read: false },
-    { id: 2, text: 'New school registration request received.', time: '1 hour ago', read: false },
-    { id: 3, text: 'Diana Prince completed "Speaking - Lesson 1".', time: '2 hours ago', read: true },
-    { id: 4, text: 'Teacher accounts synchronized with database.', time: '1 day ago', read: true },
+    { id: 1, title: "School Onboarding Request", message: "New school onboarding request received from Apex International Academy.", time: "30 mins ago", type: "info", read: false },
+    { id: 2, title: "Sync Ingestion Completed", message: "SCAD World School completed offline data ingestion (142 student logs synced).", time: "2 hours ago", type: "success", read: false },
+    { id: 3, title: "System Sync Warning", message: "Apex International Academy reported offline telemetry synchronization timeout.", time: "1 day ago", type: "warning", read: true },
+    { id: 4, title: "System Maintenance", message: "Database backup & system optimization completed successfully.", time: "Yesterday", type: "system", read: true },
   ]);
+  const [recentActivitiesList, setRecentActivitiesList] = useState([
+    { id: 1, icon: <FiGrid />, color: '#3b82f6', bg: '#eff6ff', desc: "School \"Greenfield Academy\" registered", meta: 'Super Admin • 10 mins ago', tag: 'School', tagBg: '#dcfce7', tagColor: '#15803d' },
+    { id: 2, icon: <FiCheckCircle />, color: '#10b981', bg: '#e0fdf4', desc: "Lesson \"The Lost Picnic\" approved by Super Admin", meta: 'Super Admin • 1 hour ago', tag: 'Approval', tagBg: '#e0f2fe', tagColor: '#0369a1' },
+    { id: 3, icon: <FiUser />, color: '#8b5cf6', bg: '#f5f3ff', desc: "Super Admin profile settings updated", meta: 'Super Admin • 3 hours ago', tag: 'Profile', tagBg: '#f3e8ff', tagColor: '#6b21a8' },
+    { id: 4, icon: <FiXCircle />, color: '#ef4444', bg: '#fee2e2', desc: "Lesson \"Audio Listening 1\" rejected by Super Admin", meta: 'Super Admin • 5 hours ago', tag: 'Rejection', tagBg: '#fecaca', tagColor: '#b91c1c' },
+  ]);
+
+  const addRecentActivity = (desc, tag, tagBg, tagColor, icon, color, bg) => {
+    const newActivity = {
+      id: Date.now(),
+      icon: icon || <FiGrid />,
+      color: color || '#3b82f6',
+      bg: bg || '#eff6ff',
+      desc,
+      meta: `Super Admin • Just now`,
+      tag,
+      tagBg: tagBg || '#dcfce7',
+      tagColor: tagColor || '#15803d'
+    };
+    setRecentActivitiesList(prev => [newActivity, ...prev.slice(0, 9)]);
+  };
   const [subPage, setSubPage] = useState('overview');
   const [schoolSubTab, setSchoolSubTab] = useState('schools-list');
   const [isAddingSchool, setIsAddingSchool] = useState(false);
@@ -548,6 +569,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setUser(updatedUser);
         if (onUpdateUser) onUpdateUser(updatedUser);
         showFeedback('Profile picture updated successfully!', null);
+        addRecentActivity("Profile picture updated", 'Profile', '#f3e8ff', '#6b21a8', <FiUser />, '#8b5cf6', '#f5f3ff');
       } else {
         const text = await res.text();
         let errMsg = 'Failed to upload profile picture.';
@@ -587,6 +609,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setUser(updatedUser);
         if (onUpdateUser) onUpdateUser(updatedUser);
         showFeedback('Profile picture removed successfully!', null);
+        addRecentActivity("Profile picture removed", 'Profile', '#fee2e2', '#b91c1c', <FiUser />, '#ef4444', '#fee2e2');
       } else {
         const d = await res.json().catch(() => ({}));
         showFeedback(null, d.error || 'Failed to remove profile picture.');
@@ -828,6 +851,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       });
       if (res.ok) {
         showFeedback('Experience approved and package generated successfully.');
+        const exp = submittedExperiences.find(e => e.id === id);
+        const title = exp ? exp.title : 'Lesson';
+        addRecentActivity(`Lesson "${title}" approved by Super Admin`, 'Approval', '#e0f2fe', '#0369a1', <FiCheckCircle />, '#10b981', '#e0fdf4');
         loadSuperAdminExperiences();
         loadAllData();
       } else {
@@ -850,6 +876,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       });
       if (res.ok) {
         showFeedback('Experience rejected successfully.');
+        const exp = submittedExperiences.find(e => e.id === rejectingId);
+        const title = exp ? exp.title : 'Lesson';
+        addRecentActivity(`Lesson "${title}" rejected by Super Admin`, 'Rejection', '#fecaca', '#b91c1c', <FiX />, '#ef4444', '#fee2e2');
         setShowRejectModal(false);
         setRejectingId(null);
         setRejectRemark('');
@@ -1125,7 +1154,15 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       if (res.ok) {
         showFeedback(resData.message || 'Operation successful', null);
         setShowModal(false);
-        if (targetTab === 'schools') { await loadSchools(); await loadDashboardStats(); }
+        if (targetTab === 'schools') {
+          if (modalType === 'add') {
+            addRecentActivity(`School "${schoolForm.school_name}" registered`, 'School', '#dcfce7', '#15803d', <FiGrid />, '#3b82f6', '#eff6ff');
+          } else {
+            addRecentActivity(`School "${schoolForm.school_name}" details updated`, 'School', '#dcfce7', '#15803d', <FiEdit2 />, '#3b82f6', '#eff6ff');
+          }
+          await loadSchools();
+          await loadDashboardStats();
+        }
         else if (targetTab === 'publish-contents') { await loadPublishContents(); await loadDashboardStats(); }
         else if (targetTab === 'grades') await loadGrades();
         else if (targetTab === 'experiences') await loadExperiences();
@@ -1224,7 +1261,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       if (res.ok) {
         showFeedback(resData.message || 'Deleted successfully', null);
         setDeleteConfirm({ show: false, id: null, type: '' });
-        if (targetTab === 'schools') { await loadSchools(); await loadDashboardStats(); }
+        if (targetTab === 'schools') {
+          const sch = schools.find(s => s.school_id === id || s.id === id);
+          const name = sch ? sch.school_name : 'School';
+          addRecentActivity(`School "${name}" deleted`, 'School', '#fee2e2', '#dc2626', <FiTrash2 />, '#ef4444', '#fee2e2');
+          await loadSchools();
+          await loadDashboardStats();
+        }
         else if (targetTab === 'publish-contents') { await loadPublishContents(); await loadDashboardStats(); }
         else if (targetTab === 'grades') await loadGrades();
         else if (targetTab === 'experiences') await loadExperiences();
@@ -1269,6 +1312,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
       if (onUpdateUser) onUpdateUser(updatedUser);
       showFeedback('Profile updated successfully', null);
+      addRecentActivity("Super Admin profile settings updated", 'Profile', '#f3e8ff', '#6b21a8', <FiUser />, '#8b5cf6', '#f5f3ff');
     } catch (err) {
       console.error('Profile update error:', err);
       setErrorMsg('Failed to update profile.');
@@ -1352,6 +1396,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
       if (aRes.ok) {
         showFeedback(`School and School Admin created successfully! Login credentials have been sent to ${newSchoolForm.email}.`, null);
+        addRecentActivity(`School "${newSchoolForm.school_name}" registered`, 'School', '#dcfce7', '#15803d', <FiGrid />, '#3b82f6', '#eff6ff');
         setIsAddingSchool(false);
         setNewSchoolForm({
           school_name: '', phone: '', address: '', city: '', state: '', pincode: '',
@@ -1502,9 +1547,10 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           <button className={`sd-nav-item${activeTab === 'experiences' ? ' active' : ''}`} onClick={() => goTo('experiences')}>
             <FiFileText /><span>Manage Lessons</span>
           </button>
-          <button className={`sd-nav-item${activeTab === 'subscriptions' ? ' active' : ''}`} onClick={() => goTo('subscriptions')}>
+          {/* Subscriptions tab temporarily removed */}
+          {/* <button className={`sd-nav-item${activeTab === 'subscriptions' ? ' active' : ''}`} onClick={() => goTo('subscriptions')}>
             <FiCheckCircle /><span>Subscriptions</span>
-          </button>
+          </button> */}
           <button className={`sd-nav-item${activeTab === 'profile' ? ' active' : ''}`} onClick={() => goTo('profile')}>
             <FiUser /><span>Profile Settings</span>
           </button>
@@ -1687,7 +1733,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       notifications.map(n => (
                         <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: n.read ? 'transparent' : '#f0fdf4', borderLeft: n.read ? 'none' : '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', textAlign: 'left' }}>
                           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <span style={{ fontSize: '0.8rem', color: '#334155' }}>{n.text || n.message}</span>
+                            <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
+                            <span style={{ fontSize: '0.75rem', color: '#475569' }}>{n.message || n.text}</span>
                             <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
                           </div>
                           <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); setNotifications(notifications.filter(item => item.id !== n.id)); }} title="Delete">
@@ -1774,46 +1821,41 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 </div>
               </div>
 
-              {/* 3 Stat Cards */}
-              <div className="sd-stat-row sd-stat-row--3col">
+              {/* 4 Stat Cards */}
+              <div className="sd-stat-row" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
                 {[
                   {
                     label: 'Total Schools',
-                    value: dashboardStats.total_schools || 1,
+                    value: dashboardStats.total_schools || 0,
                     color: '#4f46e5',
                     bg: '#eef2ff',
-                    trendBg: '#e0e7ff',
-                    trendColor: '#3730a3',
                     icon: (
                       <svg stroke="currentColor" fill="none" strokeWidth="2.2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="1.1em" width="1.1em" xmlns="http://www.w3.org/2000/svg">
                         <path d="M4 22V4c0-.5.2-1 .6-1.4C5 2.2 5.5 2 6 2h12c.5 0 1 .2 1.4.6.4.4.6.9.6 1.4v18" />
                         <path d="M10 6h4M10 10h4M10 14h4M10 18h4" />
                       </svg>
                     ),
-                    trend: '↑ 8% this month',
-                    chart: <MiniLineChart color="#4f46e5" fillGradId="schGrad" points={[10, 15, 12, 18, 30]} />
                   },
                   {
-                    label: 'Total Students',
-                    value: '0',
-                    color: '#0d9488',
-                    bg: '#f0fdfa',
-                    trendBg: '#ccfbf1',
-                    trendColor: '#0f766e',
-                    icon: <FiUsers />,
-                    trend: '↑ 0% this month',
-                    chart: <MiniBarChart color="#0d9488" values={[0, 0, 0, 0, 0, 0]} />
+                    label: 'Total Lessons',
+                    value: submittedExperiences.length,
+                    color: '#0ea5e9',
+                    bg: '#e0f2fe',
+                    icon: <FiFileText />,
                   },
                   {
-                    label: 'Active Subscriptions',
-                    value: '0',
-                    color: '#8b5cf6',
-                    bg: '#f5f3ff',
-                    trendBg: '#ede9fe',
-                    trendColor: '#6d28d9',
-                    icon: <FiUser />,
-                    trend: '↑ 0% this month',
-                    chart: <MiniLineChart color="#8b5cf6" fillGradId="subGrad" points={[0, 0, 0, 0, 0]} />
+                    label: 'Draft Lessons',
+                    value: submittedExperiences.filter(e => e.status?.toUpperCase() === 'DRAFT').length,
+                    color: '#f59e0b',
+                    bg: '#fffbeb',
+                    icon: <FiEdit2 />,
+                  },
+                  {
+                    label: 'Approved Lessons',
+                    value: submittedExperiences.filter(e => e.status?.toUpperCase() === 'APPROVED').length,
+                    color: '#10b981',
+                    bg: '#e0fdf4',
+                    icon: <FiCheckCircle />,
                   },
                 ].map((s, i) => (
                   <div className="sd-stat-card sd-stat-card--horizontal" key={i} style={{ alignItems: 'center' }}>
@@ -1829,7 +1871,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               </div>
 
               {/* Middle Row Charts */}
-              <div className="sd-bottom-grid">
+              <div className="sd-bottom-grid" style={{ gridTemplateColumns: '1fr' }}>
                 {/* Recent Activity */}
                 <div className="sd-card">
                   <div className="sd-card-header">
@@ -1837,12 +1879,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     <button className="sd-view-all">View All</button>
                   </div>
                   <div className="sd-activity-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    {[
-                      { id: 1, icon: <FiGrid />, color: '#3b82f6', bg: '#eff6ff', desc: "New school \"Greenfield Academy\" registered", meta: 'Super Admin • 10 mins ago', tag: 'New School', tagBg: '#dcfce7', tagColor: '#15803d' },
-                      { id: 2, icon: <FiActivity />, color: '#0d9488', bg: '#f0fdfa', desc: "Subscription renewed for \"Bright Future School\"", meta: 'System • 1 hour ago', tag: 'Subscription', tagBg: '#e0f2fe', tagColor: '#0369a1' },
-                      { id: 3, icon: <FiUsers />, color: '#8b5cf6', bg: '#f5f3ff', desc: "12 new students added to \"Silver Oak High\"", meta: 'Admin User • 3 hours ago', tag: 'Students', tagBg: '#f3e8ff', tagColor: '#6b21a8' },
-                      { id: 4, icon: <FiFileText />, color: '#f59e0b', bg: '#fffbeb', desc: "Monthly report generated", meta: 'System • 5 hours ago', tag: 'Report', tagBg: '#fef3c7', tagColor: '#b45309' },
-                    ].map(act => (
+                    {recentActivitiesList.map(act => (
                       <div className="sd-activity-item" key={act.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 0', borderBottom: '1px solid #f1f5f9' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: 0 }}>
                           <div className="sd-activity-icon-container" style={{ width: 36, height: 36, borderRadius: '50%', background: act.bg, color: act.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1861,41 +1898,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                   </div>
                 </div>
 
-                {/* Subscription Status Donut */}
+                {/* Subscription Status Donut temporarily removed */}
+                {/* 
                 <div className="sd-card sd-card--subscription-donut" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <div>
-                    <div className="sd-card-header" style={{ marginBottom: '1rem' }}>
-                      <div className="sd-card-title">Subscription Status</div>
-                    </div>
-                    <div className="sd-completion-grid">
-                      <div className="sd-donut-wrap">
-                        <MultiDonutChart total={124} activeCount={78} expiringCount={28} expiredCount={18} />
-                      </div>
-                      <div className="sd-legend">
-                        {[
-                          { label: 'Active', color: '#006aa6', pct: '78 (62.9%)' },
-                          { label: 'Expiring Soon', color: '#0ea5e9', pct: '28 (22.6%)' },
-                          { label: 'Expired', color: '#38bdf8', pct: '18 (14.5%)' },
-                        ].map(l => (
-                          <div className="sd-legend-row" key={l.label}>
-                            <div className="sd-legend-dot-label">
-                              <div className="sd-legend-dot" style={{ background: l.color }} />
-                              {l.label}
-                            </div>
-                            <span className="sd-legend-pct">{l.pct}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* View All Subscriptions Link */}
-                  <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'center' }}>
-                    <button className="sd-view-all" onClick={() => goTo('subscriptions')} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#2563eb', fontWeight: 600, fontSize: '0.82rem', background: 'none', border: 'none', cursor: 'pointer' }}>
-                      View all subscriptions <span style={{ fontSize: '1rem' }}>→</span>
-                    </button>
-                  </div>
+                  ...
                 </div>
+                */}
               </div>
             </>
           )}
@@ -3461,6 +3469,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 try { d = await res.json(); } catch { d = {}; }
                 if (res.ok) {
                   showFeedback('Password changed successfully!', null);
+                  addRecentActivity("Super Admin security settings updated", 'Profile', '#f3e8ff', '#6b21a8', <FiLock />, '#8b5cf6', '#f5f3ff');
                   setPwForm({ current_password: '', new_password: '', confirm_password: '' });
                   setShowPwModal(false);
                 } else {
@@ -4058,9 +4067,10 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {[
-                { icon: '📧', title: 'Email Support', desc: 'support@languagelab.edu', action: 'mailto:support@languagelab.edu' },
-                { icon: '📚', title: 'Documentation', desc: 'Browse our knowledge base and guides', action: '#' },
-                { icon: '💬', title: 'Live Chat', desc: 'Chat with our support team', action: '#' },
+                { icon: '🏫', title: 'School Management Guide', desc: 'How to onboard new schools, issue license keys, and manage portal roles.', action: '#' },
+                { icon: '🔄', title: 'Offline Sync Troubleshooting', desc: 'Resolving telemetry ingestion conflicts from Electron LMS apps.', action: '#' },
+                { icon: '🛡️', title: 'System Audit & Security', desc: 'Managing global admin permissions and monitoring API health.', action: '#' },
+                { icon: '📞', title: 'Priority Support Contact', desc: 'Email: superadmin-support@lingualab.edu | Emergency Line: +91 98765 43210', action: 'mailto:superadmin-support@lingualab.edu' },
               ].map((item, idx) => (
                 <a key={idx} href={item.action} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', textDecoration: 'none', color: '#334155', transition: 'background 0.15s' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
@@ -4391,7 +4401,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     notifications.map(n => (
                       <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: n.read ? '#f8fafc' : '#f0fdf4', border: `1px solid ${n.read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative' }}>
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: n.read ? 400 : 600 }}>{n.text || n.message}</span>
+                          <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
+                          <span style={{ fontSize: '0.8rem', color: '#475569' }}>{n.message || n.text}</span>
                           <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
                         </div>
                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>

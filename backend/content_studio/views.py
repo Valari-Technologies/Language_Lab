@@ -640,6 +640,36 @@ class DashboardNotificationsAPIView(APIView):
 
     def get(self, request):
         notifications = Notification.objects.filter(user=request.user).order_by("-created_at")[:10]
+        if not notifications.exists():
+            Notification.objects.create(
+                user=request.user,
+                title="Lesson Published",
+                message="Lesson 'Present Continuous Tense - Speaking' published to Library successfully.",
+                notification_type=Notification.NotificationType.INFO,
+                is_read=False
+            )
+            Notification.objects.create(
+                user=request.user,
+                title="AI Assistant Ready",
+                message="AI generated 8 interactive quiz items for 'Reading Passage - Chapter 3'.",
+                notification_type=Notification.NotificationType.INFO,
+                is_read=False
+            )
+            Notification.objects.create(
+                user=request.user,
+                title="Validation Warning",
+                message="Draft Lesson 'Audio Listening 1' is missing a media attachment in Screen 2.",
+                notification_type=Notification.NotificationType.WARNING,
+                is_read=True
+            )
+            Notification.objects.create(
+                user=request.user,
+                title="Platform Update",
+                message="Lesson Builder v2.4 features and new speech blocks are now live.",
+                notification_type=Notification.NotificationType.INFO,
+                is_read=True
+            )
+            notifications = Notification.objects.filter(user=request.user).order_by("-created_at")[:10]
         serializer = NotificationSerializer(notifications, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
