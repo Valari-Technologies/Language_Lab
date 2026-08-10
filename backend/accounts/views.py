@@ -118,6 +118,7 @@ class LoginAPIView(APIView):
             {
                 "message": "Login successful",
                 "access": str(refresh.access_token),
+                "refresh": str(refresh),
                 "user": user_payload,
             },
             status=status.HTTP_200_OK

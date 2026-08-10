@@ -265,26 +265,82 @@ class LMSIngestReportsAPIView(APIView):
         sent from offline/online LMS Electron clients.
         """
         try:
+            from django.utils import timezone
             data = request.data
             logger.info(f"[LMS Ingest] Received report payload: {data}")
 
-            # Extract report details safely
-            student_id = data.get('student_id') or data.get('roll_number') or data.get('studentRollNumber')
-            package_id = data.get('package_id') or data.get('experience_id') or data.get('scenarioId')
-            progress = data.get('progress') or data.get('score')
+            student_roll = data.get('studentRollNumber')
+            student = Student.objects.filter(roll_no=student_roll).first()
+            if not student:
+                student = Student.objects.filter(user__username=student_roll).first()
+            if not student:
+                return Response({"error": f"Student not found with roll number: {student_roll}"}, status=status.HTTP_404_NOT_FOUND)
 
-            # Optional: Save payload into database if model exists
-            # Example:
-            # StudentReport.objects.create(
-            #     student_identifier=student_id,
-            #     package_identifier=package_id,
-            #     raw_data=data
-            # )
+            reports = data.get('reports', [])
+            processed_keys = []
+
+            for r in reports:
+                ikey = r.get('idempotencyKey')
+                if not ikey:
+                    continue
+                scenario_id = str(r.get('scenarioId'))
+                activity_id = r.get('activityId')
+                screen_id = r.get('screenId')
+                score = r.get('score', 0)
+                max_score = r.get('maxScore', 10)
+                time_spent = r.get('timeSpentSeconds', 0)
+                completed = r.get('completed', False)
+                answers = r.get('answers', {})
+
+                if SyncLog.objects.filter(idempotency_key=ikey).exists():
+                    processed_keys.append(ikey)
+                    continue
+
+                with transaction.atomic():
+                    SyncLog.objects.create(
+                        idempotency_key=ikey,
+                        client_device_id=data.get('deviceId', ''),
+                        sync_type='INGEST_REPORT',
+                        status='SUCCESS'
+                    )
+
+                    sp, created = StudentProgress.objects.get_or_create(
+                        student=student,
+                        scenario_id=scenario_id,
+                        defaults={
+                            'completed': completed,
+                            'total_time_spent': time_spent,
+                            'synced_at': timezone.now()
+                        }
+                    )
+                    if not created:
+                        sp.completed = completed
+                        sp.total_time_spent = time_spent
+                        sp.save()
+
+                    QuizAttempt.objects.create(
+                        student=student,
+                        scenario_id=scenario_id,
+                        screen_id=screen_id,
+                        score=score,
+                        max_score=max_score,
+                        answers=answers
+                    )
+
+                    ActivityReport.objects.create(
+                        student=student,
+                        scenario_id=scenario_id,
+                        activity_id=activity_id,
+                        completed=completed
+                    )
+
+                processed_keys.append(ikey)
 
             return Response({
                 "status": "success",
                 "message": "Report ingested successfully",
-                "received_student": student_id
+                "processedKeys": processed_keys,
+                "received_student": student_roll
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -367,7 +423,7 @@ class LMSPullUpdatesAPIView(APIView):
             })
 
         return Response(
-            {"status": "success", "packages": packages},
+            {"status": "success", "packages": packages, "updates": packages},
             status=status.HTTP_200_OK,
         )
 

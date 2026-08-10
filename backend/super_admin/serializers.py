@@ -1,9 +1,23 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from .models import Grade, School, SchoolAdminProfile, PublishContent
+from .models import Grade, School, SchoolAdminProfile, PublishContent, License, LmsServer
 
 User = get_user_model()
+
+
+class LmsServerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LmsServer
+        fields = '__all__'
+
+
+class LicenseSerializer(serializers.ModelSerializer):
+    lms_servers = LmsServerSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = License
+        fields = '__all__'
 
 
 class GradeSerializer(serializers.ModelSerializer):
@@ -19,6 +33,9 @@ class GradeDetailSerializer(serializers.ModelSerializer):
 
 
 class SchoolSerializer(serializers.ModelSerializer):
+    license = LicenseSerializer(source='school_license', read_only=True)
+    lms_servers = LmsServerSerializer(many=True, read_only=True)
+
     class Meta:
         model = School
         fields = '__all__'

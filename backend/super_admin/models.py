@@ -40,15 +40,63 @@ class Grade(models.Model):
         return self.grade_name
 
 
+class License(models.Model):
+    class Status(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        SUSPENDED = "SUSPENDED", "Suspended"
+        EXPIRED = "EXPIRED", "Expired"
+        REVOKED = "REVOKED", "Revoked"
+
+    licenseId = models.CharField(max_length=100, unique=True, primary_key=True)
+    licenseKey = models.CharField(max_length=100, unique=True)
+    school = models.OneToOneField('School', on_delete=models.CASCADE, related_name='school_license')
+    maxLmsServers = models.IntegerField(default=2)
+    concurrentUsersPerServer = models.IntegerField(default=40)
+    issueDate = models.DateField(auto_now_add=True)
+    expiryDate = models.DateField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+
+    class Meta:
+        db_table = "cms_license"
+
+    def __str__(self):
+        return f"{self.licenseId} - {self.status}"
+
+
+class LmsServer(models.Model):
+    class Status(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        DEACTIVATED = "DEACTIVATED", "Deactivated"
+
+    installationId = models.CharField(max_length=100, unique=True, primary_key=True)
+    serverName = models.CharField(max_length=150)
+    school = models.ForeignKey('School', on_delete=models.CASCADE, related_name='lms_servers')
+    license = models.ForeignKey('License', on_delete=models.CASCADE, related_name='lms_servers')
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    activationDate = models.DateTimeField(auto_now_add=True)
+    lastSyncTime = models.DateTimeField(null=True, blank=True)
+    currentCapacity = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = "cms_lmsserver"
+
+    def __str__(self):
+        return f"{self.serverName} ({self.installationId})"
+
+
 class School(models.Model):
     school_id = models.AutoField(primary_key=True)
+    schoolId = models.CharField(max_length=100, unique=True, null=True, blank=True)
     school_name = models.CharField(max_length=150)
     address = models.CharField(max_length=255)
     phone = models.CharField(max_length=20)
     email = models.CharField(max_length=100)
+    contactEmail = models.EmailField(null=True, blank=True)
     logo = models.CharField(max_length=255, null=True, blank=True)
     school_code = models.CharField(max_length=50, null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    schoolAdminId = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='schools_administered')
+    licenseId = models.ForeignKey('License', on_delete=models.SET_NULL, null=True, blank=True, related_name='schools_linked')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

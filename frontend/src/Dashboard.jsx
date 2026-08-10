@@ -484,8 +484,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [showSchoolDetailModal, setShowSchoolDetailModal] = useState(false);
   const [selectedSchoolAdminDetail, setSelectedSchoolAdminDetail] = useState(null);
   const [showSchoolAdminDetailModal, setShowSchoolAdminDetailModal] = useState(false);
+  const [selectedExpIds, setSelectedExpIds] = useState([]);
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState(null);
 
   const [activeDropdown, setActiveDropdown] = useState(null); // { id, type }
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 }); // for fixed-position dropdowns
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
@@ -523,7 +527,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [isAddingSchool, setIsAddingSchool] = useState(false);
   const [newSchoolForm, setNewSchoolForm] = useState({
     school_name: '', school_code: '', phone: '', address: '', city: '', state: '', pincode: '',
-    admin_name: '', email: '', password: ''
+    admin_name: '', email: '', password: '',
+    maxLmsServers: 2, concurrentUsersPerServer: 40, licenseDuration: '1 Year', expiryDate: ''
   });
 
   const generateSchoolAdminPassword = (name) => {
@@ -1239,6 +1244,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           setSelectedUserIds([]);
           await loadSchoolAdmins();
           await loadTeachers();
+        } else if (bulkType === 'bulk-experiences') {
+          await Promise.all(ids.map(id => apiFetch(`/api/v1/content/experiences/${id}/`, { method: 'DELETE' })));
+          showFeedback(`Successfully deleted ${count} lesson(s).`, null);
+          setSelectedExpIds([]);
+          await loadExperiences();
+          await loadSuperAdminExperiences();
+          await loadDashboardStats();
         }
         setDeleteConfirm({ show: false, id: null, type: '', isBulk: false, ids: [], count: 0 });
         return;
@@ -1270,7 +1282,11 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         }
         else if (targetTab === 'publish-contents') { await loadPublishContents(); await loadDashboardStats(); }
         else if (targetTab === 'grades') await loadGrades();
-        else if (targetTab === 'experiences') await loadExperiences();
+        else if (targetTab === 'experiences') {
+          await loadExperiences();
+          await loadSuperAdminExperiences();
+          await loadDashboardStats();
+        }
         else if (targetTab === 'experience-builders') await loadExperienceBuilders();
         else if (targetTab === 'school-admins' || targetTab === 'teachers' || targetTab === 'students') {
           await loadSchoolAdmins();
@@ -1342,14 +1358,32 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     setErrorMsg('');
     setLoading(true);
     try {
+      const adminPassword = generateSchoolAdminPassword(newSchoolForm.admin_name);
+      const exactAdminUsername = (newSchoolForm.admin_name || 'admin').trim();
+
       const schoolPayload = {
+        name: newSchoolForm.school_name,
         school_name: newSchoolForm.school_name,
         school_code: newSchoolForm.school_code || '',
         address: `${newSchoolForm.address}, ${newSchoolForm.city}, ${newSchoolForm.state} - ${newSchoolForm.pincode}`,
         phone: newSchoolForm.phone || '0000000000',
+        contactEmail: newSchoolForm.email || 'school@example.com',
         email: newSchoolForm.email || 'school@example.com',
         logo: '',
-        is_active: true
+        is_active: true,
+
+        // Admin details
+        admin_name: newSchoolForm.admin_name,
+        admin_full_name: newSchoolForm.admin_name,
+        admin_username: exactAdminUsername,
+        admin_email: newSchoolForm.email,
+        admin_password: adminPassword,
+
+        // Quota settings
+        maxLmsServers: parseInt(newSchoolForm.maxLmsServers || 2, 10),
+        concurrentUsersPerServer: parseInt(newSchoolForm.concurrentUsersPerServer || 40, 10),
+        licenseDuration: newSchoolForm.licenseDuration || '1 Year',
+        expiryDate: newSchoolForm.expiryDate || ''
       };
 
       const sRes = await apiFetch('/api/cms/v1/schools/', {
@@ -1359,60 +1393,23 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       let sData = {};
       try { sData = await sRes.json(); } catch { sData = {}; }
 
-      if (!sRes.ok) {
-        let msg = 'Failed to create school.';
-        if (sData.school_name) msg = Array.isArray(sData.school_name) ? sData.school_name.join(' ') : sData.school_name;
-        else if (sData.detail) msg = String(sData.detail);
-        else if (sData.error) msg = String(sData.error);
-        else if (typeof sData === 'object' && Object.keys(sData).length > 0) {
-          const firstVal = Object.values(sData)[0];
-          msg = Array.isArray(firstVal) ? firstVal.join(' ') : String(firstVal);
-        }
-        setErrorMsg(msg);
-        setLoading(false);
-        return;
-      }
-
-      const schoolObj = sData.data || sData;
-      const createdSchoolId = schoolObj.school_id || schoolObj.id || sData.school_id || sData.id;
-      const adminPassword = generateSchoolAdminPassword(newSchoolForm.admin_name);
-      const exactAdminUsername = (newSchoolForm.admin_name || 'admin').trim();
-
-      const adminPayload = {
-        username: exactAdminUsername,
-        email: newSchoolForm.email,
-        full_name: exactAdminUsername,
-        school: createdSchoolId,
-        password: adminPassword,
-        is_active: true
-      };
-
-      const aRes = await apiFetch('/api/cms/v1/school-admins/', {
-        method: 'POST',
-        body: JSON.stringify(adminPayload)
-      });
-      let aData = {};
-      try { aData = await aRes.json(); } catch { aData = {}; }
-
-      if (aRes.ok) {
-        showFeedback(`School and School Admin created successfully! Login credentials have been sent to ${newSchoolForm.email}.`, null);
+      if (sRes.ok) {
+        showFeedback(`School, Admin and License key created successfully! Password: ${adminPassword}`, null);
         addRecentActivity(`School "${newSchoolForm.school_name}" registered`, 'School', '#dcfce7', '#15803d', <FiGrid />, '#3b82f6', '#eff6ff');
         setIsAddingSchool(false);
         setNewSchoolForm({
-          school_name: '', phone: '', address: '', city: '', state: '', pincode: '',
-          admin_name: '', email: '', password: ''
+          school_name: '', school_code: '', phone: '', address: '', city: '', state: '', pincode: '',
+          admin_name: '', email: '', password: '',
+          maxLmsServers: 2, concurrentUsersPerServer: 40, licenseDuration: '1 Year', expiryDate: ''
         });
         await loadSchools();
         await loadSchoolAdmins();
       } else {
-        let msg = 'Failed to create school admin.';
-        if (aData.email) msg = Array.isArray(aData.email) ? aData.email.join(' ') : aData.email;
-        else if (aData.username) msg = Array.isArray(aData.username) ? aData.username.join(' ') : aData.username;
-        else if (aData.password) msg = Array.isArray(aData.password) ? aData.password.join(' ') : aData.password;
-        else if (aData.detail) msg = String(aData.detail);
-        else if (aData.error) msg = String(aData.error);
-        else if (typeof aData === 'object' && Object.keys(aData).length > 0) {
-          const firstVal = Object.values(aData)[0];
+        let msg = 'Failed to create school.';
+        if (sData.detail) msg = String(sData.detail);
+        else if (sData.error) msg = String(sData.error);
+        else if (typeof sData === 'object' && Object.keys(sData).length > 0) {
+          const firstVal = Object.values(sData)[0];
           msg = Array.isArray(firstVal) ? firstVal.join(' ') : String(firstVal);
         }
         setErrorMsg(msg);
@@ -1975,6 +1972,163 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       </div>
                     </div>
                   </div>
+
+                  {/* License Overview Card */}
+                  <div className="sd-card" style={{ padding: '2rem', marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                      <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>License Management</h3>
+                      {selectedSchoolDetail.license ? (
+                        <span className={`sd-badge sd-badge-${selectedSchoolDetail.license.status?.toLowerCase()}`} style={{ display: 'inline-flex' }}>
+                          {selectedSchoolDetail.license.status}
+                        </span>
+                      ) : (
+                        <span className="sd-badge sd-badge-inactive">No License</span>
+                      )}
+                    </div>
+
+                    {selectedSchoolDetail.license ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.55rem', fontSize: '0.85rem', color: '#334155' }}>
+                        <div>
+                          <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>License ID</span>
+                          <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.license.licenseId}</strong>
+                        </div>
+                        <div>
+                          <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>License Key</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <strong style={{ fontSize: '0.9rem', color: '#0f172a', fontFamily: 'monospace' }}>{selectedSchoolDetail.license.licenseKey}</strong>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(selectedSchoolDetail.license.licenseKey);
+                                triggerAlert("License key copied to clipboard!", "Copied", "success");
+                              }}
+                              className="sd-btn-outline"
+                              style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+                            >
+                              Copy
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Issue Date</span>
+                          <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.license.issueDate}</strong>
+                        </div>
+                        <div>
+                          <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Expiry Date</span>
+                          <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.license.expiryDate}</strong>
+                        </div>
+
+                        {/* Quota Progress Indicators */}
+                        <div style={{ gridColumn: 'span 2', marginTop: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                          <span style={{ display: 'block', color: '#0f172a', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.75rem' }}>Quota Usage</span>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#475569', marginBottom: '4px' }}>
+                                <span>Registered LMS Servers:</span>
+                                <strong>
+                                  {(selectedSchoolDetail.lms_servers?.filter(s => s.status === 'ACTIVE').length || 0)} / {selectedSchoolDetail.license.maxLmsServers} Servers Used
+                                </strong>
+                              </div>
+                              <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                                <div style={{
+                                  height: '100%',
+                                  backgroundColor: '#3b82f6',
+                                  width: `${Math.min(100, ((selectedSchoolDetail.lms_servers?.filter(s => s.status === 'ACTIVE').length || 0) / selectedSchoolDetail.license.maxLmsServers) * 100)}%`
+                                }} />
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#475569', marginBottom: '4px' }}>
+                                <span>Concurrent Users:</span>
+                                <strong>{selectedSchoolDetail.license.concurrentUsersPerServer} Users Per Server</strong>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>No license details available.</p>
+                    )}
+                  </div>
+
+                  {/* Registered LMS Servers Card */}
+                  <div className="sd-card" style={{ padding: '2rem', marginTop: '1.5rem' }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                      Registered LMS Servers (Installations)
+                    </h3>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="sd-table">
+                        <thead>
+                          <tr>
+                            <th>Server Name</th>
+                            <th>Installation ID</th>
+                            <th>Status</th>
+                            <th>Activation Date</th>
+                            <th>Last Sync Time</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedSchoolDetail.lms_servers && selectedSchoolDetail.lms_servers.length > 0 ? (
+                            selectedSchoolDetail.lms_servers.map(server => (
+                              <tr key={server.installationId}>
+                                <td style={{ fontWeight: 600 }}>{server.serverName}</td>
+                                <td style={{ fontFamily: 'monospace' }}>{server.installationId}</td>
+                                <td>
+                                  <span className={`sd-badge sd-badge-${server.status?.toLowerCase()}`}>
+                                    {server.status}
+                                  </span>
+                                </td>
+                                <td>{new Date(server.activationDate).toLocaleDateString()}</td>
+                                <td>{server.lastSyncTime ? new Date(server.lastSyncTime).toLocaleString() : '—'}</td>
+                                <td>
+                                  {server.status === 'ACTIVE' ? (
+                                    <button
+                                      onClick={async () => {
+                                        if (window.confirm(`Are you sure you want to deactivate server "${server.serverName}"?`)) {
+                                          try {
+                                            const res = await apiFetch('/api/v1/licensing/deactivate-server', {
+                                              method: 'POST',
+                                              body: JSON.stringify({ installationId: server.installationId })
+                                            });
+                                            if (res.ok) {
+                                              triggerAlert(`Server deactivated successfully.`, "Success", "success");
+                                              const sRes = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/`);
+                                              if (sRes.ok) {
+                                                const updatedData = await sRes.json();
+                                                setSelectedSchoolDetail(updatedData);
+                                              }
+                                              await loadSchools();
+                                            } else {
+                                              const errData = await res.json();
+                                              triggerAlert(errData.error || "Failed to deactivate server.", "Error", "error");
+                                            }
+                                          } catch (e) {
+                                            triggerAlert("Deactivation error: " + e.message, "Error", "error");
+                                          }
+                                        }
+                                      }}
+                                      className="sd-btn-outline"
+                                      style={{ padding: '4px 8px', fontSize: '0.75rem', borderColor: '#ef4444', color: '#ef4444' }}
+                                    >
+                                      Deactivate Server
+                                    </button>
+                                  ) : (
+                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Deactivated</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="6" style={{ textAlign: 'center', color: '#64748b', padding: '2rem' }}>
+                                No LMS servers registered yet.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -2089,6 +2243,47 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         </div>
                       </div>
 
+                      {/* License Configuration Card */}
+                      <div className="sd-card" style={{ padding: '1.5rem 2rem' }}>
+                        <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.25rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>License Configuration</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                          <div className="sd-form-group">
+                            <label className="sd-form-label">Max LMS Servers <span style={{ color: '#ef4444' }}>*</span></label>
+                            <input className="sd-form-input" type="number" min="1" required
+                              value={newSchoolForm.maxLmsServers || 2}
+                              onChange={e => setNewSchoolForm({ ...newSchoolForm, maxLmsServers: e.target.value })}
+                            />
+                          </div>
+                          <div className="sd-form-group">
+                            <label className="sd-form-label">Concurrent Users Per Server <span style={{ color: '#ef4444' }}>*</span></label>
+                            <input className="sd-form-input" type="number" min="1" required
+                              value={newSchoolForm.concurrentUsersPerServer || 40}
+                              onChange={e => setNewSchoolForm({ ...newSchoolForm, concurrentUsersPerServer: e.target.value })}
+                            />
+                          </div>
+                          <div className="sd-form-group">
+                            <label className="sd-form-label">License Duration <span style={{ color: '#ef4444' }}>*</span></label>
+                            <select className="sd-form-input" required
+                              value={newSchoolForm.licenseDuration || '1 Year'}
+                              onChange={e => setNewSchoolForm({ ...newSchoolForm, licenseDuration: e.target.value })}
+                            >
+                              <option value="1 Year">1 Year</option>
+                              <option value="2 Years">2 Years</option>
+                              <option value="Custom">Custom Expiry Date</option>
+                            </select>
+                          </div>
+                          {(newSchoolForm.licenseDuration === 'Custom') && (
+                            <div className="sd-form-group">
+                              <label className="sd-form-label">Custom Expiry Date <span style={{ color: '#ef4444' }}>*</span></label>
+                              <input className="sd-form-input" type="date" required
+                                value={newSchoolForm.expiryDate || ''}
+                                onChange={e => setNewSchoolForm({ ...newSchoolForm, expiryDate: e.target.value })}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       {/* Footer Actions */}
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.65rem', marginBottom: '2rem' }}>
                         <button type="button" className="sd-btn-outline" onClick={() => setIsAddingSchool(false)}>Cancel</button>
@@ -2137,16 +2332,16 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       </div>
                     </div>
 
-                    <div className="sd-table-wrap">
-                      <table className="sd-table">
+                    <div className="sd-table-wrap" style={{ overflow: 'visible' }}>
+                      <table className="sd-table" style={{ tableLayout: 'fixed', width: '100%' }}>
                         <colgroup>
                           {isSelectModeSchools && <col style={{ width: '4%' }} />}
-                          <col style={{ width: '22%' }} />
-                          <col style={{ width: '15%' }} />
-                          <col style={{ width: '15%' }} />
-                          <col style={{ width: '20%' }} />
+                          <col style={{ width: '28%' }} />
                           <col style={{ width: '12%' }} />
-                          <col style={{ width: '12%' }} />
+                          <col style={{ width: '16%' }} />
+                          <col style={{ width: '24%' }} />
+                          <col style={{ width: '10%' }} />
+                          <col style={{ width: '10%' }} />
                         </colgroup>
                         <thead>
                           <tr>
@@ -2195,144 +2390,37 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                     {isSchoolActive ? 'Active' : 'Inactive'}
                                   </span>
                                 </td>
-                                <td style={{ overflow: 'visible' }}>
-                                  <div className="sd-action-cell" style={{ justifyContent: 'center', overflow: 'visible' }}>
-                                    <div className="sd-action-dropdown-container" style={{ position: 'relative', display: 'inline-block' }}>
-                                      <button
-                                        type="button"
-                                        className="sd-action-dots-btn"
-                                        style={{
-                                          background: 'none',
-                                          border: 'none',
-                                          cursor: 'pointer',
-                                          padding: '4px 8px',
-                                          fontSize: '1.2rem',
-                                          color: '#64748b',
-                                          borderRadius: '50%',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          transition: 'background-color 0.15s'
-                                        }}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setActiveDropdown(activeDropdown?.id === sid ? null : { id: sid, type: 'school' });
-                                        }}
-                                      >
-                                        <FiMoreVertical />
-                                      </button>
-                                      {activeDropdown?.id === sid && (
-                                        <div
-                                          style={{
-                                            position: 'absolute',
-                                            right: 0,
-                                            top: '100%',
-                                            backgroundColor: '#ffffff',
-                                            border: '1px solid #e2e8f0',
-                                            borderRadius: '8px',
-                                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-                                            zIndex: 100,
-                                            minWidth: '120px',
-                                            padding: '4px 0',
-                                            display: 'flex',
-                                            flexDirection: 'column'
-                                          }}
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <button
-                                            type="button"
-                                            style={{
-                                              padding: '8px 12px',
-                                              textAlign: 'left',
-                                              background: 'none',
-                                              border: 'none',
-                                              fontSize: '0.85rem',
-                                              color: '#334155',
-                                              cursor: 'pointer',
-                                              display: 'flex',
-                                              alignItems: 'center',
-                                              gap: '8px',
-                                              width: '100%'
-                                            }}
-                                            onClick={() => {
-                                              setActiveDropdown(null);
-                                              setSelectedSchoolDetail(s);
-                                              setShowSchoolDetailModal(true);
-                                            }}
-                                          >
-                                            <FiEye style={{ fontSize: '0.95rem' }} /> View
-                                          </button>
-                                          <button
-                                            type="button"
-                                            style={{
-                                              padding: '8px 12px',
-                                              textAlign: 'left',
-                                              background: 'none',
-                                              border: 'none',
-                                              fontSize: '0.85rem',
-                                              color: '#334155',
-                                              cursor: 'pointer',
-                                              display: 'flex',
-                                              alignItems: 'center',
-                                              gap: '8px',
-                                              width: '100%'
-                                            }}
-                                            onClick={() => {
-                                              setActiveDropdown(null);
-                                              handleOpenEdit(s);
-                                            }}
-                                          >
-                                            <FiEdit2 style={{ fontSize: '0.95rem' }} /> Edit
-                                          </button>
-                                          <button
-                                            type="button"
-                                            style={{
-                                              padding: '8px 12px',
-                                              textAlign: 'left',
-                                              background: 'none',
-                                              border: 'none',
-                                              fontSize: '0.85rem',
-                                              color: '#334155',
-                                              cursor: 'pointer',
-                                              display: 'flex',
-                                              alignItems: 'center',
-                                              gap: '8px',
-                                              width: '100%'
-                                            }}
-                                            onClick={() => {
-                                              setActiveDropdown(null);
-                                              toggleActiveStatus(sid, isSchoolActive, 'schools');
-                                            }}
-                                          >
-                                            <FiLock style={{ fontSize: '0.95rem' }} /> {isSchoolActive ? 'Block' : 'Unblock'}
-                                          </button>
-                                          <div style={{ height: '1px', backgroundColor: '#e2e8f0', margin: '4px 0' }}></div>
-                                          <button
-                                            type="button"
-                                            style={{
-                                              padding: '8px 12px',
-                                              textAlign: 'left',
-                                              background: 'none',
-                                              border: 'none',
-                                              fontSize: '0.85rem',
-                                              color: '#ef4444',
-                                              cursor: 'pointer',
-                                              display: 'flex',
-                                              alignItems: 'center',
-                                              gap: '8px',
-                                              width: '100%'
-                                            }}
-                                            onClick={() => {
-                                              setActiveDropdown(null);
-                                              openDeleteModal(sid, 'school');
-                                            }}
-                                          >
-                                            <FiTrash2 style={{ fontSize: '0.95rem' }} /> Delete
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
+                                <td style={{ textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                      padding: '4px 8px',
+                                      fontSize: '1.2rem',
+                                      color: '#64748b',
+                                      borderRadius: '50%',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      transition: 'background-color 0.15s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (activeDropdown?.id === sid) {
+                                        setActiveDropdown(null);
+                                      } else {
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        setDropdownPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                                        setActiveDropdown({ id: sid, type: 'school' });
+                                      }
+                                    }}
+                                  >
+                                    <FiMoreVertical />
+                                  </button>
                                 </td>
                               </tr>
                             );
@@ -2764,6 +2852,35 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     />
                   </div>
                   <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    {selectedExpIds.length > 0 && (
+                      <button
+                        className="sd-btn-outline"
+                        style={{
+                          borderColor: '#ef4444',
+                          color: '#ef4444',
+                          background: '#fef2f2',
+                          padding: '0.35rem 0.75rem',
+                          fontSize: '0.82rem',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          marginRight: '0.5rem'
+                        }}
+                        onClick={() => {
+                          setDeleteConfirm({
+                            show: true,
+                            id: 'bulk-experiences',
+                            type: 'lessons',
+                            isBulk: true,
+                            count: selectedExpIds.length,
+                            ids: [...selectedExpIds]
+                          });
+                        }}
+                      >
+                        🗑️ Delete Selected ({selectedExpIds.length})
+                      </button>
+                    )}
                     <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>Status Filter:</span>
                     <select
                       className="sd-form-input"
@@ -2776,26 +2893,74 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       <option value="APPROVED">Approved</option>
                       <option value="REJECTED">Rejected</option>
                     </select>
+
+                    <button
+                      className="sd-btn-outline"
+                      style={{
+                        padding: '0.45rem 1rem',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        borderRadius: '8px',
+                        backgroundColor: isSelectMode ? '#e2e8f0' : '#fff',
+                        border: '1px solid #cbd5e1',
+                        color: '#1e293b',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minWidth: '70px',
+                        height: '38px',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      }}
+                      onClick={() => {
+                        if (isSelectMode) {
+                          setSelectedExpIds([]);
+                        }
+                        setIsSelectMode(!isSelectMode);
+                      }}
+                    >
+                      Select
+                    </button>
                   </div>
                 </div>
 
-                <div className="sd-table-wrap sd-table-wrap-scrollable">
-                  <table className="sd-table sd-table-compact">
+                <div className="sd-table-wrap" style={{ overflow: 'visible' }}>
+                  <table className="sd-table sd-table-compact" style={{ width: '100%', tableLayout: 'fixed', overflow: 'visible' }}>
                     <thead>
-                      <tr>
-                        <th>Title</th>
-                        <th>Grade</th>
-                        <th>Created By</th>
-                        <th>Status</th>
-                        <th>Pending/Active Version</th>
-                        <th>Date Submitted</th>
-                        <th style={{ textAlign: 'right', width: '160px', minWidth: '160px', paddingRight: '1rem' }}>Actions</th>
+                      <tr style={{ overflow: 'visible' }}>
+                        {isSelectMode && (
+                          <th style={{ width: '50px', textAlign: 'center', verticalAlign: 'middle', padding: '0.75rem 0' }}>
+                            <input
+                              type="checkbox"
+                              style={{ cursor: 'pointer', transform: 'scale(1.1)', verticalAlign: 'middle' }}
+                              checked={
+                                filterList(submittedExperiences).length > 0 &&
+                                filterList(submittedExperiences).every(exp => selectedExpIds.includes(exp.id))
+                              }
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                if (checked) {
+                                  const allIds = filterList(submittedExperiences).map(exp => exp.id);
+                                  setSelectedExpIds(allIds);
+                                } else {
+                                  setSelectedExpIds([]);
+                                }
+                              }}
+                            />
+                          </th>
+                        )}
+                        <th style={{ width: isSelectMode ? '35%' : '39%' }}>Title</th>
+                        <th style={{ width: '15%' }}>Grade</th>
+                        <th style={{ width: '15%' }}>Duration</th>
+                        <th style={{ width: '15%' }}>Status</th>
+                        <th style={{ width: isSelectMode ? '15%' : '16%' }}>Date Submitted</th>
+                        <th style={{ textAlign: 'right', width: isSelectMode ? '10%' : '15%', paddingRight: '1rem' }}>Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody style={{ overflow: 'visible' }}>
                       {submittedExperiences.length === 0 ? (
                         <tr>
-                          <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
+                          <td colSpan={isSelectMode ? 7 : 6} style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
                             <FiFileText style={{ fontSize: '2.5rem', color: '#cbd5e1', marginBottom: '1rem' }} />
                             <div style={{ fontWeight: 600 }}>No lessons found</div>
                             <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Try changing the filter criteria.</div>
@@ -2803,55 +2968,66 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         </tr>
                       ) : (
                         paginate(filterList(submittedExperiences), saExpPage).map((exp, idx) => (
-                          <tr key={exp.id || idx}>
-                            <td>
+                          <tr key={exp.id || idx} style={{ overflow: 'visible' }}>
+                            {isSelectMode && (
+                              <td style={{ width: '50px', textAlign: 'center', verticalAlign: 'middle', padding: '0.75rem 0' }}>
+                                <input
+                                  type="checkbox"
+                                  style={{ cursor: 'pointer', transform: 'scale(1.1)', verticalAlign: 'middle' }}
+                                  checked={selectedExpIds.includes(exp.id)}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    if (checked) {
+                                      setSelectedExpIds(prev => [...prev, exp.id]);
+                                    } else {
+                                      setSelectedExpIds(prev => prev.filter(id => id !== exp.id));
+                                    }
+                                  }}
+                                />
+                              </td>
+                            )}
+                            <td style={{ width: isSelectMode ? '35%' : '39%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>{exp.title}</span>
-                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{exp.subject} • {exp.estimated_duration} mins</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>{exp.title ? exp.title.toUpperCase() : ''}</span>
                               </div>
                             </td>
-                            <td>{exp.grade_name || `Grade ${exp.grade}`}</td>
-                            <td>{exp.created_by_name || exp.created_by?.username || 'Content Creator'}</td>
-                            <td>
+                            <td style={{ width: '15%' }}>{exp.grade_name || `Grade ${exp.grade}`}</td>
+                            <td style={{ width: '15%' }}>{exp.estimated_duration ? `${exp.estimated_duration} mins` : 'N/A'}</td>
+                            <td style={{ width: '15%' }}>
                               <span className={`sd-badge ${exp.status === 'APPROVED' ? 'sd-badge-published' :
                                 exp.status === 'PENDING_APPROVAL' ? 'sd-badge-review' : 'sd-badge-draft'
                                 }`}>
                                 {exp.status === 'PENDING_APPROVAL' ? 'PENDING' : exp.status}
                               </span>
                             </td>
-                            <td>
-                              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ fontWeight: 600 }}>{exp.pending_version || exp.version_number || '1.0'}</span>
-                                {exp.pending_release_notes && (
-                                  <span style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={exp.pending_release_notes}>
-                                    Notes: {exp.pending_release_notes}
-                                  </span>
-                                )}
-                                {exp.review_remark && exp.status === 'REJECTED' && (
-                                  <span style={{ fontSize: '0.72rem', color: '#ef4444', fontStyle: 'italic', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={exp.review_remark}>
-                                    Reason: {exp.review_remark}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td>{new Date(exp.updated_at).toLocaleDateString()}</td>
-                            <td style={{ textAlign: 'right', width: '160px', minWidth: '160px', paddingRight: '1rem' }}>
-                              <div className="sd-action-cell" style={{ display: 'inline-flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                                <button
-                                  className="sd-btn-outline"
-                                  style={{ 
-                                    padding: '0.35rem 0.75rem', 
-                                    fontSize: '0.78rem', 
-                                    display: 'inline-flex', 
-                                    alignItems: 'center', 
-                                    gap: '0.35rem' 
-                                  }}
-                                  onClick={() => handlePreviewExperience(exp)}
-                                >
-                                  <span style={{ fontSize: '0.9rem' }}>👁️</span>
-                                  <span>Preview Screen</span>
-                                </button>
-                              </div>
+                            <td style={{ width: isSelectMode ? '15%' : '16%' }}>{new Date(exp.updated_at).toLocaleDateString()}</td>
+                            <td style={{ textAlign: 'right', width: isSelectMode ? '10%' : '15%', paddingRight: '1rem' }}>
+                              <button
+                                style={{
+                                  border: 'none',
+                                  background: 'none',
+                                  fontSize: '1.25rem',
+                                  padding: '0.25rem 0.5rem',
+                                  cursor: 'pointer',
+                                  color: '#64748b',
+                                  lineHeight: 1
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (activeDropdown === exp.id) {
+                                    setActiveDropdown(null);
+                                  } else {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setDropdownPos({
+                                      top: rect.bottom + 4,
+                                      right: window.innerWidth - rect.right
+                                    });
+                                    setActiveDropdown(exp.id);
+                                  }
+                                }}
+                              >
+                                ⋮
+                              </button>
                             </td>
                           </tr>
                         ))
@@ -4086,6 +4262,144 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           </div>
         </div>
       )}
+
+      {/* ── Lessons table action dropdown (fixed-position, never clipped by table overflow) ── */}
+      {typeof activeDropdown === 'number' && activeDropdown !== null && (() => {
+        const exp = submittedExperiences.find(e => e.id === activeDropdown);
+        if (!exp) return null;
+        return (
+          <>
+            {/* Invisible backdrop to close on outside click */}
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+              onClick={() => setActiveDropdown(null)}
+            />
+            <div
+              style={{
+                position: 'fixed',
+                top: dropdownPos.top,
+                right: dropdownPos.right,
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                zIndex: 9999,
+                minWidth: '150px',
+                padding: '4px 0',
+                overflow: 'hidden'
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <button
+                style={{
+                  width: '100%',
+                  padding: '0.55rem 0.85rem',
+                  fontSize: '0.82rem',
+                  border: 'none',
+                  background: 'none',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  color: '#334155',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                onClick={() => {
+                  setActiveDropdown(null);
+                  handlePreviewExperience(exp);
+                }}
+              >
+                👁️ Preview Screen
+              </button>
+              <div style={{ height: '1px', background: '#f1f5f9', margin: '2px 0' }} />
+              <button
+                style={{
+                  width: '100%',
+                  padding: '0.55rem 0.85rem',
+                  fontSize: '0.82rem',
+                  border: 'none',
+                  background: 'none',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  color: '#ef4444',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                onClick={() => {
+                  setActiveDropdown(null);
+                  setDeleteConfirm({ show: true, id: exp.id, type: 'experiences' });
+                }}
+              >
+                🗑️ Delete Lesson
+              </button>
+            </div>
+          </>
+        );
+      })()}
+
+      {/* ── Schools table action dropdown (fixed-position, never clipped by table overflow) ── */}
+      {activeDropdown?.type === 'school' && (() => {
+        const s = schools.find(sc => (sc.school_id || sc.id) === activeDropdown.id);
+        if (!s) return null;
+        const sid = s.school_id || s.id;
+        const isSchoolActive = s.is_active !== false;
+        return (
+          <>
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+              onClick={() => setActiveDropdown(null)}
+            />
+            <div
+              style={{
+                position: 'fixed',
+                top: dropdownPos.top,
+                right: dropdownPos.right,
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                zIndex: 9999,
+                minWidth: '150px',
+                padding: '4px 0',
+                overflow: 'hidden'
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              {[
+                { label: 'View', icon: <FiEye style={{ fontSize: '0.95rem' }} />, color: '#334155', hover: '#f8fafc', action: () => { setActiveDropdown(null); setSelectedSchoolDetail(s); setShowSchoolDetailModal(true); } },
+                { label: 'Edit', icon: <FiEdit2 style={{ fontSize: '0.95rem' }} />, color: '#334155', hover: '#f8fafc', action: () => { setActiveDropdown(null); handleOpenEdit(s); } },
+                { label: isSchoolActive ? 'Block' : 'Unblock', icon: <FiLock style={{ fontSize: '0.95rem' }} />, color: '#334155', hover: '#f8fafc', action: () => { setActiveDropdown(null); toggleActiveStatus(sid, isSchoolActive, 'schools'); } },
+              ].map((item, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  style={{ padding: '8px 14px', textAlign: 'left', background: 'none', border: 'none', fontSize: '0.85rem', color: item.color, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}
+                  onMouseEnter={e => e.currentTarget.style.background = item.hover}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                  onClick={item.action}
+                >
+                  {item.icon} {item.label}
+                </button>
+              ))}
+              <div style={{ height: '1px', background: '#f1f5f9', margin: '2px 0' }} />
+              <button
+                type="button"
+                style={{ padding: '8px 14px', textAlign: 'left', background: 'none', border: 'none', fontSize: '0.85rem', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}
+                onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                onClick={() => { setActiveDropdown(null); openDeleteModal(sid, 'school'); }}
+              >
+                <FiTrash2 style={{ fontSize: '0.95rem' }} /> Delete
+              </button>
+            </div>
+          </>
+        );
+      })()}
 
       {/* ── Centered Blurred Delete Confirmation Modal ── */}
       {deleteConfirm.show && (

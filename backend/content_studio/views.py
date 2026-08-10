@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 
-from accounts.permissions import IsContentCreatorOrSuperAdmin, IsSuperAdmin
+from accounts.permissions import IsContentCreatorOrSuperAdmin, IsSuperAdmin, IsContentCreator
 from .models import (
     Experience,
     LearningOutcome,
@@ -48,9 +48,9 @@ class ExperienceViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
 
     def get_permissions(self):
-        if self.action in ["list", "retrieve"]:
-            return [IsAuthenticated()]
-        return [IsAuthenticated(), IsContentCreatorOrSuperAdmin()]
+        if self.action in ("destroy", "list", "retrieve", "preview", "activities"):
+            return [IsAuthenticated(), IsContentCreatorOrSuperAdmin()]
+        return [IsAuthenticated(), IsContentCreator()]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["title", "description", "subject"]
     ordering_fields = ["updated_at", "created_at", "title"]
