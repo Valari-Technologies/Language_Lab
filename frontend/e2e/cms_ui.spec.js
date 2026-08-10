@@ -24,7 +24,7 @@ test.describe('CMS Content Creator UI workflows', () => {
       'experience-builder',
       'activity-builder',
       'screen-builder',
-      'media',
+      'preview',
       'publish',
     ];
     for (const key of expectedNavItems) {

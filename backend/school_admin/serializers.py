@@ -176,6 +176,18 @@ class ClassSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         ret['assigned_teacher_ids'] = list(TeacherClass.objects.filter(class_obj=instance).values_list('teacher_id', flat=True))
+        # Format class_name from e.g. "Class 3-A" to "Class 3"
+        name = ret.get("class_name") or ""
+        if "-" in name:
+            ret["class_name"] = name.split("-")[0].strip()
+        # Ensure section prefix is "Section "
+        sec = ret.get("section") or ""
+        if sec and not sec.startswith("Section "):
+            ret["section"] = f"Section {sec}"
+        # Format grade_name to Class
+        g_name = ret.get("grade_name") or ""
+        if g_name:
+            ret["grade_name"] = g_name.replace("Grade", "Class")
         return ret
 
     def validate(self, attrs):

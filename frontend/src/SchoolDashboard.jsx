@@ -1070,7 +1070,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         }
         .sd-stat-row {
           display: grid !important;
-          grid-template-columns: repeat(4, 1fr) !important;
+          grid-template-columns: repeat(3, 1fr) !important;
           gap: 0.75rem !important;
           margin-bottom: 1.5rem !important;
         }
@@ -1435,12 +1435,11 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               </div>
 
               {/* Stat cards */}
-              <div className="sd-stat-row">
+              <div className="sd-stat-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
                 {[
                   { label:'Total Teachers',      value: statTeachers,  color:'#3b82f6', bg:'#dbeafe', icon:<FiUsers/> },
                   { label:'Total Students',      value: statStudents,  color:'#a855f7', bg:'#f3e8ff', icon:<FiUsers/> },
-                  { label:'Total Courses',       value: statExperiences, color:'#f97316', bg:'#ffedd5', icon:<FiBookOpen/> },
-                  { label:'Average Attendance',  value: statAttend,    color:'#06b6d4', bg:'#cffafe', icon:<FiTrendingUp/> },
+                  { label:'Total Lessons',       value: statExperiences, color:'#f97316', bg:'#ffedd5', icon:<FiBookOpen/> },
                 ].map((s, i) => (
                   <div className="sd-stat-card" key={i}>
                     <div className="sd-stat-card-icon-part" style={{ background: s.bg, color: s.color }}>
@@ -1455,11 +1454,11 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 ))}
               </div>
 
-              {/* Course Completion donut (Full Width Card) */}
+              {/* Lesson Completion donut (Full Width Card) */}
               <div className="sd-card" style={{ width: '100%', marginBottom: '1.5rem' }}>
                 <div className="sd-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <div className="sd-card-title">Course Completion</div>
+                    <div className="sd-card-title">Lesson Completion</div>
                     <div className="sd-card-sub">Class Progress Overview</div>
                   </div>
                   <button className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>This Month <FiChevronDown/></button>
@@ -1524,7 +1523,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e40af' }}>Completion Insights</span>
                     </div>
                     <p style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: '#1e293b', lineHeight: 1.4, zIndex: 1 }}>
-                      Great job! <span style={{ color: '#2563eb' }}>68%</span> of the coursework has been completed this month.
+                      Great job! <span style={{ color: '#2563eb' }}>68%</span> of the lessons have been completed this month.
                     </p>
                     <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: '#64748b', fontWeight: 500, zIndex: 1 }}>
                       Keep encouraging your students to stay on track.
@@ -2054,7 +2053,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               <span className="sd-name-cell-primary">{s.full_name || s.username || 'N/A'}</span>
                             </td>
                             <td>{s.roll_no || 'N/A'}</td>
-                            <td>{s.grade || 'N/A'}</td>
+                            <td>{s.grade ? String(s.grade).replace('Grade', 'Class') : 'N/A'}</td>
                             <td>{s.section || 'N/A'}</td>
                             <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
                               <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
@@ -2499,10 +2498,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       {paginate(filterList(experiences), experiencePage).map((s, i) => (
                         <tr key={s.id || i}>
                           <td>
-                            <span className="sd-name-cell-primary">{s.title}</span>
+                            <span className="sd-name-cell-primary">{s.title ? s.title.toUpperCase() : ''}</span>
                             <span className="sd-name-cell-email">{s.description?.slice(0, 50) || ''}</span>
                           </td>
-                          <td>{s.grade_name || (s.grade && `Grade ${s.grade}`) || 'N/A'}</td>
+                          <td>{s.grade_name ? String(s.grade_name).replace('Grade', 'Class') : (s.grade && `Class ${s.grade}`) || 'N/A'}</td>
                           <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
                             <span className={`sd-badge ${s.difficulty === 'BEGINNER' ? 'sd-badge-active' : s.difficulty === 'MASTER' ? 'sd-badge-leave' : 'sd-badge-review'}`}>
                               {s.difficulty || 'INTERMEDIATE'}
@@ -2930,12 +2929,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <div className="sd-form-group">
                       <label className="sd-form-label">Full Name *</label>
                       <input className="sd-form-input" type="text" value={teacherForm.full_name}
-                        onChange={e => setTeacherForm({...teacherForm, full_name:e.target.value})} required/>
+                        onChange={e => setTeacherForm({...teacherForm, full_name:e.target.value})} placeholder="e.g. John Doe" required/>
                     </div>
                     <div className="sd-form-group">
                       <label className="sd-form-label">Email Address *</label>
                       <input className="sd-form-input" type="email" value={teacherForm.email}
-                        onChange={e => setTeacherForm({...teacherForm, email:e.target.value})} required/>
+                        onChange={e => setTeacherForm({...teacherForm, email:e.target.value})} placeholder="e.g. johndoe@example.com" required/>
                     </div>
                     <div className="sd-form-group">
                       <label className="sd-form-label">Qualification</label>
@@ -3077,12 +3076,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <div className="sd-form-group">
                         <label className="sd-form-label">Username *</label>
                         <input className="sd-form-input" type="text" value={teacherForm.username}
-                          onChange={e => setTeacherForm({...teacherForm, username:e.target.value})} required/>
+                          onChange={e => setTeacherForm({...teacherForm, username:e.target.value})} placeholder="e.g. johndoe" required/>
                       </div>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Password *</label>
                         <input className="sd-form-input" type="password" value={teacherForm.password}
-                          onChange={e => setTeacherForm({...teacherForm, password:e.target.value})} required/>
+                          onChange={e => setTeacherForm({...teacherForm, password:e.target.value})} placeholder="Minimum 6 characters" required/>
                       </div>
                     </>)}
                     <label className="sd-checkbox-label">
@@ -3442,11 +3441,11 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 </div>
                 <div style={{ padding: '0.5rem 0', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
-                    <span style={{ color: '#64748b', fontWeight: 600 }}>Class Name:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.class_name || 'N/A'}</span>
-                    
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Class:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.grade_name || `Grade ID: ${selectedClassCrudDetail.grade}`}</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.grade_name ? String(selectedClassCrudDetail.grade_name).replace('Grade', 'Class') : (selectedClassCrudDetail.grade ? `Class ${selectedClassCrudDetail.grade}` : 'N/A')}</span>
+                    
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Section:</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.section ? (selectedClassCrudDetail.section.startsWith('Section') ? selectedClassCrudDetail.section : `Section ${selectedClassCrudDetail.section}`) : (selectedClassCrudDetail.class_name && selectedClassCrudDetail.class_name.includes('-') ? `Section ${selectedClassCrudDetail.class_name.split('-').pop().trim()}` : '—')}</span>
                     
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Assigned Teachers:</span>
                     <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.teacher_name || 'Unassigned'}</span>

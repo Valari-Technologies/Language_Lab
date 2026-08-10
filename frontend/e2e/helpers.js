@@ -54,7 +54,7 @@ async function seedExperienceAndActivity(request, { titleSuffix = String(Date.no
       grade: gradeId,
       subject: 'English',
       language: 'English',
-      difficulty: 'EASY',
+      difficulty: 'BEGINNER',
       estimated_duration: 15,
       tags: [],
     },
@@ -156,7 +156,7 @@ async function loginViaUI(page, username = E2E_USERNAME, password = E2E_PASSWORD
 async function selectExperience(page, experienceTitle) {
   await page.locator('[data-testid="cs-nav-experiences"]').click();
   await page.locator('tr', { hasText: experienceTitle }).first().click();
-  await page.waitForSelector('text=Experience Builder', { timeout: 10000 });
+  await page.waitForSelector('text=Lessons Builder', { timeout: 10000 });
 }
 
 /** 
@@ -168,7 +168,7 @@ async function navigateToScreenBuilder(page, { experienceTitle, activityTitle })
   await selectExperience(page, experienceTitle);
 
   await page.locator('[data-testid="cs-nav-activity-builder"]').click();
-  await page.locator('[data-testid="activity-card"]', { hasText: activityTitle }).first().click();
+  await page.locator('[data-testid="activity-card"]').first().click();
 
   await expect(page.locator('[data-testid="activity-title-input"]')).toHaveValue(activityTitle);
 

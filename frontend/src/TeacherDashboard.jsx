@@ -1396,11 +1396,11 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 ))}
               </div>
 
-              {/* Course Completion donut (Full Width Card) */}
+              {/* Lesson Completion donut (Full Width Card) */}
               <div className="sd-card" style={{ width: '100%', marginBottom: '1.5rem' }}>
                 <div className="sd-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <div className="sd-card-title">Course Completion</div>
+                    <div className="sd-card-title">Lesson Completion</div>
                     <div className="sd-card-sub">Class Progress Overview</div>
                   </div>
                   <button className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>This Month <FiChevronDown/></button>
@@ -1465,7 +1465,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e40af' }}>Completion Insights</span>
                     </div>
                     <p style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: '#1e293b', lineHeight: 1.4, zIndex: 1 }}>
-                      Great job! <span style={{ color: '#2563eb' }}>68%</span> of the coursework has been completed this month.
+                      Great job! <span style={{ color: '#2563eb' }}>68%</span> of the lessons have been completed this month.
                     </p>
                     <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: '#64748b', fontWeight: 500, zIndex: 1 }}>
                       Keep encouraging your students to stay on track.
@@ -1714,7 +1714,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               <span className="sd-name-cell-primary">{s.full_name || 'N/A'}</span>
                             </td>
                             <td>{s.roll_no || 'N/A'}</td>
-                            <td>{s.grade || 'N/A'}</td>
+                            <td>{s.grade ? String(s.grade).replace('Grade', 'Class') : 'N/A'}</td>
                             <td>{s.section || 'N/A'}</td>
                             <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
                               <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
@@ -1911,11 +1911,11 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         return (
                           <tr key={cid || i}>
                             <td>
-                              <span className="sd-name-cell-primary">{c.class_name}</span>
+                              <span className="sd-name-cell-primary">{c.class_name ? String(c.class_name).replace('Grade', 'Class').split('-')[0].trim() : '—'}</span>
                             </td>
                             <td style={{ textAlign: 'center' }}>
                               <span style={{ fontWeight: 600, color: '#4f46e5', background: '#ede9fe', padding: '2px 10px', borderRadius: '20px', fontSize: '0.82rem' }}>
-                                {c.section || (c.class_name && c.class_name.includes('-') ? c.class_name.split('-').pop().trim() : '—')}
+                                {c.section ? `Section ${c.section}` : (c.class_name && c.class_name.includes('-') ? `Section ${c.class_name.split('-').pop().trim()}` : '—')}
                               </span>
                             </td>
                             <td>{c.teacher_name || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Unassigned</span>}</td>
@@ -2399,11 +2399,11 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 </div>
                 <div style={{ padding: '0.5rem 0', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
-                    <span style={{ color: '#64748b', fontWeight: 600 }}>Class Name:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.class_name || 'N/A'}</span>
-                    
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Class:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{grades.find(g => g.id === selectedClassCrudDetail.grade)?.grade_name || selectedClassCrudDetail.grade || 'N/A'}</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{grades.find(g => g.id === selectedClassCrudDetail.grade)?.grade_name ? String(grades.find(g => g.id === selectedClassCrudDetail.grade)?.grade_name).replace('Grade', 'Class') : selectedClassCrudDetail.grade || 'N/A'}</span>
+                    
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Section:</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.section ? (selectedClassCrudDetail.section.startsWith('Section') ? selectedClassCrudDetail.section : `Section ${selectedClassCrudDetail.section}`) : (selectedClassCrudDetail.class_name && selectedClassCrudDetail.class_name.includes('-') ? `Section ${selectedClassCrudDetail.class_name.split('-').pop().trim()}` : '—')}</span>
                     
                     <span style={{ color: '#64748b', fontWeight: 600 }}>School Name:</span>
                     <span style={{ color: '#0f172a', fontWeight: 500 }}>{schools.find(s => s.school_id === selectedClassCrudDetail.school)?.school_name || selectedClassCrudDetail.school || 'N/A'}</span>
