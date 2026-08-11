@@ -1008,7 +1008,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     language: 'English',
     difficulty: 'Intermediate',
     duration: 15,
-    tags: []
+    tags: [],
+    experience_type: 'LESSON',
+    mastery_threshold: 70
   });
 
   const [activityForm, setActivityForm] = useState({
@@ -1017,7 +1019,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     objective: '',
     skills: [],
     duration: 5,
-    mastery: 80
+    mastery: 80,
+    activity_type: 'LISTENING'
   });
 
   const [screenForm, setScreenForm] = useState({
@@ -1117,7 +1120,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           difficulty: data.difficulty || 'Intermediate',
           duration: data.estimated_duration || 0,
           tags: data.tags || [],
-          thumbnail: data.thumbnail || ''
+          thumbnail: data.thumbnail || '',
+          experience_type: data.experience_type || 'LESSON',
+          mastery_threshold: data.mastery_threshold !== undefined ? data.mastery_threshold : 70
         });
         setActivities(data.activities || []);
         const rawOutcomes = data.learning_outcomes || [];
@@ -1159,7 +1164,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         difficulty: diff,
         estimated_duration: parseInt(experienceForm.duration) || 15,
         tags: experienceForm.tags || [],
-        thumbnail: experienceForm.thumbnail || ''
+        thumbnail: experienceForm.thumbnail || '',
+        experience_type: experienceForm.experience_type || 'LESSON',
+        mastery_threshold: experienceForm.experience_type === 'ASSESSMENT' ? (parseInt(experienceForm.mastery_threshold) || 70) : 70
       };
 
       let res;
@@ -1344,7 +1351,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           objective: data.learning_objective || '',
           skills: data.skills ? data.skills.map(s => s.name) : [],
           duration: data.estimated_duration || 5,
-          mastery: data.mastery_threshold || 80
+          mastery: data.mastery_threshold || 80,
+          activity_type: data.activity_type || 'LISTENING'
         });
         const activityScreens = data.screens || [];
         setScreens(activityScreens);
@@ -1384,7 +1392,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         .filter(s => selectedSkillNames.includes(s.name))
         .map(s => s.id);
 
-      const moduleName = selectedSkillNames[0];
+      const moduleName = selectedSkillNames[0] || 'listening';
       const displayTitle = moduleName.charAt(0).toUpperCase() + moduleName.slice(1);
 
       const payload = {
@@ -1394,7 +1402,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         learning_objective: activityForm.objective || '',
         estimated_duration: parseInt(activityForm.duration) || 5,
         mastery_threshold: parseInt(activityForm.mastery) || 80,
-        skill_ids: skillIds
+        skill_ids: skillIds,
+        activity_type: moduleName.toUpperCase()
       };
 
       let res;
@@ -4635,7 +4644,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           language: 'English',
                           difficulty: 'Medium',
                           duration: 15,
-                          tags: []
+                          tags: [],
+                          experience_type: 'LESSON',
+                          mastery_threshold: 70
                         });
                         setLearningOutcomes([]);
                         setOutcomesText('');
@@ -4665,6 +4676,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         </th>
                       )}
                       <th>Lessons</th>
+                      <th>Type</th>
                       <th>Grade</th>
                       <th>Subject</th>
                       <th>Difficulty</th>
@@ -4677,7 +4689,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   <tbody>
                     {experiences.length === 0 ? (
                       <tr>
-                        <td colSpan={isSelectMode ? "9" : "8"} style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No lessons found. Click "+ New Lesson" to create one!</td>
+                        <td colSpan={isSelectMode ? "10" : "9"} style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No lessons found. Click "+ New Lesson" to create one!</td>
                       </tr>
                     ) : (
                       experiences.map((row) => (
@@ -4707,6 +4719,19 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                 </div>
                               </div>
                             </div>
+                          </td>
+                          <td>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: '12px',
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                              background: row.experience_type === 'ASSESSMENT' ? '#f3e8ff' : '#e0f2fe',
+                              color: row.experience_type === 'ASSESSMENT' ? '#7c3aed' : '#0284c7'
+                            }}>
+                              {row.experience_type === 'ASSESSMENT' ? 'Assessment' : 'Lesson'}
+                            </span>
                           </td>
                           <td>{row.grade_name || `Grade ${row.grade}`}</td>
                           <td>{row.subject}</td>
@@ -4899,6 +4924,33 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div className="cs-form-group">
+                      <label className="cs-form-label">Experience Type <span style={{ color: '#ef4444' }}>*</span></label>
+                      <select className="cs-form-input" value={experienceForm.experience_type || 'LESSON'}
+                        onChange={e => setExperienceForm({ ...experienceForm, experience_type: e.target.value })}>
+                        <option value="LESSON">Lesson</option>
+                        <option value="ASSESSMENT">Assessment</option>
+                      </select>
+                    </div>
+                    {experienceForm.experience_type === 'ASSESSMENT' && (
+                      <div className="cs-form-group">
+                        <label className="cs-form-label">Mastery Threshold (%)</label>
+                        <input
+                          className="cs-form-input"
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={experienceForm.mastery_threshold === undefined ? 70 : experienceForm.mastery_threshold}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setExperienceForm({
+                              ...experienceForm,
+                              mastery_threshold: val === '' ? '' : Math.min(100, Math.max(0, parseInt(val) || 0))
+                            });
+                          }}
+                        />
+                      </div>
+                    )}
+                    <div className="cs-form-group">
                       <label className="cs-form-label">Grade <span style={{ color: '#ef4444' }}>*</span></label>
                       <select className="cs-form-input" value={experienceForm.grade}
                         onChange={e => setExperienceForm({ ...experienceForm, grade: e.target.value })}>
@@ -5074,7 +5126,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               </option>
                             ))
                           ) : (
-                            ['listening', 'speaking', 'reading', 'writing', 'grammar', 'phonetics'].map(name => (
+                            ['listening', 'speaking', 'reading', 'writing', 'grammar', 'phonetics', 'assessment'].map(name => (
                               <option key={name} value={name}>
                                 {name.charAt(0).toUpperCase() + name.slice(1)}
                               </option>
@@ -5830,13 +5882,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                     reading: ['text', 'heading', 'image', 'quiz', 'mcq', 'match', 'flashcard', 'memory', 'word_search', 'reading_passage', 'audio', 'video'],
                                     writing: ['fill_blank', 'sentence_builder', 'writing_prompt', 'text', 'heading', 'image', 'video', 'audio'],
                                     grammar: ['heading', 'true_false', 'drag_drop', 'grammar_correction', 'quiz', 'mcq', 'fill_blank', 'match', 'sequence', 'image', 'video', 'audio', 'text'],
-                                    phonetics: ['heading', 'pronunciation', 'audio', 'video', 'quiz', 'mcq', 'text', 'image', 'voice_recorder', 'drag_drop', 'fill_blank']
+                                    phonetics: ['heading', 'pronunciation', 'audio', 'video', 'quiz', 'mcq', 'text', 'image', 'voice_recorder', 'drag_drop', 'fill_blank'],
+                                    assessment: ['quiz', 'mcq', 'fill_blank', 'drag_drop', 'heading', 'text', 'image', 'video', 'audio']
                                   };
 
                                   const allowedTypes = MODULE_ELEMENTS[activeModule] || [];
 
                                   const isAllowed = (tmplType) => {
                                     if (!activeModule) return true;
+                                    if (activeModule === 'assessment') return true;
                                     const mapped = tmplType.toLowerCase();
                                     if (mapped === 'quiz') {
                                       return allowedTypes.includes('quiz') || allowedTypes.includes('mcq');

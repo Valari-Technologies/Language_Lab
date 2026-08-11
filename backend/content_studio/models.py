@@ -49,6 +49,20 @@ class Experience(models.Model):
         default=Difficulty.INTERMEDIATE,
         verbose_name=_("Difficulty")
     )
+    experience_type = models.CharField(
+        max_length=20,
+        choices=[
+            ("LESSON", "Lesson"),
+            ("ASSESSMENT", "Assessment"),
+        ],
+        default="LESSON",
+        verbose_name=_("Experience Type")
+    )
+    mastery_threshold = models.IntegerField(
+        default=70,
+        verbose_name=_("Mastery Threshold"),
+        help_text=_("Mastery threshold percentage required for assessment, e.g. 70.")
+    )
     estimated_duration = models.IntegerField(
         verbose_name=_("Estimated Duration"),
         help_text=_("Duration of the experience in minutes.")
@@ -191,6 +205,21 @@ class Activity(models.Model):
         related_name="activities",
         blank=True,
         verbose_name=_("Skills")
+    )
+    activity_type = models.CharField(
+        max_length=30,
+        choices=[
+            ("LISTENING", "Listening"),
+            ("SPEAKING", "Speaking"),
+            ("READING", "Reading"),
+            ("WRITING", "Writing"),
+            ("GRAMMAR", "Grammar"),
+            ("VOCABULARY", "Vocabulary"),
+            ("PHONETICS", "Phonetics"),
+            ("ASSESSMENT", "Assessment"),
+        ],
+        default="LISTENING",
+        verbose_name=_("Activity Type")
     )
     estimated_duration = models.IntegerField(
         verbose_name=_("Estimated Duration"),

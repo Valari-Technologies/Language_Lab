@@ -37,6 +37,8 @@ def build_runtime_experience(experience, preview_payload):
         "grade": metadata.get("grade"),
         "subject": metadata.get("subject", ""),
         "estimatedDuration": metadata.get("estimated_duration", 0),
+        "experienceType": metadata.get("experience_type", "LESSON"),
+        "masteryThreshold": metadata.get("mastery_threshold", 70),
 
         "activities": []
     }
@@ -50,6 +52,8 @@ def build_runtime_experience(experience, preview_payload):
             "sequence": activity.get("display_order", 0),
             "estimatedDuration": activity.get("estimated_duration", 0),
             "skills": activity.get("skills", []),
+            "activityType": activity.get("activity_type", "LISTENING"),
+            "masteryThreshold": activity.get("mastery_threshold", 80),
             "screens": []
         }
 

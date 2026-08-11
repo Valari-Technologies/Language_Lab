@@ -50,6 +50,8 @@ def build_runtime_payload(experience, request=None):
         "subject": experience.subject,
         "language": experience.language,
         "difficulty": experience.difficulty,
+        "experience_type": experience.experience_type,
+        "mastery_threshold": experience.mastery_threshold,
         "estimated_duration": experience.estimated_duration,
         "learning_outcomes": [lo.text for lo in experience.learning_outcomes.all()],
         "learningOutcomes": [lo.text for lo in experience.learning_outcomes.all()],
@@ -237,6 +239,7 @@ def build_runtime_payload(experience, request=None):
             "skills": [s.name for s in act.skills.all()],
             "estimated_duration": act.estimated_duration,
             "mastery_threshold": act.mastery_threshold,
+            "activity_type": act.activity_type,
             "display_order": act.display_order,
             "order": act.display_order,
             "screens": screens_list
