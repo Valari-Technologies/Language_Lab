@@ -69,6 +69,9 @@ class LMSPackageListAPIView(APIView):
 
         # 2. Query PublishedPackages matching experience IDs or titles or assigned grade
         pkg_queryset = PublishedPackage.objects.filter(compression_status="COMPLETED", experience__status="APPROVED")
+        if student:
+            grade_ids = Class.objects.filter(school=student.school).values_list("grade_id", flat=True)
+            pkg_queryset = pkg_queryset.filter(experience__grade_id__in=grade_ids)
 
         # Fetch latest PublishVersion for each PublishedPackage
         latest_versions = []
@@ -158,8 +161,9 @@ class LMSPackageCheckUpdatesAPIView(APIView):
         grade = class_obj.grade if class_obj else None
 
         pkgs = PublishedPackage.objects.filter(compression_status="COMPLETED", experience__status="APPROVED")
-        # Remove grade-based filtering so all packages check for updates
-        pass
+        if student:
+            grade_ids = Class.objects.filter(school=student.school).values_list("grade_id", flat=True)
+            pkgs = pkgs.filter(experience__grade_id__in=grade_ids)
 
         updates_available = []
         for pkg in pkgs.select_related("experience", "experience__grade"):

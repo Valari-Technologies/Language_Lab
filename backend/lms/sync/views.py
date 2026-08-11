@@ -296,12 +296,17 @@ class LMSIngestReportsAPIView(APIView):
                     processed_keys.append(ikey)
                     continue
 
+                report_time_str = r.get('timestamp')
+                report_time = parse_datetime(report_time_str) if report_time_str else None
+                if not report_time:
+                    report_time = timezone.now()
+
                 with transaction.atomic():
                     SyncLog.objects.create(
                         idempotency_key=ikey,
-                        client_device_id=data.get('deviceId', ''),
-                        sync_type='INGEST_REPORT',
-                        status='SUCCESS'
+                        device_id=data.get('deviceId', ''),
+                        student_roll_no=student_roll,
+                        synced_at=timezone.now()
                     )
 
                     sp, created = StudentProgress.objects.get_or_create(
@@ -309,8 +314,7 @@ class LMSIngestReportsAPIView(APIView):
                         scenario_id=scenario_id,
                         defaults={
                             'completed': completed,
-                            'total_time_spent': time_spent,
-                            'synced_at': timezone.now()
+                            'total_time_spent': time_spent
                         }
                     )
                     if not created:
@@ -321,17 +325,21 @@ class LMSIngestReportsAPIView(APIView):
                     QuizAttempt.objects.create(
                         student=student,
                         scenario_id=scenario_id,
-                        screen_id=screen_id,
+                        activity_id=activity_id or "",
+                        screen_id=screen_id or "",
                         score=score,
                         max_score=max_score,
-                        answers=answers
+                        answers=answers,
+                        timestamp=report_time
                     )
 
                     ActivityReport.objects.create(
                         student=student,
                         scenario_id=scenario_id,
-                        activity_id=activity_id,
-                        completed=completed
+                        activity_id=activity_id or "",
+                        time_spent_seconds=time_spent,
+                        completed=completed,
+                        timestamp=report_time
                     )
 
                 processed_keys.append(ikey)

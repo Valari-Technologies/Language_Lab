@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: languagelab_db
+    environment:
+      POSTGRES_DB: languagelab
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: languagelab_backend
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=django-insecure-master-key-production-change-me
+      - ALLOWED_HOSTS=localhost,127.0.0.1,backend,db,0.0.0.0,*
+      - DB_NAME=languagelab
+      - DB_USER=postgres
+      - DB_PASSWORD=postgrespassword
+      - DB_HOST=db
+      - DB_PORT=5432
+      - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+      - LMS_SYNC_SECRET=super-secret-key-12345
+      - EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+      - GOOGLE_CLIENT_ID=299933614033-hipiatgbvbg11l7pr7072tjln3a7v5mc.apps.googleusercontent.com
+      - GOOGLE_CLIENT_SECRET=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
+      - GEMINI_API_KEY=AQ.Ab8RN6KSgHsGfNo1LgCF-wHMFgxLuolEEJ-rAO-Wjg3dzrOJ7A
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: languagelab_frontend
+    command: npm run dev -- --host
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_GOOGLE_CLIENT_ID=299933614033-hipiatgbvbg11l7pr7072tjln3a7v5mc.apps.googleusercontent.com
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
