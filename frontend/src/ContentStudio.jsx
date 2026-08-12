@@ -101,6 +101,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [filterStatus, setFilterStatus] = useState('');
   const [filterTag, setFilterTag] = useState('');
   const [activeMenuId, setActiveMenuId] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Multi-select and View Details states for Experiences
   const [selectedExperienceIds, setSelectedExperienceIds] = useState([]);
@@ -495,7 +497,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   };
 
 
-  const loadExperiencesData = async () => {
+  const loadExperiencesData = async (targetPage = page) => {
     try {
       const params = new URLSearchParams();
       if (filterGrade) params.append('grade', filterGrade);
@@ -503,17 +505,29 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       if (filterDifficulty) params.append('difficulty', filterDifficulty.toUpperCase());
       if (filterStatus) params.append('status', filterStatus.toUpperCase());
       if (filterTag) params.append('tags', filterTag);
+      params.append('page', targetPage);
 
       const url = `/api/v1/content/experiences/?${params.toString()}`;
       const res = await apiFetch(url);
       if (res.ok) {
         const data = await res.json();
-        setExperiences(data.results || data);
+        if (data.results) {
+          setExperiences(data.results);
+          setTotalCount(data.count || 0);
+        } else {
+          setExperiences(data);
+          setTotalCount(data.length || 0);
+        }
         setSelectedExperienceIds([]);
       }
     } catch (e) {
       console.error('Failed to load experiences in Content Studio', e);
     }
+  };
+
+  const handlePageChange = (newPage) => {
+    setPage(newPage);
+    loadExperiencesData(newPage);
   };
 
   const loadMediaData = async () => {
@@ -665,7 +679,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   };
 
   useEffect(() => {
-    loadExperiencesData();
+    setPage(1);
+    loadExperiencesData(1);
   }, [filterGrade, filterSubject, filterDifficulty, filterStatus, filterTag]);
 
   useEffect(() => {
@@ -4808,13 +4823,34 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 {/* Table Footer */}
                 <div style={{ padding: '1rem 1.5rem' }}>
                   <div className="cs-pagination-bar">
-                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Showing {experiences.length > 0 ? 1 : 0} to {experiences.length} of {experiences.length} experiences</span>
+                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Showing {experiences.length > 0 ? (page - 1) * 10 + 1 : 0} to {(page - 1) * 10 + experiences.length} of {totalCount} experiences</span>
                     <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                      <button className="cs-page-link">&lt;</button>
-                      <button className="cs-page-link active">1</button>
-                      <button className="cs-page-link">&gt;</button>
-
-
+                      <button 
+                        className="cs-page-link" 
+                        disabled={page === 1} 
+                        onClick={() => handlePageChange(page - 1)}
+                        style={{ cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.5 : 1 }}
+                      >
+                        &lt;
+                      </button>
+                      {Array.from({ length: Math.max(1, Math.ceil(totalCount / 10)) }, (_, i) => i + 1).map(pageNum => (
+                        <button
+                          key={pageNum}
+                          className={`cs-page-link ${page === pageNum ? 'active' : ''}`}
+                          onClick={() => handlePageChange(pageNum)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          {pageNum}
+                        </button>
+                      ))}
+                      <button 
+                        className="cs-page-link" 
+                        disabled={page >= Math.ceil(totalCount / 10)} 
+                        onClick={() => handlePageChange(page + 1)}
+                        style={{ cursor: page >= Math.ceil(totalCount / 10) ? 'not-allowed' : 'pointer', opacity: page >= Math.ceil(totalCount / 10) ? 0.5 : 1 }}
+                      >
+                        &gt;
+                      </button>
                     </div>
                   </div>
                 </div>

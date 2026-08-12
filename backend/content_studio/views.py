@@ -64,18 +64,6 @@ class ExperienceViewSet(viewsets.ModelViewSet):
         if role in ["SCHOOL_ADMIN", "TEACHER", "STUDENT"]:
             queryset = queryset.filter(status="APPROVED")
         
-        # Exclude draft experiences that have no activities or no screens
-        # (meaning they only completed Experience Builder but not Activity/Screen Builder)
-        if self.action == "list":
-            from django.db.models import Exists, OuterRef, Q
-            from content_studio.models import Activity, Screen
-            
-            has_activities = Activity.objects.filter(experience=OuterRef("pk"))
-            has_screens = Screen.objects.filter(activity__experience=OuterRef("pk"))
-            
-            queryset = queryset.filter(
-                ~Q(status="DRAFT") | (Q(status="DRAFT") & Exists(has_activities) & Exists(has_screens))
-            )
 
         grade = self.request.query_params.get("grade")
         status_param = self.request.query_params.get("status")
