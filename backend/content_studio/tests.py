@@ -1234,7 +1234,7 @@ class PublishPipelineTests(APITestCase):
         response = self.client.get(dl_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("attachment", response.get("Content-Disposition", ""))
-        self.assertIn(".elab", response.get("Content-Disposition", ""))
+        self.assertIn(".zip", response.get("Content-Disposition", ""))
 
         # School Admin gets 403
         self.client.force_authenticate(user=self.school_admin)
