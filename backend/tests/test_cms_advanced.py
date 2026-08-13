@@ -350,6 +350,6 @@ class TestPackageExportBundlesScreensAndMedia:
         download_response = anonymous_client.get(reverse("package-download", args=[version_id]))
 
         assert download_response.status_code == status.HTTP_200_OK
-        assert download_response["Content-Type"] == "application/octet-stream"
-        assert ".elab" in download_response["Content-Disposition"]
+        assert download_response["Content-Type"] == "application/zip"
+        assert ".zip" in download_response["Content-Disposition"]
         assert download_response["X-Checksum-SHA256"]

@@ -3336,19 +3336,22 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       const res = await apiFetch(`/api/v1/content/packages/${versionId}/download/`);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        showFeedback(errData.error || 'Failed to download .elab package', 'error');
+        showFeedback(errData.error || 'Failed to download package', 'error');
         return;
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename || `package_${versionId}.elab`;
+      const targetFilename = filename 
+        ? filename.replace(/\.elab$/, '.zip') 
+        : `package_${versionId}.zip`;
+      a.download = targetFilename.endsWith('.zip') ? targetFilename : `${targetFilename}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      showFeedback('.elab package downloaded!');
+      showFeedback('Package (.zip) downloaded!');
     } catch (err) {
       console.error(err);
       showFeedback('Download error occurred', 'error');
@@ -8201,13 +8204,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                             </tr>
                           ) : (
                             publishHistory.map((pkg, idx) => {
-                              const elabFilename = `${selectedExperience?.title?.replace(/\s+/g, '_') || 'Experience'}_v${pkg.version_number || '1.0.0'}.elab`;
+                              const zipFilename = `${selectedExperience?.title?.replace(/\s+/g, '_') || 'Experience'}_v${pkg.version_number || '1.0.0'}.zip`;
                               const isLatest = idx === 0;
                               return (
                                 <tr key={pkg.id}>
                                   <td style={{ fontWeight: 700, color: '#0284c7' }}>v{pkg.version_number || '—'}</td>
                                   <td style={{ fontWeight: 700 }}>#{pkg.build_number || (1000 + idx)}</td>
-                                  <td style={{ color: '#475569', fontSize: '0.72rem', fontFamily: 'monospace' }}>{elabFilename}</td>
+                                  <td style={{ color: '#475569', fontSize: '0.72rem', fontFamily: 'monospace' }}>{zipFilename}</td>
                                   <td>{pkg.package_size ? formatBytes(pkg.package_size) : '—'}</td>
                                   <td style={{ whiteSpace: 'nowrap' }}>{pkg.published_at ? new Date(pkg.published_at).toLocaleString() : '—'}</td>
                                   <td>
@@ -8219,16 +8222,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                   <td>
                                     <div style={{ display: 'flex', gap: 4 }}>
                                       <button
-                                        title="Download .elab package"
+                                        title="Download package (.zip)"
                                         data-testid="download-elab-btn"
-                                        onClick={() => handleDownloadPackageElab(pkg.id, elabFilename)}
+                                        onClick={() => handleDownloadPackageElab(pkg.id, zipFilename)}
                                         style={{
                                           background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe',
                                           borderRadius: 5, padding: '3px 7px', fontSize: '0.68rem',
                                           fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap'
                                         }}
                                       >
-                                        ⬇ .elab
+                                        ⬇ .zip
                                       </button>
                                     </div>
                                   </td>

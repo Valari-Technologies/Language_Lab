@@ -929,11 +929,12 @@ class PackageViewSet(viewsets.ViewSet):
             )
 
         elab_filename = os.path.basename(file_path)
+        zip_filename = elab_filename.replace('.elab', '.zip') if elab_filename.endswith('.elab') else f"{elab_filename}.zip"
         response = FileResponse(
             open(file_path, "rb"),
-            content_type="application/octet-stream",
+            content_type="application/zip",
         )
-        response["Content-Disposition"] = f'attachment; filename="{elab_filename}"'
+        response["Content-Disposition"] = f'attachment; filename="{zip_filename}"'
         response["X-Checksum-SHA256"] = version.checksum or ""
         return response
 
