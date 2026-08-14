@@ -85,12 +85,10 @@ class LoginAPIView(APIView):
                     status=status.HTTP_403_FORBIDDEN
                 )
         elif user.role == "STUDENT":
-            from teacher.models import Student
-            if not Student.objects.filter(user=user).exists():
-                return Response(
-                    {"message": "Access denied. Your Student profile was not found or has been deleted."},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+            return Response(
+                {"message": "Access denied. Students cannot log in to the CMS platform. Student access is restricted to the offline LMS application only."},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         school_obj = get_user_school(user)
         if school_obj and not school_obj.is_active:

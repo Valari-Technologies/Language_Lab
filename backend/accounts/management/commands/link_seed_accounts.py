@@ -105,7 +105,7 @@ class Command(BaseCommand):
                 super_user = User.objects.create_superuser(
                     username="super_admin",
                     email="superadmin@languagelab.edu.in",
-                    password=os.environ.get("SUPER_ADMIN_PASSWORD") or "admin123",
+                    password=os.environ.get("SUPER_ADMIN_PASSWORD") or "SuperAdmin@123",
                     role="SUPER_ADMIN",
                     full_name="Super Admin Staff"
                 )
@@ -120,17 +120,14 @@ class Command(BaseCommand):
             # 2. Link school_admin
             admin_user = User.objects.filter(username="school_admin").first()
             if not admin_user:
-                if not school_admin_pass:
-                    self.stdout.write(self.style.WARNING("Username 'school_admin' not found and no password provided. Skipping creation."))
-                else:
-                    admin_user = User.objects.create_user(
-                        username="school_admin",
-                        email="schooladmin@timematricschool.edu.in",
-                        password=school_admin_pass,
-                        role="SCHOOL_ADMIN",
-                        full_name="Karthik Subramanian"
-                    )
-                    self.stdout.write(self.style.SUCCESS("Created 'school_admin' user."))
+                admin_user = User.objects.create_user(
+                    username="school_admin",
+                    email="schooladmin@timematricschool.edu.in",
+                    password=school_admin_pass or "SchoolAdmin@123",
+                    role="SCHOOL_ADMIN",
+                    full_name="Karthik Subramanian"
+                )
+                self.stdout.write(self.style.SUCCESS("Created 'school_admin' user."))
             else:
                 admin_user.email = "schooladmin@timematricschool.edu.in"
                 admin_user.role = "SCHOOL_ADMIN"
@@ -146,71 +143,65 @@ class Command(BaseCommand):
                 if created:
                     self.stdout.write(self.style.SUCCESS(f"Linked 'school_admin' to School '{school.school_name}' via SchoolAdminProfile."))
                 else:
-                    # Idempotently ensure correct school
                     if profile.school != school:
                         profile.school = school
                         profile.save()
                         self.stdout.write(self.style.SUCCESS(f"Updated SchoolAdminProfile for 'school_admin' to link to '{school.school_name}'."))
-                    else:
-                        self.stdout.write("SchoolAdminProfile for 'school_admin' already correct.")
 
-            # 3. Link teacher01
-            teacher_user = User.objects.filter(username="teacher01").first()
-            if not teacher_user:
-                if not teacher_pass:
-                    self.stdout.write(self.style.WARNING("Username 'teacher01' not found and no password provided. Skipping creation."))
-                else:
+            # 3. Link teacher_demo and teacher01
+            for t_username in ["teacher_demo", "teacher01"]:
+                teacher_user = User.objects.filter(username=t_username).first()
+                if not teacher_user:
                     teacher_user = User.objects.create_user(
-                        username="teacher01",
-                        email="rajesh.kumar@timematricschool.edu.in",
-                        password=teacher_pass,
+                        username=t_username,
+                        email=f"{t_username}@timematricschool.edu.in",
+                        password=teacher_pass or "Teacher@123",
                         role="TEACHER",
                         full_name="Rajesh Kumar"
                     )
-                    self.stdout.write(self.style.SUCCESS("Created 'teacher01' user."))
-            else:
-                teacher_user.email = "rajesh.kumar@timematricschool.edu.in"
-                teacher_user.role = "TEACHER"
-                teacher_user.full_name = "Rajesh Kumar"
-                teacher_user.save()
-                self.stdout.write(self.style.SUCCESS("Updated/verified 'teacher01' user."))
-
-            if teacher_user:
-                teacher, created = Teacher.objects.get_or_create(
-                    user=teacher_user,
-                    defaults={
-                        "school": school,
-                        "qualification": "M.Sc. B.Ed. English",
-                        "experience_years": 8
-                    }
-                )
-                if created:
-                    self.stdout.write(self.style.SUCCESS(f"Linked 'teacher01' to School '{school.school_name}' via Teacher profile."))
+                    self.stdout.write(self.style.SUCCESS(f"Created '{t_username}' user."))
                 else:
-                    # Idempotently ensure correct school
-                    teacher.school = school
-                    teacher.qualification = "M.Sc. B.Ed. English"
-                    teacher.experience_years = 8
-                    teacher.save()
-                    self.stdout.write(self.style.SUCCESS(f"Updated Teacher profile for 'teacher01'."))
+                    teacher_user.email = f"{t_username}@timematricschool.edu.in"
+                    teacher_user.role = "TEACHER"
+                    teacher_user.full_name = "Rajesh Kumar"
+                    teacher_user.save()
+                    self.stdout.write(self.style.SUCCESS(f"Updated/verified '{t_username}' user."))
 
-            # 3b. Create/update content creator my_creator
-            creator_user = User.objects.filter(username="my_creator").first()
-            if not creator_user:
-                creator_user = User.objects.create_user(
-                    username="my_creator",
-                    email="creator@languagelab.edu.in",
-                    password=os.environ.get("CREATOR_PASSWORD") or "creator123",
-                    role="CONTENT_CREATOR",
-                    full_name="Devanand Sharma"
-                )
-                self.stdout.write(self.style.SUCCESS("Created 'my_creator' user."))
-            else:
-                creator_user.email = "creator@languagelab.edu.in"
-                creator_user.role = "CONTENT_CREATOR"
-                creator_user.full_name = "Devanand Sharma"
-                creator_user.save()
-                self.stdout.write(self.style.SUCCESS("Updated/verified 'my_creator' user."))
+                if teacher_user:
+                    teacher_profile, created = Teacher.objects.get_or_create(
+                        user=teacher_user,
+                        defaults={
+                            "school": school,
+                            "qualification": "M.Sc. B.Ed. English",
+                            "experience_years": 8
+                        }
+                    )
+                    if created:
+                        self.stdout.write(self.style.SUCCESS(f"Linked '{t_username}' to School '{school.school_name}' via Teacher profile."))
+                    else:
+                        teacher_profile.school = school
+                        teacher_profile.qualification = "M.Sc. B.Ed. English"
+                        teacher_profile.experience_years = 8
+                        teacher_profile.save()
+
+            # 3b. Create/update content_creator and my_creator
+            for c_username in ["content_creator", "my_creator"]:
+                creator_user = User.objects.filter(username=c_username).first()
+                if not creator_user:
+                    creator_user = User.objects.create_user(
+                        username=c_username,
+                        email=f"{c_username}@languagelab.edu.in",
+                        password=os.environ.get("CREATOR_PASSWORD") or "Creator@123",
+                        role="CONTENT_CREATOR",
+                        full_name="Devanand Sharma"
+                    )
+                    self.stdout.write(self.style.SUCCESS(f"Created '{c_username}' user."))
+                else:
+                    creator_user.email = f"{c_username}@languagelab.edu.in"
+                    creator_user.role = "CONTENT_CREATOR"
+                    creator_user.full_name = "Devanand Sharma"
+                    creator_user.save()
+                    self.stdout.write(self.style.SUCCESS(f"Updated/verified '{c_username}' user."))
 
             # 3c. Create/update default student (student01)
             student_user = User.objects.filter(username="student01").first()

@@ -3379,12 +3379,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       }} />
                     </div>
                     <div className="sd-form-group">
-                      <label className="sd-form-label">School ID / Slug *</label>
-                      <input className="sd-form-input" type="text" required placeholder="e.g. nirmala (no spaces/special chars)" disabled={modalType === 'edit'} value={schoolForm.school_id} onChange={e => setSchoolForm({ ...schoolForm, school_id: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })} />
-                    </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Unique School Code *</label>
-                      <input className="sd-form-input" type="text" required placeholder="Auto-generated" value={schoolForm.school_code} onChange={e => setSchoolForm({ ...schoolForm, school_code: e.target.value })} />
+                      <label className="sd-form-label">Unique School Code</label>
+                      <input className="sd-form-input" type="text" readOnly placeholder="Auto-generated" value={schoolForm.school_code || ''} style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }} />
                     </div>
                     <div className="sd-form-group">
                       <label className="sd-form-label">Email Address *</label>
@@ -3397,10 +3393,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     <div className="sd-form-group">
                       <label className="sd-form-label">LAN / Landline Number <span style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: 400 }}>(Optional)</span></label>
                       <input className="sd-form-input" type="text" placeholder="Enter LAN / landline number" value={schoolForm.lan || schoolForm.lan_phone || ''} onChange={e => setSchoolForm({ ...schoolForm, lan: e.target.value, lan_phone: e.target.value })} />
-                    </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">City Scope</label>
-                      <input className="sd-form-input" type="text" value={schoolForm.city} onChange={e => setSchoolForm({ ...schoolForm, city: e.target.value })} />
                     </div>
                     <div className="sd-form-group">
                       <label className="sd-form-label">Address</label>

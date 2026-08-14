@@ -3444,10 +3444,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
 
 
-  const handleStartPreview = async (targetActId = null, targetScrId = null) => {
-    const expId = selectedExperience?.id;
+  const handleStartPreview = async (targetExpId = null, targetActId = null, targetScrId = null) => {
+    const expId = targetExpId || selectedExperience?.id;
     if (!expId) {
-      triggerAlert("Please select or create an experience first.", "No Experience Selected", "warning");
+      setPreviewPayload(null);
+      setView('preview');
       return;
     }
     try {
@@ -3455,6 +3456,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       if (res.ok) {
         const payload = await res.json();
         setPreviewPayload(payload);
+        if (targetExpId && (!selectedExperience || selectedExperience.id !== targetExpId)) {
+          const expObj = experiences.find(e => e.id === targetExpId);
+          if (expObj) setSelectedExperience(expObj);
+        }
 
         let actIdx = 0;
         let scrIdx = 0;
@@ -3488,7 +3493,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
 
   return (
-    <div className="cs-layout" style={view === 'preview' ? { backgroundColor: '#ffffff' } : { backgroundImage: `url(${contentStudioBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}>
+    <div className="cs-layout" style={{ backgroundImage: `url(${contentStudioBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}>
       {/* Scope CSS variables & scoped rules */}
       <style>{`
         .cs-layout {
@@ -4064,7 +4069,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 key={item.key}
                 onClick={() => {
                   if (item.key === 'preview') {
-                    handleStartPreview();
+                    if (selectedExperience?.id) {
+                      handleStartPreview();
+                    } else {
+                      setPreviewPayload(null);
+                      setView('preview');
+                    }
                   } else {
                     if (item.key === 'screen-builder') {
                       setIsEditingScreen(false);
@@ -4693,6 +4703,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           />
                         </th>
                       )}
+                      <th style={{ width: '48px', paddingLeft: '1.25rem' }}>#</th>
                       <th>Lessons</th>
                       <th>Type</th>
                       <th>Grade</th>
@@ -4707,10 +4718,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   <tbody>
                     {experiences.length === 0 ? (
                       <tr>
-                        <td colSpan={isSelectMode ? "10" : "9"} style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No lessons found. Click "+ New Lesson" to create one!</td>
+                        <td colSpan={isSelectMode ? "11" : "10"} style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No lessons found. Click "+ New Lesson" to create one!</td>
                       </tr>
                     ) : (
-                      experiences.map((row) => (
+                      experiences.map((row, idx) => (
                         <tr key={row.id} style={{ cursor: 'pointer' }} onClick={() => loadExperienceDetail(row, true)}>
                           {isSelectMode && (
                             <td style={{ paddingLeft: '1.5rem' }} onClick={e => e.stopPropagation()}>
@@ -4722,19 +4733,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               />
                             </td>
                           )}
+                          <td style={{ paddingLeft: '1.25rem', fontWeight: 800, color: '#0284c7', fontSize: '0.84rem' }}>
+                            #{idx + 1}
+                          </td>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                              <div style={{ width: 48, height: 34, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden' }}>
+                              <div style={{ width: 44, height: 32, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
                                 {getThumbnailUrl(row.thumbnail) ? <img src={getThumbnailUrl(row.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
                               </div>
-                              <div>
-                                <div style={{ fontWeight: 700, color: '#0f172a', textTransform: 'uppercase' }}>{row.title}</div>
-                                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  {row.description || 'No description provided.'} &nbsp;
-                                  {row.tags && row.tags.map(t => (
-                                    <span key={t} style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '9px', fontWeight: 700, padding: '1px 4px', borderRadius: 4 }}>{t}</span>
-                                  ))}
-                                </div>
+                              <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.86rem' }}>
+                                {row.title}
                               </div>
                             </div>
                           </td>
@@ -7751,8 +7759,149 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             )
           )}
 
-          {/* ───────────────── VIEW 6: RUNTIME PREVIEW (Image 1 of remaining) ───────────────── */}
+          {/* ───────────────── VIEW 6: RUNTIME PREVIEW ───────────────── */}
           {view === 'preview' && (() => {
+            // Sort all created lessons chronologically (earliest created #1 to latest created #N)
+            const sortedExperiences = [...(experiences || [])].sort((a, b) => (new Date(a.created_at || a.id) - new Date(b.created_at || b.id)));
+
+            // If no experience payload is loaded, show the Lesson Selector Grid View
+            if (!previewPayload || !selectedExperience) {
+              return (
+                <div style={{ padding: '1.5rem 2rem', minHeight: 'calc(100vh - 80px)', background: 'transparent' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                    <div>
+                      <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 4px 0', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <FiPlay style={{ color: '#0284c7' }} /> Runtime Preview Library
+                      </h1>
+                      <p style={{ fontSize: '0.84rem', color: '#64748b', margin: 0 }}>
+                        Select any lesson below (drafted or published) to test its interactive student runtime screens.
+                      </p>
+                    </div>
+                    <button className="cs-btn-outline" onClick={() => setView('experiences')}>
+                      View Full Library
+                    </button>
+                  </div>
+
+                  {sortedExperiences.length === 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem 2rem', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', textAlign: 'center', gap: '1.25rem' }}>
+                      <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7' }}>
+                        <FiBookOpen style={{ fontSize: '2.2rem' }} />
+                      </div>
+                      <div>
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#1e293b', margin: '0 0 6px 0' }}>No Lessons Created Yet</h3>
+                        <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '360px', margin: '0 auto' }}>
+                          Create your first lesson in the Lesson Builder to test interactive screens here.
+                        </p>
+                      </div>
+                      <button className="cs-btn-primary" onClick={() => setView('experience-builder')}>
+                        + Create First Lesson
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
+                      {sortedExperiences.map((exp, idx) => {
+                        const gradeObj = gradesList.find(g => String(g.id) === String(exp.grade_id || exp.grade));
+                        const gradeName = gradeObj ? gradeObj.grade_name : 'Grade Level';
+                        const thumbUrl = getThumbnailUrl(exp.thumbnail);
+                        const lessonNumber = idx + 1;
+                        return (
+                          <div
+                            key={exp.id}
+                            style={{
+                              background: '#ffffff',
+                              borderRadius: '16px',
+                              border: '1.5px solid #e2e8f0',
+                              padding: '1.25rem',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'space-between',
+                              boxShadow: '0 4px 10px rgba(0, 0, 0, 0.03)',
+                              transition: 'all 0.2s ease',
+                              cursor: 'pointer'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.borderColor = '#0284c7';
+                              e.currentTarget.style.transform = 'translateY(-3px)';
+                              e.currentTarget.style.boxShadow = '0 10px 20px rgba(2, 132, 199, 0.1)';
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.borderColor = '#e2e8f0';
+                              e.currentTarget.style.transform = 'translateY(0)';
+                              e.currentTarget.style.boxShadow = '0 4px 10px rgba(0, 0, 0, 0.03)';
+                            }}
+                            onClick={() => handleStartPreview(exp.id)}
+                          >
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <span className="cs-badge" style={{ background: '#0284c7', color: '#ffffff', fontWeight: 800 }}>
+                                    Lesson #{lessonNumber}
+                                  </span>
+                                  <span className="cs-badge cs-badge-published" style={{ background: '#e0f2fe', color: '#0369a1', fontWeight: 700 }}>
+                                    {gradeName}
+                                  </span>
+                                </div>
+                                <span className={`cs-badge ${exp.status === 'APPROVED' ? 'cs-badge-approved' : 'cs-badge-draft'}`}>
+                                  {exp.status || 'DRAFT'}
+                                </span>
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '0.85rem', marginBottom: '0.85rem' }}>
+                                <div style={{ width: '56px', height: '56px', borderRadius: '10px', background: '#f1f5f9', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7', fontSize: '1.5rem', border: '1px solid #e2e8f0' }}>
+                                  {thumbUrl ? (
+                                    <img src={thumbUrl} alt={exp.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  ) : (
+                                    <FiBookOpen />
+                                  )}
+                                </div>
+                                <div>
+                                  <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 4px 0', lineHeight: 1.3 }}>
+                                    {exp.title}
+                                  </h3>
+                                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                    {exp.subject || 'English'} · {exp.difficulty || 'Beginner'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <p style={{ fontSize: '0.78rem', color: '#475569', margin: '0 0 1rem 0', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                {exp.description || 'No description provided.'}
+                              </p>
+                            </div>
+
+                            <button
+                              className="cs-btn-primary"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartPreview(exp.id);
+                              }}
+                              style={{
+                                width: '100%',
+                                background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: '10px',
+                                padding: '0.6rem',
+                                fontWeight: 700,
+                                fontSize: '0.82rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                boxShadow: '0 2px 8px rgba(2, 132, 199, 0.25)'
+                              }}
+                            >
+                              <FiPlay style={{ fontSize: '0.9rem' }} /> Preview Lesson Screens
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
             const activeActivity = previewPayload?.activities?.[previewActivityIndex];
             const activeScreen = activeActivity?.screens?.[previewScreenIndex];
             const totalScreens = activeActivity?.screens?.length || 1;
@@ -7772,7 +7921,28 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   flexShrink: 0,
                   boxSizing: 'border-box'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <button
+                      className="cs-btn-outline"
+                      onClick={() => {
+                        setPreviewPayload(null);
+                      }}
+                      style={{
+                        background: '#e0f2fe',
+                        border: '1px solid #bae6fd',
+                        borderRadius: '8px',
+                        padding: '0.4rem 0.8rem',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        color: '#0369a1',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <FiArrowLeft /> Select Different Lesson
+                    </button>
                     <button
                       className="cs-btn-outline"
                       onClick={() => setView('screen-builder')}
@@ -7790,7 +7960,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         gap: '6px'
                       }}
                     >
-                      <FiArrowLeft /> Back to Editor
+                      Back to Editor
                     </button>
                     <div style={{ borderLeft: '1px solid #cbd5e1', height: '24px' }} />
                     <div>

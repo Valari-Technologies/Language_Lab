@@ -17,7 +17,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: languagelab_backend
-    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    command: sh -c "python manage.py migrate && python manage.py link_seed_accounts && python manage.py runserver 0.0.0.0:8000"
     volumes:
       - ./backend:/app
     ports:
