@@ -526,7 +526,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [schoolSubTab, setSchoolSubTab] = useState('schools-list');
   const [isAddingSchool, setIsAddingSchool] = useState(false);
   const [newSchoolForm, setNewSchoolForm] = useState({
-    school_name: '', school_code: '', phone: '', address: '', city: '', state: '', pincode: '',
+    school_name: '', school_code: '', phone: '', lan: '', address: '', city: '', state: '', pincode: '',
     admin_name: '', email: '', password: '',
     maxLmsServers: 2, concurrentUsersPerServer: 40, licenseDuration: '1 Year', expiryDate: ''
   });
@@ -1356,6 +1356,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const handleAddNewSchoolWithAdmin = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+
+    const cleanPhone = (newSchoolForm.phone || '').replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      setErrorMsg('Phone Number must be exactly 10 numeric digits.');
+      return;
+    }
+
     setLoading(true);
     try {
       const adminPassword = generateSchoolAdminPassword(newSchoolForm.admin_name);
@@ -1366,7 +1373,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         school_name: newSchoolForm.school_name,
         school_code: newSchoolForm.school_code || '',
         address: `${newSchoolForm.address}, ${newSchoolForm.city}, ${newSchoolForm.state} - ${newSchoolForm.pincode}`,
-        phone: newSchoolForm.phone || '0000000000',
+        phone: cleanPhone,
+        lan_phone: newSchoolForm.lan || '',
+        lan: newSchoolForm.lan || '',
         contactEmail: newSchoolForm.email || 'school@example.com',
         email: newSchoolForm.email || 'school@example.com',
         logo: '',
@@ -1398,7 +1407,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         addRecentActivity(`School "${newSchoolForm.school_name}" registered`, 'School', '#dcfce7', '#15803d', <FiGrid />, '#3b82f6', '#eff6ff');
         setIsAddingSchool(false);
         setNewSchoolForm({
-          school_name: '', school_code: '', phone: '', address: '', city: '', state: '', pincode: '',
+          school_name: '', school_code: '', phone: '', lan: '', address: '', city: '', state: '', pincode: '',
           admin_name: '', email: '', password: '',
           maxLmsServers: 2, concurrentUsersPerServer: 40, licenseDuration: '1 Year', expiryDate: ''
         });
@@ -2213,9 +2222,29 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                               value={newSchoolForm.pincode} onChange={e => setNewSchoolForm({ ...newSchoolForm, pincode: e.target.value })} />
                           </div>
                           <div className="sd-form-group">
-                            <label className="sd-form-label">Phone Number <span style={{ color: '#ef4444' }}>*</span></label>
-                            <input className="sd-form-input" type="text" placeholder="Enter phone number" required
-                              value={newSchoolForm.phone || ''} onChange={e => setNewSchoolForm({ ...newSchoolForm, phone: e.target.value })} />
+                            <label className="sd-form-label">Phone Number (10 Digits) <span style={{ color: '#ef4444' }}>*</span></label>
+                            <input
+                              className="sd-form-input"
+                              type="text"
+                              maxLength={10}
+                              placeholder="Enter 10 digit phone number"
+                              required
+                              value={newSchoolForm.phone || ''}
+                              onChange={e => {
+                                const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                setNewSchoolForm({ ...newSchoolForm, phone: digitsOnly });
+                              }}
+                            />
+                          </div>
+                          <div className="sd-form-group">
+                            <label className="sd-form-label">LAN / Landline Number <span style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: 400 }}>(Optional)</span></label>
+                            <input
+                              className="sd-form-input"
+                              type="text"
+                              placeholder="Enter LAN / landline number"
+                              value={newSchoolForm.lan || ''}
+                              onChange={e => setNewSchoolForm({ ...newSchoolForm, lan: e.target.value })}
+                            />
                           </div>
                         </div>
                       </div>
@@ -2366,8 +2395,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                           {paginate(filterList(schools), schoolsPage).map((s, i) => {
                             const sid = s.school_id || s.id;
                             const admin = schoolAdmins.find(sa => sa.school === s.school_id || sa.school_id === s.school_id);
-                            const adminName = admin ? (admin.full_name || admin.username) : (s.admin_name || 'N/A');
-                            const adminEmail = admin ? admin.email : (s.email || 'admin@example.com');
+                            const adminName = s.admin_name || (admin ? (admin.full_name || admin.username) : 'N/A');
+                            const adminEmail = s.admin_email || (admin ? admin.email : (s.email || s.contactEmail || '—'));
+                            const schoolCode = s.school_code || s.schoolId || '—';
                             const isSchoolActive = s.is_active !== false;
 
                             return (
@@ -2382,7 +2412,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                   </td>
                                 )}
                                 <td style={{ fontWeight: 600, color: '#1e293b' }}>{s.school_name}</td>
-                                <td style={{ fontFamily: 'monospace', fontWeight: 600, color: '#475569' }}>{s.school_code || '—'}</td>
+                                <td style={{ fontFamily: 'monospace', fontWeight: 600, color: '#475569' }}>{schoolCode}</td>
                                 <td>{adminName}</td>
                                 <td>{adminEmail}</td>
                                 <td>
@@ -3361,8 +3391,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       <input className="sd-form-input" type="email" required value={schoolForm.email} onChange={e => setSchoolForm({ ...schoolForm, email: e.target.value })} />
                     </div>
                     <div className="sd-form-group">
-                      <label className="sd-form-label">Phone Number</label>
-                      <input className="sd-form-input" type="text" value={schoolForm.phone} onChange={e => setSchoolForm({ ...schoolForm, phone: e.target.value })} />
+                      <label className="sd-form-label">Phone Number (10 Digits)</label>
+                      <input className="sd-form-input" type="text" maxLength={10} placeholder="Enter 10 digit phone number" value={schoolForm.phone || ''} onChange={e => setSchoolForm({ ...schoolForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
+                    </div>
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">LAN / Landline Number <span style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: 400 }}>(Optional)</span></label>
+                      <input className="sd-form-input" type="text" placeholder="Enter LAN / landline number" value={schoolForm.lan || schoolForm.lan_phone || ''} onChange={e => setSchoolForm({ ...schoolForm, lan: e.target.value, lan_phone: e.target.value })} />
                     </div>
                     <div className="sd-form-group">
                       <label className="sd-form-label">City Scope</label>

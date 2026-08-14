@@ -112,11 +112,13 @@ class SchoolViewSet(CMSBaseViewSet):
 
         address = data.get("address", "")
         phone = data.get("phone", "")
+        lan_phone = data.get("lan_phone") or data.get("lan") or ""
+        school_code = data.get("school_code") or ""
         contact_email = data.get("contactEmail") or data.get("email") or ""
         
         admin_name = data.get("admin_name") or data.get("admin_full_name") or "School Admin"
         admin_username = data.get("admin_username")
-        admin_email = data.get("admin_email")
+        admin_email = data.get("admin_email") or contact_email
         admin_password = data.get("admin_password")
         
         max_servers = int(data.get("maxLmsServers", 2))
@@ -137,14 +139,18 @@ class SchoolViewSet(CMSBaseViewSet):
                     expiry_date = issue_date + timedelta(days=365)
             else:
                 expiry_date = issue_date + timedelta(days=365)
-                
+
         with transaction.atomic():
             sch_id_str = "SCH-" + uuid.uuid4().hex[:8].upper()
+            if not school_code:
+                school_code = sch_id_str
             school = School.objects.create(
                 schoolId=sch_id_str,
+                school_code=school_code,
                 school_name=school_name,
                 address=address,
                 phone=phone,
+                lan_phone=lan_phone,
                 email=contact_email,
                 contactEmail=contact_email,
                 is_active=True
@@ -153,7 +159,7 @@ class SchoolViewSet(CMSBaseViewSet):
             if not admin_username:
                 admin_username = f"admin_{uuid.uuid4().hex[:6]}"
             if User.objects.filter(username=admin_username).exists():
-                raise Response({"error": "Admin username already exists."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "Admin username already exists."}, status=status.HTTP_400_BAD_REQUEST)
                 
             admin_user = User.objects.create_user(
                 username=admin_username,
@@ -184,6 +190,39 @@ class SchoolViewSet(CMSBaseViewSet):
                 user=admin_user,
                 school=school
             )
+
+        # Dispatch welcome email with credentials to recipient
+        recipient = admin_email or contact_email
+        if recipient and admin_password:
+            try:
+                from django.core.mail import send_mail
+                from django.conf import settings
+                subject = f"Welcome to Language Lab - Credentials for {school_name}"
+                message = f"""Hello {admin_name},
+
+Your School Admin account for '{school_name}' has been created successfully.
+
+Here are your account credentials:
+--------------------------------------------
+School Code: {school_code}
+Username: {admin_username}
+Password: {admin_password}
+--------------------------------------------
+
+Please use these credentials to sign in to the Language Lab CMS portal.
+
+Best regards,
+Language Lab Team
+"""
+                send_mail(
+                    subject=subject,
+                    message=message,
+                    from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@languagelab.com"),
+                    recipient_list=[recipient],
+                    fail_silently=True,
+                )
+            except Exception as mail_err:
+                pass
             
         serializer = self.get_serializer(school)
         return Response(
@@ -193,6 +232,23 @@ class SchoolViewSet(CMSBaseViewSet):
             },
             status=status.HTTP_201_CREATED
         )
+
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        if response.status_code == status.HTTP_200_OK:
+            instance = self.get_object()
+            new_email = request.data.get("email") or request.data.get("contactEmail")
+            if new_email:
+                instance.email = new_email
+                instance.contactEmail = new_email
+                instance.save()
+                if instance.schoolAdminId:
+                    instance.schoolAdminId.email = new_email
+                    instance.schoolAdminId.save(update_fields=["email"])
+            serializer = self.get_serializer(instance)
+            return Response({"message": "School updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+        return response
+
 
 
 class ActivateServerAPIView(APIView):

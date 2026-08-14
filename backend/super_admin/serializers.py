@@ -35,10 +35,14 @@ class GradeDetailSerializer(serializers.ModelSerializer):
 class SchoolSerializer(serializers.ModelSerializer):
     license = LicenseSerializer(source='school_license', read_only=True)
     lms_servers = LmsServerSerializer(many=True, read_only=True)
+    admin_name = serializers.CharField(source='schoolAdminId.full_name', read_only=True)
+    admin_username = serializers.CharField(source='schoolAdminId.username', read_only=True)
+    admin_email = serializers.CharField(source='schoolAdminId.email', read_only=True)
 
     class Meta:
         model = School
         fields = '__all__'
+
 
 
 from django.core.exceptions import ValidationError as DjangoValidationError
