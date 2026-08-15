@@ -16,6 +16,27 @@ import { API_BASE_URL } from './config';
 import dashboardHeaderBanner from './assets/1.jpeg';
 import superAdminBg from './assets/superadminbg.png';
 
+const getUserInitials = (u, defaultVal = 'U') => {
+  if (!u) return defaultVal;
+  const name = (u.full_name || u.username || '').trim();
+  if (!name) return defaultVal;
+  
+  const parts = name.split(/[\s_\-]+/);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  
+  const lower = name.toLowerCase();
+  if (lower.startsWith('prakash') && lower.includes('raj')) {
+    return 'PR';
+  }
+  if (lower.startsWith('super') && lower.includes('admin')) {
+    return 'SA';
+  }
+  
+  return name.slice(0, 2).toUpperCase();
+};
+
 const resolvePreviewUrl = (url) => {
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
@@ -627,6 +648,10 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     }
   };
 
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false);
   const [profileForm, setProfileForm] = useState({ username: user?.username || '', email: user?.email || '', full_name: user?.full_name || '', phone_no: user?.phone_no || '', current_password: '', password: '' });
   const [schoolForm, setSchoolForm] = useState({ school_name: '', school_code: '', address: '', phone: '', email: '', logo: '', is_active: true });
   const [publishForm, setPublishForm] = useState({ release_name: '', grade: '', total_experiences: 0, status: 'DRAFT', export_file: '', checksum: '' });
@@ -1303,6 +1328,10 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+    if (profileForm.phone_no && profileForm.phone_no.replace(/\D/g, '').length !== 10) {
+      setErrorMsg('Phone number must be exactly 10 numeric digits.');
+      return;
+    }
     setActionLoading(true);
     try {
       const res = await apiFetch('/api/users/profile/', {
@@ -1635,7 +1664,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               {user?.profile_picture ? (
                 <img src={user.profile_picture} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
               ) : (
-                (user?.username || 'AD').slice(0, 2).toUpperCase()
+                getUserInitials(user, 'AD')
               )}
             </div>
             <div className="sd-user-meta" style={{ flex: 1 }}>
@@ -1715,10 +1744,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             </h2>
           </div>
           <div className="sd-topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}>
-            <div className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.5rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600 }}>
-              <FiCalendar /> {formatDateTime(currentTime)}
-            </div>
-
             <div style={{ position: 'relative' }}>
               <button className="sd-icon-btn" style={{ position: 'relative' }} onClick={(e) => { e.stopPropagation(); setShowNotifDropdown(!showNotifDropdown); }}>
                 <FiBell />
@@ -2984,8 +3009,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         <th style={{ width: '15%' }}>Duration</th>
                         <th style={{ width: '15%' }}>Status</th>
                         <th style={{ width: isSelectMode ? '15%' : '16%' }}>Date Submitted</th>
-                        <th style={{ textAlign: 'right', width: isSelectMode ? '10%' : '15%', paddingRight: '1rem' }}>Actions</th>
-                      </tr>
+                        <th style={{ textAlign: 'center', width: isSelectMode ? '10%' : '15%' }}>Actions</th>                      </tr>
                     </thead>
                     <tbody style={{ overflow: 'visible' }}>
                       {submittedExperiences.length === 0 ? (
@@ -3031,7 +3055,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                               </span>
                             </td>
                             <td style={{ width: isSelectMode ? '15%' : '16%' }}>{new Date(exp.updated_at).toLocaleDateString()}</td>
-                            <td style={{ textAlign: 'right', width: isSelectMode ? '10%' : '15%', paddingRight: '1rem' }}>
+                            <td style={{ textAlign: 'center', width: isSelectMode ? '10%' : '15%' }}>
                               <button
                                 style={{
                                   border: 'none',
@@ -3109,24 +3133,56 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         </div>
                       )}
                       <div
-                        style={{ position: 'relative', margin: '0.5rem 0', cursor: 'pointer' }}
-                        onClick={() => document.getElementById('profile-avatar-input').click()}
+                        style={{ position: 'relative', margin: '0.5rem 0' }}
                       >
                         <div style={{ width: '96px', height: '96px', borderRadius: '50%', border: '4px solid #eff6ff', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(11, 117, 179, 0.2)', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           {user?.profile_picture ? (
                             <img src={user.profile_picture} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           ) : (
                             <div style={{ width: '100%', height: '100%', background: '#0b75b3', color: '#fff', fontWeight: 800, fontSize: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              {(user?.username || 'U').slice(0, 2).toUpperCase()}
+                              {getUserInitials(user, 'U')}
                             </div>
                           )}
                         </div>
-                        <div
-                          style={{ position: 'absolute', bottom: 0, right: 0, background: '#0b75b3', color: '#fff', padding: '0.45rem', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: '2px solid #fff', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          title="Upload Photo"
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setShowAvatarMenu(!showAvatarMenu); }}
+                          style={{ position: 'absolute', bottom: 0, right: 0, background: '#0b75b3', color: '#fff', padding: '0.45rem', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: '2px solid #fff', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }}
+                          title="Edit Profile Picture"
                         >
-                          <FiUpload />
-                        </div>
+                          <FiEdit2 />
+                        </button>
+
+                        {showAvatarMenu && (
+                          <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: '8px', width: '150px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 100, padding: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }} onClick={e => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowAvatarMenu(false);
+                                document.getElementById('profile-avatar-input').click();
+                              }}
+                              style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.8rem', textAlign: 'left', cursor: 'pointer', borderRadius: '6px', color: '#334155', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}
+                              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                            >
+                              <FiUpload size={14} /> Upload New
+                            </button>
+                            {user?.profile_picture && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowAvatarMenu(false);
+                                  handleRemoveAvatar();
+                                }}
+                                style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.8rem', textAlign: 'left', cursor: 'pointer', borderRadius: '6px', color: '#ef4444', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fee2e2'}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                              >
+                                <FiTrash2 size={14} /> Delete
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <input
@@ -3136,32 +3192,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         accept="image/*"
                         onChange={handleAvatarChange}
                       />
-
-                      {user?.profile_picture && (
-                        <button
-                          type="button"
-                          onClick={handleRemoveAvatar}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#ef4444',
-                            fontSize: '0.75rem',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            marginTop: '0.5rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '2px 8px',
-                            borderRadius: '4px',
-                            transition: 'all 0.2s'
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >
-                          <FiTrash2 /> Remove Photo
-                        </button>
-                      )}
 
                       <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: '1rem 0 0.25rem 0' }}>
                         {profileForm.full_name || user?.username || 'User'}
@@ -3247,8 +3277,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                           <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Phone Number</label>
                           <input className="sd-form-input" type="tel"
-                            value={profileForm.phone_no}
-                            onChange={e => setProfileForm({ ...profileForm, phone_no: e.target.value })}
+                            maxLength={10}
+                            value={profileForm.phone_no || ''}
+                            onChange={e => {
+                              const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
+                              setProfileForm({ ...profileForm, phone_no: cleaned });
+                            }}
                             placeholder="+91 98765 43210"
                             style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                             onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
@@ -3370,35 +3404,44 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
                   {/* Schools Form */}
                   {activeTab === 'schools' && (<>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">School Name *</label>
-                      <input className="sd-form-input" type="text" required value={schoolForm.school_name} onChange={e => {
-                        const name = e.target.value;
-                        const code = generateSchoolCode(name);
-                        setSchoolForm({ ...schoolForm, school_name: name, school_code: code });
-                      }} />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
+                      <div className="sd-form-group" style={{ marginBottom: 0 }}>
+                        <label className="sd-form-label">School Name *</label>
+                        <input className="sd-form-input" type="text" required value={schoolForm.school_name} onChange={e => {
+                          const name = e.target.value;
+                          const code = generateSchoolCode(name);
+                          setSchoolForm({ ...schoolForm, school_name: name, school_code: code });
+                        }} />
+                      </div>
+                      <div className="sd-form-group" style={{ marginBottom: 0 }}>
+                        <label className="sd-form-label">Unique School Code</label>
+                        <input className="sd-form-input" type="text" readOnly placeholder="Auto-generated" value={schoolForm.school_code || ''} style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }} />
+                      </div>
                     </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Unique School Code</label>
-                      <input className="sd-form-input" type="text" readOnly placeholder="Auto-generated" value={schoolForm.school_code || ''} style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }} />
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
+                      <div className="sd-form-group" style={{ marginBottom: 0 }}>
+                        <label className="sd-form-label">Email Address *</label>
+                        <input className="sd-form-input" type="email" required value={schoolForm.email} onChange={e => setSchoolForm({ ...schoolForm, email: e.target.value })} />
+                      </div>
+                      <div className="sd-form-group" style={{ marginBottom: 0 }}>
+                        <label className="sd-form-label">Phone Number (10 Digits)</label>
+                        <input className="sd-form-input" type="text" maxLength={10} placeholder="Enter 10 digit phone number" value={schoolForm.phone || ''} onChange={e => setSchoolForm({ ...schoolForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
+                      </div>
                     </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Email Address *</label>
-                      <input className="sd-form-input" type="email" required value={schoolForm.email} onChange={e => setSchoolForm({ ...schoolForm, email: e.target.value })} />
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
+                      <div className="sd-form-group" style={{ marginBottom: 0 }}>
+                        <label className="sd-form-label">LAN / Landline Number <span style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: 400 }}>(Optional)</span></label>
+                        <input className="sd-form-input" type="text" placeholder="Enter LAN / landline number" value={schoolForm.lan || schoolForm.lan_phone || ''} onChange={e => setSchoolForm({ ...schoolForm, lan: e.target.value, lan_phone: e.target.value })} />
+                      </div>
+                      <div className="sd-form-group" style={{ marginBottom: 0 }}>
+                        <label className="sd-form-label">Address</label>
+                        <input className="sd-form-input" type="text" value={schoolForm.address} onChange={e => setSchoolForm({ ...schoolForm, address: e.target.value })} />
+                      </div>
                     </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Phone Number (10 Digits)</label>
-                      <input className="sd-form-input" type="text" maxLength={10} placeholder="Enter 10 digit phone number" value={schoolForm.phone || ''} onChange={e => setSchoolForm({ ...schoolForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} />
-                    </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">LAN / Landline Number <span style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: 400 }}>(Optional)</span></label>
-                      <input className="sd-form-input" type="text" placeholder="Enter LAN / landline number" value={schoolForm.lan || schoolForm.lan_phone || ''} onChange={e => setSchoolForm({ ...schoolForm, lan: e.target.value, lan_phone: e.target.value })} />
-                    </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Address</label>
-                      <input className="sd-form-input" type="text" value={schoolForm.address} onChange={e => setSchoolForm({ ...schoolForm, address: e.target.value })} />
-                    </div>
-                    <label className="sd-checkbox-label">
+
+                    <label className="sd-checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
                       <input type="checkbox" checked={schoolForm.is_active} onChange={e => setSchoolForm({ ...schoolForm, is_active: e.target.checked })} />
                       Active / Enable Tenant Scoping
                     </label>
@@ -3721,24 +3764,39 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               )}
               <div className="sd-form-group">
                 <label className="sd-form-label">Current Password</label>
-                <input className="sd-form-input" type="password"
-                  value={pwForm.current_password}
-                  onChange={e => { setPwForm({ ...pwForm, current_password: e.target.value }); setPwModalError(''); }}
-                  placeholder="Enter current password" required />
+                <div style={{ position: 'relative' }}>
+                  <input className="sd-form-input" type={showCurrentPassword ? "text" : "password"}
+                    value={pwForm.current_password}
+                    onChange={e => { setPwForm({ ...pwForm, current_password: e.target.value }); setPwModalError(''); }}
+                    placeholder="Enter current password" required style={{ width: '100%', paddingRight: '2.5rem' }} />
+                  <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                    {showCurrentPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                  </button>
+                </div>
               </div>
               <div className="sd-form-group">
                 <label className="sd-form-label">New Password</label>
-                <input className="sd-form-input" type="password"
-                  value={pwForm.new_password}
-                  onChange={e => { setPwForm({ ...pwForm, new_password: e.target.value }); setPwModalError(''); }}
-                  placeholder="Minimum 6 characters" required minLength={6} />
+                <div style={{ position: 'relative' }}>
+                  <input className="sd-form-input" type={showNewPassword ? "text" : "password"}
+                    value={pwForm.new_password}
+                    onChange={e => { setPwForm({ ...pwForm, new_password: e.target.value }); setPwModalError(''); }}
+                    placeholder="Minimum 6 characters" required minLength={6} style={{ width: '100%', paddingRight: '2.5rem' }} />
+                  <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                    {showNewPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                  </button>
+                </div>
               </div>
               <div className="sd-form-group">
                 <label className="sd-form-label">Confirm Password</label>
-                <input className="sd-form-input" type="password"
-                  value={pwForm.confirm_password}
-                  onChange={e => { setPwForm({ ...pwForm, confirm_password: e.target.value }); setPwModalError(''); }}
-                  placeholder="Confirm new password" required minLength={6} />
+                <div style={{ position: 'relative' }}>
+                  <input className="sd-form-input" type={showConfirmPassword ? "text" : "password"}
+                    value={pwForm.confirm_password}
+                    onChange={e => { setPwForm({ ...pwForm, confirm_password: e.target.value }); setPwModalError(''); }}
+                    placeholder="Confirm new password" required minLength={6} style={{ width: '100%', paddingRight: '2.5rem' }} />
+                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                    {showConfirmPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                  </button>
+                </div>
               </div>
               <div className="sd-modal-footer">
                 <button type="button" className="sd-btn-cancel" onClick={() => setShowPwModal(false)}>Cancel</button>
@@ -4700,8 +4758,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       )}
 
       {showNotifModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', width: '100%', maxWidth: '850px', height: '90%', maxHeight: '650px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#ffffff', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ backgroundColor: '#ffffff', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Modal Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

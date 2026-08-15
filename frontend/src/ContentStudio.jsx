@@ -20,6 +20,27 @@ import contentStudioBg from './assets/contentbg.png';
 import logoIcon from './assets/icon.png';
 import AvatarCropperModal from './AvatarCropperModal';
 
+const getUserInitials = (u, defaultVal = 'U') => {
+  if (!u) return defaultVal;
+  const name = (u.full_name || u.username || '').trim();
+  if (!name) return defaultVal;
+  
+  const parts = name.split(/[\s_\-]+/);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  
+  const lower = name.toLowerCase();
+  if (lower.startsWith('prakash') && lower.includes('raj')) {
+    return 'PR';
+  }
+  if (lower.startsWith('super') && lower.includes('admin')) {
+    return 'SA';
+  }
+  
+  return name.slice(0, 2).toUpperCase();
+};
+
 const incrementVersion = (versionStr) => {
   if (!versionStr) return "1.0.0";
   const parts = versionStr.split('.').map(Number);
@@ -839,12 +860,17 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
 
   // Profile / Password states
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false);
   const [profileForm, setProfileForm] = useState({
     username: user?.username || 'content_creator',
     email: user?.email || '',
     full_name: user?.full_name || '',
     phone_no: user?.phone_no || ''
   });
+  const [previewSearch, setPreviewSearch] = useState('');
   const [showPwModal, setShowPwModal] = useState(false);
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
   const [pwModalError, setPwModalError] = useState('');
@@ -876,6 +902,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
+    if (profileForm.phone_no && profileForm.phone_no.replace(/\D/g, '').length !== 10) {
+      showFeedback('Phone number must be exactly 10 numeric digits.', 'error');
+      return;
+    }
     setActionLoading(true);
     try {
       const res = await apiFetch('/api/users/profile/', {
@@ -4167,7 +4197,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 {currentUserState?.profile_picture ? (
                   <img src={resolveMediaUrl(currentUserState.profile_picture)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
                 ) : (
-                  (currentUserState?.username || 'CC').slice(0, 2).toUpperCase()
+                  getUserInitials(currentUserState, 'CC')
                 )}
               </div>
               <div className="cs-profile-info" style={{ flex: 1 }}>
@@ -4235,10 +4265,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               />
             </div>
             <div className="cs-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}>
-              <div className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.5rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600 }}>
-                <FiCalendar /> {formatDateTime(currentTime)}
-              </div>
-
               <div style={{ position: 'relative' }}>
                 <button className="sd-icon-btn" style={{ position: 'relative' }} onClick={(e) => { e.stopPropagation(); setShowNotifDropdown(!showNotifDropdown); }}>
                   <FiBell />
@@ -4703,22 +4729,20 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           />
                         </th>
                       )}
-                      <th style={{ width: '48px', paddingLeft: '1.25rem' }}>#</th>
+                      <th style={{ width: '60px', paddingLeft: '1.25rem' }}>S.No</th>
                       <th>Lessons</th>
                       <th>Type</th>
                       <th>Grade</th>
-                      <th>Subject</th>
                       <th>Difficulty</th>
                       <th>Status</th>
-                      <th>Version</th>
                       <th>Last Modified</th>
-                      <th style={{ textAlign: 'right' }}>Actions</th>
+                      <th style={{ textAlign: 'center' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {experiences.length === 0 ? (
                       <tr>
-                        <td colSpan={isSelectMode ? "11" : "10"} style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No lessons found. Click "+ New Lesson" to create one!</td>
+                        <td colSpan={isSelectMode ? "9" : "8"} style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No lessons found. Click "+ New Lesson" to create one!</td>
                       </tr>
                     ) : (
                       experiences.map((row, idx) => (
@@ -4727,109 +4751,96 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                             <td style={{ paddingLeft: '1.5rem' }} onClick={e => e.stopPropagation()}>
                               <input
                                 type="checkbox"
-                                checked={selectedExperienceIds.includes(row.id)}
-                                onChange={() => handleSelectExperience(row.id)}
-                                style={{ cursor: 'pointer' }}
-                              />
-                            </td>
-                          )}
-                          <td style={{ paddingLeft: '1.25rem', fontWeight: 800, color: '#0284c7', fontSize: '0.84rem' }}>
-                            #{idx + 1}
-                          </td>
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                              <div style={{ width: 44, height: 32, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
-                                {getThumbnailUrl(row.thumbnail) ? <img src={getThumbnailUrl(row.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
-                              </div>
-                              <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.86rem' }}>
-                                {row.title}
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <span style={{
-                              display: 'inline-block',
-                              padding: '2px 8px',
-                              borderRadius: '12px',
-                              fontSize: '0.72rem',
-                              fontWeight: 600,
-                              background: row.experience_type === 'ASSESSMENT' ? '#f3e8ff' : '#e0f2fe',
-                              color: row.experience_type === 'ASSESSMENT' ? '#7c3aed' : '#0284c7'
-                            }}>
-                              {row.experience_type === 'ASSESSMENT' ? 'Assessment' : 'Lesson'}
-                            </span>
-                          </td>
-                          <td>{row.grade_name || `Grade ${row.grade}`}</td>
-                          <td>{row.subject}</td>
-                          <td>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: row.difficulty === 'BEGINNER' ? '#10b981' : row.difficulty === 'MASTER' ? '#ef4444' : '#3b82f6' }} />
-                              {row.difficulty_display || row.difficulty}
-                            </span>
-                          </td>
-                          <td>
-                            <span className={`cs-badge ${row.status === 'APPROVED' || row.status === 'PUBLISHED' ? 'cs-badge-approved' : row.status === 'PENDING_APPROVAL' ? 'cs-badge-pending' : row.status === 'REJECTED' ? 'cs-badge-rejected' : 'cs-badge-draft'}`}>
-                              {row.status === 'PENDING_APPROVAL' ? 'PENDING' : row.status}
-                            </span>
-                          </td>
-                          <td>v1.0.0</td>
-                          <td>
-                            <div style={{ fontWeight: 500 }}>{new Date(row.updated_at).toLocaleDateString()}</div>
-                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>by {row.created_by_name || 'Content Creator'}</div>
-                          </td>
-                          <td style={{ textAlign: 'right', position: 'relative' }} onClick={e => e.stopPropagation()}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem' }}>
-                              <button
-                                title="View Details"
-                                onClick={() => handleViewDetails(row.id)}
-                                style={{
-                                  padding: '6px',
-                                  fontSize: '1.15rem',
-                                  cursor: 'pointer',
-                                  border: 'none',
-                                  background: 'none',
-                                  color: '#3b82f6',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}
-                              >
-                                <FiEye />
-                              </button>
-                              <button
-                                className="cs-icon-btn"
-                                onClick={() => setActiveMenuId(activeMenuId === row.id ? null : row.id)}
-                                style={{ padding: '6px', fontSize: '1.15rem', cursor: 'pointer', border: 'none', background: 'none', color: '#64748b', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                              >
-                                <FiMoreVertical />
-                              </button>
-                            </div>
-                            {activeMenuId === row.id && (
-                              <div style={{
-                                position: 'absolute', right: '16px', top: '75%', background: '#ffffff',
-                                border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-                                zIndex: 100, display: 'flex', flexDirection: 'column', width: '110px', overflow: 'hidden'
-                              }}>
-                                <button
-                                  onClick={() => { setActiveMenuId(null); loadExperienceDetail(row, true); }}
-                                  style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem', textAlign: 'left', cursor: 'pointer', color: '#1e293b', display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}
-                                >
-                                  <FiEdit2 style={{ fontSize: '0.85rem' }} /> Edit
-                                </button>
-                                <button
-                                  onClick={() => { setActiveMenuId(null); handleDeleteExperience(row.id); }}
-                                  style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem', textAlign: 'left', cursor: 'pointer', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6, width: '100%', borderTop: '1px solid #f1f5f9' }}
-                                >
-                                  <FiTrash2 style={{ fontSize: '0.85rem' }} /> Delete
-                                </button>
-                              </div>
+                                  checked={selectedExperienceIds.includes(row.id)}
+                                  onChange={() => handleSelectExperience(row.id)}
+                                  style={{ cursor: 'pointer' }}
+                                />
+                              </td>
                             )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                            <td style={{ paddingLeft: '1.25rem', fontWeight: 800, color: '#0284c7', fontSize: '0.84rem' }}>
+                              {idx + 1}
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <div style={{ width: 44, height: 32, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
+                                  {getThumbnailUrl(row.thumbnail) ? <img src={getThumbnailUrl(row.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
+                                </div>
+                                <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.86rem' }}>
+                                  {row.title}
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '2px 8px',
+                                borderRadius: '12px',
+                                fontSize: '0.72rem',
+                                fontWeight: 600,
+                                background: row.experience_type === 'ASSESSMENT' ? '#f3e8ff' : '#e0f2fe',
+                                color: row.experience_type === 'ASSESSMENT' ? '#7c3aed' : '#0284c7'
+                              }}>
+                                {row.experience_type === 'ASSESSMENT' ? 'Assessment' : 'Lesson'}
+                              </span>
+                            </td>
+                            <td>{row.grade_name || `Grade ${row.grade}`}</td>
+                            <td>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: row.difficulty === 'BEGINNER' ? '#10b981' : row.difficulty === 'MASTER' ? '#ef4444' : '#3b82f6' }} />
+                                {row.difficulty_display || row.difficulty}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`cs-badge ${row.status === 'APPROVED' || row.status === 'PUBLISHED' ? 'cs-badge-approved' : row.status === 'PENDING_APPROVAL' ? 'cs-badge-pending' : row.status === 'REJECTED' ? 'cs-badge-rejected' : 'cs-badge-draft'}`}>
+                                {row.status === 'PENDING_APPROVAL' ? 'PENDING' : row.status}
+                              </span>
+                            </td>
+                            <td>
+                              <div style={{ fontWeight: 500 }}>{new Date(row.updated_at).toLocaleDateString()}</div>
+                              <div style={{ fontSize: '0.72rem', color: '#64748b' }}>by {row.created_by_name || 'Content Creator'}</div>
+                            </td>
+                            <td style={{ textAlign: 'center', position: 'relative' }} onClick={e => e.stopPropagation()}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <button
+                                  className="cs-icon-btn"
+                                  onClick={() => setActiveMenuId(activeMenuId === row.id ? null : row.id)}
+                                  style={{ padding: '6px', fontSize: '1.15rem', cursor: 'pointer', border: 'none', background: 'none', color: '#64748b', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                  <FiMoreVertical />
+                                </button>
+                              </div>
+                              {activeMenuId === row.id && (
+                                <div style={{
+                                  position: 'absolute', right: '50%', transform: 'translateX(50%)', top: '75%', background: '#ffffff',
+                                  border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+                                  zIndex: 100, display: 'flex', flexDirection: 'column', width: '110px', overflow: 'hidden'
+                                }}>
+                                  <button
+                                    onClick={() => { setActiveMenuId(null); handleViewDetails(row.id); }}
+                                    style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem', textAlign: 'left', cursor: 'pointer', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}
+                                  >
+                                    <FiEye style={{ fontSize: '0.85rem' }} /> View
+                                  </button>
+                                  <button
+                                    onClick={() => { setActiveMenuId(null); loadExperienceDetail(row, true); }}
+                                    style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem', textAlign: 'left', cursor: 'pointer', color: '#1e293b', display: 'flex', alignItems: 'center', gap: 6, width: '100%', borderTop: '1px solid #f1f5f9' }}
+                                  >
+                                    <FiEdit2 style={{ fontSize: '0.85rem' }} /> Edit
+                                  </button>
+                                  <button
+                                    onClick={() => { setActiveMenuId(null); handleDeleteExperience(row.id); }}
+                                    style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem', textAlign: 'left', cursor: 'pointer', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6, width: '100%', borderTop: '1px solid #f1f5f9' }}
+                                  >
+                                    <FiTrash2 style={{ fontSize: '0.85rem' }} /> Delete
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
 
                 {/* Table Footer */}
                 <div style={{ padding: '1rem 1.5rem' }}>
@@ -4900,25 +4911,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <button
-                    onClick={async () => {
-                      await handleSaveExperience();
-                      setSelectedActivity(null);
-                      setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
-                      setView('activity-builder');
-                    }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '6px',
-                      background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
-                      color: '#ffffff', border: 'none', borderRadius: '10px',
-                      padding: '0.5rem 1.25rem', fontWeight: 700, fontSize: '0.82rem',
-                      cursor: 'pointer', boxShadow: '0 2px 8px rgba(11,87,208,0.25)'
-                    }}
-                  >
-                    Save &amp; Continue to Activities &nbsp;<span style={{ fontSize: '1rem' }}>→</span>
-                  </button>
-                </div>
               </div>
 
               {/* Layout: full-width single column */}
@@ -4969,7 +4961,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }}>
                     <div className="cs-form-group">
                       <label className="cs-form-label">Experience Type <span style={{ color: '#ef4444' }}>*</span></label>
                       <select className="cs-form-input" value={experienceForm.experience_type || 'LESSON'}
@@ -4978,25 +4970,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         <option value="ASSESSMENT">Assessment</option>
                       </select>
                     </div>
-                    {experienceForm.experience_type === 'ASSESSMENT' && (
-                      <div className="cs-form-group">
-                        <label className="cs-form-label">Mastery Threshold (%)</label>
-                        <input
-                          className="cs-form-input"
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={experienceForm.mastery_threshold === undefined ? 70 : experienceForm.mastery_threshold}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setExperienceForm({
-                              ...experienceForm,
-                              mastery_threshold: val === '' ? '' : Math.min(100, Math.max(0, parseInt(val) || 0))
-                            });
-                          }}
-                        />
-                      </div>
-                    )}
                     <div className="cs-form-group">
                       <label className="cs-form-label">Grade <span style={{ color: '#ef4444' }}>*</span></label>
                       <select className="cs-form-input" value={experienceForm.grade}
@@ -5019,18 +4992,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       </select>
                     </div>
                     <div className="cs-form-group">
-                      <label className="cs-form-label">Language</label>
-                      <div style={{
-                        display: 'flex', alignItems: 'center', gap: '0.5rem',
-                        padding: '0.45rem 0.75rem',
-                        background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px',
-                        fontSize: '0.82rem', color: '#374151', fontWeight: 600, height: '36px'
-                      }}>
-                        🌐 English
-                        <FiLock style={{ marginLeft: 'auto', color: '#94a3b8', fontSize: '0.75rem' }} />
-                      </div>
-                    </div>
-                    <div className="cs-form-group">
                       <label className="cs-form-label">Difficulty <span style={{ color: '#ef4444' }}>*</span></label>
                       <select className="cs-form-input" value={experienceForm.difficulty}
                         onChange={e => setExperienceForm({ ...experienceForm, difficulty: e.target.value })}>
@@ -5039,6 +5000,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         <option value="Master">Master</option>
                       </select>
                     </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }}>
                     <div className="cs-form-group">
                       <label className="cs-form-label">Estimated Duration (min)</label>
                       <input
@@ -5053,14 +5017,40 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         }}
                       />
                     </div>
+                    <div className="cs-form-group">
+                      <label className="cs-form-label">Language</label>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: '0.5rem',
+                        padding: '0.45rem 0.75rem',
+                        background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px',
+                        fontSize: '0.82rem', color: '#374151', fontWeight: 600, height: '36px'
+                      }}>
+                        🌐 English
+                        <FiLock style={{ marginLeft: 'auto', color: '#94a3b8', fontSize: '0.75rem' }} />
+                      </div>
+                    </div>
+                    {experienceForm.experience_type === 'ASSESSMENT' ? (
+                      <div className="cs-form-group">
+                        <label className="cs-form-label">Mastery Threshold (%)</label>
+                        <input
+                          className="cs-form-input"
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={experienceForm.mastery_threshold === undefined ? 70 : experienceForm.mastery_threshold}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setExperienceForm({
+                              ...experienceForm,
+                              mastery_threshold: val === '' ? '' : Math.min(100, Math.max(0, parseInt(val) || 0))
+                            });
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="cs-form-group" style={{ opacity: 0, pointerEvents: 'none' }}></div>
+                    )}
                   </div>
-
-
-
-                  <div className="cs-form-group" style={{ display: 'none' }}>
-                    {/* tags hidden placeholder */}
-                  </div>
-
 
                   {/* Learning outcomes - simple textarea */}
                   <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
@@ -5080,6 +5070,26 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '4px' }}>One outcome per line. Press Enter to add more.</div>
                   </div>
 
+                  {/* Save button at the bottom */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '1.25rem', marginTop: '0.5rem' }}>
+                    <button
+                      onClick={async () => {
+                        await handleSaveExperience();
+                        setSelectedActivity(null);
+                        setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
+                        setView('activity-builder');
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '6px',
+                        background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
+                        color: '#ffffff', border: 'none', borderRadius: '10px',
+                        padding: '0.6rem 1.75rem', fontWeight: 700, fontSize: '0.86rem',
+                        cursor: 'pointer', boxShadow: '0 2px 8px rgba(11,87,208,0.25)'
+                      }}
+                    >
+                      Save &amp; Continue to Activities &nbsp;<span style={{ fontSize: '1.1rem' }}>→</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </>
@@ -5115,35 +5125,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-                  <button
-                    type="button"
-                    disabled={activities.length >= 5}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '6px',
-                      background: activities.length >= 5 ? '#f1f5f9' : 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
-                      color: activities.length >= 5 ? '#94a3b8' : '#ffffff',
-                      border: 'none', borderRadius: '10px',
-                      padding: '0.5rem 1.25rem', fontWeight: 700, fontSize: '0.82rem',
-                      cursor: activities.length >= 5 ? 'not-allowed' : 'pointer',
-                      opacity: activities.length >= 5 ? 0.7 : 1,
-                      boxShadow: activities.length >= 5 ? 'none' : '0 2px 8px rgba(11,87,208,0.25)',
-                      transition: 'all 0.2s ease',
-                    }}
-                    onClick={() => {
-                      if (activities.length >= 5) return;
-                      setSelectedActivity(null);
-                      setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
-                      setScreens([]);
-                    }}
-                  >
-                    {activities.length >= 5 ? (
-                      'Max 5 Reached'
-                    ) : (
-                      <>
-                        <FiPlus style={{ fontSize: '0.9rem' }} /> Add New Activity
-                      </>
-                    )}
-                  </button>
                 </div>
               </div>
 
@@ -5247,15 +5228,35 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
                 </div>
 
-                {/* RIGHT COLUMN: Activity Timeline */}
+                {/* RIGHT COLUMN: Activities */}
                 <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
                     <div>
-                      <h3 className="cs-card-title" style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0 }}>Activity Timeline</h3>
+                      <h3 className="cs-card-title" style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0 }}>Activities</h3>
                       <div className="cs-card-sub" style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>
                         Sequence of activities (1 to 5 allowed. Current: {activities.length}/5)
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      disabled={activities.length >= 5}
+                      onClick={() => {
+                        if (activities.length >= 5) return;
+                        setSelectedActivity(null);
+                        setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
+                        setScreens([]);
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '4px',
+                        background: activities.length >= 5 ? '#e2e8f0' : '#0b57d0',
+                        color: activities.length >= 5 ? '#94a3b8' : '#ffffff',
+                        border: 'none', borderRadius: '6px',
+                        padding: '0.35rem 0.75rem', fontWeight: 700, fontSize: '0.75rem',
+                        cursor: activities.length >= 5 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      <FiPlus /> New
+                    </button>
                   </div>
 
                   {activities.length === 0 ? (
@@ -7761,26 +7762,56 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
           {/* ───────────────── VIEW 6: RUNTIME PREVIEW ───────────────── */}
           {view === 'preview' && (() => {
-            // Sort all created lessons chronologically (earliest created #1 to latest created #N)
-            const sortedExperiences = [...(experiences || [])].sort((a, b) => (new Date(a.created_at || a.id) - new Date(b.created_at || b.id)));
-
-            // If no experience payload is loaded, show the Lesson Selector Grid View
-            if (!previewPayload || !selectedExperience) {
-              return (
-                <div style={{ padding: '1.5rem 2rem', minHeight: 'calc(100vh - 80px)', background: 'transparent' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
-                    <div>
-                      <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 4px 0', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <FiPlay style={{ color: '#0284c7' }} /> Runtime Preview Library
-                      </h1>
-                      <p style={{ fontSize: '0.84rem', color: '#64748b', margin: 0 }}>
-                        Select any lesson below (drafted or published) to test its interactive student runtime screens.
-                      </p>
-                    </div>
-                    <button className="cs-btn-outline" onClick={() => setView('experiences')}>
-                      View Full Library
-                    </button>
-                  </div>
+             // Sort all created lessons chronologically (earliest created #1 to latest created #N)
+             const sortedExperiences = [...(experiences || [])]
+               .sort((a, b) => (new Date(a.created_at || a.id) - new Date(b.created_at || b.id)))
+               .filter(exp => {
+                 const searchLower = previewSearch.toLowerCase().trim();
+                 if (!searchLower) return true;
+                 return (
+                   (exp.title || '').toLowerCase().includes(searchLower) ||
+                   (exp.description || '').toLowerCase().includes(searchLower)
+                 );
+               });
+ 
+             // If no experience payload is loaded, show the Lesson Selector Grid View
+             if (!previewPayload || !selectedExperience) {
+               return (
+                 <div style={{ padding: '1.5rem 2rem', minHeight: 'calc(100vh - 80px)', background: 'transparent' }}>
+                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                     <div>
+                       <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 4px 0', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                         <FiPlay style={{ color: '#0284c7' }} /> Runtime Preview Library
+                       </h1>
+                       <p style={{ fontSize: '0.84rem', color: '#64748b', margin: 0 }}>
+                         Select any lesson below (drafted or published) to test its interactive student runtime screens.
+                       </p>
+                     </div>
+                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                       {/* Small Search Bar */}
+                       <div style={{ position: 'relative' }}>
+                         <FiSearch style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-55%)', color: '#64748b', fontSize: '0.9rem' }} />
+                         <input
+                           type="text"
+                           placeholder="Search lessons..."
+                           value={previewSearch}
+                           onChange={e => setPreviewSearch(e.target.value)}
+                           style={{
+                             padding: '0.4rem 0.75rem 0.4rem 2.2rem',
+                             fontSize: '0.82rem',
+                             border: '1px solid #cbd5e1',
+                             borderRadius: '8px',
+                             width: '200px',
+                             background: '#ffffff',
+                             color: '#1e293b'
+                           }}
+                         />
+                       </div>
+                       <button className="cs-btn-outline" onClick={() => setView('experiences')}>
+                         View Full Library
+                       </button>
+                     </div>
+                   </div>
 
                   {sortedExperiences.length === 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem 2rem', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', textAlign: 'center', gap: '1.25rem' }}>
@@ -8249,9 +8280,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       </span>
                     )}
                   </h1>
-                  <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '2px 0 0 0' }}>
-                    Verify layout structure, media files, and compile final package version distribution.
-                  </p>
                 </div>
                 <div style={{ display: 'flex', gap: '0.55rem' }}>
                   <button className="cs-btn-outline" onClick={() => setView('experiences')}>Back to Library</button>
@@ -8286,14 +8314,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         <h4 style={{ fontSize: '0.85rem', fontWeight: 700, margin: '0 0 4px 0', color: '#1e293b' }}>
                           {selectedExperience?.title || 'Lesson'}
                         </h4>
-                        <p style={{ fontSize: '0.75rem', color: '#64748b', margin: '0 0 8px 0', lineHeight: 1.4 }}>
-                          {selectedExperience?.description || 'No description provided.'}
-                        </p>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', fontSize: '0.72rem', color: '#475569' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', fontSize: '0.72rem', color: '#475569', marginTop: '6px' }}>
                           <span>Target: <strong>{gradesList.find(g => String(g.id) === String(selectedExperience?.grade_id || selectedExperience?.grade))?.grade_name || 'Grade 4'}</strong></span>
                           <span>Activities: <strong>{activities.length}</strong></span>
                           <span>Screens: <strong>{activities.reduce((acc, act) => acc + (act.screens?.length || 0), 0)}</strong></span>
-                          <span>Media: <strong>{mediaAssets.length}</strong></span>
                         </div>
                       </div>
                     </div>
@@ -8356,8 +8380,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <table className="cs-table">
                         <thead>
                           <tr>
+                            <th>L.No</th>
                             <th>VERSION</th>
-                            <th>BUILD #</th>
                             <th>PACKAGE FILE</th>
                             <th>SIZE</th>
                             <th>PUBLISHED ON</th>
@@ -8378,8 +8402,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               const isLatest = idx === 0;
                               return (
                                 <tr key={pkg.id}>
+                                  <td style={{ fontWeight: 700, color: '#475569' }}>{publishHistory.length - idx}</td>
                                   <td style={{ fontWeight: 700, color: '#0284c7' }}>v{pkg.version_number || '—'}</td>
-                                  <td style={{ fontWeight: 700 }}>#{pkg.build_number || (1000 + idx)}</td>
                                   <td style={{ color: '#475569', fontSize: '0.72rem', fontFamily: 'monospace' }}>{zipFilename}</td>
                                   <td>{pkg.package_size ? formatBytes(pkg.package_size) : '—'}</td>
                                   <td style={{ whiteSpace: 'nowrap' }}>{pkg.published_at ? new Date(pkg.published_at).toLocaleString() : '—'}</td>
@@ -8510,25 +8534,57 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         <FiRefreshCw className="spin-anim" style={{ color: '#0b75b3', fontSize: '1.5rem' }} />
                       </div>
                     )}
-                    <div
-                      style={{ position: 'relative', margin: '0.5rem 0', cursor: 'pointer' }}
-                      onClick={() => document.getElementById('profile-avatar-input').click()}
+                     <div
+                      style={{ position: 'relative', margin: '0.5rem 0' }}
                     >
                       <div style={{ width: '96px', height: '96px', borderRadius: '50%', border: '4px solid #eff6ff', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(11, 117, 179, 0.2)', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {currentUserState?.profile_picture ? (
                           <img src={resolveMediaUrl(currentUserState.profile_picture)} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
                           <div style={{ width: '100%', height: '100%', background: '#0b75b3', color: '#fff', fontWeight: 800, fontSize: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {(currentUserState?.username || 'CC').slice(0, 2).toUpperCase()}
+                            {getUserInitials(currentUserState, 'CC')}
                           </div>
                         )}
                       </div>
-                      <div
-                        style={{ position: 'absolute', bottom: 0, right: 0, background: '#0b75b3', color: '#fff', padding: '0.45rem', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: '2px solid #fff', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="Upload Photo"
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setShowAvatarMenu(!showAvatarMenu); }}
+                        style={{ position: 'absolute', bottom: 0, right: 0, background: '#0b75b3', color: '#fff', padding: '0.45rem', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: '2px solid #fff', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }}
+                        title="Edit Profile Picture"
                       >
-                        <FiUpload />
-                      </div>
+                        <FiEdit2 />
+                      </button>
+
+                      {showAvatarMenu && (
+                        <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: '8px', width: '150px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 100, padding: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }} onClick={e => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAvatarMenu(false);
+                              document.getElementById('profile-avatar-input').click();
+                            }}
+                            style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.8rem', textAlign: 'left', cursor: 'pointer', borderRadius: '6px', color: '#334155', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            <FiUpload size={14} /> Upload New
+                          </button>
+                          {currentUserState?.profile_picture && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowAvatarMenu(false);
+                                handleRemoveAvatar();
+                              }}
+                              style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.8rem', textAlign: 'left', cursor: 'pointer', borderRadius: '6px', color: '#ef4444', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}
+                              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fee2e2'}
+                              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                            >
+                              <FiTrash2 size={14} /> Delete
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <input
@@ -8538,32 +8594,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       accept="image/*"
                       onChange={handleAvatarChange}
                     />
-
-                    {currentUserState?.profile_picture && (
-                      <button 
-                        type="button"
-                        onClick={handleRemoveAvatar}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#ef4444',
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          marginTop: '0.5rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <FiTrash2 /> Remove Photo
-                      </button>
-                    )}
 
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: '1rem 0 0.25rem 0' }}>
                       {profileForm.full_name || currentUserState?.username || 'Content Creator'}
@@ -8649,8 +8679,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Phone Number</label>
                         <input className="sd-form-input" type="tel"
-                          value={profileForm.phone_no}
-                          onChange={e => setProfileForm({ ...profileForm, phone_no: e.target.value })}
+                          maxLength={10}
+                          value={profileForm.phone_no || ''}
+                          onChange={e => {
+                            const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
+                            setProfileForm({ ...profileForm, phone_no: cleaned });
+                          }}
                           placeholder="+91 98765 43210"
                           style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                           onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
@@ -8747,24 +8781,39 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   )}
                   <div className="sd-form-group">
                     <label className="sd-form-label">Current Password</label>
-                    <input className="sd-form-input" type="password"
-                      value={pwForm.current_password}
-                      onChange={e => { setPwForm({ ...pwForm, current_password: e.target.value }); setPwModalError(''); }}
-                      placeholder="Enter current password" required />
+                    <div style={{ position: 'relative' }}>
+                      <input className="sd-form-input" type={showCurrentPassword ? "text" : "password"}
+                        value={pwForm.current_password}
+                        onChange={e => { setPwForm({ ...pwForm, current_password: e.target.value }); setPwModalError(''); }}
+                        placeholder="Enter current password" required style={{ width: '100%', paddingRight: '2.5rem' }} />
+                      <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                        {showCurrentPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                      </button>
+                    </div>
                   </div>
                   <div className="sd-form-group">
                     <label className="sd-form-label">New Password</label>
-                    <input className="sd-form-input" type="password"
-                      value={pwForm.new_password}
-                      onChange={e => { setPwForm({ ...pwForm, new_password: e.target.value }); setPwModalError(''); }}
-                      placeholder="Minimum 6 characters" required minLength={6} />
+                    <div style={{ position: 'relative' }}>
+                      <input className="sd-form-input" type={showNewPassword ? "text" : "password"}
+                        value={pwForm.new_password}
+                        onChange={e => { setPwForm({ ...pwForm, new_password: e.target.value }); setPwModalError(''); }}
+                        placeholder="Minimum 6 characters" required minLength={6} style={{ width: '100%', paddingRight: '2.5rem' }} />
+                      <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                        {showNewPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                      </button>
+                    </div>
                   </div>
                   <div className="sd-form-group">
                     <label className="sd-form-label">Confirm Password</label>
-                    <input className="sd-form-input" type="password"
-                      value={pwForm.confirm_password}
-                      onChange={e => { setPwForm({ ...pwForm, confirm_password: e.target.value }); setPwModalError(''); }}
-                      placeholder="Confirm new password" required minLength={6} />
+                    <div style={{ position: 'relative' }}>
+                      <input className="sd-form-input" type={showConfirmPassword ? "text" : "password"}
+                        value={pwForm.confirm_password}
+                        onChange={e => { setPwForm({ ...pwForm, confirm_password: e.target.value }); setPwModalError(''); }}
+                        placeholder="Confirm new password" required minLength={6} style={{ width: '100%', paddingRight: '2.5rem' }} />
+                      <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                        {showConfirmPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                      </button>
+                    </div>
                   </div>
                   <div className="sd-modal-footer">
                     <button type="button" className="sd-btn-cancel" onClick={() => setShowPwModal(false)}>Cancel</button>
@@ -9328,8 +9377,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       )}
 
       {showNotifModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', width: '100%', maxWidth: '850px', height: '90%', maxHeight: '650px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#ffffff', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ backgroundColor: '#ffffff', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Modal Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

@@ -15,6 +15,27 @@ import teacherHeaderBanner from './assets/6.jpeg';
 import schoolBg from './assets/school_bg.png';
 import AvatarCropperModal from './AvatarCropperModal';
 
+const getUserInitials = (u, defaultVal = 'U') => {
+  if (!u) return defaultVal;
+  const name = (u.full_name || u.username || '').trim();
+  if (!name) return defaultVal;
+  
+  const parts = name.split(/[\s_\-]+/);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  
+  const lower = name.toLowerCase();
+  if (lower.startsWith('prakash') && lower.includes('raj')) {
+    return 'PR';
+  }
+  if (lower.startsWith('super') && lower.includes('admin')) {
+    return 'SA';
+  }
+  
+  return name.slice(0, 2).toUpperCase();
+};
+
 /* ─── Auto-generate a student roll no from their name, e.g. "Rahul" -> "RAH001" ───
    The numeric part continues from the total number of existing students (school-wide),
    so it never restarts at 001 once other students already exist — e.g. with 4 students
@@ -341,15 +362,21 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [classDropdownOpen, setClassDropdownOpen] = useState(false);
 
   /* ── Forms ── */
+  const [showTeacherPassword, setShowTeacherPassword] = useState(false);
   const [teacherForm, setTeacherForm] = useState({
-    username: '', password: '', email:'', full_name:'', is_active:true, school:'', qualification:'', assigned_class_ids: []
+    username: '', password: '', email:'', full_name:'', phone_no:'', is_active:true, school:'', qualification:'', assigned_class_ids: [],
+    class_grade: '', class_section: '', academic_year: '2025 - 2026'
   });
   const [studentForm, setStudentForm] = useState({
-    username:'', password:'', email:'', full_name:'', roll_no:'', grade:'', section:'', is_active:true
+    username:'', password:'', email:'', full_name:'', roll_no:'', grade:'', section:'', academic_year: '2025 - 2026', is_active:true
   });
   const [classForm, setClassForm] = useState({
     class_name:'', school:'', grade:'', section: 'A', academic_year: '2025 - 2026', is_active:true, assigned_teacher_ids: []
   });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false);
   const [profileForm, setProfileForm] = useState({
     username: user?.username || '', email: user?.email || '', full_name: user?.full_name || '',
     phone_no: user?.phone_no || '',
@@ -587,17 +614,35 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     setErrorMsg('');
     const defaultSchool = getSelectedSchoolId();
     if (tab === 'teachers') {
+      let class_grade = '';
+      let class_section = '';
+      let academic_year = '2025 - 2026';
+      if (entity && entity.assigned_class_ids && entity.assigned_class_ids.length > 0) {
+        const firstClassId = entity.assigned_class_ids[0];
+        const clsObj = classes.find(c => c.class_id === firstClassId);
+        if (clsObj) {
+          const matchNum = (clsObj.class_name || '').match(/\d+/);
+          class_grade = matchNum ? matchNum[0] : '';
+          class_section = (clsObj.section || '').replace('Section ', '').trim().toUpperCase() || (clsObj.class_name && clsObj.class_name.includes('-') ? clsObj.class_name.split('-').pop().trim().toUpperCase() : '');
+          academic_year = clsObj.academic_year || '2025 - 2026';
+        }
+      }
       setTeacherForm(entity ? {
         username: entity.username || '',
         password: '',
         email: entity.email || '',
         full_name: entity.full_name || '',
+        phone_no: entity.phone_no || '',
         is_active: entity.is_active !== undefined ? entity.is_active : true,
         school: entity.school || defaultSchool,
         qualification: entity.qualification || '',
-        assigned_class_ids: entity.assigned_class_ids || []
-      } : { username: '', password: '', email:'', full_name:'', is_active:true,
-            school: defaultSchool, qualification:'', assigned_class_ids: [] });
+        assigned_class_ids: entity.assigned_class_ids || [],
+        class_grade,
+        class_section,
+        academic_year
+      } : { username: '', password: '', email:'', full_name:'', phone_no:'', is_active:true,
+            school: defaultSchool, qualification:'', assigned_class_ids: [],
+            class_grade: '', class_section: '', academic_year: '2025 - 2026' });
     } else if (tab === 'students') {
       setStudentForm(entity ? {
         username: entity.username || '', password: '', email: entity.email || '',
@@ -605,8 +650,9 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         roll_no: entity.roll_no || '',
         grade: entity.grade ? (entity.grade.startsWith('Grade') ? entity.grade.replace('Grade', 'Class') : entity.grade) : '',
         section: entity.section || '',
+        academic_year: entity.academic_year || '2025 - 2026',
         is_active: entity.is_active !== undefined ? entity.is_active : true
-      } : { username:'', password:'', email:'', full_name:'', roll_no:'', grade:'', section:'', is_active:true });
+      } : { username:'', password:'', email:'', full_name:'', roll_no:'', grade:'', section:'', academic_year: '2025 - 2026', is_active:true });
     } else if (tab === 'classes') {
       const extractedSec = entity && entity.class_name && ['A','B','C','D'].includes(entity.class_name.slice(-1).toUpperCase()) ? entity.class_name.slice(-1).toUpperCase() : 'A';
       const defaultGradeId = grades[0]?.id || '';
@@ -646,7 +692,66 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
     try {
       if (activeSubTab === 'teachers') {
-        body = { ...teacherForm, school: parseInt(teacherForm.school) };
+        if (modalType === 'add' && (!teacherForm.password || teacherForm.password.length < 8)) {
+          setErrorMsg('Password must be at least 8 characters long.');
+          setActionLoading(false);
+          return;
+        }
+        if (modalType === 'edit' && teacherForm.password && teacherForm.password.length < 8) {
+          setErrorMsg('Password must be at least 8 characters long.');
+          setActionLoading(false);
+          return;
+        }
+
+        let classId = null;
+        const targetClassName = `Class ${teacherForm.class_grade}-${teacherForm.class_section}`;
+        const targetAcademicYear = teacherForm.academic_year;
+
+        const existingClass = classes.find(c => 
+          (c.class_name || '').toLowerCase() === targetClassName.toLowerCase() && 
+          (c.academic_year || '') === targetAcademicYear
+        );
+
+        if (existingClass) {
+          classId = existingClass.class_id || existingClass.id;
+        } else {
+          const gradeNum = teacherForm.class_grade;
+          const gradeObj = grades.find(g => (g.grade_name || '').toLowerCase().includes(gradeNum));
+          const gradeId = gradeObj ? gradeObj.id : null;
+
+          if (!gradeId) {
+            setErrorMsg(`Grade for Class ${gradeNum} is not registered in the system.`);
+            setActionLoading(false);
+            return;
+          }
+
+          const classPostRes = await apiFetch('/api/cms/v1/classes/', {
+            method: 'POST',
+            body: JSON.stringify({
+              school: parseInt(teacherForm.school),
+              class_name: targetClassName,
+              grade: gradeId,
+              academic_year: targetAcademicYear,
+              is_active: true
+            })
+          });
+
+          if (!classPostRes.ok) {
+            setErrorMsg('Failed to automatically create the specified class.');
+            setActionLoading(false);
+            return;
+          }
+
+          const createdClassData = await classPostRes.json();
+          classId = createdClassData.class_id || createdClassData.id;
+          await loadClasses();
+        }
+
+        body = { 
+          ...teacherForm, 
+          school: parseInt(teacherForm.school),
+          assigned_class_ids: classId ? [classId] : []
+        };
         if (modalType === 'edit' && !body.password) {
           delete body.password;
         }
@@ -920,6 +1025,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+    if (profileForm.phone_no && profileForm.phone_no.replace(/\D/g, '').length !== 10) {
+      setErrorMsg('Phone number must be exactly 10 numeric digits.');
+      return;
+    }
     setActionLoading(true);
     try {
       const res = await apiFetch('/api/users/profile/', {
@@ -1288,7 +1397,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               {user?.profile_picture ? (
                 <img src={user.profile_picture} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
               ) : (
-                (user?.username || 'SA').slice(0, 2).toUpperCase()
+                getUserInitials(user, 'SA')
               )}
             </div>
             <div className="sd-user-meta" style={{ flex: 1 }}>
@@ -1322,10 +1431,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             </h2>
           </div>
           <div className="sd-topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}>
-            <div className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.5rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600 }}>
-              <FiCalendar/> {formatDateTime(currentTime)}
-            </div>
-
             <div style={{ position: 'relative' }}>
               <button className="sd-icon-btn" style={{ position: 'relative' }} onClick={(e) => { e.stopPropagation(); setShowNotifDropdown(!showNotifDropdown); }}>
                 <FiBell/>
@@ -1454,134 +1559,31 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 ))}
               </div>
 
-              {/* Lesson Completion donut (Full Width Card) */}
-              <div className="sd-card" style={{ width: '100%', marginBottom: '1.5rem' }}>
-                <div className="sd-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div className="sd-card-title">Lesson Completion</div>
-                    <div className="sd-card-sub">Class Progress Overview</div>
-                  </div>
-                  <button className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>This Month <FiChevronDown/></button>
-                </div>
-                <div style={{ display: 'flex', gap: '2.5rem', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', padding: '0.5rem 0' }}>
-                  {/* Left: Donut wrapper */}
-                  <div className="sd-donut-wrap" style={{ display: 'flex', justifyContent: 'center', padding: '0 0.5rem' }}>
-                    <DonutChart pct={68}/>
-                  </div>
-                  
-                  {/* Middle: Legend with progress bars */}
-                  <div className="sd-legend" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: '1.5', minWidth: '300px' }}>
-                    {[
-                      { label: 'Completed',   color: '#2563eb', pct: '68%' },
-                      { label: 'In Progress', color: '#10b981', pct: '22%' },
-                      { label: 'Not Started', color: '#cbd5e1', pct: '10%' },
-                    ].map(l => (
-                      <div className="sd-legend-row" key={l.label} style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.6fr 1.5fr', alignItems: 'center', gap: '1rem', width: '100%' }}>
-                        <div className="sd-legend-dot-label" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.9rem', fontWeight: 600, color: '#475569' }}>
-                          <div className="sd-legend-dot" style={{ width: 10, height: 10, borderRadius: '50%', background: l.color }}/>
-                          {l.label}
-                        </div>
-                        <span className="sd-legend-pct" style={{ fontSize: '0.92rem', fontWeight: 800, color: '#1e293b', textAlign: 'right' }}>{l.pct}</span>
-                        <div style={{ width: '100%', height: 10, background: '#f1f5f9', borderRadius: 5, overflow: 'hidden' }}>
-                          <div style={{ width: l.pct, height: '100%', background: l.color, borderRadius: 5 }}/>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Right: Completion Insights Box */}
-                  <div style={{
-                    background: '#eff6ff',
-                    borderRadius: '16px',
-                    padding: '1.5rem',
-                    flex: '2',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    border: '1px solid #dbeafe',
-                    minWidth: '320px',
-                    height: '140px'
-                  }}>
-                    <div style={{ position: 'absolute', right: '12px', bottom: '12px', opacity: 0.15 }}>
-                      <svg width="130" height="80" viewBox="0 0 110 70" fill="none">
-                        <path d="M10 60 L28 42 L46 50 L64 25 L82 33 L100 8" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        <path d="M100 8 L90 8 M100 8 L100 18" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        <rect x="23" y="47" width="7" height="13" fill="#2563eb" rx="1"/>
-                        <rect x="41" y="52" width="7" height="8" fill="#2563eb" rx="1"/>
-                        <rect x="59" y="30" width="7" height="30" fill="#2563eb" rx="1"/>
-                        <rect x="77" y="38" width="7" height="22" fill="#2563eb" rx="1"/>
-                        <rect x="95" y="13" width="7" height="47" fill="#2563eb" rx="1"/>
-                      </svg>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem', zIndex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', background: '#dbeafe', borderRadius: '50%', color: '#2563eb' }}>
-                        <FiActivity style={{ fontSize: '1rem' }}/>
-                      </div>
-                      <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e40af' }}>Completion Insights</span>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: '#1e293b', lineHeight: 1.4, zIndex: 1 }}>
-                      Great job! <span style={{ color: '#2563eb' }}>68%</span> of the lessons have been completed this month.
-                    </p>
-                    <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: '#64748b', fontWeight: 500, zIndex: 1 }}>
-                      Keep encouraging your students to stay on track.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom two-col grid */}
-              <div className="sd-bottom-grid">
-                {/* Student Performance */}
+              {/* Recent Activity */}
+              <div className="sd-bottom-grid" style={{ gridTemplateColumns: '1fr', marginTop: '1.5rem' }}>
                 <div className="sd-card">
                   <div className="sd-card-header">
-                    <div>
-                      <div className="sd-card-title">Student Performance</div>
-                      <div className="sd-card-sub">Active Users</div>
-                    </div>
-                    <span className="sd-card-meta">This Month</span>
+                    <div className="sd-card-title">Recent Activity</div>
+                    <button className="sd-view-all" onClick={() => setActiveSubTab('teachers')}>View All</button>
                   </div>
-                  <div className="sd-chart-legend">
-                    {CHART_LINES.map(l => (
-                      <div className="sd-chart-legend-item" key={l.label}>
-                        <div className="sd-chart-legend-dot" style={{ background: l.color }}/>
-                        {l.label}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="sd-chart-wrap">
-                    <LineChart lines={CHART_LINES}/>
-                  </div>
-                  <div className="sd-x-labels">
-                    {CHART_MONTHS.map(m => <span className="sd-x-label" key={m}>{m}</span>)}
-                  </div>
-                </div>
-
-                {/* Teacher Activity */}
-                <div className="sd-card">
-                  <div className="sd-card-header">
-                    <div className="sd-card-title">Teacher Activity</div>
-                    <button className="sd-view-all" onClick={() => goTo('teachers')}>View All</button>
-                  </div>
-                  <div className="sd-activity-list">
+                  <div className="sd-activity-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                     {dashboardData?.recent_activities?.length ? (
-                      dashboardData.recent_activities.slice(0, 4).map((act, i) => (
-                        <div className="sd-activity-item" key={act.id || i}>
-                          <div className="sd-activity-avatar" style={{ background: ACTIVITY_AVATAR_COLORS[i % ACTIVITY_AVATAR_COLORS.length] }}>
-                            {(act.teacher_name || act.activity?.split(' ')[0] || 'Teacher').slice(0, 2).toUpperCase()}
+                      dashboardData.recent_activities.map((act, i) => (
+                        <div className="sd-activity-item" key={act.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: 0 }}>
+                            <div className="sd-activity-icon-container" style={{ width: 36, height: 36, borderRadius: '50%', background: '#eff6ff', color: '#0b75b3', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontWeight: 700, fontSize: '0.85rem' }}>
+                              {(act.teacher_name || act.activity?.split(' ')[0] || 'T').slice(0, 2).toUpperCase()}
+                            </div>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div className="sd-activity-desc" style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{act.activity || 'Activity'}</div>
+                              <div className="sd-activity-meta" style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '2px' }}>{act.teacher_name || 'Teacher'} • {act.time || 'recent'}</div>
+                            </div>
                           </div>
-                          <div className="sd-activity-body">
-                            <div className="sd-activity-name">{act.teacher_name || act.activity?.split(' ')[0] || 'Teacher'}</div>
-                            <div className="sd-activity-desc">{act.activity || ''}</div>
-                          </div>
-                          <div className="sd-activity-time">{act.time || ''}</div>
                         </div>
                       ))
                     ) : (
                       <div className="sd-empty-state" style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8', fontSize: '0.85rem' }}>
-                        No recent teacher activity yet.
+                        No recent activity yet.
                       </div>
                     )}
                   </div>
@@ -2029,8 +2031,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         )}
                         <th>Full Name</th>
                         <th>Roll No</th>
+                        <th>LMS Login Code</th>
                         <th>Class</th>
                         <th>Section</th>
+                        <th style={{ textAlign: 'center' }}>Academic Year</th>
                         <th>Status</th>
                         <th style={{ textAlign:'center' }}>Actions</th>
                       </tr>
@@ -2053,8 +2057,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               <span className="sd-name-cell-primary">{s.full_name || s.username || 'N/A'}</span>
                             </td>
                             <td>{s.roll_no || 'N/A'}</td>
+                            <td><span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>{s.username || 'N/A'}</span></td>
                             <td>{s.grade ? String(s.grade).replace('Grade', 'Class') : 'N/A'}</td>
                             <td>{s.section || 'N/A'}</td>
+                            <td style={{ textAlign: 'center' }}>{s.academic_year || '2025 - 2026'}</td>
                             <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
                               <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
                                 {s.is_active ? 'Active' : 'Inactive'}
@@ -2234,26 +2240,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     />
                   </div>
                   <div className="sd-table-actions">
-                    <button
-                      className="sd-btn-outline"
-                      style={{
-                        background: isSelectModeClasses ? '#e2e8f0' : '#ffffff',
-                        color: '#374151',
-                        borderColor: '#cbd5e1'
-                      }}
-                      onClick={() => {
-                        setIsSelectModeClasses(!isSelectModeClasses);
-                        if (isSelectModeClasses) setSelectedClassIds([]);
-                      }}
-                    >
-                      {isSelectModeClasses ? '✓ Done Selecting' : 'Select'}
-                    </button>
-                    {selectedClassIds.length > 0 && (
-                      <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteClasses}>
-                        <FiTrash2/> Delete Selected ({selectedClassIds.length})
-                      </button>
-                    )}
-                    <button className="sd-btn-primary" onClick={handleOpenAdd}><FiPlus/>Add Class</button>
                   </div>
                 </div>
                 <div className="sd-table-wrap">
@@ -2279,184 +2265,82 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {paginate(filterList(classes), classPage).map((c, i) => {
-                        const cid = c.class_id || c.id;
+                      {(() => {
+                        const assignedClasses = filterList(classes).filter(c => c.teacher_name);
                         return (
-                          <tr key={cid || i}>
-                            {isSelectModeClasses && (
-                              <td className="sd-checkbox-cell">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedClassIds.includes(cid)}
-                                  onChange={() => handleSelectClassRow(cid)}
-                                />
-                              </td>
-                            )}
-                            <td>
-                              <span className="sd-name-cell-primary">{c.class_name}</span>
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              <span style={{ fontWeight: 600, color: '#4f46e5', background: '#ede9fe', padding: '2px 10px', borderRadius: '20px', fontSize: '0.82rem' }}>
-                                {c.section || (c.class_name && c.class_name.includes('-') ? c.class_name.split('-').pop().trim() : '—')}
-                              </span>
-                            </td>
-                            <td>{c.teacher_name || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Unassigned</span>}</td>
-                            <td style={{ textAlign: 'center' }}>{c.academic_year}</td>
-                            <td style={{ textAlign: 'center', overflow: 'visible', textOverflow: 'clip' }}>
-                              <span className={`sd-badge ${c.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
-                                {c.is_active ? 'Active' : 'Inactive'}
-                              </span>
-                            </td>
-                            <td style={{ overflow: 'visible' }}>
-                              <div className="sd-action-cell" style={{ justifyContent: 'center', overflow: 'visible' }}>
-                                <div className="sd-action-dropdown-container" style={{ position: 'relative', display: 'inline-block' }}>
-                                  <button
-                                    type="button"
-                                    className="sd-action-dots-btn"
-                                    style={{
-                                      background: 'none',
-                                      border: 'none',
-                                      cursor: 'pointer',
-                                      padding: '4px 8px',
-                                      fontSize: '1.2rem',
-                                      color: '#64748b',
-                                      borderRadius: '50%',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      transition: 'background-color 0.15s'
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActiveDropdown(activeDropdown?.id === cid && activeDropdown?.type === 'class' ? null : { id: cid, type: 'class' });
-                                    }}
-                                  >
-                                    <FiMoreVertical />
-                                  </button>
-                                  {activeDropdown?.id === cid && activeDropdown?.type === 'class' && (
-                                    <div
-                                      style={{
-                                        position: 'absolute',
-                                        right: 0,
-                                        top: '100%',
-                                        backgroundColor: '#ffffff',
-                                        border: '1px solid #e2e8f0',
-                                        borderRadius: '8px',
-                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-                                        zIndex: 100,
-                                        minWidth: '120px',
-                                        padding: '4px 0',
-                                        display: 'flex',
-                                        flexDirection: 'column'
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
+                          <>
+                            {paginate(assignedClasses, classPage).map((c, i) => {
+                              const cid = c.class_id || c.id;
+                              return (
+                                <tr key={cid || i}>
+                                  {isSelectModeClasses && (
+                                    <td className="sd-checkbox-cell">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedClassIds.includes(cid)}
+                                        onChange={() => handleSelectClassRow(cid)}
+                                      />
+                                    </td>
+                                  )}
+                                  <td>
+                                    <span className="sd-name-cell-primary">{c.class_name}</span>
+                                  </td>
+                                  <td style={{ textAlign: 'center' }}>
+                                    <span style={{ fontWeight: 600, color: '#4f46e5', background: '#ede9fe', padding: '2px 10px', borderRadius: '20px', fontSize: '0.82rem' }}>
+                                      {c.section || (c.class_name && c.class_name.includes('-') ? c.class_name.split('-').pop().trim() : '—')}
+                                    </span>
+                                  </td>
+                                  <td>{c.teacher_name || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Unassigned</span>}</td>
+                                  <td style={{ textAlign: 'center' }}>{c.academic_year}</td>
+                                  <td style={{ textAlign: 'center', overflow: 'visible', textOverflow: 'clip' }}>
+                                    <span className={`sd-badge ${c.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                                      {c.is_active ? 'Active' : 'Inactive'}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <div style={{ display: 'flex', justifyContent: 'center' }}>
                                       <button
                                         type="button"
+                                        title="View Details"
                                         style={{
-                                          padding: '8px 12px',
-                                          textAlign: 'left',
                                           background: 'none',
                                           border: 'none',
-                                          fontSize: '0.85rem',
-                                          color: '#334155',
                                           cursor: 'pointer',
-                                          display: 'flex',
+                                          padding: '6px 12px',
+                                          fontSize: '0.82rem',
+                                          color: '#0b75b3',
+                                          borderRadius: '6px',
+                                          display: 'inline-flex',
                                           alignItems: 'center',
-                                          gap: '8px',
-                                          width: '100%'
+                                          gap: '6px',
+                                          fontWeight: 600,
+                                          transition: 'background-color 0.15s'
                                         }}
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f0f9ff'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                                         onClick={() => {
-                                          setActiveDropdown(null);
                                           setSelectedClassCrudDetail(c);
                                           setShowClassCrudDetailModal(true);
                                         }}
                                       >
-                                        <FiEye style={{ fontSize: '0.95rem' }} /> View
-                                      </button>
-                                      <button
-                                        type="button"
-                                        style={{
-                                          padding: '8px 12px',
-                                          textAlign: 'left',
-                                          background: 'none',
-                                          border: 'none',
-                                          fontSize: '0.85rem',
-                                          color: '#334155',
-                                          cursor: 'pointer',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '8px',
-                                          width: '100%'
-                                        }}
-                                        onClick={() => {
-                                          setActiveDropdown(null);
-                                          handleOpenEdit(c);
-                                        }}
-                                      >
-                                        <FiEdit2 style={{ fontSize: '0.95rem' }} /> Edit
-                                      </button>
-                                      <button
-                                        type="button"
-                                        style={{
-                                          padding: '8px 12px',
-                                          textAlign: 'left',
-                                          background: 'none',
-                                          border: 'none',
-                                          fontSize: '0.85rem',
-                                          color: '#334155',
-                                          cursor: 'pointer',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '8px',
-                                          width: '100%'
-                                        }}
-                                        onClick={() => {
-                                          setActiveDropdown(null);
-                                          toggleActiveStatus(cid, c.is_active, 'classes');
-                                        }}
-                                      >
-                                        <FiLock style={{ fontSize: '0.95rem' }} /> {c.is_active ? 'Block' : 'Unblock'}
-                                      </button>
-                                      <div style={{ height: '1px', backgroundColor: '#e2e8f0', margin: '4px 0' }}></div>
-                                      <button
-                                        type="button"
-                                        style={{
-                                          padding: '8px 12px',
-                                          textAlign: 'left',
-                                          background: 'none',
-                                          border: 'none',
-                                          fontSize: '0.85rem',
-                                          color: '#ef4444',
-                                          cursor: 'pointer',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '8px',
-                                          width: '100%'
-                                        }}
-                                        onClick={() => {
-                                          setActiveDropdown(null);
-                                          handleDelete(cid);
-                                        }}
-                                      >
-                                        <FiTrash2 style={{ fontSize: '0.95rem' }} /> Delete
+                                        <FiEye size={15} /> View
                                       </button>
                                     </div>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                            {assignedClasses.length === 0 && (
+                              <tr><td colSpan={isSelectModeClasses ? "7" : "6"} className="sd-empty-state">No classes found.</td></tr>
+                            )}
+                          </>
                         );
-                      })}
-                      {filterList(classes).length === 0 && (
-                        <tr><td colSpan={isSelectModeClasses ? "7" : "6"} className="sd-empty-state">No classes found.</td></tr>
-                      )}
+                      })()}
                     </tbody>
                   </table>
                 </div>
                 <Pagination
-                  total={filterList(classes).length}
+                  total={filterList(classes).filter(c => c.teacher_name).length}
                   perPage={PER_PAGE}
                   page={classPage}
                   onPage={setClassPage}
@@ -2734,25 +2618,57 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <FiRefreshCw className="spin-anim" style={{ color: '#0b75b3', fontSize: '1.5rem' }} />
                       </div>
                     )}
-                    <div 
-                      style={{ position: 'relative', margin: '0.5rem 0', cursor: 'pointer' }}
-                      onClick={() => document.getElementById('profile-avatar-input').click()}
+                     <div
+                      style={{ position: 'relative', margin: '0.5rem 0' }}
                     >
                       <div style={{ width: '96px', height: '96px', borderRadius: '50%', border: '4px solid #eff6ff', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(11, 117, 179, 0.2)', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {user?.profile_picture ? (
                           <img src={user.profile_picture} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
                           <div style={{ width: '100%', height: '100%', background: '#0b75b3', color: '#fff', fontWeight: 800, fontSize: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {(user?.username || 'U').slice(0, 2).toUpperCase()}
+                            {getUserInitials(user, 'U')}
                           </div>
                         )}
                       </div>
-                      <div 
-                        style={{ position: 'absolute', bottom: 0, right: 0, background: '#0b75b3', color: '#fff', padding: '0.45rem', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: '2px solid #fff', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="Upload Photo"
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setShowAvatarMenu(!showAvatarMenu); }}
+                        style={{ position: 'absolute', bottom: 0, right: 0, background: '#0b75b3', color: '#fff', padding: '0.45rem', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: '2px solid #fff', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }}
+                        title="Edit Profile Picture"
                       >
-                        <FiUpload />
-                      </div>
+                        <FiEdit2 />
+                      </button>
+
+                      {showAvatarMenu && (
+                        <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: '8px', width: '150px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 100, padding: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }} onClick={e => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAvatarMenu(false);
+                              document.getElementById('profile-avatar-input').click();
+                            }}
+                            style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.8rem', textAlign: 'left', cursor: 'pointer', borderRadius: '6px', color: '#334155', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            <FiUpload size={14} /> Upload New
+                          </button>
+                          {user?.profile_picture && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowAvatarMenu(false);
+                                handleRemoveAvatar();
+                              }}
+                              style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.8rem', textAlign: 'left', cursor: 'pointer', borderRadius: '6px', color: '#ef4444', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}
+                              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fee2e2'}
+                              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                            >
+                              <FiTrash2 size={14} /> Delete
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <input 
@@ -2762,32 +2678,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       accept="image/*" 
                       onChange={handleAvatarChange}
                     />
-                    
-                    {user?.profile_picture && (
-                      <button 
-                        type="button"
-                        onClick={handleRemoveAvatar}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#ef4444',
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          marginTop: '0.5rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <FiTrash2 /> Remove Photo
-                      </button>
-                    )}
                     
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: '1rem 0 0.25rem 0' }}>
                       {profileForm.full_name || user?.username || 'User'}
@@ -2873,8 +2763,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Phone Number</label>
                         <input className="sd-form-input" type="tel"
-                          value={profileForm.phone_no}
-                          onChange={e => setProfileForm({ ...profileForm, phone_no: e.target.value })}
+                          maxLength={10}
+                          value={profileForm.phone_no || ''}
+                          onChange={e => {
+                            const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
+                            setProfileForm({ ...profileForm, phone_no: cleaned });
+                          }}
                           placeholder="+91 98765 43210" 
                           style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                           onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
@@ -2926,165 +2820,109 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <form className="sd-modal-form" onSubmit={handleFormSubmit}>
                   {/* Teacher fields */}
                   {activeSubTab === 'teachers' && (<>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Full Name *</label>
-                      <input className="sd-form-input" type="text" value={teacherForm.full_name}
-                        onChange={e => setTeacherForm({...teacherForm, full_name:e.target.value})} placeholder="e.g. John Doe" required/>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Full Name *</label>
+                        <input className="sd-form-input" type="text" value={teacherForm.full_name}
+                          onChange={e => setTeacherForm({...teacherForm, full_name:e.target.value})} placeholder="e.g. John Doe" required/>
+                      </div>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Email Address *</label>
+                        <input className="sd-form-input" type="email" value={teacherForm.email}
+                          onChange={e => setTeacherForm({...teacherForm, email:e.target.value})} placeholder="e.g. johndoe@example.com" required/>
+                      </div>
                     </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Email Address *</label>
-                      <input className="sd-form-input" type="email" value={teacherForm.email}
-                        onChange={e => setTeacherForm({...teacherForm, email:e.target.value})} placeholder="e.g. johndoe@example.com" required/>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Qualification</label>
+                        <input className="sd-form-input" type="text" value={teacherForm.qualification}
+                          onChange={e => setTeacherForm({...teacherForm, qualification:e.target.value})} placeholder="e.g. B.Ed, M.A. English"/>
+                      </div>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Phone Number</label>
+                        <input className="sd-form-input" type="text" value={teacherForm.phone_no || ''}
+                          onChange={e => setTeacherForm({...teacherForm, phone_no:e.target.value})} placeholder="e.g. +91 9876543210"/>
+                      </div>
                     </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Qualification</label>
-                      <input className="sd-form-input" type="text" value={teacherForm.qualification}
-                        onChange={e => setTeacherForm({...teacherForm, qualification:e.target.value})} placeholder="e.g. B.Ed, M.A. English"/>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Academic Year *</label>
+                        <input className="sd-form-input" type="text" value={teacherForm.academic_year}
+                          onChange={e => setTeacherForm({...teacherForm, academic_year:e.target.value})} placeholder="e.g. 2025 - 2026" required/>
+                      </div>
+                      <div className="sd-form-group"></div>
                     </div>
-                    <div className="sd-form-group" style={{ position: 'relative' }}>
-                      <label className="sd-form-label">Assign Classes</label>
-                      <div
-                        style={{
-                          minHeight: '42px',
-                          border: '1px solid #cbd5e1',
-                          borderRadius: '8px',
-                          padding: '0.5rem 0.85rem',
-                          fontSize: '0.85rem',
-                          background: '#ffffff',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          flexWrap: 'wrap',
-                          gap: '4px',
-                          position: 'relative'
-                        }}
-                        onClick={() => setClassDropdownOpen(!classDropdownOpen)}
-                      >
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', maxWidth: '90%' }}>
-                          {(teacherForm.assigned_class_ids || []).length === 0 ? (
-                            <span style={{ color: '#94a3b8' }}>-- Select Classes --</span>
-                          ) : (
-                            (teacherForm.assigned_class_ids || []).map(cid => {
-                              const cls = classes.find(c => (c.class_id || c.id) === cid);
-                              return cls ? (
-                                <span
-                                  key={cid}
-                                  style={{
-                                    background: '#ede9fe',
-                                    color: '#4f46e5',
-                                    padding: '2px 8px',
-                                    borderRadius: '12px',
-                                    fontSize: '0.78rem',
-                                    fontWeight: 600,
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                  }}
-                                >
-                                  {cls.class_name}
-                                  <span
-                                    style={{ cursor: 'pointer', fontWeight: 'bold', marginLeft: '2px' }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setTeacherForm({
-                                        ...teacherForm,
-                                        assigned_class_ids: (teacherForm.assigned_class_ids || []).filter(id => id !== cid)
-                                      });
-                                    }}
-                                  >
-                                    ×
-                                  </span>
-                                </span>
-                              ) : null;
-                            })
-                          )}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Class *</label>
+                        <select className="sd-form-input" value={teacherForm.class_grade}
+                          onChange={e => setTeacherForm({...teacherForm, class_grade:e.target.value})} required>
+                          <option value="">-- Select Class --</option>
+                          {[3, 4, 5, 6, 7, 8].map(num => (
+                            <option key={num} value={String(num)}>Class {num}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Section *</label>
+                        <select className="sd-form-input" value={teacherForm.class_section}
+                          onChange={e => setTeacherForm({...teacherForm, class_section:e.target.value})} required>
+                          <option value="">-- Select Section --</option>
+                          {['A', 'B', 'C', 'D'].map(letter => (
+                            <option key={letter} value={letter}>Section {letter}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {modalType === 'add' && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                        <div className="sd-form-group">
+                          <label className="sd-form-label">Username *</label>
+                          <input className="sd-form-input" type="text" value={teacherForm.username}
+                            onChange={e => setTeacherForm({...teacherForm, username:e.target.value})} placeholder="e.g. johndoe" required/>
                         </div>
-                        <span style={{ color: '#64748b', fontSize: '0.8rem' }}>{classDropdownOpen ? '▲' : '▼'}</span>
-                      </div>
-                      {classDropdownOpen && (
-                        <>
-                          <div 
-                            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setClassDropdownOpen(false);
-                            }}
-                          />
-                          <div
-                            style={{
-                              position: 'absolute',
-                              top: '100%',
-                              left: 0,
-                              right: 0,
-                              background: '#ffffff',
-                              border: '1px solid #cbd5e1',
-                              borderRadius: '8px',
-                              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                              zIndex: 1000,
-                              maxHeight: '200px',
-                              overflowY: 'auto',
-                              marginTop: '4px',
-                              padding: '4px 0'
-                            }}
-                          >
-                            {classes.length === 0 ? (
-                              <div style={{ padding: '8px 12px', color: '#64748b', fontSize: '0.85rem' }}>No classes available</div>
-                            ) : (
-                              classes.map(c => {
-                                const cid = c.class_id || c.id;
-                                const isChecked = (teacherForm.assigned_class_ids || []).includes(cid);
-                                return (
-                                  <label
-                                    key={cid}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '8px',
-                                      padding: '8px 12px',
-                                      cursor: 'pointer',
-                                      fontSize: '0.85rem',
-                                      transition: 'background 0.2s',
-                                      userSelect: 'none'
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const nextIds = isChecked
-                                        ? (teacherForm.assigned_class_ids || []).filter(id => id !== cid)
-                                        : [...(teacherForm.assigned_class_ids || []), cid];
-                                      setTeacherForm({ ...teacherForm, assigned_class_ids: nextIds });
-                                    }}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={isChecked}
-                                      readOnly
-                                      style={{ cursor: 'pointer' }}
-                                    />
-                                    <span>{c.class_name}</span>
-                                  </label>
-                                );
-                              })
-                            )}
+                        <div className="sd-form-group">
+                          <label className="sd-form-label">Password *</label>
+                          <div style={{ position: 'relative' }}>
+                            <input 
+                              className="sd-form-input" 
+                              type={showTeacherPassword ? "text" : "password"} 
+                              value={teacherForm.password}
+                              onChange={e => setTeacherForm({...teacherForm, password:e.target.value})} 
+                              placeholder="Minimum 8 characters" 
+                              minLength={8}
+                              required
+                              style={{ width: '100%', paddingRight: '2.5rem' }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowTeacherPassword(!showTeacherPassword)}
+                              style={{
+                                position: 'absolute',
+                                right: '10px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: '#64748b',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: 0
+                              }}
+                            >
+                              {showTeacherPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                            </button>
                           </div>
-                        </>
-                      )}
-                    </div>
-                    {modalType === 'add' && (<>
-                      <div className="sd-form-group">
-                        <label className="sd-form-label">Username *</label>
-                        <input className="sd-form-input" type="text" value={teacherForm.username}
-                          onChange={e => setTeacherForm({...teacherForm, username:e.target.value})} placeholder="e.g. johndoe" required/>
+                        </div>
                       </div>
-                      <div className="sd-form-group">
-                        <label className="sd-form-label">Password *</label>
-                        <input className="sd-form-input" type="password" value={teacherForm.password}
-                          onChange={e => setTeacherForm({...teacherForm, password:e.target.value})} placeholder="Minimum 6 characters" required/>
-                      </div>
-                    </>)}
-                    <label className="sd-checkbox-label">
+                    )}
+                    <label className="sd-checkbox-label" style={{ marginBottom: '1rem' }}>
                       <input type="checkbox" checked={teacherForm.is_active}
                         onChange={e => setTeacherForm({...teacherForm, is_active:e.target.checked})}/>
                       Active Status
@@ -3093,49 +2931,62 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
                   {/* Student fields */}
                   {activeSubTab === 'students' && (<>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Full Name *</label>
-                      <input className="sd-form-input" type="text" value={studentForm.full_name}
-                        onChange={e => setStudentForm({...studentForm, full_name:e.target.value})} required/>
-                    </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Class *</label>
-                      <select className="sd-form-input" value={studentForm.grade || ''}
-                        onChange={e => setStudentForm({...studentForm, grade: e.target.value})} required>
-                        <option value="">-- Select Class --</option>
-                        {[3, 4, 5, 6, 7, 8].map(num => (
-                          <option key={num} value={`Class ${num}`}>Class {num}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Section *</label>
-                      <select className="sd-form-input" value={studentForm.section || ''}
-                        onChange={e => setStudentForm({...studentForm, section: e.target.value})} required>
-                        <option value="">-- Select Section --</option>
-                        {['A', 'B', 'C', 'D'].map(letter => (
-                          <option key={letter} value={letter}>Section {letter}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Email Address</label>
-                      <input className="sd-form-input" type="email" value={studentForm.email}
-                        onChange={e => setStudentForm({...studentForm, email:e.target.value})}/>
-                    </div>
-                    {modalType === 'add' && (<>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
                       <div className="sd-form-group">
-                        <label className="sd-form-label">Username *</label>
-                        <input className="sd-form-input" type="text" value={studentForm.username}
-                          onChange={e => setStudentForm({...studentForm, username:e.target.value})} required/>
+                        <label className="sd-form-label">Full Name *</label>
+                        <input className="sd-form-input" type="text" value={studentForm.full_name}
+                          onChange={e => {
+                            const full_name = e.target.value;
+                            setStudentForm(prev => ({
+                              ...prev,
+                              full_name,
+                              username: modalType === 'add' ? generateRollNo(full_name, students) : prev.username
+                            }));
+                          }} required placeholder="e.g. Arjun Sharma"/>
                       </div>
                       <div className="sd-form-group">
-                        <label className="sd-form-label">Password *</label>
-                        <input className="sd-form-input" type="password" value={studentForm.password}
-                          onChange={e => setStudentForm({...studentForm, password:e.target.value})} required/>
+                        <label className="sd-form-label">Roll No *</label>
+                        <input className="sd-form-input" type="text" value={studentForm.roll_no}
+                          onChange={e => setStudentForm({...studentForm, roll_no: e.target.value})} placeholder="e.g. 12" required/>
                       </div>
-                    </>)}
-                    <label className="sd-checkbox-label">
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">LMS Login Code (Auto Generated)</label>
+                        <input className="sd-form-input" type="text" value={studentForm.username || ''} readOnly style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }}/>
+                      </div>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Class *</label>
+                        <select className="sd-form-input" value={studentForm.grade || ''}
+                          onChange={e => setStudentForm({...studentForm, grade: e.target.value})} required>
+                          <option value="">-- Select Class --</option>
+                          {[3, 4, 5, 6, 7, 8].map(num => (
+                            <option key={num} value={`Class ${num}`}>Class {num}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Section *</label>
+                        <select className="sd-form-input" value={studentForm.section || ''}
+                          onChange={e => setStudentForm({...studentForm, section: e.target.value})} required>
+                          <option value="">-- Select Section --</option>
+                          {['A', 'B', 'C', 'D'].map(letter => (
+                            <option key={letter} value={letter}>Section {letter}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Academic Year *</label>
+                        <input className="sd-form-input" type="text" value={studentForm.academic_year || ''}
+                          onChange={e => setStudentForm({...studentForm, academic_year: e.target.value})} placeholder="e.g. 2025 - 2026" required/>
+                      </div>
+                    </div>
+
+                    <label className="sd-checkbox-label" style={{ marginBottom: '1rem' }}>
                       <input type="checkbox" checked={studentForm.is_active}
                         onChange={e => setStudentForm({...studentForm, is_active:e.target.checked})}/>
                       Active Status
@@ -3144,61 +2995,66 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
                   {/* Class fields */}
                   {activeSubTab === 'classes' && (<>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Class *</label>
-                      <select className="sd-form-input" value={classForm.grade || ''}
-                        onChange={e => {
-                          const selectedGradeId = parseInt(e.target.value);
-                          const gObj = grades.find(g => g.id === selectedGradeId);
-                          const match = gObj ? gObj.grade_name.match(/\d+/) : null;
-                          const num = match ? match[0] : selectedGradeId;
-                          const sec = classForm.section || 'A';
-                          setClassForm({
-                            ...classForm,
-                            grade: selectedGradeId,
-                            class_name: `Class ${num}-${sec}`
-                          });
-                        }} required>
-                        <option value="">-- Select Class --</option>
-                        {grades.map(g => {
-                          const match = g.grade_name.match(/\d+/);
-                          const num = match ? match[0] : g.id;
-                          return (
-                            <option key={g.id} value={g.id}>Class {num}</option>
-                          );
-                        })}
-                      </select>
-                    </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Section *</label>
-                      <select className="sd-form-input" value={classForm.section || 'A'}
-                        onChange={e => {
-                          const selectedSecVal = e.target.value;
-                          const gObj = grades.find(g => g.id === classForm.grade);
-                          const match = gObj ? gObj.grade_name.match(/\d+/) : null;
-                          const num = match ? match[0] : (classForm.grade || 3);
-                          setClassForm({
-                            ...classForm,
-                            section: selectedSecVal,
-                            class_name: `Class ${num}-${selectedSecVal}`
-                          });
-                        }} required>
-                        {['A', 'B', 'C', 'D'].map(letter => (
-                          <option key={letter} value={letter}>Section {letter}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">School Name</label>
-                      <input className="sd-form-input" type="text" value={user?.school_name || profileForm.school_name || ''} readOnly style={{ backgroundColor:'#e2e8f0', cursor:'not-allowed' }}/>
-                    </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Academic Year *</label>
-                      <input className="sd-form-input" type="text" value={classForm.academic_year}
-                        onChange={e => setClassForm({...classForm, academic_year:e.target.value})} placeholder="e.g. 2026" required/>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Class *</label>
+                        <select className="sd-form-input" value={classForm.grade || ''}
+                          onChange={e => {
+                            const selectedGradeId = parseInt(e.target.value);
+                            const gObj = grades.find(g => g.id === selectedGradeId);
+                            const match = gObj ? gObj.grade_name.match(/\d+/) : null;
+                            const num = match ? match[0] : selectedGradeId;
+                            const sec = classForm.section || 'A';
+                            setClassForm({
+                              ...classForm,
+                              grade: selectedGradeId,
+                              class_name: `Class ${num}-${sec}`
+                            });
+                          }} required>
+                          <option value="">-- Select Class --</option>
+                          {grades.map(g => {
+                            const match = g.grade_name.match(/\d+/);
+                            const num = match ? match[0] : g.id;
+                            return (
+                              <option key={g.id} value={g.id}>Class {num}</option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Section *</label>
+                        <select className="sd-form-input" value={classForm.section || 'A'}
+                          onChange={e => {
+                            const selectedSecVal = e.target.value;
+                            const gObj = grades.find(g => g.id === classForm.grade);
+                            const match = gObj ? gObj.grade_name.match(/\d+/) : null;
+                            const num = match ? match[0] : (classForm.grade || 3);
+                            setClassForm({
+                              ...classForm,
+                              section: selectedSecVal,
+                              class_name: `Class ${num}-${selectedSecVal}`
+                            });
+                          }} required>
+                          {['A', 'B', 'C', 'D'].map(letter => (
+                            <option key={letter} value={letter}>Section {letter}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
-                    <label className="sd-checkbox-label">
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">School Name</label>
+                        <input className="sd-form-input" type="text" value={user?.school_name || profileForm.school_name || ''} readOnly style={{ backgroundColor:'#e2e8f0', cursor:'not-allowed' }}/>
+                      </div>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Academic Year *</label>
+                        <input className="sd-form-input" type="text" value={classForm.academic_year}
+                          onChange={e => setClassForm({...classForm, academic_year:e.target.value})} placeholder="e.g. 2026" required/>
+                      </div>
+                    </div>
+
+                    <label className="sd-checkbox-label" style={{ marginBottom: '1rem' }}>
                       <input type="checkbox" checked={classForm.is_active}
                         onChange={e => setClassForm({...classForm, is_active:e.target.checked})}/>
                       Active Status
@@ -3741,24 +3597,39 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               )}
               <div className="sd-form-group">
                 <label className="sd-form-label">Current Password</label>
-                <input className="sd-form-input" type="password"
-                  value={pwForm.current_password}
-                  onChange={e => { setPwForm({...pwForm, current_password:e.target.value}); setPwModalError(''); }}
-                  placeholder="Enter current password" required/>
+                <div style={{ position: 'relative' }}>
+                  <input className="sd-form-input" type={showCurrentPassword ? "text" : "password"}
+                    value={pwForm.current_password}
+                    onChange={e => { setPwForm({...pwForm, current_password:e.target.value}); setPwModalError(''); }}
+                    placeholder="Enter current password" required style={{ width: '100%', paddingRight: '2.5rem' }} />
+                  <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                    {showCurrentPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                  </button>
+                </div>
               </div>
               <div className="sd-form-group">
                 <label className="sd-form-label">New Password</label>
-                <input className="sd-form-input" type="password"
-                  value={pwForm.new_password}
-                  onChange={e => { setPwForm({...pwForm, new_password:e.target.value}); setPwModalError(''); }}
-                  placeholder="Minimum 6 characters" required minLength={6}/>
+                <div style={{ position: 'relative' }}>
+                  <input className="sd-form-input" type={showNewPassword ? "text" : "password"}
+                    value={pwForm.new_password}
+                    onChange={e => { setPwForm({...pwForm, new_password:e.target.value}); setPwModalError(''); }}
+                    placeholder="Minimum 6 characters" required minLength={6} style={{ width: '100%', paddingRight: '2.5rem' }} />
+                  <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                    {showNewPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                  </button>
+                </div>
               </div>
               <div className="sd-form-group">
                 <label className="sd-form-label">Confirm Password</label>
-                <input className="sd-form-input" type="password"
-                  value={pwForm.confirm_password}
-                  onChange={e => { setPwForm({...pwForm, confirm_password:e.target.value}); setPwModalError(''); }}
-                  placeholder="Confirm new password" required minLength={6}/>
+                <div style={{ position: 'relative' }}>
+                  <input className="sd-form-input" type={showConfirmPassword ? "text" : "password"}
+                    value={pwForm.confirm_password}
+                    onChange={e => { setPwForm({...pwForm, confirm_password:e.target.value}); setPwModalError(''); }}
+                    placeholder="Confirm new password" required minLength={6} style={{ width: '100%', paddingRight: '2.5rem' }} />
+                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                    {showConfirmPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                  </button>
+                </div>
               </div>
               <div className="sd-modal-footer">
                 <button type="button" className="sd-btn-cancel" onClick={() => setShowPwModal(false)}>Cancel</button>
@@ -3998,8 +3869,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       )}
 
       {showNotifModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', width: '100%', maxWidth: '850px', height: '90%', maxHeight: '650px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#ffffff', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ backgroundColor: '#ffffff', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Modal Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

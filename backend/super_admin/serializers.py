@@ -43,6 +43,28 @@ class SchoolSerializer(serializers.ModelSerializer):
         model = School
         fields = '__all__'
 
+    def validate(self, attrs):
+        email = attrs.get('email')
+        contactEmail = attrs.get('contactEmail')
+        
+        # Check email
+        if email:
+            qs = School.objects.filter(email=email) | School.objects.filter(contactEmail=email)
+            if self.instance:
+                qs = qs.exclude(school_id=self.instance.school_id)
+            if qs.exists():
+                raise serializers.ValidationError({"email": "A school with this email address already exists."})
+                
+        # Check contactEmail
+        if contactEmail:
+            qs = School.objects.filter(email=contactEmail) | School.objects.filter(contactEmail=contactEmail)
+            if self.instance:
+                qs = qs.exclude(school_id=self.instance.school_id)
+            if qs.exists():
+                raise serializers.ValidationError({"contactEmail": "A school with this email address already exists."})
+                
+        return attrs
+
 
 
 from django.core.exceptions import ValidationError as DjangoValidationError

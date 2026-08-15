@@ -65,6 +65,13 @@ class ProfileSerializer(serializers.ModelSerializer):
             return obj.teacher_profile.school.school_name
         return ""
 
+    def validate_phone_no(self, value):
+        if value:
+            cleaned = "".join(c for c in value if c.isdigit())
+            if len(cleaned) != 10 or len(value) != 10:
+                raise serializers.ValidationError("Phone number must be exactly 10 numeric digits.")
+        return value
+
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 

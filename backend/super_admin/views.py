@@ -115,6 +115,9 @@ class SchoolViewSet(CMSBaseViewSet):
         lan_phone = data.get("lan_phone") or data.get("lan") or ""
         school_code = data.get("school_code") or ""
         contact_email = data.get("contactEmail") or data.get("email") or ""
+        if contact_email:
+            if School.objects.filter(email=contact_email).exists() or School.objects.filter(contactEmail=contact_email).exists():
+                return Response({"error": "A school with this email address already registered."}, status=status.HTTP_400_BAD_REQUEST)
         
         admin_name = data.get("admin_name") or data.get("admin_full_name") or "School Admin"
         admin_username = data.get("admin_username")

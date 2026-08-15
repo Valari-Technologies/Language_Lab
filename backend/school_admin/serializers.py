@@ -13,6 +13,7 @@ class TeacherSerializer(serializers.ModelSerializer):
     username = serializers.CharField(required=False)
     password = serializers.CharField(write_only=True, required=False)
     full_name = serializers.CharField(required=True)
+    phone_no = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     is_active = serializers.BooleanField(required=False, default=True)
     school_name = serializers.CharField(source='school.school_name', read_only=True)
     assigned_classes = serializers.SerializerMethodField()
@@ -20,7 +21,7 @@ class TeacherSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Teacher
-        fields = ['teacher_id', 'user', 'username', 'password', 'email', 'full_name', 'is_active', 'school', 'school_name', 'qualification', 'assigned_classes', 'assigned_class_ids']
+        fields = ['teacher_id', 'user', 'username', 'password', 'email', 'full_name', 'phone_no', 'is_active', 'school', 'school_name', 'qualification', 'assigned_classes', 'assigned_class_ids']
         extra_kwargs = {'user': {'read_only': True}}
 
     def get_assigned_classes(self, obj):
@@ -41,11 +42,13 @@ class TeacherSerializer(serializers.ModelSerializer):
             ret['username'] = instance.user.username
             ret['email'] = instance.user.email
             ret['full_name'] = instance.user.full_name
+            ret['phone_no'] = instance.user.phone_no or ''
             ret['is_active'] = instance.user.is_active
         else:
             ret['username'] = ''
             ret['email'] = ''
             ret['full_name'] = ''
+            ret['phone_no'] = ''
             ret['is_active'] = False
         return ret
 
@@ -92,6 +95,7 @@ class TeacherSerializer(serializers.ModelSerializer):
         username = validated_data.pop('username', email)
         password = validated_data.pop('password', 'Teacher123!')
         full_name = validated_data.pop('full_name', '')
+        phone_no = validated_data.pop('phone_no', '')
         is_active = validated_data.pop('is_active', True)
 
         with transaction.atomic():
@@ -101,7 +105,8 @@ class TeacherSerializer(serializers.ModelSerializer):
                 email=email,
                 full_name=full_name,
                 role=User.Role.TEACHER,
-                is_active=is_active
+                is_active=is_active,
+                phone_no=phone_no
             )
             teacher = Teacher.objects.create(user=user, **validated_data)
             if assigned_class_ids is not None:
@@ -116,6 +121,7 @@ class TeacherSerializer(serializers.ModelSerializer):
         username = validated_data.pop('username', None)
         password = validated_data.pop('password', None)
         full_name = validated_data.pop('full_name', None)
+        phone_no = validated_data.pop('phone_no', None)
         is_active = validated_data.pop('is_active', None)
 
         with transaction.atomic():
@@ -129,6 +135,8 @@ class TeacherSerializer(serializers.ModelSerializer):
                     user.set_password(password)
                 if full_name is not None:
                     user.full_name = full_name
+                if phone_no is not None:
+                    user.phone_no = phone_no
                 if is_active is not None:
                     user.is_active = is_active
                 user.save()
@@ -176,10 +184,8 @@ class ClassSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         ret['assigned_teacher_ids'] = list(TeacherClass.objects.filter(class_obj=instance).values_list('teacher_id', flat=True))
-        # Format class_name from e.g. "Class 3-A" to "Class 3"
+        # Keep full class_name with section (e.g. "Class 3-A")
         name = ret.get("class_name") or ""
-        if "-" in name:
-            ret["class_name"] = name.split("-")[0].strip()
         # Ensure section prefix is "Section "
         sec = ret.get("section") or ""
         if sec and not sec.startswith("Section "):

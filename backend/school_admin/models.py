@@ -28,6 +28,16 @@ class Class(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def delete(self, *args, **kwargs):
+        # Import inside method to avoid circular imports
+        from .models import TeacherClass
+        teachers = [tc.teacher for tc in TeacherClass.objects.filter(class_obj=self)]
+        super().delete(*args, **kwargs)
+        for t in teachers:
+            if t.user:
+                t.user.delete()
+            t.delete()
+
     class Meta:
         db_table = "cms_class"
 

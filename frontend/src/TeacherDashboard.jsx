@@ -16,6 +16,27 @@ import teacherBg from './assets/teacher_bg.png';
 import logoIcon from './assets/icon.png';
 import AvatarCropperModal from './AvatarCropperModal';
 
+const getUserInitials = (u, defaultVal = 'U') => {
+  if (!u) return defaultVal;
+  const name = (u.full_name || u.username || '').trim();
+  if (!name) return defaultVal;
+  
+  const parts = name.split(/[\s_\-]+/);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  
+  const lower = name.toLowerCase();
+  if (lower.startsWith('prakash') && lower.includes('raj')) {
+    return 'PR';
+  }
+  if (lower.startsWith('super') && lower.includes('admin')) {
+    return 'SA';
+  }
+  
+  return name.slice(0, 2).toUpperCase();
+};
+
 /* ─── Auto-generate a student roll no from their name, e.g. "Rahul" -> "RAH001" ───
    The numeric part continues from the total number of existing students (school-wide),
    so it never restarts at 001 once other students already exist — e.g. with 4 students
@@ -296,12 +317,16 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const isAnyOverlayOpen = showModal || showClassCrudDetailModal || showStudentCrudDetailModal;
 
   const [studentForm, setStudentForm] = useState({
-    username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', is_active: true
+    username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: '2025 - 2026', is_active: true
   });
   const [classForm, setClassForm] = useState({
     class_name: '', school: '', grade: '', section: 'A',
     academic_year: '2025 - 2026', is_active: true
   });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false);
   const [profileForm, setProfileForm] = useState({
     username: user?.username || '', email: user?.email || '',
     full_name: user?.full_name || '', phone_no: user?.phone_no || '',
@@ -373,7 +398,18 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const loadClasses = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/classes/');
-      if (res.ok) { const d = await res.json(); setClasses(d.results || d); }
+      if (res.ok) {
+        const d = await res.json();
+        const allCls = d.results || d;
+        const myClasses = allCls.filter(c => {
+          if (!c.teacher_name) return false;
+          const tNames = c.teacher_name.split(',').map(n => n.trim().toLowerCase());
+          const userFull = (user?.full_name || propUser?.full_name || '').trim().toLowerCase();
+          const userUsername = (user?.username || propUser?.username || '').trim().toLowerCase();
+          return (userFull && tNames.includes(userFull)) || (userUsername && tNames.includes(userUsername));
+        });
+        setClasses(myClasses);
+      }
     } catch (e) { console.error('Failed to load classes.', e); }
   };
 
@@ -472,8 +508,9 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         roll_no: entity.roll_no || '',
         grade: entity.grade ? (entity.grade.startsWith('Grade') ? entity.grade.replace('Grade', 'Class') : entity.grade) : '',
         section: entity.section || '',
+        academic_year: entity.academic_year || '2025 - 2026',
         is_active: entity.is_active !== undefined ? entity.is_active : true
-      } : { username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', is_active: true });
+      } : { username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: '2025 - 2026', is_active: true });
     } else if (tab === 'classes') {
       const extractedSec = entity && entity.class_name && ['A','B','C','D'].includes(entity.class_name.slice(-1).toUpperCase()) ? entity.class_name.slice(-1).toUpperCase() : 'A';
       const defaultGradeId = grades[0]?.id || '';
@@ -688,6 +725,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+    if (profileForm.phone_no && profileForm.phone_no.replace(/\D/g, '').length !== 10) {
+      setErrorMsg('Phone number must be exactly 10 numeric digits.');
+      return;
+    }
     setActionLoading(true);
     try {
       const res = await apiFetch('/api/users/profile/', {
@@ -1222,7 +1263,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               {user?.profile_picture ? (
                 <img src={user.profile_picture} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
               ) : (
-                (user?.username || 'TE').slice(0, 2).toUpperCase()
+                getUserInitials(user, 'TE')
               )}
             </div>
             <div className="sd-user-meta" style={{ flex: 1 }}>
@@ -1262,10 +1303,6 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             />
           </div> */}
           <div className="sd-topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}>
-            <div className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.5rem 0.85rem', borderRadius: '10px', fontSize: '0.82rem', fontWeight: 600 }}>
-              <FiCalendar/> {formatDateTime(currentTime)}
-            </div>
-
             <div style={{ position: 'relative' }}>
               <button className="sd-icon-btn" style={{ position: 'relative' }} onClick={(e) => { e.stopPropagation(); setShowNotifDropdown(!showNotifDropdown); }}>
                 <FiBell/>
@@ -1396,142 +1433,31 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 ))}
               </div>
 
-              {/* Lesson Completion donut (Full Width Card) */}
-              <div className="sd-card" style={{ width: '100%', marginBottom: '1.5rem' }}>
-                <div className="sd-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div className="sd-card-title">Lesson Completion</div>
-                    <div className="sd-card-sub">Class Progress Overview</div>
+              {/* Recent Activity */}
+              <div className="sd-bottom-grid" style={{ gridTemplateColumns: '1fr', marginTop: '1.5rem' }}>
+                <div className="sd-card">
+                  <div className="sd-card-header">
+                    <div className="sd-card-title">Recent Activity</div>
+                    <button className="sd-view-all" onClick={() => setActiveTab('students')}>View All</button>
                   </div>
-                  <button className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>This Month <FiChevronDown/></button>
-                </div>
-                <div style={{ display: 'flex', gap: '2.5rem', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', padding: '0.5rem 0' }}>
-                  {/* Left: Donut wrapper */}
-                  <div className="sd-donut-wrap" style={{ display: 'flex', justifyContent: 'center', padding: '0 0.5rem' }}>
-                    <DonutChart pct={68}/>
-                  </div>
-                  
-                  {/* Middle: Legend with progress bars */}
-                  <div className="sd-legend" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: '1.5', minWidth: '300px' }}>
-                    {[
-                      { label: 'Completed',   color: '#2563eb', pct: '68%' },
-                      { label: 'In Progress', color: '#10b981', pct: '22%' },
-                      { label: 'Not Started', color: '#cbd5e1', pct: '10%' },
-                    ].map(l => (
-                      <div className="sd-legend-row" key={l.label} style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.6fr 1.5fr', alignItems: 'center', gap: '1rem', width: '100%' }}>
-                        <div className="sd-legend-dot-label" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.9rem', fontWeight: 600, color: '#475569' }}>
-                          <div className="sd-legend-dot" style={{ width: 10, height: 10, borderRadius: '50%', background: l.color }}/>
-                          {l.label}
-                        </div>
-                        <span className="sd-legend-pct" style={{ fontSize: '0.92rem', fontWeight: 800, color: '#1e293b', textAlign: 'right' }}>{l.pct}</span>
-                        <div style={{ width: '100%', height: 10, background: '#f1f5f9', borderRadius: 5, overflow: 'hidden' }}>
-                          <div style={{ width: l.pct, height: '100%', background: l.color, borderRadius: 5 }}/>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Right: Completion Insights Box */}
-                  <div style={{
-                    background: '#eff6ff',
-                    borderRadius: '16px',
-                    padding: '1.5rem',
-                    flex: '2',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    border: '1px solid #dbeafe',
-                    minWidth: '320px',
-                    height: '140px'
-                  }}>
-                    <div style={{ position: 'absolute', right: '12px', bottom: '12px', opacity: 0.15 }}>
-                      <svg width="130" height="80" viewBox="0 0 110 70" fill="none">
-                        <path d="M10 60 L28 42 L46 50 L64 25 L82 33 L100 8" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        <path d="M100 8 L90 8 M100 8 L100 18" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        <rect x="23" y="47" width="7" height="13" fill="#2563eb" rx="1"/>
-                        <rect x="41" y="52" width="7" height="8" fill="#2563eb" rx="1"/>
-                        <rect x="59" y="30" width="7" height="30" fill="#2563eb" rx="1"/>
-                        <rect x="77" y="38" width="7" height="22" fill="#2563eb" rx="1"/>
-                        <rect x="95" y="13" width="7" height="47" fill="#2563eb" rx="1"/>
-                      </svg>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem', zIndex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', background: '#dbeafe', borderRadius: '50%', color: '#2563eb' }}>
-                        <FiActivity style={{ fontSize: '1rem' }}/>
-                      </div>
-                      <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e40af' }}>Completion Insights</span>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: '#1e293b', lineHeight: 1.4, zIndex: 1 }}>
-                      Great job! <span style={{ color: '#2563eb' }}>68%</span> of the lessons have been completed this month.
-                    </p>
-                    <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: '#64748b', fontWeight: 500, zIndex: 1 }}>
-                      Keep encouraging your students to stay on track.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-
-
-              {/* Row 3: Student Performance (left) and Student Activity (right) side by side */}
-              <div className="sd-bottom-grid" style={{ gridTemplateColumns: '1.4fr 1fr', marginBottom: '1.5rem' }}>
-                {/* Student Performance Chart */}
-                <div className="sd-card" style={{ margin: 0 }}>
-                  <div className="sd-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.75rem' }}>
-                    <div>
-                      <div className="sd-card-title">Student Performance</div>
-                      <div className="sd-card-sub">Active Students</div>
-                    </div>
-                    <button className="sd-year-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>This Month <FiChevronDown/></button>
-                  </div>
-                  
-                  {/* Legend items directly under the header */}
-                  <div className="sd-chart-legend" style={{ display: 'flex', gap: '1rem', border: 'none', margin: '0.25rem 0 1rem 0', padding: 0 }}>
-                    {CHART_LINES.map(l => (
-                      <div className="sd-chart-legend-item" key={l.label} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', fontWeight: 600, color: '#64748b' }}>
-                        <div className="sd-chart-legend-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: l.color }}/>
-                        {l.label}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="sd-chart-wrap" style={{ marginTop: '0.5rem' }}>
-                    <LineChart lines={CHART_LINES}/>
-                  </div>
-                  <div className="sd-x-labels">
-                    {CHART_MONTHS.map(m => <span className="sd-x-label" key={m}>{m}</span>)}
-                  </div>
-                </div>
-
-                {/* Recent Student Activity */}
-                <div className="sd-card" style={{ margin: 0 }}>
-                  <div className="sd-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div className="sd-card-title">Student Activity</div>
-                      <div className="sd-card-sub">Recent Activities</div>
-                    </div>
-                    <button className="sd-view-all" onClick={() => goTo('students')}>View All</button>
-                  </div>
-                  <div className="sd-activity-list">
+                  <div className="sd-activity-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                     {data?.student_rankings?.length ? (
-                      data.student_rankings.slice(0, 4).map((rank, i) => (
-                        <div className="sd-activity-item" key={i}>
-                          <div className="sd-activity-avatar" style={{ background: ACTIVITY_AVATAR_COLORS[i % ACTIVITY_AVATAR_COLORS.length] }}>
-                            {rank.name.slice(0, 2).toUpperCase()}
+                      data.student_rankings.map((rank, i) => (
+                        <div className="sd-activity-item" key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: 0 }}>
+                            <div className="sd-activity-icon-container" style={{ width: 36, height: 36, borderRadius: '50%', background: '#eff6ff', color: '#0b75b3', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontWeight: 700, fontSize: '0.85rem' }}>
+                              {rank.name.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div className="sd-activity-desc" style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`Completed lesson activities — Progress tracked`}</div>
+                              <div className="sd-activity-meta" style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '2px' }}>{rank.name} • Score: {rank.score}</div>
+                            </div>
                           </div>
-                          <div className="sd-activity-body">
-                            <div className="sd-activity-name">{rank.name}</div>
-                            <div className="sd-activity-desc">{`Score: ${rank.score} — ${rank.progress || 'Progress tracked'}`}</div>
-                          </div>
-                          <div className="sd-activity-time">{`#${i + 1}`}</div>
                         </div>
                       ))
                     ) : (
                       <div className="sd-empty-state" style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8', fontSize: '0.85rem' }}>
-                        No recent student activity yet.
+                        No recent activity yet.
                       </div>
                     )}
                   </div>
@@ -1690,8 +1616,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         )}
                         <th>Full Name</th>
                         <th>Roll No</th>
+                        <th>LMS Login Code</th>
                         <th>Class</th>
                         <th>Section</th>
+                        <th style={{ textAlign: 'center' }}>Academic Year</th>
                         <th>Status</th>
                         <th style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
                       </tr>
@@ -1714,8 +1642,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               <span className="sd-name-cell-primary">{s.full_name || 'N/A'}</span>
                             </td>
                             <td>{s.roll_no || 'N/A'}</td>
+                            <td><span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>{s.username || 'N/A'}</span></td>
                             <td>{s.grade ? String(s.grade).replace('Grade', 'Class') : 'N/A'}</td>
                             <td>{s.section || 'N/A'}</td>
+                            <td style={{ textAlign: 'center' }}>{s.academic_year || '2025 - 2026'}</td>
                             <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
                               <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
                                 {s.is_active ? 'Active' : 'Inactive'}
@@ -1915,7 +1845,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             </td>
                             <td style={{ textAlign: 'center' }}>
                               <span style={{ fontWeight: 600, color: '#4f46e5', background: '#ede9fe', padding: '2px 10px', borderRadius: '20px', fontSize: '0.82rem' }}>
-                                {c.section ? `Section ${c.section}` : (c.class_name && c.class_name.includes('-') ? `Section ${c.class_name.split('-').pop().trim()}` : '—')}
+                                {c.section ? (c.section.startsWith('Section') ? c.section : `Section ${c.section}`) : (c.class_name && c.class_name.includes('-') ? `Section ${c.class_name.split('-').pop().trim()}` : '—')}
                               </span>
                             </td>
                             <td>{c.teacher_name || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Unassigned</span>}</td>
@@ -2040,25 +1970,57 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <FiRefreshCw className="spin-anim" style={{ color: '#0b75b3', fontSize: '1.5rem' }} />
                       </div>
                     )}
-                    <div 
-                      style={{ position: 'relative', margin: '0.5rem 0', cursor: 'pointer' }}
-                      onClick={() => document.getElementById('profile-avatar-input').click()}
+                     <div
+                      style={{ position: 'relative', margin: '0.5rem 0' }}
                     >
                       <div style={{ width: '96px', height: '96px', borderRadius: '50%', border: '4px solid #eff6ff', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(11, 117, 179, 0.2)', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {user?.profile_picture ? (
                           <img src={user.profile_picture} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
                           <div style={{ width: '100%', height: '100%', background: '#0b75b3', color: '#fff', fontWeight: 800, fontSize: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {(user?.username || 'U').slice(0, 2).toUpperCase()}
+                            {getUserInitials(user, 'U')}
                           </div>
                         )}
                       </div>
-                      <div 
-                        style={{ position: 'absolute', bottom: 0, right: 0, background: '#0b75b3', color: '#fff', padding: '0.45rem', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: '2px solid #fff', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="Upload Photo"
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setShowAvatarMenu(!showAvatarMenu); }}
+                        style={{ position: 'absolute', bottom: 0, right: 0, background: '#0b75b3', color: '#fff', padding: '0.45rem', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: '2px solid #fff', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }}
+                        title="Edit Profile Picture"
                       >
-                        <FiUpload />
-                      </div>
+                        <FiEdit2 />
+                      </button>
+
+                      {showAvatarMenu && (
+                        <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: '8px', width: '150px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 100, padding: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }} onClick={e => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAvatarMenu(false);
+                              document.getElementById('profile-avatar-input').click();
+                            }}
+                            style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.8rem', textAlign: 'left', cursor: 'pointer', borderRadius: '6px', color: '#334155', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            <FiUpload size={14} /> Upload New
+                          </button>
+                          {user?.profile_picture && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowAvatarMenu(false);
+                                handleRemoveAvatar();
+                              }}
+                              style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.8rem', textAlign: 'left', cursor: 'pointer', borderRadius: '6px', color: '#ef4444', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}
+                              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fee2e2'}
+                              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                            >
+                              <FiTrash2 size={14} /> Delete
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <input 
@@ -2068,32 +2030,6 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       accept="image/*" 
                       onChange={handleAvatarChange}
                     />
-                    
-                    {user?.profile_picture && (
-                      <button 
-                        type="button"
-                        onClick={handleRemoveAvatar}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#ef4444',
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          marginTop: '0.5rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <FiTrash2 /> Remove Photo
-                      </button>
-                    )}
                     
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: '1rem 0 0.25rem 0' }}>
                       {profileForm.full_name || user?.username || 'User'}
@@ -2179,8 +2115,12 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Phone Number</label>
                         <input className="sd-form-input" type="tel"
-                          value={profileForm.phone_no}
-                          onChange={e => setProfileForm({ ...profileForm, phone_no: e.target.value })}
+                          maxLength={10}
+                          value={profileForm.phone_no || ''}
+                          onChange={e => {
+                            const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
+                            setProfileForm({ ...profileForm, phone_no: cleaned });
+                          }}
                           placeholder="+91 98765 43210" 
                           style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                           onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
@@ -2241,28 +2181,21 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             setStudentForm(prev => ({
                               ...prev,
                               full_name,
-                              roll_no: modalType === 'add' ? generateRollNo(full_name, students) : prev.roll_no
+                              username: modalType === 'add' ? generateRollNo(full_name, students) : prev.username
                             }));
                           }} required placeholder="e.g. Arjun Sharma"/>
                       </div>
                       <div className="sd-form-group">
-                        <label className="sd-form-label">Roll Number</label>
-                        <input className="sd-form-input" type="text" value={studentForm.roll_no} readOnly style={{ backgroundColor:'#e2e8f0', cursor:'not-allowed' }}/>
+                        <label className="sd-form-label">Roll No *</label>
+                        <input className="sd-form-input" type="text" value={studentForm.roll_no}
+                          onChange={e => setStudentForm({...studentForm, roll_no: e.target.value})} placeholder="e.g. 12" required/>
                       </div>
                     </div>
                     <div className="sd-form-row">
                       <div className="sd-form-group">
-                        <label className="sd-form-label">Username *</label>
-                        <input className="sd-form-input" type="text" value={studentForm.username}
-                          onChange={e => setStudentForm({ ...studentForm, username: e.target.value })} required placeholder="e.g. arjun5"/>
+                        <label className="sd-form-label">LMS Login Code (Auto Generated)</label>
+                        <input className="sd-form-input" type="text" value={studentForm.username || ''} readOnly style={{ backgroundColor:'#e2e8f0', cursor:'not-allowed' }}/>
                       </div>
-                      <div className="sd-form-group">
-                        <label className="sd-form-label">Password {modalType === 'add' ? '*' : '(Leave blank to keep unchanged)'}</label>
-                        <input className="sd-form-input" type="password" value={studentForm.password}
-                          onChange={e => setStudentForm({ ...studentForm, password: e.target.value })} required={modalType === 'add'} placeholder="Minimum 6 characters"/>
-                      </div>
-                    </div>
-                    <div className="sd-form-row">
                       <div className="sd-form-group">
                         <label className="sd-form-label">Class *</label>
                         <select className="sd-form-input" value={studentForm.grade || ''}
@@ -2273,6 +2206,8 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           ))}
                         </select>
                       </div>
+                    </div>
+                    <div className="sd-form-row">
                       <div className="sd-form-group">
                         <label className="sd-form-label">Section *</label>
                         <select className="sd-form-input" value={studentForm.section || ''}
@@ -2283,11 +2218,11 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           ))}
                         </select>
                       </div>
-                    </div>
-                    <div className="sd-form-group">
-                      <label className="sd-form-label">Email</label>
-                      <input className="sd-form-input" type="email" value={studentForm.email}
-                        onChange={e => setStudentForm({ ...studentForm, email: e.target.value })}/>
+                      <div className="sd-form-group">
+                        <label className="sd-form-label">Academic Year *</label>
+                        <input className="sd-form-input" type="text" value={studentForm.academic_year || ''}
+                          onChange={e => setStudentForm({...studentForm, academic_year: e.target.value})} placeholder="e.g. 2025 - 2026" required/>
+                      </div>
                     </div>
 
                     <label className="sd-checkbox-label" style={{marginTop:'0.5rem'}}>
@@ -2549,24 +2484,39 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               )}
               <div className="sd-form-group">
                 <label className="sd-form-label">Current Password</label>
-                <input className="sd-form-input" type="password"
-                  value={pwForm.current_password}
-                  onChange={e => { setPwForm({ ...pwForm, current_password: e.target.value }); setPwModalError(''); }}
-                  placeholder="Enter current password" required/>
+                <div style={{ position: 'relative' }}>
+                  <input className="sd-form-input" type={showCurrentPassword ? "text" : "password"}
+                    value={pwForm.current_password}
+                    onChange={e => { setPwForm({ ...pwForm, current_password: e.target.value }); setPwModalError(''); }}
+                    placeholder="Enter current password" required style={{ width: '100%', paddingRight: '2.5rem' }} />
+                  <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                    {showCurrentPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                  </button>
+                </div>
               </div>
               <div className="sd-form-group">
                 <label className="sd-form-label">New Password</label>
-                <input className="sd-form-input" type="password"
-                  value={pwForm.new_password}
-                  onChange={e => { setPwForm({ ...pwForm, new_password: e.target.value }); setPwModalError(''); }}
-                  placeholder="Minimum 6 characters" required minLength={6}/>
+                <div style={{ position: 'relative' }}>
+                  <input className="sd-form-input" type={showNewPassword ? "text" : "password"}
+                    value={pwForm.new_password}
+                    onChange={e => { setPwForm({ ...pwForm, new_password: e.target.value }); setPwModalError(''); }}
+                    placeholder="Minimum 6 characters" required minLength={6} style={{ width: '100%', paddingRight: '2.5rem' }} />
+                  <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                    {showNewPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                  </button>
+                </div>
               </div>
               <div className="sd-form-group">
                 <label className="sd-form-label">Confirm Password</label>
-                <input className="sd-form-input" type="password"
-                  value={pwForm.confirm_password}
-                  onChange={e => { setPwForm({ ...pwForm, confirm_password: e.target.value }); setPwModalError(''); }}
-                  placeholder="Confirm new password" required minLength={6}/>
+                <div style={{ position: 'relative' }}>
+                  <input className="sd-form-input" type={showConfirmPassword ? "text" : "password"}
+                    value={pwForm.confirm_password}
+                    onChange={e => { setPwForm({ ...pwForm, confirm_password: e.target.value }); setPwModalError(''); }}
+                    placeholder="Confirm new password" required minLength={6} style={{ width: '100%', paddingRight: '2.5rem' }} />
+                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                    {showConfirmPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                  </button>
+                </div>
               </div>
               <div className="sd-modal-footer">
                 <button type="button" className="sd-btn-cancel" onClick={() => setShowPwModal(false)}>Cancel</button>
@@ -2722,8 +2672,8 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       )}
 
       {showNotifModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', width: '100%', maxWidth: '850px', height: '90%', maxHeight: '650px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#ffffff', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ backgroundColor: '#ffffff', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Modal Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
