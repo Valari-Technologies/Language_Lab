@@ -6,6 +6,9 @@ __pycache__/
 
 # Environment variables
 .env
+.env.*
+!.env.example
+!.env.prod.example
 
 # Django
 db.sqlite3

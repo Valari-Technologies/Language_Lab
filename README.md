@@ -127,6 +127,36 @@ Language_lab/
 
 ---
 
+## Demo Seed Runner Notes
+
+Use the demo seed after migrations when setting up a fresh local, staging, or demo machine. The command is idempotent, so it can be rerun safely to recreate/update the demo school, roles, classes, sample Content Studio experience, assignment, and attempt data.
+
+### Local Docker
+```bash
+docker compose run --rm backend sh -c "python manage.py migrate && python manage.py seed_demo_data"
+```
+
+### Production Docker
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T backend python manage.py seed_demo_data
+```
+
+### Demo Credentials
+```text
+Super Admin      username=super_admin      password=SuperAdmin@123
+Content Creator  username=content_creator  password=Creator@123
+School Admin     username=school_admin     password=SchoolAdmin@123
+Teacher          username=teacher_demo     password=Teacher@123
+Student/LMS      username=DEMO001          password=DEMO001
+```
+
+For existing demo environments where passwords should not be reset, run:
+```bash
+python manage.py seed_demo_data --no-reset-passwords
+```
+
+---
+
 ## 🧪 Verification Commands
 
 Before deploying or pushing changes, ensure the build and tests pass cleanly:
