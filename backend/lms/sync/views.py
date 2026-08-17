@@ -477,10 +477,10 @@ class LMSStudentRollNoAuthAPIView(APIView):
         )
 
         if not student:
-            print(f"[CMS Auth] Authentication rejected: Identifier '{raw_code}' not found in CMS database.")
+            logger.warning("CMS student authentication rejected: identifier not found")
             return Response({"success": False, "error": f"Student '{raw_code}' not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        print(f"[CMS Auth] Authentication approved for Student: {student.user.full_name or student.user.username} ({student.user.username})")
+        logger.debug("CMS student authentication approved")
 
         user = student.user
         if not user.is_active:
@@ -663,14 +663,16 @@ class LessonsPackageSyncAPIView(APIView):
             
             lessons_data.append({
                 "id": exp.id,
-                "lesson_id": f"LES_{exp.id}",
+                "lesson_id": str(exp.id),
                 "title": exp.title,
                 "description": exp.description or "",
                 "status": exp.status,
                 "package_url": package_url,
-                "grade": exp.grade.grade_name if exp.grade else "",
-                "type": exp.experience_type,
-                "payload_json": payload_json
+                "grade": exp.grade.grade_name if exp.grade else getattr(exp, 'target_grade', ''),
+                "type": exp.experience_type if hasattr(exp, 'experience_type') else getattr(exp, 'type', 'Lesson'),
+                "difficulty": getattr(exp, 'difficulty', 'Intermediate'),
+                "payload_json": payload_json,
+                "created_at": exp.created_at.isoformat() if hasattr(exp, 'created_at') and exp.created_at else None
             })
             
         return Response({
