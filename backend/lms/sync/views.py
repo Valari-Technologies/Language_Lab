@@ -451,32 +451,36 @@ class LMSStudentRollNoAuthAPIView(APIView):
     throttle_classes = []
 
     def post(self, request, *args, **kwargs):
-        roll_number = (request.data.get("roll_number") or "").strip()
-        if not roll_number:
+        # Incoming parameter from request
+        raw_code = str(
+            request.data.get('code') 
+            or request.data.get('roll_number') 
+            or request.data.get('lms_login_code') 
+            or request.data.get('username') 
+            or ''
+        ).strip()
+
+        if not raw_code:
             return Response(
-                {"error": "roll_number is required."},
+                {"error": "Identifier/roll_number is required."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # --- 1. Resolve student by roll_no field (primary), then username fallback ---
+        # Robust Multi-field Match
         student = (
             Student.objects.select_related("user", "school")
-            .filter(roll_no=roll_number)
+            .filter(
+                Q(roll_no__iexact=raw_code) |
+                Q(user__username__iexact=raw_code)
+            )
             .first()
         )
-        if not student:
-            # Fallback: the roll number may be stored as the Django username
-            student = (
-                Student.objects.select_related("user", "school")
-                .filter(user__username=roll_number)
-                .first()
-            )
 
         if not student:
-            return Response(
-                {"error": "Invalid Roll Number"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            print(f"[CMS Auth] Authentication rejected: Identifier '{raw_code}' not found in CMS database.")
+            return Response({"success": False, "error": f"Student '{raw_code}' not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        print(f"[CMS Auth] Authentication approved for Student: {student.user.full_name or student.user.username} ({student.user.username})")
 
         user = student.user
         if not user.is_active:
@@ -558,3 +562,119 @@ class LMSStudentRollNoAuthAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class BootstrapSyncAPIView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        school_id_param = request.query_params.get("school_id") or request.query_params.get("schoolId")
+        
+        # Resolve active school
+        if school_id_param:
+            school = School.objects.filter(Q(schoolId=school_id_param) | Q(school_id=school_id_param)).first()
+        else:
+            school = School.objects.filter(is_active=True).first()
+            
+        if not school:
+            return Response({"error": "No active school found"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        users_list = []
+        
+        # Get active teachers
+        from school_admin.models import Teacher
+        teachers = Teacher.objects.filter(school=school, user__is_active=True)
+        for t in teachers:
+            users_list.append({
+                "id": t.user.id,
+                "lms_code": t.user.username,
+                "username": t.user.username,
+                "name": t.user.full_name or t.user.username,
+                "roll_no": "",
+                "grade": "",
+                "section": "",
+                "role": "teacher"
+            })
+            
+        # Get active students
+        students = Student.objects.filter(school=school, user__is_active=True)
+        for s in students:
+            grade_val = s.grade
+            if grade_val and grade_val.isdigit():
+                g_obj = Grade.objects.filter(id=int(grade_val)).first()
+                if g_obj:
+                    grade_val = g_obj.grade_name
+            users_list.append({
+                "id": s.user.id,
+                "lms_code": s.user.username,
+                "username": s.user.username,
+                "name": s.user.full_name or s.user.username,
+                "roll_no": s.roll_no or s.user.username,
+                "grade": grade_val or "",
+                "section": s.section or "",
+                "role": "student"
+            })
+            
+        payload = {
+            "school_id": school.schoolId or str(school.school_id),
+            "users": users_list
+        }
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class LessonsPackageSyncAPIView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from content_studio.models import Experience
+        from content_studio.services.runtime_payload import build_runtime_payload
+        from django.utils import timezone
+        from super_admin.models import PublishContent
+        from lms.models import PublishedPackage
+        from content_studio.models import PublishVersion
+        
+        package_version = "1.0.0"
+        latest_publish = PublishContent.objects.filter(status='APPROVED').first()
+        if latest_publish:
+            package_version = latest_publish.release_name or "1.0.0"
+            
+        approved_lessons = Experience.objects.filter(status='APPROVED', is_deleted=False).select_related("grade")
+        
+        lessons_data = []
+        for exp in approved_lessons:
+            # Resolve package download URL
+            pkg = PublishedPackage.objects.filter(experience=exp, compression_status="COMPLETED").first()
+            package_url = ""
+            if pkg:
+                version_obj = PublishVersion.objects.filter(published_package=pkg).order_by("-published_at").first()
+                if version_obj:
+                    raw_download = version_obj.download_url or f"/api/lms/packages/{version_obj.id}/download/"
+                    if raw_download.startswith("http"):
+                        package_url = raw_download
+                    else:
+                        base_url = f"{request.scheme}://{request.get_host()}"
+                        package_url = f"{base_url}{raw_download}"
+            
+            if not package_url:
+                base_url = f"{request.scheme}://{request.get_host()}"
+                package_url = f"{base_url}/media/packages/experience_{exp.id}.zip"
+                
+            payload_json = build_runtime_payload(exp, request)
+            
+            lessons_data.append({
+                "id": exp.id,
+                "lesson_id": f"LES_{exp.id}",
+                "title": exp.title,
+                "description": exp.description or "",
+                "status": exp.status,
+                "package_url": package_url,
+                "grade": exp.grade.grade_name if exp.grade else "",
+                "type": exp.experience_type,
+                "payload_json": payload_json
+            })
+            
+        return Response({
+            "package_version": package_version,
+            "synced_at": timezone.now().isoformat(),
+            "lessons": lessons_data
+        }, status=status.HTTP_200_OK)

@@ -102,6 +102,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [activitySkillOptions, setActivitySkillOptions] = useState([]);
   const [recentExperiences, setRecentExperiences] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
+  const [showRecentActivityModal, setShowRecentActivityModal] = useState(false);
   const [notifications, setNotifications] = useState([
     { id: 1, title: "Lesson Published", message: "Lesson 'Present Continuous Tense - Speaking' published to Library successfully.", time: "15 mins ago", type: "success", read: false, is_read: false },
     { id: 2, title: "AI Assistant Ready", message: "AI generated 8 interactive quiz items for 'Reading Passage - Chapter 3'.", time: "1 hour ago", type: "info", read: false, is_read: false },
@@ -4419,13 +4420,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   <div className="cs-card">
                     <div className="cs-card-header">
                       <h3 className="cs-card-title">Recent Activity</h3>
-                      <button className="cs-btn-outline" style={{ padding: '0.25rem 0.6rem', fontSize: '0.72rem' }}>View All</button>
+                      <button className="cs-btn-outline" style={{ padding: '0.25rem 0.6rem', fontSize: '0.72rem' }} onClick={() => setShowRecentActivityModal(true)}>View All</button>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                       {recentActivities.length === 0 ? (
                         <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>No recent activity.</div>
                       ) : (
-                        recentActivities.map((item, idx) => {
+                        recentActivities.slice(0, 6).map((item, idx) => {
                           const isEdit = item.activity_type === 'experience_edited';
                           return (
                             <div key={idx} style={{ display: 'flex', gap: '0.65rem', alignItems: 'flex-start' }}>
@@ -9463,6 +9464,57 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {showRecentActivityModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#ffffff', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ backgroundColor: '#0284c7', color: '#ffffff', width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                <FiClock />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Recent Activity History</h3>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Detailed view of recent updates and media assets uploaded</p>
+              </div>
+            </div>
+            <button style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }} onClick={() => setShowRecentActivityModal(false)}>
+              <FiX size={18} />
+            </button>
+          </div>
+          <div style={{ flex: 1, padding: '24px', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
+            <div style={{ maxWidth: '1000px', margin: '0 auto', backgroundColor: '#ffffff', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0', padding: '24px' }}>
+              {recentActivities.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
+                  <FiClock size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                  <p style={{ margin: 0 }}>No recent activities found.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
+                  {recentActivities.map((act, i) => {
+                    const isEdit = act.activity_type === 'experience_edited';
+                    const actDate = new Date(act.timestamp);
+                    return (
+                      <div key={act.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: i === recentActivities.length - 1 ? 'none' : '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                          <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0284c7' : '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {isEdit ? <FiEdit2 /> : <FiUpload />}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>{act.message}</div>
+                            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>{actDate.toLocaleDateString()} at {actDate.toLocaleTimeString()}</div>
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '4px 10px', borderRadius: '12px', backgroundColor: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0369a1' : '#ea580c' }}>
+                          {isEdit ? 'Experience' : 'Media'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>

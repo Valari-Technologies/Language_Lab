@@ -6,7 +6,7 @@ import {
   FiChevronDown, FiCalendar, FiBell, FiFilter,
   FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
   FiActivity, FiTrendingUp, FiAward, FiLock, FiChevronLeft, FiChevronRight, FiDownload,
-  FiEye, FiEyeOff, FiAlertTriangle, FiInfo, FiUpload, FiRefreshCw, FiMoreVertical
+  FiEye, FiEyeOff, FiAlertTriangle, FiInfo, FiUpload, FiRefreshCw, FiMoreVertical, FiClock
 } from 'react-icons/fi';
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
@@ -324,6 +324,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [editingId,   setEditingId]   = useState(null);
   const [showPwModal, setShowPwModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, type: null });
+  const [showRecentActivityModal, setShowRecentActivityModal] = useState(false);
 
   /* ── Data ── */
   const [dashboardData,  setDashboardData]  = useState(null);
@@ -405,6 +406,11 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       const res = await apiFetch('/api/school/dashboard/');
       if (res.ok) {
         const d = await res.json();
+        // Fetch recent activities from unified API
+        const actRes = await apiFetch('/api/v1/dashboard/recent-activity');
+        if (actRes.ok) {
+          d.recent_activities = await actRes.json();
+        }
         setDashboardData(d);
         if (d.school_name) {
           setProfileForm(prev => ({ ...prev, school_name: d.school_name }));
@@ -1564,23 +1570,33 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div className="sd-card">
                   <div className="sd-card-header">
                     <div className="sd-card-title">Recent Activity</div>
-                    <button className="sd-view-all" onClick={() => setActiveSubTab('teachers')}>View All</button>
+                    <button className="sd-view-all" onClick={() => setShowRecentActivityModal(true)}>View All</button>
                   </div>
                   <div className="sd-activity-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                     {dashboardData?.recent_activities?.length ? (
-                      dashboardData.recent_activities.map((act, i) => (
-                        <div className="sd-activity-item" key={act.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 0', borderBottom: '1px solid #f1f5f9' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: 0 }}>
-                            <div className="sd-activity-icon-container" style={{ width: 36, height: 36, borderRadius: '50%', background: '#eff6ff', color: '#0b75b3', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontWeight: 700, fontSize: '0.85rem' }}>
-                              {(act.teacher_name || act.activity?.split(' ')[0] || 'T').slice(0, 2).toUpperCase()}
+                      dashboardData.recent_activities.slice(0, 6).map((act, i) => {
+                        const isTeacher = act.activity_type === 'teacher_registered';
+                        const isClass = act.activity_type === 'class_created';
+                        const badgeLabel = isTeacher ? 'Teacher' : isClass ? 'Class' : 'Student';
+                        const badgeColor = isTeacher ? '#0284c7' : isClass ? '#16a34a' : '#ea580c';
+                        const badgeBg = isTeacher ? '#e0f2fe' : isClass ? '#dcfce7' : '#ffedd5';
+                        return (
+                          <div className="sd-activity-item" key={act.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: 0 }}>
+                              <div className="sd-activity-icon-container" style={{ width: 36, height: 36, borderRadius: '50%', background: badgeBg, color: badgeColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontWeight: 700, fontSize: '0.85rem' }}>
+                                {badgeLabel.slice(0, 2).toUpperCase()}
+                              </div>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div className="sd-activity-desc" style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{act.message}</div>
+                                <div className="sd-activity-meta" style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '2px' }}>{new Date(act.timestamp).toLocaleDateString()}</div>
+                              </div>
                             </div>
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <div className="sd-activity-desc" style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{act.activity || 'Activity'}</div>
-                              <div className="sd-activity-meta" style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '2px' }}>{act.teacher_name || 'Teacher'} • {act.time || 'recent'}</div>
-                            </div>
+                            <span className="sd-activity-badge" style={{ fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: '12px', background: badgeBg, color: badgeColor, flexShrink: 0 }}>
+                              {badgeLabel}
+                            </span>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <div className="sd-empty-state" style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8', fontSize: '0.85rem' }}>
                         No recent activity yet.
@@ -3956,6 +3972,61 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {showRecentActivityModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#ffffff', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ backgroundColor: '#4f46e5', color: '#ffffff', width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                <FiClock />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Recent Activity History</h3>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Detailed history of teacher, class, and student actions in this school</p>
+              </div>
+            </div>
+            <button style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }} onClick={() => setShowRecentActivityModal(false)}>
+              <FiX size={18} />
+            </button>
+          </div>
+          <div style={{ flex: 1, padding: '24px', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
+            <div style={{ maxWidth: '1000px', margin: '0 auto', backgroundColor: '#ffffff', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0', padding: '24px' }}>
+              {!dashboardData?.recent_activities?.length ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
+                  <FiClock size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                  <p style={{ margin: 0 }}>No recent activities found.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
+                  {dashboardData.recent_activities.map((act, i) => {
+                    const isTeacher = act.activity_type === 'teacher_registered';
+                    const isClass = act.activity_type === 'class_created';
+                    const badgeLabel = isTeacher ? 'Teacher' : isClass ? 'Class' : 'Student';
+                    const badgeColor = isTeacher ? '#0284c7' : isClass ? '#16a34a' : '#ea580c';
+                    const badgeBg = isTeacher ? '#e0f2fe' : isClass ? '#dcfce7' : '#ffedd5';
+                    const actDate = new Date(act.timestamp);
+                    return (
+                      <div key={act.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: i === dashboardData.recent_activities.length - 1 ? 'none' : '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                          <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: badgeBg, color: badgeColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                            {badgeLabel.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>{act.message}</div>
+                            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>{actDate.toLocaleDateString()} at {actDate.toLocaleTimeString()}</div>
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '4px 10px', borderRadius: '12px', backgroundColor: badgeBg, color: badgeColor }}>
+                          {badgeLabel}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>

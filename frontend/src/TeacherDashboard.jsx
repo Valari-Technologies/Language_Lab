@@ -300,6 +300,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [editingId,   setEditingId]   = useState(null);
   const [showPwModal, setShowPwModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, type: '' });
+  const [showRecentActivityModal, setShowRecentActivityModal] = useState(false);
 
   /* ── Data ── */
   const [data,     setData]     = useState(null);
@@ -352,7 +353,14 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const loadDashboardData = async () => {
     try {
       const res = await apiFetch('/api/teacher/dashboard/');
-      if (res.ok) setData(await res.json());
+      if (res.ok) {
+        const d = await res.json();
+        const actRes = await apiFetch('/api/v1/dashboard/recent-activity');
+        if (actRes.ok) {
+          d.recent_activities = await actRes.json();
+        }
+        setData(d);
+      }
     } catch (e) { console.error('Failed to load teacher dashboard data.', e); }
   };
 
@@ -1438,21 +1446,24 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div className="sd-card">
                   <div className="sd-card-header">
                     <div className="sd-card-title">Recent Activity</div>
-                    <button className="sd-view-all" onClick={() => setActiveTab('students')}>View All</button>
+                    <button className="sd-view-all" onClick={() => setShowRecentActivityModal(true)}>View All</button>
                   </div>
                   <div className="sd-activity-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    {data?.student_rankings?.length ? (
-                      data.student_rankings.map((rank, i) => (
-                        <div className="sd-activity-item" key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                    {data?.recent_activities?.length ? (
+                      data.recent_activities.slice(0, 6).map((act, i) => (
+                        <div className="sd-activity-item" key={act.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 0', borderBottom: '1px solid #f1f5f9' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: 0 }}>
-                            <div className="sd-activity-icon-container" style={{ width: 36, height: 36, borderRadius: '50%', background: '#eff6ff', color: '#0b75b3', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontWeight: 700, fontSize: '0.85rem' }}>
-                              {rank.name.slice(0, 2).toUpperCase()}
+                            <div className="sd-activity-icon-container" style={{ width: 36, height: 36, borderRadius: '50%', background: '#ffedd5', color: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontWeight: 700, fontSize: '0.85rem' }}>
+                              ST
                             </div>
                             <div style={{ minWidth: 0, flex: 1 }}>
-                              <div className="sd-activity-desc" style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`Completed lesson activities — Progress tracked`}</div>
-                              <div className="sd-activity-meta" style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '2px' }}>{rank.name} • Score: {rank.score}</div>
+                              <div className="sd-activity-desc" style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{act.message}</div>
+                              <div className="sd-activity-meta" style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '2px' }}>{new Date(act.timestamp).toLocaleDateString()}</div>
                             </div>
                           </div>
+                          <span className="sd-activity-badge" style={{ fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: '12px', background: '#ffedd5', color: '#ea580c', flexShrink: 0 }}>
+                            Student
+                          </span>
                         </div>
                       ))
                     ) : (
@@ -2759,6 +2770,56 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {showRecentActivityModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#ffffff', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ backgroundColor: '#ea580c', color: '#ffffff', width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                <FiClock />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Recent Activity History</h3>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Detailed history of student enrollments and activity updates in your classes</p>
+              </div>
+            </div>
+            <button style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }} onClick={() => setShowRecentActivityModal(false)}>
+              <FiX size={18} />
+            </button>
+          </div>
+          <div style={{ flex: 1, padding: '24px', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
+            <div style={{ maxWidth: '1000px', margin: '0 auto', backgroundColor: '#ffffff', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0', padding: '24px' }}>
+              {!data?.recent_activities?.length ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
+                  <FiClock size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                  <p style={{ margin: 0 }}>No recent activities found.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
+                  {data.recent_activities.map((act, i) => {
+                    const actDate = new Date(act.timestamp);
+                    return (
+                      <div key={act.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: i === data.recent_activities.length - 1 ? 'none' : '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                          <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#ffedd5', color: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                            ST
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>{act.message}</div>
+                            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>{actDate.toLocaleDateString()} at {actDate.toLocaleTimeString()}</div>
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '4px 10px', borderRadius: '12px', backgroundColor: '#ffedd5', color: '#ea580c' }}>
+                          Student
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>

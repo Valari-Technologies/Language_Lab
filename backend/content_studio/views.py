@@ -592,71 +592,193 @@ class DashboardRecentExperiencesAPIView(APIView):
 
 
 class DashboardRecentActivityAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsContentCreatorOrSuperAdmin]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        user = request.user
+        role = getattr(user, "role", "STUDENT")
         activities = []
-        recent_experiences = Experience.objects.filter(is_deleted=False).order_by("-updated_at")[:5]
-        for s in recent_experiences:
-            activities.append({
-                "id": f"experience-{s.id}",
-                "activity_type": "experience_edited",
-                "message": f"You edited '{s.title}'",
-                "timestamp": s.updated_at
-            })
 
-        recent_media = Media.objects.all().order_by("-upload_date")[:5]
-        for m in recent_media:
-            activities.append({
-                "id": f"media-{m.id}",
-                "activity_type": "media_uploaded",
-                "message": f"You uploaded '{m.name}'",
-                "timestamp": m.upload_date
-            })
+        from django.utils import timezone
+        from datetime import timedelta
+        cutoff = timezone.now() - timedelta(days=7)
+
+        if role in ["SUPER_ADMIN", "CONTENT_CREATOR"]:
+            recent_experiences = Experience.objects.filter(is_deleted=False, updated_at__gte=cutoff).order_by("-updated_at")[:15]
+            for s in recent_experiences:
+                activities.append({
+                    "id": f"experience-{s.id}",
+                    "activity_type": "experience_edited",
+                    "message": f"Experience '{s.title}' was updated.",
+                    "timestamp": s.updated_at
+                })
+
+            recent_media = Media.objects.filter(upload_date__gte=cutoff).order_by("-upload_date")[:15]
+            for m in recent_media:
+                activities.append({
+                    "id": f"media-{m.id}",
+                    "activity_type": "media_uploaded",
+                    "message": f"Media asset '{m.name}' was uploaded.",
+                    "timestamp": m.upload_date
+                })
+
+        elif role == "SCHOOL_ADMIN":
+            from school_admin.models import Teacher, Class
+            from teacher.models import Student
+            
+            school = None
+            if hasattr(user, "school_admin_profile"):
+                school = user.school_admin_profile.school
+            
+            if school:
+                recent_teachers = Teacher.objects.filter(school=school, created_at__gte=cutoff).order_by("-created_at")[:10]
+                for t in recent_teachers:
+                    activities.append({
+                        "id": f"teacher-{t.teacher_id}",
+                        "activity_type": "teacher_registered",
+                        "message": f"Teacher '{t.user.full_name or t.user.username}' was registered.",
+                        "timestamp": t.created_at
+                    })
+                
+                recent_classes = Class.objects.filter(school=school, created_at__gte=cutoff).order_by("-created_at")[:10]
+                for c in recent_classes:
+                    activities.append({
+                        "id": f"class-{c.class_id}",
+                        "activity_type": "class_created",
+                        "message": f"Class '{c.class_name}' was created.",
+                        "timestamp": c.created_at
+                    })
+
+                recent_students = Student.objects.filter(school=school, created_at__gte=cutoff).order_by("-created_at")[:10]
+                for st in recent_students:
+                    activities.append({
+                        "id": f"student-{st.student_id}",
+                        "activity_type": "student_registered",
+                        "message": f"Student '{st.user.full_name or st.user.username}' enrolled.",
+                        "timestamp": st.created_at
+                    })
+            
+        elif role == "TEACHER":
+            from school_admin.models import Teacher
+            from teacher.models import Student
+            
+            teacher = Teacher.objects.filter(user=user).first()
+            if teacher:
+                recent_students = Student.objects.filter(school=teacher.school, created_at__gte=cutoff).order_by("-created_at")[:15]
+                for st in recent_students:
+                    activities.append({
+                        "id": f"student-{st.student_id}",
+                        "activity_type": "student_enrolled",
+                        "message": f"Student '{st.user.full_name or st.user.username}' was enrolled in school.",
+                        "timestamp": st.created_at
+                    })
 
         activities.sort(key=lambda x: x["timestamp"], reverse=True)
-        recent_activities = activities[:5]
+        recent_activities = activities[:50]
 
         for act in recent_activities:
-            act["timestamp"] = act["timestamp"].isoformat()
+            if hasattr(act["timestamp"], "isoformat"):
+                act["timestamp"] = act["timestamp"].isoformat()
+            else:
+                act["timestamp"] = str(act["timestamp"])
 
         return Response(recent_activities, status=status.HTTP_200_OK)
 
 
 class DashboardNotificationsAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsContentCreatorOrSuperAdmin]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        user = request.user
+        role = getattr(user, "role", "STUDENT")
         notifications = Notification.objects.filter(user=request.user).order_by("-created_at")[:10]
         if not notifications.exists():
-            Notification.objects.create(
-                user=request.user,
-                title="Lesson Published",
-                message="Lesson 'Present Continuous Tense - Speaking' published to Library successfully.",
-                notification_type=Notification.NotificationType.INFO,
-                is_read=False
-            )
-            Notification.objects.create(
-                user=request.user,
-                title="AI Assistant Ready",
-                message="AI generated 8 interactive quiz items for 'Reading Passage - Chapter 3'.",
-                notification_type=Notification.NotificationType.INFO,
-                is_read=False
-            )
-            Notification.objects.create(
-                user=request.user,
-                title="Validation Warning",
-                message="Draft Lesson 'Audio Listening 1' is missing a media attachment in Screen 2.",
-                notification_type=Notification.NotificationType.WARNING,
-                is_read=True
-            )
-            Notification.objects.create(
-                user=request.user,
-                title="Platform Update",
-                message="Lesson Builder v2.4 features and new speech blocks are now live.",
-                notification_type=Notification.NotificationType.INFO,
-                is_read=True
-            )
+            if role == "SUPER_ADMIN":
+                # Superadmin needs approval alerts and system alerts
+                Notification.objects.create(
+                    user=user,
+                    title="Experience Approval Request",
+                    message="Content Creator submitted 'Grade 5 Speaking Scenario' for approval.",
+                    notification_type=Notification.NotificationType.INFO,
+                    is_read=False
+                )
+                Notification.objects.create(
+                    user=user,
+                    title="System Check Status",
+                    message="Weekly packaging and checksum check completed with zero errors.",
+                    notification_type=Notification.NotificationType.INFO,
+                    is_read=True
+                )
+            elif role == "SCHOOL_ADMIN":
+                # School admin needs teacher additions, class registrations, and report notifications
+                Notification.objects.create(
+                    user=user,
+                    title="Teacher Registered",
+                    message="A new teacher account was successfully registered and assigned class Grade 6-A.",
+                    notification_type=Notification.NotificationType.INFO,
+                    is_read=False
+                )
+                Notification.objects.create(
+                    user=user,
+                    title="School Performance Report Ready",
+                    message="Consolidated monthly grade logs and student activity reports are now available.",
+                    notification_type=Notification.NotificationType.INFO,
+                    is_read=True
+                )
+            elif role == "TEACHER":
+                # Teacher needs student progress reports and student crud alerts
+                Notification.objects.create(
+                    user=user,
+                    title="Student Performance Alert",
+                    message="Student performance report for Grade 6-B is generated. 3 student scores need review.",
+                    notification_type=Notification.NotificationType.WARNING,
+                    is_read=False
+                )
+                Notification.objects.create(
+                    user=user,
+                    title="Student Enrollment Update",
+                    message="Two new students enrolled in Grade 6-B Class roster.",
+                    notification_type=Notification.NotificationType.INFO,
+                    is_read=True
+                )
+            elif role == "CONTENT_CREATOR":
+                # Content creator needs LMS connect, report push, content pull, and super admin approve notification
+                Notification.objects.create(
+                    user=user,
+                    title="LMS Connect Success",
+                    message="Successfully connected to target Electron LMS build instance.",
+                    notification_type=Notification.NotificationType.INFO,
+                    is_read=False
+                )
+                Notification.objects.create(
+                    user=user,
+                    title="Experience Approved",
+                    message="Super Admin approved your speaking scenario 'The Lost Picnic'.",
+                    notification_type=Notification.NotificationType.INFO,
+                    is_read=False
+                )
+                Notification.objects.create(
+                    user=user,
+                    title="Content Package Pull Complete",
+                    message="Pulled latest packaging templates successfully.",
+                    notification_type=Notification.NotificationType.INFO,
+                    is_read=True
+                )
+                Notification.objects.create(
+                    user=user,
+                    title="LMS Report Push Complete",
+                    message="Successfully pushed compiled package version build details.",
+                    notification_type=Notification.NotificationType.INFO,
+                    is_read=True
+                )
+            else:
+                Notification.objects.create(
+                    user=user,
+                    title="System Notification",
+                    message="Welcome to LinguaLab Educational Platform.",
+                    notification_type=Notification.NotificationType.INFO,
+                    is_read=True
+                )
             notifications = Notification.objects.filter(user=request.user).order_by("-created_at")[:10]
         serializer = NotificationSerializer(notifications, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

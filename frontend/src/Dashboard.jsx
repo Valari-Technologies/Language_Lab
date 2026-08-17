@@ -7,7 +7,7 @@ import {
   FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
   FiActivity, FiTrendingUp, FiAward, FiLock,
   FiChevronLeft, FiChevronRight, FiEye, FiEyeOff, FiList,
-  FiCornerDownRight, FiXCircle, FiMoreVertical, FiDownload, FiAlertTriangle, FiKey, FiInfo, FiRefreshCw, FiUpload, FiVolume2
+  FiCornerDownRight, FiXCircle, FiMoreVertical, FiDownload, FiAlertTriangle, FiKey, FiInfo, FiRefreshCw, FiUpload, FiVolume2, FiClock
 } from 'react-icons/fi';
 import PreviewCanvasRenderer from './PreviewCanvasRenderer';
 import './Dashboard.css';
@@ -522,12 +522,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     { id: 3, title: "System Sync Warning", message: "Apex International Academy reported offline telemetry synchronization timeout.", time: "1 day ago", type: "warning", read: true },
     { id: 4, title: "System Maintenance", message: "Database backup & system optimization completed successfully.", time: "Yesterday", type: "system", read: true },
   ]);
-  const [recentActivitiesList, setRecentActivitiesList] = useState([
-    { id: 1, icon: <FiGrid />, color: '#3b82f6', bg: '#eff6ff', desc: "School \"Greenfield Academy\" registered", meta: 'Super Admin • 10 mins ago', tag: 'School', tagBg: '#dcfce7', tagColor: '#15803d' },
-    { id: 2, icon: <FiCheckCircle />, color: '#10b981', bg: '#e0fdf4', desc: "Lesson \"The Lost Picnic\" approved by Super Admin", meta: 'Super Admin • 1 hour ago', tag: 'Approval', tagBg: '#e0f2fe', tagColor: '#0369a1' },
-    { id: 3, icon: <FiUser />, color: '#8b5cf6', bg: '#f5f3ff', desc: "Super Admin profile settings updated", meta: 'Super Admin • 3 hours ago', tag: 'Profile', tagBg: '#f3e8ff', tagColor: '#6b21a8' },
-    { id: 4, icon: <FiXCircle />, color: '#ef4444', bg: '#fee2e2', desc: "Lesson \"Audio Listening 1\" rejected by Super Admin", meta: 'Super Admin • 5 hours ago', tag: 'Rejection', tagBg: '#fecaca', tagColor: '#b91c1c' },
-  ]);
+  const [showRecentActivityModal, setShowRecentActivityModal] = useState(false);
+  const [recentActivitiesList, setRecentActivitiesList] = useState([]);
 
   const addRecentActivity = (desc, tag, tagBg, tagColor, icon, color, bg) => {
     const newActivity = {
@@ -762,6 +758,18 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       const res = await apiFetch('/api/cms/v1/dashboard-stats/');
       if (res.ok) { const data = await res.json(); setDashboardStats(data); }
     } catch (e) { console.error('Failed to load dashboard stats', e); }
+  };
+
+  const loadRecentActivities = async () => {
+    try {
+      const res = await apiFetch('/api/v1/dashboard/recent-activity');
+      if (res.ok) {
+        const data = await res.json();
+        setRecentActivitiesList(data);
+      }
+    } catch (e) {
+      console.error('Failed to load recent activities', e);
+    }
   };
 
   const handleSelectPreviewScreen = (scr) => {
@@ -1034,7 +1042,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         loadSchools(), loadPublishContents(), loadDashboardStats(),
         loadGrades(), loadExperiences(), loadExperienceBuilders(),
         loadSchoolAdmins(), loadTeachers(), loadStudents(),
-        loadSuperAdminExperiences(),
+        loadSuperAdminExperiences(), loadRecentActivities(),
       ]);
     } catch (e) {
       console.error('Failed to load data from backend server.', e);
@@ -1907,25 +1915,32 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 <div className="sd-card">
                   <div className="sd-card-header">
                     <div className="sd-card-title">Recent Activity</div>
-                    <button className="sd-view-all">View All</button>
+                    <button className="sd-view-all" onClick={() => setShowRecentActivityModal(true)}>View All</button>
                   </div>
                   <div className="sd-activity-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    {recentActivitiesList.map(act => (
-                      <div className="sd-activity-item" key={act.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 0', borderBottom: '1px solid #f1f5f9' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: 0 }}>
-                          <div className="sd-activity-icon-container" style={{ width: 36, height: 36, borderRadius: '50%', background: act.bg, color: act.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            {act.icon}
+                    {recentActivitiesList.length === 0 ? (
+                      <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>No recent activity.</div>
+                    ) : (
+                      recentActivitiesList.slice(0, 6).map((act, idx) => {
+                        const isEdit = act.activity_type === 'experience_edited';
+                        return (
+                          <div className="sd-activity-item" key={act.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: 0 }}>
+                              <div className="sd-activity-icon-container" style={{ width: 36, height: 36, borderRadius: '50%', background: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0284c7' : '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                {isEdit ? <FiEdit2 /> : <FiUpload />}
+                              </div>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div className="sd-activity-desc" style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{act.message}</div>
+                                <div className="sd-activity-meta" style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '2px' }}>{new Date(act.timestamp).toLocaleDateString()}</div>
+                              </div>
+                            </div>
+                            <span className="sd-activity-badge" style={{ fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: '12px', background: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0369a1' : '#ea580c', flexShrink: 0 }}>
+                              {isEdit ? 'Experience' : 'Media'}
+                            </span>
                           </div>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div className="sd-activity-desc" style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{act.desc}</div>
-                            <div className="sd-activity-meta" style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '2px' }}>{act.meta}</div>
-                          </div>
-                        </div>
-                        <span className="sd-activity-badge" style={{ fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: '12px', background: act.tagBg, color: act.tagColor, flexShrink: 0 }}>
-                          {act.tag}
-                        </span>
-                      </div>
-                    ))}
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 
@@ -4744,6 +4759,57 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               >
                 Confirm Reject
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showRecentActivityModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#ffffff', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ backgroundColor: '#2563eb', color: '#ffffff', width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                <FiClock />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Recent Activity History</h3>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Detailed view of recent events and changes across the platform</p>
+              </div>
+            </div>
+            <button style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }} onClick={() => setShowRecentActivityModal(false)}>
+              <FiX size={18} />
+            </button>
+          </div>
+          <div style={{ flex: 1, padding: '24px', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
+            <div style={{ maxWidth: '1000px', margin: '0 auto', backgroundColor: '#ffffff', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0', padding: '24px' }}>
+              {recentActivitiesList.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
+                  <FiClock size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                  <p style={{ margin: 0 }}>No recent activities found.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
+                  {recentActivitiesList.map((act, i) => {
+                    const isEdit = act.activity_type === 'experience_edited';
+                    const actDate = new Date(act.timestamp);
+                    return (
+                      <div key={act.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: i === recentActivitiesList.length - 1 ? 'none' : '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                          <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0284c7' : '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {isEdit ? <FiEdit2 /> : <FiUpload />}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>{act.message}</div>
+                            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>{actDate.toLocaleDateString()} at {actDate.toLocaleTimeString()}</div>
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '4px 10px', borderRadius: '12px', backgroundColor: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0369a1' : '#ea580c' }}>
+                          {isEdit ? 'Experience' : 'Media'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
