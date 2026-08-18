@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   FiVolume2, FiImage, FiMonitor, FiFileText, FiEdit2, FiMic, 
-  FiMove, FiCheckCircle, FiList, FiPlusCircle, FiLayers,
+  FiCheckCircle,
   FiActivity, FiType, FiGrid
 } from 'react-icons/fi';
 import { API_BASE_URL } from './config';

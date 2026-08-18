@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  FiGrid, FiUsers, FiBookOpen, FiBarChart2, FiUser,
+  FiGrid, FiBookOpen, FiUser,
   FiSettings, FiHelpCircle, FiLogOut, FiSearch,
   FiPlus, FiEdit2, FiTrash2, FiX, FiMenu,
-  FiChevronDown, FiCalendar, FiBell, FiFilter,
-  FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
-  FiActivity, FiTrendingUp, FiAward, FiLock,
-  FiChevronLeft, FiChevronRight, FiEye, FiEyeOff, FiList,
-  FiCornerDownRight, FiXCircle, FiMoreVertical, FiDownload, FiAlertTriangle, FiKey, FiInfo, FiRefreshCw, FiUpload, FiVolume2, FiClock
+  FiChevronDown, FiCalendar, FiBell,
+  FiCheckCircle, FiFileText,
+  FiAward, FiLock,
+  FiChevronLeft, FiChevronRight, FiEye, FiEyeOff,
+  FiCornerDownRight, FiXCircle, FiMoreVertical, FiAlertTriangle, FiInfo, FiRefreshCw, FiUpload, FiClock
 } from 'react-icons/fi';
 import PreviewCanvasRenderer from './PreviewCanvasRenderer';
 import './Dashboard.css';

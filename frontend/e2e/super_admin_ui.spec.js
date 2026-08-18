@@ -39,7 +39,7 @@ test.describe('Super Admin UI workflows', () => {
     await page.locator('select').nth(1).selectOption('Bangalore (Bengaluru)');
     
     await page.locator('input[placeholder="Enter pincode"]').fill('560001');
-    await page.locator('input[placeholder="Enter phone number"]').fill('9876543210');
+    await page.locator('input[placeholder="Enter 10 digit phone number"]').fill('9876543210');
 
     // School admin details (must be a valid username without spaces, e.g. e2eadmin)
     const adminUser = `e2eadmin${Date.now()}`;

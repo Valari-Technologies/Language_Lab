@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   FiGrid, FiUsers, FiBookOpen, FiBarChart2, FiUser,
-  FiSettings, FiHelpCircle, FiLogOut, FiSearch,
+  FiHelpCircle, FiLogOut, FiSearch,
   FiPlus, FiEdit2, FiTrash2, FiX, FiMenu,
-  FiChevronDown, FiCalendar, FiBell, FiFilter,
-  FiCheckCircle, FiMonitor, FiSmartphone, FiFileText,
-  FiActivity, FiTrendingUp, FiAward, FiLock, FiChevronLeft, FiChevronRight, FiDownload,
+  FiChevronDown, FiBell,
+  FiCheckCircle, FiFileText,
+  FiActivity, FiTrendingUp, FiAward, FiLock, FiChevronLeft, FiChevronRight,
   FiEye, FiEyeOff, FiAlertTriangle, FiInfo, FiUpload, FiRefreshCw, FiMoreVertical, FiClock
 } from 'react-icons/fi';
 import './SchoolDashboard.css';

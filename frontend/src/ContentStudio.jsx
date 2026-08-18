@@ -6,11 +6,11 @@ import {
   FiGrid, FiBookOpen, FiActivity, FiMonitor, FiFileText,
   FiCheckCircle, FiDownload, FiSettings, FiHelpCircle, FiLogOut,
   FiSearch, FiPlus, FiEdit2, FiTrash2, FiX, FiMenu,
-  FiChevronDown, FiChevronUp, FiCalendar, FiBell, FiFilter, FiEye, FiEyeOff,
-  FiAlertTriangle, FiFolder, FiImage, FiSend, FiPlusCircle,
-  FiArrowLeft, FiSmartphone, FiTablet, FiInfo, FiUpload,
-  FiPlay, FiCheck, FiFolderPlus, FiShare2, FiHelpCircle as FiQuestion,
-  FiUser, FiClock, FiMoreVertical, FiVolume2, FiMic, FiCopy, FiColumns,
+  FiChevronDown, FiChevronUp, FiBell, FiEye, FiEyeOff,
+  FiAlertTriangle, FiImage, FiPlusCircle,
+  FiArrowLeft, FiInfo, FiUpload,
+  FiPlay, FiCheck,
+  FiUser, FiClock, FiMoreVertical, FiVolume2, FiMic, FiCopy,
   FiMove, FiEdit, FiGitCommit, FiList, FiLayers, FiType, FiLock, FiRefreshCw,
   FiCornerUpLeft, FiCornerUpRight
 } from 'react-icons/fi';
@@ -439,11 +439,38 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     );
   };
 
-  const handleSelectAllExperiences = () => {
-    if (selectedExperienceIds.length === experiences.length) {
+  const handleSelectAllExperiences = async () => {
+    const allCurrentSelected = experiences.length > 0 && experiences.every(e => selectedExperienceIds.includes(e.id));
+    if (allCurrentSelected) {
       setSelectedExperienceIds([]);
     } else {
-      setSelectedExperienceIds(experiences.map(e => e.id));
+      try {
+        const params = new URLSearchParams();
+        if (filterGrade) params.append('grade', filterGrade);
+        if (filterSubject) params.append('subject', filterSubject);
+        if (filterDifficulty) params.append('difficulty', filterDifficulty.toUpperCase());
+        if (filterStatus) params.append('status', filterStatus.toUpperCase());
+        if (filterTag) params.append('tags', filterTag);
+        params.append('page_size', '100'); // fetch all up to backend max_page_size
+
+        const res = await apiFetch(`/api/v1/content/experiences/?${params.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          const allItems = data.results || data;
+          setSelectedExperienceIds(allItems.map(e => e.id));
+        }
+      } catch (err) {
+        console.error('Failed to select all experiences', err);
+        // fallback to current page only
+        const currentIds = experiences.map(e => e.id);
+        setSelectedExperienceIds(prev => {
+          const next = [...prev];
+          currentIds.forEach(id => {
+            if (!next.includes(id)) next.push(id);
+          });
+          return next;
+        });
+      }
     }
   };
 
@@ -540,7 +567,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           setExperiences(data);
           setTotalCount(data.length || 0);
         }
-        setSelectedExperienceIds([]);
       }
     } catch (e) {
       console.error('Failed to load experiences in Content Studio', e);
@@ -4316,7 +4342,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {/* Content Body Router */}
-        <div className={view === 'preview' ? "" : "cs-body"} style={view === 'preview' ? { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' } : {}}>
+        <div className={(view === 'preview' && previewPayload && selectedExperience) ? "" : "cs-body"} style={(view === 'preview' && previewPayload && selectedExperience) ? { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' } : {}}>
 
           {/* ───────────────── VIEW 1: STUDIO DASHBOARD (Image 2) ───────────────── */}
           {view === 'dashboard' && (
@@ -4724,7 +4750,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         <th style={{ width: '40px', paddingLeft: '1.5rem' }}>
                           <input
                             type="checkbox"
-                            checked={experiences.length > 0 && selectedExperienceIds.length === experiences.length}
+                            checked={experiences.length > 0 && experiences.every(exp => selectedExperienceIds.includes(exp.id))}
                             onChange={handleSelectAllExperiences}
                             style={{ cursor: 'pointer' }}
                           />
@@ -4759,7 +4785,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               </td>
                             )}
                             <td style={{ paddingLeft: '1.25rem', fontWeight: 800, color: '#0284c7', fontSize: '0.84rem' }}>
-                              {idx + 1}
+                              {(page - 1) * 10 + idx + 1}
                             </td>
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -7778,7 +7804,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
              // If no experience payload is loaded, show the Lesson Selector Grid View
              if (!previewPayload || !selectedExperience) {
                return (
-                 <div style={{ padding: '1.5rem 2rem', minHeight: 'calc(100vh - 80px)', background: 'transparent' }}>
+                 <div style={{ padding: '0.5rem 1rem', background: 'transparent' }}>
                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
                      <div>
                        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 4px 0', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

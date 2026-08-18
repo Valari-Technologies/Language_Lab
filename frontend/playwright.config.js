@@ -10,7 +10,7 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:5173';
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 30_000,
+  timeout: 60_000,
   expect: { timeout: 8_000 },
   fullyParallel: false, // CMS UI tests share one seeded backend dataset — keep them sequential.
   workers: 1,

@@ -62,12 +62,12 @@ async function seedExperienceAndActivity(request, { titleSuffix = String(Date.no
   if (!experienceRes.ok()) throw new Error(`Failed to seed Experience: ${experienceRes.status()} ${await experienceRes.text()}`);
   const experience = await experienceRes.json();
 
-  const activityTitle = `Playwright CMS Activity ${titleSuffix}`;
+  const requestedActivityTitle = `Playwright CMS Activity ${titleSuffix}`;
   const activityRes = await request.post(`${API_BASE_URL}/api/v1/content/activities/`, {
     headers,
     data: {
       experience: experience.id,
-      title: activityTitle,
+      title: requestedActivityTitle,
       description: '',
       learning_objective: '',
       estimated_duration: 10,
@@ -76,6 +76,7 @@ async function seedExperienceAndActivity(request, { titleSuffix = String(Date.no
   });
   if (!activityRes.ok()) throw new Error(`Failed to seed Activity: ${activityRes.status()} ${await activityRes.text()}`);
   const activity = await activityRes.json();
+  const activityTitle = activity.title;
 
   const placeholderScreen = await seedScreen(request, access, activity.id, {
     title: `Placeholder Screen ${titleSuffix}`,
@@ -168,11 +169,13 @@ async function navigateToScreenBuilder(page, { experienceTitle, activityTitle })
   await selectExperience(page, experienceTitle);
 
   await page.locator('[data-testid="cs-nav-activity-builder"]').click();
-  await page.locator('[data-testid="activity-card"]').first().locator('button', { hasText: 'Edit Activity' }).click();
-
-  await expect(page.locator('[data-testid="activity-title-input"]')).toHaveValue(activityTitle);
+  const activityCard = page.locator('[data-testid="activity-card"]', { hasText: activityTitle }).first();
+  await expect(activityCard).toBeVisible();
+  await activityCard.click();
+  await expect(activityCard).toHaveCSS('border-color', 'rgb(11, 87, 208)');
 
   await page.locator('[data-testid="cs-nav-screen-builder"]').click();
+  await expect(page.locator('[data-testid="add-new-screen-btn"]').first()).toBeVisible();
 }
 
 export {

@@ -100,7 +100,7 @@ class TestScreenRBAC:
 
 class TestPackageRBAC:
     """Publish / regenerate / package metadata require CONTENT_CREATOR; only the
-    actual .elab file download is intentionally public (for the LMS player)."""
+    actual .elab file download also permits an identified LMS client."""
 
     def test_unauthenticated_user_cannot_trigger_publish(self, api_client, experience):
         response = api_client.post(reverse("publish-experience", args=[experience.id]), {}, format="json")
@@ -240,7 +240,8 @@ def uploaded_image_media(authenticated_client):
 
 class TestPackageExportBundlesScreensAndMedia:
     def test_publish_bundles_all_screens_and_media_with_no_missing_references(
-        self, authenticated_client, experience, activity, uploaded_image_media
+        self, authenticated_client, content_creator, super_admin_user,
+        experience, activity, uploaded_image_media
     ):
         # Screen 1: an information screen with dialogue content.
         Screen.objects.create(
@@ -267,14 +268,22 @@ class TestPackageExportBundlesScreensAndMedia:
             {"version": "1.0", "release_notes": "Initial automated test build"},
             format="json",
         )
-        assert publish_response.status_code == status.HTTP_201_CREATED, publish_response.data
-        version_id = publish_response.data["version_id"]
+        assert publish_response.status_code == status.HTTP_200_OK, publish_response.data
+        assert publish_response.data["status"] == "PENDING_APPROVAL"
+
+        authenticated_client.force_authenticate(user=super_admin_user)
+        approval_response = authenticated_client.post(
+            reverse("super-admin-experiences-approve", args=[experience.id])
+        )
+        assert approval_response.status_code == status.HTTP_200_OK, approval_response.data
+        version_id = approval_response.data["version_id"]
 
         version = PublishVersion.objects.get(id=version_id)
         assert version.file_path and os.path.exists(version.file_path), "The .elab file must exist on disk"
 
         # Inspect the archive contents via the dedicated preview-json endpoint,
         # the same inspection path a content creator/QA engineer would use.
+        authenticated_client.force_authenticate(user=content_creator)
         preview_response = authenticated_client.get(reverse("package-preview-json", args=[version_id]))
         assert preview_response.status_code == status.HTTP_200_OK, preview_response.data
 
@@ -331,8 +340,8 @@ class TestPackageExportBundlesScreensAndMedia:
         assert publish_response.data["validation_report"]["status"] == "FAILED"
         assert PublishVersion.objects.count() == 0
 
-    def test_package_download_endpoint_is_publicly_accessible_and_streams_file(
-        self, authenticated_client, experience, activity
+    def test_package_download_endpoint_allows_identified_lms_client_and_streams_file(
+        self, authenticated_client, super_admin_user, experience, activity
     ):
         Screen.objects.create(
             activity=activity, title="Solo Screen", screen_type=Screen.ScreenType.INFORMATION,
@@ -341,14 +350,26 @@ class TestPackageExportBundlesScreensAndMedia:
         publish_response = authenticated_client.post(
             reverse("publish-experience", args=[experience.id]), {"version": "1.0"}, format="json"
         )
-        assert publish_response.status_code == status.HTTP_201_CREATED, publish_response.data
-        version_id = publish_response.data["version_id"]
+        assert publish_response.status_code == status.HTTP_200_OK, publish_response.data
+        assert publish_response.data["status"] == "PENDING_APPROVAL"
 
-        # Download is deliberately AllowAny (the LMS Electron player has no user session),
-        # so an entirely unauthenticated client must still be able to fetch it.
+        authenticated_client.force_authenticate(user=super_admin_user)
+        approval_response = authenticated_client.post(
+            reverse("super-admin-experiences-approve", args=[experience.id])
+        )
+        assert approval_response.status_code == status.HTTP_200_OK, approval_response.data
+        version_id = approval_response.data["version_id"]
+
+        # An anonymous request without LMS identity is rejected.
         anonymous_client = APIClient()
         download_response = anonymous_client.get(reverse("package-download", args=[version_id]))
+        assert download_response.status_code == status.HTTP_401_UNAUTHORIZED
 
+        # The LMS Electron player identifies the student without a CMS user session.
+        download_response = anonymous_client.get(
+            reverse("package-download", args=[version_id]),
+            HTTP_X_STUDENT_ID="test-student",
+        )
         assert download_response.status_code == status.HTTP_200_OK
         assert download_response["Content-Type"] == "application/zip"
         assert ".zip" in download_response["Content-Disposition"]

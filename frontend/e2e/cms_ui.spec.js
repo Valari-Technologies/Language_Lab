@@ -4,6 +4,7 @@ import {
   seedExperienceAndActivity,
   seedScreen,
   cleanupExperience,
+  API_BASE_URL,
   loginViaUI,
   selectExperience,
   navigateToScreenBuilder,
@@ -134,6 +135,22 @@ test.describe('CMS Content Creator UI workflows', () => {
       await page.locator('[data-testid="cs-nav-publish"]').click();
       await page.locator('[data-testid="publish-version-input"]').fill('1.0.0');
       await page.locator('[data-testid="build-publish-package-btn"]').click();
+
+      const submissionToast = page.locator('[data-testid="cs-toast"]');
+      await expect(submissionToast).toContainText(/submitted.*approval/i);
+
+      const adminLogin = await request.post(`${API_BASE_URL}/api/auth/login/`, {
+        data: { username: 'superadmin', password: 'Password123!' },
+      });
+      expect(adminLogin.ok()).toBeTruthy();
+      const { access: adminAccess } = await adminLogin.json();
+      const approval = await request.post(
+        `${API_BASE_URL}/api/v1/super-admin/experiences/${seed.experienceId}/approve/`,
+        { headers: { Authorization: `Bearer ${adminAccess}` } },
+      );
+      expect(approval.ok()).toBeTruthy();
+
+      await page.reload();
 
       // Wait for the build to complete and appear in the Published Build History table.
       const downloadBtn = page.locator('[data-testid="download-elab-btn"]').first();

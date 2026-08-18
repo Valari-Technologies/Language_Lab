@@ -6,8 +6,6 @@ import {
   FiEye,
   FiEyeOff,
   FiArrowRight,
-  FiGlobe,
-  FiChevronDown,
   FiMail,
   FiKey,
   FiCheck,

@@ -48,7 +48,7 @@ def experience(db, grade, content_creator):
         grade=grade,
         subject="English",
         language="English",
-        difficulty=Experience.Difficulty.EASY,
+        difficulty=Experience.Difficulty.BEGINNER,
         estimated_duration=15,
         status=Experience.Status.DRAFT,
         created_by=content_creator,
@@ -100,4 +100,15 @@ def student_user(db, django_user_model):
         email="cms_student@example.com",
         password="password123",
         role="STUDENT",
+    )
+
+
+@pytest.fixture
+def super_admin_user(db, django_user_model):
+    """A SUPER_ADMIN who can approve submitted Content Studio experiences."""
+    return django_user_model.objects.create_user(
+        username="cms_super_admin",
+        email="cms_super_admin@example.com",
+        password="password123",
+        role="SUPER_ADMIN",
     )

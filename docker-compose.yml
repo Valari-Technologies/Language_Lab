@@ -3,9 +3,9 @@ services:
     image: postgres:18-alpine
     container_name: languagelab_db
     environment:
-      POSTGRES_DB: languagelab
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: ${DB_NAME:-languagelab}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the root .env file}
     ports:
       - "5435:5432"
     volumes:
@@ -23,20 +23,20 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DEBUG=True
-      - SECRET_KEY=django-insecure-master-key-production-change-me
+      - DEBUG=${DEBUG:-True}
+      - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in the root .env file}
       - ALLOWED_HOSTS=localhost,127.0.0.1,backend,db,0.0.0.0,*
-      - DB_NAME=languagelab
-      - DB_USER=postgres
-      - DB_PASSWORD=postgrespassword
+      - DB_NAME=${DB_NAME:-languagelab}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in the root .env file}
       - DB_HOST=db
       - DB_PORT=5432
       - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-      - LMS_SYNC_SECRET=super-secret-key-12345
+      - LMS_SYNC_SECRET=${LMS_SYNC_SECRET:?Set LMS_SYNC_SECRET in the root .env file}
       - EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
-      - GOOGLE_CLIENT_ID=299933614033-hipiatgbvbg11l7pr7072tjln3a7v5mc.apps.googleusercontent.com
-      - GOOGLE_CLIENT_SECRET=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
-      - GEMINI_API_KEY=AQ.Ab8RN6KSgHsGfNo1LgCF-wHMFgxLuolEEJ-rAO-Wjg3dzrOJ7A
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     depends_on:
       - db
 
@@ -52,7 +52,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_GOOGLE_CLIENT_ID=299933614033-hipiatgbvbg11l7pr7072tjln3a7v5mc.apps.googleusercontent.com
+      - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-}
     depends_on:
       - backend
 

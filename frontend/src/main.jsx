@@ -6,7 +6,6 @@ import Dashboard from './Dashboard.jsx'
 import SchoolDashboard from './SchoolDashboard.jsx'
 import TeacherDashboard from './TeacherDashboard.jsx'
 import ContentStudio from './ContentStudio.jsx'
-import { logoutSession } from './api'
 
 
 export const App = () => {
