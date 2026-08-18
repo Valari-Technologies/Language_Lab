@@ -2775,8 +2775,8 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         </div>
       )}
       {showRecentActivityModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#ffffff', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundImage: `url(${teacherBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid rgba(15, 23, 42, 0.08)', background: 'rgba(255, 255, 255, 0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ backgroundColor: '#ea580c', color: '#ffffff', width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
                 <FiClock />
@@ -2790,7 +2790,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               <FiX size={18} />
             </button>
           </div>
-          <div style={{ flex: 1, padding: '24px', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
+          <div style={{ flex: 1, padding: '24px', overflowY: 'auto', backgroundColor: 'transparent' }}>
             <div style={{ maxWidth: '1000px', margin: '0 auto', backgroundColor: '#ffffff', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0', padding: '24px' }}>
               {!data?.recent_activities?.length ? (
                 <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
