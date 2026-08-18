@@ -1440,7 +1440,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       try { sData = await sRes.json(); } catch { sData = {}; }
 
       if (sRes.ok) {
-        showFeedback(`School, Admin and License key created successfully! Password: ${adminPassword}`, null);
+        showFeedback("School registered successfully!", null);
         addRecentActivity(`School "${newSchoolForm.school_name}" registered`, 'School', '#dcfce7', '#15803d', <FiGrid />, '#3b82f6', '#eff6ff');
         setIsAddingSchool(false);
         setNewSchoolForm({
@@ -2951,19 +2951,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         🗑️ Delete Selected ({selectedExpIds.length})
                       </button>
                     )}
-                    <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>Status Filter:</span>
-                    <select
-                      className="sd-form-input"
-                      style={{ width: '180px', height: '38px', padding: '0 0.75rem', fontSize: '0.82rem', borderRadius: '8px' }}
-                      value={saExpFilter}
-                      onChange={e => { setSaExpFilter(e.target.value); setSaExpPage(1); }}
-                    >
-                      <option value="">All Statuses</option>
-                      <option value="PENDING_APPROVAL">Pending Approval</option>
-                      <option value="APPROVED">Approved</option>
-                      <option value="REJECTED">Rejected</option>
-                    </select>
-
                     <button
                       className="sd-btn-outline"
                       style={{
@@ -2989,8 +2976,20 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         setIsSelectMode(!isSelectMode);
                       }}
                     >
-                      Select
+                      {isSelectMode ? '✓ Done Selecting' : 'Select'}
                     </button>
+
+                    <select
+                      className="sd-form-input"
+                      style={{ width: '140px', height: '38px', padding: '0 0.5rem', fontSize: '0.82rem', borderRadius: '8px' }}
+                      value={saExpFilter}
+                      onChange={e => { setSaExpFilter(e.target.value); setSaExpPage(1); }}
+                    >
+                      <option value="">All Statuses</option>
+                      <option value="PENDING_APPROVAL">Pending Approval</option>
+                      <option value="APPROVED">Approved</option>
+                      <option value="REJECTED">Rejected</option>
+                    </select>
                   </div>
                 </div>
 
@@ -4297,34 +4296,36 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             <div className="sd-modal-footer" style={{ position: 'sticky', bottom: 0, backgroundColor: '#ffffff', borderTop: '1px solid #e2e8f0', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100, flexShrink: 0 }}>
               <button type="button" className="sd-btn-cancel" onClick={() => { setPreviewExperience(null); setActivePreviewScreen(null); }}>Close Preview</button>
 
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button
-                  type="button"
-                  className="sd-btn-primary"
-                  style={{ padding: '0.65rem 1.5rem', backgroundColor: '#ef4444', border: 'none', color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}
-                  onClick={() => {
-                    setRejectingId(previewExperience.id);
-                    setRejectRemark('');
-                    setShowRejectModal(true);
-                    setPreviewExperience(null);
-                    setActivePreviewScreen(null);
-                  }}
-                >
-                  ❌ Reject Experience
-                </button>
-                <button
-                  type="button"
-                  className="sd-btn-primary"
-                  style={{ padding: '0.65rem 1.5rem', backgroundColor: '#22c55e', border: 'none', color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}
-                  onClick={() => {
-                    handleApproveExperience(previewExperience.id);
-                    setPreviewExperience(null);
-                    setActivePreviewScreen(null);
-                  }}
-                >
-                  ✅ Approve Experience
-                </button>
-              </div>
+              {previewExperience.status === 'PENDING_APPROVAL' && (
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button
+                    type="button"
+                    className="sd-btn-primary"
+                    style={{ padding: '0.65rem 1.5rem', backgroundColor: '#ef4444', border: 'none', color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}
+                    onClick={() => {
+                      setRejectingId(previewExperience.id);
+                      setRejectRemark('');
+                      setShowRejectModal(true);
+                      setPreviewExperience(null);
+                      setActivePreviewScreen(null);
+                    }}
+                  >
+                    ❌ Reject Experience
+                  </button>
+                  <button
+                    type="button"
+                    className="sd-btn-primary"
+                    style={{ padding: '0.65rem 1.5rem', backgroundColor: '#22c55e', border: 'none', color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}
+                    onClick={() => {
+                      handleApproveExperience(previewExperience.id);
+                      setPreviewExperience(null);
+                      setActivePreviewScreen(null);
+                    }}
+                  >
+                    ✅ Approve Experience
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

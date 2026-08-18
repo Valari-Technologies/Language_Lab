@@ -732,7 +732,22 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
   border-bottom: 1px solid #f1f5f9;
   color: var(--text-mid);
   vertical-align: middle;
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Exclude checkbox, status, and action columns from truncation */
+.sd-table td.sd-checkbox-cell,
+.sd-table td:has(input[type="checkbox"]),
+.sd-table td:has(.sd-badge),
+.sd-table td:has(.sd-action-cell),
+.sd-table td:last-child {
+  max-width: none !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
 }
 .sd-table td:last-child,
 .sd-table th:last-child { text-align: center; }
@@ -1014,7 +1029,7 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
   font-weight: 500;
 }
 .sd-alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-.sd-alert-error   { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+.sd-alert-error   { display: none !important; }
 
 /* ============================
    MODAL

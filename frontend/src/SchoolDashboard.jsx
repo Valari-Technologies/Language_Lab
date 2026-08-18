@@ -749,7 +749,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           }
 
           const createdClassData = await classPostRes.json();
-          classId = createdClassData.class_id || createdClassData.id;
+          classId = createdClassData.data?.class_id || createdClassData.data?.id || createdClassData.class_id || createdClassData.id;
           await loadClasses();
         }
 
@@ -1105,6 +1105,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     setShowTeacherDetailModal(false);
     setShowStudentCrudDetailModal(false);
     setShowClassCrudDetailModal(false);
+    
+    if (tab === 'classes') loadClasses();
+    else if (tab === 'teachers') loadTeachers();
+    else if (tab === 'students') loadStudents();
   };
 
   /* ── Loading screen ── */

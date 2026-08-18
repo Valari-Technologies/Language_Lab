@@ -104,6 +104,18 @@ class SchoolViewSet(CMSBaseViewSet):
     def get_queryset(self):
         return filter_queryset_by_school(School.objects.all(), self.request.user, school_field="school_id")
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        admin_user = instance.schoolAdminId
+        with transaction.atomic():
+            instance.delete()
+            if admin_user:
+                admin_user.delete()
+        return Response(
+            {"message": "School and associated admin deleted successfully"},
+            status=status.HTTP_200_OK
+        )
+
     def create(self, request, *args, **kwargs):
         data = request.data
         school_name = data.get("school_name") or data.get("name")
@@ -143,6 +155,13 @@ class SchoolViewSet(CMSBaseViewSet):
             else:
                 expiry_date = issue_date + timedelta(days=365)
 
+        if not admin_username:
+            admin_username = f"admin_{uuid.uuid4().hex[:6]}"
+        if User.objects.filter(username=admin_username).exists():
+            return Response({"error": "Admin username already exists."}, status=status.HTTP_400_BAD_REQUEST)
+        if admin_email and User.objects.filter(email=admin_email).exists():
+            return Response({"error": "A user with this email address already registered."}, status=status.HTTP_400_BAD_REQUEST)
+
         with transaction.atomic():
             sch_id_str = "SCH-" + uuid.uuid4().hex[:8].upper()
             if not school_code:
@@ -159,11 +178,6 @@ class SchoolViewSet(CMSBaseViewSet):
                 is_active=True
             )
             
-            if not admin_username:
-                admin_username = f"admin_{uuid.uuid4().hex[:6]}"
-            if User.objects.filter(username=admin_username).exists():
-                return Response({"error": "Admin username already exists."}, status=status.HTTP_400_BAD_REQUEST)
-                
             admin_user = User.objects.create_user(
                 username=admin_username,
                 email=admin_email,
