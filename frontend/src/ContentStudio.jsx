@@ -100,6 +100,127 @@ const HintLadderForm = ({ block, onChange }) => {
   );
 };
 
+const MediaUploadField = ({ label, value, mediaType, onChange, actionLoading, setActionLoading, showFeedback }) => {
+  const uploadId = `upload-${Math.random().toString(36).substr(2, 9)}`;
+  const acceptPattern = 
+    mediaType === 'image' ? 'image/*' :
+    mediaType === 'audio' ? 'audio/*' :
+    mediaType === 'video' ? 'video/*' : '*';
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = null;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('name', file.name);
+    formData.append('folder', 'screen_builder');
+
+    setActionLoading(true);
+    try {
+      const res = await apiFetch('/api/v1/content/media/upload/', {
+        method: 'POST',
+        body: formData
+      });
+      if (res.ok || res.status === 201) {
+        const uploadedAsset = await res.json();
+        showFeedback('File uploaded successfully!');
+        const assetUrl = uploadedAsset.file || uploadedAsset.url || '';
+        onChange(assetUrl);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showFeedback(errData.error || 'Failed to upload file', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showFeedback('Upload error occurred', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  return (
+    <div className="cs-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+      <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 600, color: '#475569', margin: 0 }}>
+        {label}
+      </label>
+      <input
+        type="file"
+        id={uploadId}
+        style={{ display: 'none' }}
+        accept={acceptPattern}
+        onChange={handleFileChange}
+      />
+      {value ? (
+        <div style={{
+          border: '1px solid #e2e8f0',
+          borderRadius: '8px',
+          padding: '0.5rem',
+          background: '#ffffff',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {mediaType === 'image' && (
+              <img
+                src={resolveMediaUrl(value)}
+                alt="Preview"
+                style={{ width: '32px', height: '32px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #f1f5f9' }}
+              />
+            )}
+            {mediaType === 'audio' && <span style={{ fontSize: '1rem' }}>🎵</span>}
+            {mediaType === 'video' && <span style={{ fontSize: '1rem' }}>🎬</span>}
+            {mediaType !== 'image' && mediaType !== 'audio' && mediaType !== 'video' && <span style={{ fontSize: '1rem' }}>📄</span>}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {value.split('/').pop()}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="cs-btn-outline"
+            style={{ fontSize: '0.68rem', padding: '2px 6px', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}
+            disabled={actionLoading}
+            onClick={() => document.getElementById(uploadId).click()}
+          >
+            <FiUpload style={{ fontSize: '0.72rem' }} /> {actionLoading ? 'Uploading...' : 'Replace File'}
+          </button>
+        </div>
+      ) : (
+        <div
+          onClick={() => document.getElementById(uploadId).click()}
+          style={{
+            border: '2px dashed #cbd5e1',
+            borderRadius: '8px',
+            padding: '0.75rem 0.5rem',
+            textAlign: 'center',
+            background: '#f8fafc',
+            cursor: 'pointer',
+            fontSize: '0.7rem',
+            color: '#64748b',
+            transition: 'border-color 0.2s, background-color 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = '#6366f1';
+            e.currentTarget.style.backgroundColor = '#f5f3ff';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = '#cbd5e1';
+            e.currentTarget.style.backgroundColor = '#f8fafc';
+          }}
+        >
+          <FiUpload style={{ fontSize: '1rem', marginBottom: '2px' }} />
+          <div>{actionLoading ? 'Uploading...' : 'Click to upload file'}</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ═══════════════════════════════════════════════════════════
    CONTENT STUDIO COMPONENT
    ═══════════════════════════════════════════════════════════ */
@@ -7352,11 +7473,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                   {selectedBlock.type === 'hotspot_explorer' && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                       <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Hotspot Explorer Settings</span>
-                                      <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Image URL</label>
-                                        <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.imageUrl || ''}
-                                          onChange={e => handleUpdateBlockContent('imageUrl', e.target.value)} placeholder="Image asset path or url..." />
-                                      </div>
+                                      <MediaUploadField
+                                        label="Explorer Image File"
+                                        value={selectedBlock.content?.imageUrl || ''}
+                                        mediaType="image"
+                                        onChange={url => handleUpdateBlockContent('imageUrl', url)}
+                                        actionLoading={actionLoading}
+                                        setActionLoading={setActionLoading}
+                                        showFeedback={showFeedback}
+                                      />
                                       
                                       {selectedBlock.content?.imageUrl && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -7468,11 +7593,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                   {selectedBlock.type === 'functional_reading' && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                       <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Functional Reading Settings</span>
-                                      <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Document URL</label>
-                                        <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.documentUrl || ''}
-                                          onChange={e => handleUpdateBlockContent('documentUrl', e.target.value)} placeholder="e.g. forms/receipt.jpg" />
-                                      </div>
+                                      <MediaUploadField
+                                        label="Document File (Image/PDF)"
+                                        value={selectedBlock.content?.documentUrl || ''}
+                                        mediaType="image"
+                                        onChange={url => handleUpdateBlockContent('documentUrl', url)}
+                                        actionLoading={actionLoading}
+                                        setActionLoading={setActionLoading}
+                                        showFeedback={showFeedback}
+                                      />
                                       <div className="cs-form-group">
                                         <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Document Type</label>
                                         <select className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} value={selectedBlock.content?.documentType || 'form'}
@@ -7609,11 +7738,19 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                 <FiTrash2 style={{ fontSize: '0.72rem' }} />
                                               </button>
                                             </div>
-                                            <div className="cs-form-group">
-                                              <label style={{ fontSize: '0.6rem' }}>Audio URL</label>
-                                              <input className="cs-form-input" style={{ height: '22px', fontSize: '0.72rem' }} type="text" value={c.audio || ''}
-                                                onChange={e => { const clues = [...selectedBlock.content.clues]; clues[cIdx].audio = e.target.value; handleUpdateBlockContent('clues', clues); }} />
-                                            </div>
+                                            <MediaUploadField
+                                              label="Audio Clue File"
+                                              value={c.audio || ''}
+                                              mediaType="audio"
+                                              onChange={url => {
+                                                const clues = [...selectedBlock.content.clues];
+                                                clues[cIdx].audio = url;
+                                                handleUpdateBlockContent('clues', clues);
+                                              }}
+                                              actionLoading={actionLoading}
+                                              setActionLoading={setActionLoading}
+                                              showFeedback={showFeedback}
+                                            />
                                             <div className="cs-form-group">
                                               <label style={{ fontSize: '0.6rem' }}>Duration (Seconds)</label>
                                               <input className="cs-form-input" style={{ height: '22px', fontSize: '0.72rem' }} type="number" value={c.duration || 5}
@@ -7667,11 +7804,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.npcCharacter || ''}
                                           onChange={e => handleUpdateBlockContent('npcCharacter', e.target.value)} />
                                       </div>
-                                      <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>NPC Image URL</label>
-                                        <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.npcImage || ''}
-                                          onChange={e => handleUpdateBlockContent('npcImage', e.target.value)} />
-                                      </div>
+                                      <MediaUploadField
+                                        label="NPC Avatar Image"
+                                        value={selectedBlock.content?.npcImage || ''}
+                                        mediaType="image"
+                                        onChange={url => handleUpdateBlockContent('npcImage', url)}
+                                        actionLoading={actionLoading}
+                                        setActionLoading={setActionLoading}
+                                        showFeedback={showFeedback}
+                                      />
 
                                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
                                         <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Conversation Turns</span>
@@ -7711,11 +7852,19 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                   <input className="cs-form-input" style={{ height: '22px', fontSize: '0.72rem' }} type="text" value={t.text || ''}
                                                     onChange={e => { const conv = [...selectedBlock.content.conversation]; conv[tIdx].text = e.target.value; handleUpdateBlockContent('conversation', conv); }} />
                                                 </div>
-                                                <div className="cs-form-group">
-                                                  <label style={{ fontSize: '0.6rem' }}>Audio URL</label>
-                                                  <input className="cs-form-input" style={{ height: '22px', fontSize: '0.72rem' }} type="text" value={t.audio || ''}
-                                                    onChange={e => { const conv = [...selectedBlock.content.conversation]; conv[tIdx].audio = e.target.value; handleUpdateBlockContent('conversation', conv); }} />
-                                                </div>
+                                                <MediaUploadField
+                                                  label="Dialogue Audio File"
+                                                  value={t.audio || ''}
+                                                  mediaType="audio"
+                                                  onChange={url => {
+                                                    const conv = [...selectedBlock.content.conversation];
+                                                    conv[tIdx].audio = url;
+                                                    handleUpdateBlockContent('conversation', conv);
+                                                  }}
+                                                  actionLoading={actionLoading}
+                                                  setActionLoading={setActionLoading}
+                                                  showFeedback={showFeedback}
+                                                />
                                                 <div className="cs-form-group">
                                                   <label style={{ fontSize: '0.6rem' }}>Expected Responses (Text:Hint, Text:Hint)</label>
                                                   <input className="cs-form-input" style={{ height: '22px', fontSize: '0.72rem' }} type="text" value={(t.expectedStudentResponses || []).map(r => `${r.text}:${r.hint}`).join(', ')}
