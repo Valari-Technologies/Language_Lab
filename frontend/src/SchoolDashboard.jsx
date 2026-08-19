@@ -10,6 +10,15 @@ import {
 } from 'react-icons/fi';
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
+import { API_BASE_URL } from './config';
+
+const resolveMediaUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  const path = url.startsWith('/') ? url : '/' + url;
+  return `${base}${path}`;
+};
 import logoIcon from './assets/icon.png';
 import teacherHeaderBanner from './assets/6.jpeg';
 import schoolBg from './assets/school_bg.png';
@@ -698,6 +707,11 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
     try {
       if (activeSubTab === 'teachers') {
+        if (teacherForm.phone_no && teacherForm.phone_no.replace(/\D/g, '').length !== 10) {
+          setErrorMsg('Phone number must be exactly 10 numeric digits.');
+          setActionLoading(false);
+          return;
+        }
         if (modalType === 'add' && (!teacherForm.password || teacherForm.password.length < 8)) {
           setErrorMsg('Password must be at least 8 characters long.');
           setActionLoading(false);
@@ -1405,7 +1419,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           <div className="sd-user-card" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}>
             <div className="sd-user-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
               {user?.profile_picture ? (
-                <img src={user.profile_picture} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
+                <img src={resolveMediaUrl(user.profile_picture)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
               ) : (
                 getUserInitials(user, 'SA')
               )}
@@ -1666,8 +1680,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a' }}>Bulk Excel Upload</h4>
                     <p style={{ margin: '0 0 1rem 0', fontSize: '0.84rem', color: '#64748b' }}>
                       Upload an <code>.xlsx</code> or <code>.xls</code> spreadsheet.<br/>
-                      <strong style={{ color: '#ef4444' }}>Mandatory fields:</strong> <code>name</code>, <code>email</code>, <code>password</code>.<br/>
-                      Optional fields: <code>qualification</code>, <code>is_active</code>.
+                      <strong style={{ color: '#ef4444' }}>Mandatory fields:</strong> <code>name</code>, <code>email</code>, <code>username</code>, <code>password</code>, <code>phone_no</code>, <code>qualification</code>, <code>class</code>, <code>section</code>, <code>academic_year</code>.
                     </p>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', alignItems: 'center' }}>
                       <input
@@ -1981,8 +1994,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a' }}>Bulk Excel Upload</h4>
                     <p style={{ margin: '0 0 1rem 0', fontSize: '0.84rem', color: '#64748b' }}>
                       Upload an <code>.xlsx</code> or <code>.xls</code> spreadsheet.<br/>
-                      <strong style={{ color: '#ef4444' }}>Mandatory fields:</strong> <code>fullname</code>, <code>grade</code>, <code>section</code>.<br/>
-                      Roll No is auto-generated from <code>fullname</code> (any <code>rollno</code> column is ignored). Optional fields: <code>username</code>, <code>password</code>, <code>email</code>, <code>is_active</code>.
+                      <strong style={{ color: '#ef4444' }}>Mandatory fields:</strong> <code>fullname</code>, <code>grade</code>, <code>section</code>, <code>username</code>, <code>password</code>, <code>email</code>, <code>academic_year</code>.<br/>
+                      Roll No is auto-generated from <code>fullname</code>.
                     </p>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', alignItems: 'center' }}>
                       <input
@@ -2789,7 +2802,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
                             setProfileForm({ ...profileForm, phone_no: cleaned });
                           }}
-                          placeholder="+91 98765 43210" 
+                          placeholder="Enter 10 digit phone number" 
                           style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                           onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
                           onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
@@ -2861,21 +2874,17 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </div>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Phone Number</label>
-                        <input className="sd-form-input" type="text" value={teacherForm.phone_no || ''}
-                          onChange={e => setTeacherForm({...teacherForm, phone_no:e.target.value})} placeholder="e.g. +91 9876543210"/>
+                        <input className="sd-form-input" type="text" maxLength={10} value={teacherForm.phone_no || ''}
+                          onChange={e => setTeacherForm({...teacherForm, phone_no:e.target.value.replace(/\D/g, '').slice(0, 10)})} placeholder="Enter 10 digit phone number"/>
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Academic Year *</label>
                         <input className="sd-form-input" type="text" value={teacherForm.academic_year}
                           onChange={e => setTeacherForm({...teacherForm, academic_year:e.target.value})} placeholder="e.g. 2025 - 2026" required/>
                       </div>
-                      <div className="sd-form-group"></div>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Class *</label>
                         <select className="sd-form-input" value={teacherForm.class_grade}

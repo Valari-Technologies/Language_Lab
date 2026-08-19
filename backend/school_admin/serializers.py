@@ -52,6 +52,13 @@ class TeacherSerializer(serializers.ModelSerializer):
             ret['is_active'] = False
         return ret
 
+    def validate_phone_no(self, value):
+        if value:
+            cleaned = "".join(c for c in value if c.isdigit())
+            if len(cleaned) != 10 or len(value) != 10:
+                raise serializers.ValidationError("Phone number must be exactly 10 numeric digits.")
+        return value
+
     def validate(self, attrs):
         request = self.context.get("request")
         email = attrs.get("email")

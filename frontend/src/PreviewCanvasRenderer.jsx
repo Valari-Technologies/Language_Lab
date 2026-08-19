@@ -40,7 +40,9 @@ export default function PreviewCanvasRenderer({
               fontWeight: block.styles?.fontWeight === 'Bold' ? 800 : block.styles?.fontWeight === 'SemiBold' ? 600 : 400,
               color: block.styles?.color || '#1e293b',
               lineHeight: 1.25,
-              display: 'inline-block'
+              display: 'inline-block',
+              wordBreak: 'break-word',
+              overflowWrap: 'anywhere'
             }}>
               {block.content?.text || ''}
             </span>
@@ -59,7 +61,10 @@ export default function PreviewCanvasRenderer({
             whiteSpace: 'pre-wrap',
             marginBottom: '0.5rem',
             flex: 1,
-            height: '100%'
+            height: '100%',
+            wordBreak: 'break-all',
+            overflowWrap: 'anywhere',
+            overflow: 'hidden'
           }}>
             {block.content?.text || ''}
           </div>
@@ -67,17 +72,17 @@ export default function PreviewCanvasRenderer({
 
       case 'image':
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', flex: 1, height: '100%', width: '100%' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', flex: 1, height: block.styles?.height || '100%', width: '100%' }}>
             {block.content?.url ? (
               <div style={{ width: '100%', height: '100%', flex: 1, borderRadius: '12px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <img
                   src={resolveUrl(block.content.url)}
                   alt="Visual presentation"
-                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                  style={{ width: '100%', height: '100%', objectFit: block.styles?.objectFit || 'contain' }}
                 />
               </div>
             ) : (
-              <div style={{ width: '100%', height: '100%', flex: 1, border: '1.5px dashed #cbd5e1', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+              <div style={{ width: '100%', height: block.styles?.height || '220px', flex: 1, border: '1.5px dashed #cbd5e1', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
                 <FiImage style={{ fontSize: '2rem', marginBottom: '4px', opacity: 0.6 }} />
                 <span style={{ fontSize: '0.72rem' }}>No image asset configured.</span>
               </div>
@@ -106,13 +111,13 @@ export default function PreviewCanvasRenderer({
 
       case 'video':
         return (
-          <div className="video-element-wrapper" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, width: '100%', height: '100%' }}>
+          <div className="video-element-wrapper" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, width: '100%', height: block.styles?.height || '100%' }}>
             {block.content?.url ? (
               <div style={{ width: '100%', height: '100%', flex: 1, borderRadius: '12px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <video src={resolveUrl(block.content.url)} controls style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain' }} />
+                <video src={resolveUrl(block.content.url)} controls style={{ width: '100%', height: '100%', display: 'block', objectFit: block.styles?.objectFit || 'contain' }} />
               </div>
             ) : (
-              <div style={{ width: '100%', height: '100%', flex: 1, border: '1.5px dashed #cbd5e1', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+              <div style={{ width: '100%', height: block.styles?.height || '220px', flex: 1, border: '1.5px dashed #cbd5e1', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
                 <FiMonitor style={{ fontSize: '2rem', marginBottom: '4px', opacity: 0.6 }} />
                 <span style={{ fontSize: '0.72rem' }}>No video asset configured.</span>
               </div>
@@ -899,7 +904,10 @@ export default function PreviewCanvasRenderer({
             boxSizing: 'border-box',
             marginBottom: '0.25rem',
             transition: 'all 0.15s',
-            zIndex: block.styles?.zIndex || 1
+            zIndex: block.styles?.zIndex || 1,
+            wordBreak: 'break-word',
+            overflowWrap: 'anywhere',
+            overflow: 'hidden'
           }}
         >
           {renderSingleBlock(block)}

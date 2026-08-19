@@ -177,23 +177,23 @@ class BulkUploadAPIView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
         elif upload_type == "teacher":
-            if not has_any(headers, "name", "fullname", "full_name", "full name", "teacher_name", "teacher name"):
-                return Response(
-                    {"error": "Missing required column header: 'name' or 'fullname' for teacher imports."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            if "email" not in headers:
-                return Response(
-                    {"error": "Missing required column header: 'email' for teacher imports."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            required_cols = ["name", "email", "username", "password", "phone_no", "qualification", "class", "section", "academic_year"]
+            for col in required_cols:
+                matched = any(col.replace("_", "").replace(" ", "") in h.replace("_", "").replace(" ", "") for h in headers)
+                if not matched:
+                    return Response(
+                        {"error": f"Missing required column header: '{col}' for teacher imports."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
         elif upload_type == "student":
-            if not has_any(headers, "fullname", "full_name", "full name", "name", "student_name"):
-                return Response({"error": "Missing required column header: 'fullname'."}, status=status.HTTP_400_BAD_REQUEST)
-            if not has_any(headers, "grade", "grade_name", "grade name"):
-                return Response({"error": "Missing required column header: 'grade'."}, status=status.HTTP_400_BAD_REQUEST)
-            if not has_any(headers, "section", "class_section", "class section"):
-                return Response({"error": "Missing required column header: 'section'."}, status=status.HTTP_400_BAD_REQUEST)
+            required_cols = ["fullname", "grade", "section", "username", "password", "email", "academic_year"]
+            for col in required_cols:
+                matched = any(col.replace("_", "").replace(" ", "") in h.replace("_", "").replace(" ", "") or (col == "fullname" and "name" in h) for h in headers)
+                if not matched:
+                    return Response(
+                        {"error": f"Missing required column header: '{col}' for student imports."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
         # Roll No is always auto-generated from the student's full name (e.g. "Rahul" -> "RAH001"),
         # continuing the numeric sequence from the school's existing student count — any
@@ -307,53 +307,51 @@ class BulkUploadAPIView(APIView):
                         created_count += 1
                     else:
                         if upload_type == "teacher":
-                            # Flexible header value extraction
                             email_val = get_val(row_data, "email", "email_address", "email address")
                             fullname_val = get_val(row_data, "name", "full_name", "full name", "fullname", "teacher_name", "teacher name")
+                            username_val = get_val(row_data, "username", "username", "user_name", "user name")
+                            password_val = get_val(row_data, "password", "pass")
+                            phone_val = get_val(row_data, "phone_no", "phone", "phone_number", "phone number")
+                            qualification_val = get_val(row_data, "qualification", "qual")
+                            class_grade_val = get_val(row_data, "class", "class_grade", "class grade", "grade")
+                            section_val = get_val(row_data, "section", "class_section", "class section")
+                            academic_year_val = get_val(row_data, "academic_year", "academic year", "year")
 
-                            if email_val is None or not str(email_val).strip():
-                                raise ValueError("Email is required for teacher.")
-                            if fullname_val is None or not str(fullname_val).strip():
-                                raise ValueError("Name is required for teacher.")
+                            if not email_val or not str(email_val).strip(): raise ValueError("email is required for teacher.")
+                            if not fullname_val or not str(fullname_val).strip(): raise ValueError("name is required for teacher.")
+                            if not username_val or not str(username_val).strip(): raise ValueError("username is required for teacher.")
+                            if not password_val or not str(password_val).strip(): raise ValueError("password is required for teacher.")
+                            if not phone_val or not str(phone_val).strip(): raise ValueError("phone_no is required for teacher.")
+                            if not qualification_val or not str(qualification_val).strip(): raise ValueError("qualification is required for teacher.")
+                            if not class_grade_val or not str(class_grade_val).strip(): raise ValueError("class is required for teacher.")
+                            if not section_val or not str(section_val).strip(): raise ValueError("section is required for teacher.")
+                            if not academic_year_val or not str(academic_year_val).strip(): raise ValueError("academic_year is required for teacher.")
 
                             email = str(email_val).strip()
                             full_name = str(fullname_val).strip()
-                            username = email
+                            username = str(username_val).strip()
+                            password = str(password_val).strip()
+                            phone_no = str(phone_val).strip()
+                            qualification = str(qualification_val).strip()
+                            class_grade = str(class_grade_val).strip()
+                            class_section = str(section_val).strip()
+                            academic_year = str(academic_year_val).strip()
 
-                            if User.objects.filter(username=username).exists() or User.objects.filter(email=email).exists():
+                            cleaned_phone = "".join(c for c in phone_no if c.isdigit())
+                            if len(cleaned_phone) != 10 or len(phone_no) != 10:
+                                raise ValueError("Phone number must be exactly 10 numeric digits.")
+
+                            if User.objects.filter(username=username).exists():
+                                raise ValueError(f"Username '{username}' already exists.")
+                            if User.objects.filter(email=email).exists():
                                 raise ValueError(f"A user with email '{email}' already exists.")
 
-                            password_val = get_val(row_data, "password", "pass")
-                            if password_val is None or not str(password_val).strip():
-                                raise ValueError("Password is required for teacher.")
-                            password = str(password_val).strip()
-
-                            is_active_val = row_data.get("is_active")
-                            if is_active_val is not None:
-                                if isinstance(is_active_val, str):
-                                    is_active = is_active_val.strip().lower() in ["true", "1", "yes", "active"]
-                                else:
-                                    is_active = bool(is_active_val)
-                            else:
-                                is_active = True
-
-                            qualification = str(row_data.get("qualification", "")).strip() if row_data.get("qualification") is not None else ""
-                            
-                            exp_val = row_data.get("experience_years")
-                            experience_years = None
-                            if exp_val is not None:
-                                try:
-                                    experience_years = int(exp_val)
-                                except ValueError:
-                                    raise ValueError(f"Invalid experience_years: '{exp_val}' must be an integer.")
-
-                            # Validate Relational class fields
-                            class_id_val = row_data.get("class_id")
-                            class_ids_val = row_data.get("class_ids")
-                            
+                            # Resolve or Create Grade & Class
                             classes_to_link = []
+                            class_id_val = get_val(row_data, "class_id")
+                            class_ids_val = get_val(row_data, "class_ids")
 
-                            if class_id_val is not None:
+                            if class_id_val is not None and str(class_id_val).strip():
                                 try:
                                     class_id = int(class_id_val)
                                     cls = Class.objects.filter(class_id=class_id, school=school).first()
@@ -364,8 +362,7 @@ class BulkUploadAPIView(APIView):
                                     if "does not exist" in str(ve):
                                         raise ve
                                     raise ValueError(f"Invalid class_id: '{class_id_val}' must be an integer.")
-
-                            if class_ids_val is not None:
+                            elif class_ids_val is not None and str(class_ids_val).strip():
                                 ids_list = [id_str.strip() for id_str in str(class_ids_val).split(",") if id_str.strip()]
                                 for id_str in ids_list:
                                     try:
@@ -378,6 +375,28 @@ class BulkUploadAPIView(APIView):
                                         if "does not exist" in str(ve):
                                             raise ve
                                         raise ValueError(f"Invalid class_id in list: '{id_str}' must be an integer.")
+                            else:
+                                import re
+                                grade_match = re.search(r"\d+", class_grade)
+                                grade_num = grade_match.group(0) if grade_match else class_grade
+                                
+                                grade_obj = Grade.objects.filter(grade_name__icontains=grade_num).first()
+                                if not grade_obj:
+                                    try:
+                                        s_ord = int(grade_num)
+                                    except ValueError:
+                                        s_ord = 1
+                                    grade_obj = Grade.objects.create(grade_name=f"Class {grade_num}", sort_order=s_ord)
+
+                                target_class_name = f"Class {grade_num}-{class_section}"
+                                class_obj, _ = Class.objects.get_or_create(
+                                    class_name=target_class_name,
+                                    school=school,
+                                    grade=grade_obj,
+                                    academic_year=academic_year,
+                                    defaults={"is_active": True}
+                                )
+                                classes_to_link.append(class_obj)
 
                             # Create Django auth user
                             new_user = User.objects.create_user(
@@ -386,15 +405,15 @@ class BulkUploadAPIView(APIView):
                                 email=email,
                                 full_name=full_name,
                                 role=User.Role.TEACHER,
-                                is_active=is_active
+                                is_active=True,
+                                phone_no=phone_no
                             )
 
                             # Create Teacher profile record
                             teacher = Teacher.objects.create(
                                 user=new_user,
                                 school=school,
-                                qualification=qualification,
-                                experience_years=experience_years
+                                qualification=qualification
                             )
 
                             # Map Teacher to classes
@@ -403,62 +422,35 @@ class BulkUploadAPIView(APIView):
 
                         elif upload_type == "student":
                             fullname_val = get_val(row_data, "fullname", "full_name", "full name", "name", "student_name")
-                            grade_val = get_val(row_data, "grade", "grade_name", "grade name")
+                            grade_val = get_val(row_data, "grade", "class", "grade_name", "grade name")
                             section_val = get_val(row_data, "section", "class_section", "class section")
+                            username_val = get_val(row_data, "username", "user", "user_name")
+                            password_val = get_val(row_data, "password", "pass")
+                            email_val = get_val(row_data, "email", "email_address", "email address")
+                            academic_year_val = get_val(row_data, "academic_year", "academic year", "year")
 
-                            if not fullname_val or not str(fullname_val).strip():
-                                raise ValueError("fullname is required.")
-                            if not grade_val or not str(grade_val).strip():
-                                raise ValueError("grade is required.")
-                            if not section_val or not str(section_val).strip():
-                                raise ValueError("section is required.")
+                            if not fullname_val or not str(fullname_val).strip(): raise ValueError("fullname is required for student.")
+                            if not grade_val or not str(grade_val).strip(): raise ValueError("grade is required for student.")
+                            if not section_val or not str(section_val).strip(): raise ValueError("section is required for student.")
+                            if not username_val or not str(username_val).strip(): raise ValueError("username is required for student.")
+                            if not password_val or not str(password_val).strip(): raise ValueError("password is required for student.")
+                            if not email_val or not str(email_val).strip(): raise ValueError("email is required for student.")
+                            if not academic_year_val or not str(academic_year_val).strip(): raise ValueError("academic_year is required for student.")
 
                             full_name = str(fullname_val).strip()
-                            # Roll No is always auto-generated from full_name — any rollno
-                            # value present in the sheet is intentionally ignored.
-                            roll_no = generate_roll_no(full_name)
                             grade = str(grade_val).strip()
                             section = str(section_val).strip()
-
-                            username_val = get_val(row_data, "username", "user", "user_name")
-                            if username_val and str(username_val).strip():
-                                username = str(username_val).strip()
-                            else:
-                                # Auto generate username
-                                base = "".join(c for c in full_name if c.isalnum()).lower()
-                                if not base:
-                                    base = "student"
-                                base = f"{base}_{roll_no}"
-                                username = base
-                                suffix = 1
-                                while User.objects.filter(username=username).exists():
-                                    username = f"{base}_{suffix}"
-                                    suffix += 1
+                            username = str(username_val).strip()
+                            password = str(password_val).strip()
+                            email = str(email_val).strip()
+                            academic_year = str(academic_year_val).strip()
 
                             if User.objects.filter(username=username).exists():
                                 raise ValueError(f"Username '{username}' already exists.")
+                            if User.objects.filter(email=email).exists():
+                                raise ValueError(f"A user with email '{email}' already exists.")
 
-                            password_val = get_val(row_data, "password", "pass")
-                            if password_val and str(password_val).strip():
-                                password = str(password_val).strip()
-                            else:
-                                import uuid
-                                password = str(uuid.uuid4())[:12]
-
-                            email_val = get_val(row_data, "email", "email_address", "email address")
-                            if email_val and str(email_val).strip():
-                                email = str(email_val).strip()
-                            else:
-                                email = f"{username}@languagelab.com"
-
-                            is_active_val = row_data.get("is_active")
-                            if is_active_val is not None:
-                                if isinstance(is_active_val, str):
-                                    is_active = is_active_val.strip().lower() in ["true", "1", "yes", "active"]
-                                else:
-                                    is_active = bool(is_active_val)
-                            else:
-                                is_active = True
+                            roll_no = generate_roll_no(full_name)
 
                             # Create Django auth user
                             new_user = User.objects.create_user(
@@ -467,7 +459,7 @@ class BulkUploadAPIView(APIView):
                                 email=email,
                                 full_name=full_name,
                                 role=User.Role.STUDENT,
-                                is_active=is_active
+                                is_active=True
                             )
 
                             # Create Student profile record
@@ -476,7 +468,8 @@ class BulkUploadAPIView(APIView):
                                 school=school,
                                 roll_no=roll_no,
                                 grade=grade,
-                                section=section
+                                section=section,
+                                academic_year=academic_year
                             )
 
                         created_count += 1

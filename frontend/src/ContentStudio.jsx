@@ -227,6 +227,8 @@ const MediaUploadField = ({ label, value, mediaType, onChange, actionLoading, se
 function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUser }) {
   // Views: dashboard, experiences, experience-builder, activity-builder, screen-builder, preview, media, publish, profile
   const [view, setView] = useState('dashboard');
+  const [previousView, setPreviousView] = useState('dashboard');
+  const [activeHotspotIndex, setActiveHotspotIndex] = useState(0);
   const [isNewExperience, setIsNewExperience] = useState(false);
   const [selectedExperience, setSelectedExperience] = useState(null);
   const [selectedActivity, setSelectedActivity] = useState(null);
@@ -2286,8 +2288,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           display: 'flex',
           flexDirection: 'column',
           boxSizing: 'border-box',
+          overflow: 'hidden',
           ...(block.styles?.blockWidth ? { width: block.styles.blockWidth } : { width: '100%' }),
-          ...(block.styles?.minHeight ? { minHeight: block.styles.minHeight, height: block.styles.minHeight } : { minHeight: '80px' }),
+          ...(block.styles?.height || block.styles?.minHeight ? { minHeight: block.styles.height || block.styles.minHeight, height: block.styles.height || block.styles.minHeight } : { minHeight: '80px' }),
         }}
       >
         {/* Selection Indicator / Action Toolbar */}
@@ -2333,14 +2336,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
         {/* Block Specific Previews */}
         {block.type === 'heading' && (
-          <div style={{ textAlign: (block.styles?.alignment || 'Center').toLowerCase(), flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div style={{ textAlign: (block.styles?.alignment || 'Center').toLowerCase(), flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden', wordBreak: 'break-all' }}>
             <span style={{
               fontFamily: block.styles?.fontFamily || 'Poppins',
               fontSize: `${(parseInt(block.styles?.fontSize) || 28) * 0.7}px`,
               fontWeight: block.styles?.fontWeight === 'Bold' ? 800 : block.styles?.fontWeight === 'SemiBold' ? 600 : 400,
               color: block.styles?.color || '#1e293b',
               lineHeight: 1.2,
-              display: 'inline-block'
+              wordBreak: 'break-all',
+              overflowWrap: 'anywhere'
             }}>
               {block.content?.text || 'Heading text...'}
             </span>
@@ -2357,7 +2361,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             lineHeight: 1.5,
             whiteSpace: 'pre-wrap',
             flex: 1,
-            height: '100%'
+            height: '100%',
+            wordBreak: 'break-all',
+            overflowWrap: 'anywhere',
+            overflow: 'hidden'
           }}>
             {block.content?.text || 'Standard paragraph writing text...'}
           </div>
@@ -2403,7 +2410,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         {block.type === 'video' && (
           <div style={{ background: '#f3e8ff', border: '1px solid #d8b4fe', borderRadius: '8px', overflow: 'hidden', flex: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
             {block.content?.url ? (
-              <video src={resolveMediaUrl(block.content.url)} controls style={{ width: '100%', height: '100%', flex: 1, display: 'block', objectFit: 'contain' }} />
+              <video src={resolveMediaUrl(block.content.url)} controls style={{ width: '100%', height: '100%', flex: 1, display: 'block', objectFit: block.styles?.objectFit || 'contain' }} />
             ) : (
               <div style={{ padding: '2rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', gap: '0.35rem', flex: 1 }}>
                 <FiMonitor style={{ fontSize: '1.75rem' }} />
@@ -2510,7 +2517,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'grammar_correction' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #a7f3d0', background: '#ecfdf5', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #a7f3d0', background: '#ecfdf5', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiCheckCircle /> Grammar Correction
             </div>
@@ -2524,7 +2531,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'reading_passage' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f1f5f9', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f1f5f9', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiFileText /> Reading Passage: {block.content?.title || 'Passage Title'}
             </div>
@@ -2541,7 +2548,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'writing_prompt' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fdf2f8', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fdf2f8', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#9d174d', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiEdit2 /> Writing Prompt (Word Count Gate)
             </div>
@@ -2557,7 +2564,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'voice_recorder' && (
-          <div style={{ border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
             <FiMic style={{ fontSize: '1.8rem', color: '#d97706' }} />
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#b45309' }}>Speaking Practice Module</div>
@@ -2668,7 +2675,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'sequence' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#92400e' }}>
               Sequence / Order: {block.content?.question || 'Reorder steps to solve'}
             </div>
@@ -2685,7 +2692,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'flashcard' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fce7f3', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fce7f3', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#9d174d' }}>
               Flashcard Cards Deck
             </div>
@@ -2723,7 +2730,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'word_search' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #c7d2fe', background: '#e0e7ff', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #c7d2fe', background: '#e0e7ff', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#3730a3' }}>
               Word Search Puzzle: {block.content?.question || 'Find all hidden words'}
             </div>
@@ -2750,7 +2757,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'pronunciation' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiMic /> Pronunciation: {block.content?.question || 'Practice pronouncing words correctly'}
             </div>
@@ -2773,7 +2780,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'role_play' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fdf2f8', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fdf2f8', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#9d174d', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiActivity /> Role Play: {block.content?.title || 'Introduction'}
             </div>
@@ -2800,7 +2807,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'memory' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #e0e7ff', background: '#f5f3ff', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #e0e7ff', background: '#f5f3ff', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#4f46e5', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiGrid /> Memory matching game
             </div>
@@ -2814,7 +2821,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
 
         {block.type === 'true_false' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#c2410c', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiCheckCircle /> True / False question
             </div>
@@ -2829,7 +2836,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'you_ask' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiHelpCircle /> You Ask Block
             </div>
@@ -2844,7 +2851,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'roleplay_simulation' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #c084fc', background: '#faf5ff', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #c084fc', background: '#faf5ff', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#6b21a8', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiUsers /> Roleplay Simulation
             </div>
@@ -2861,13 +2868,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'hotspot_explorer' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f8fafc', borderRadius: '8px', padding: '0.75rem', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f8fafc', borderRadius: '8px', padding: '0.75rem', position: 'relative', overflow: 'hidden', flex: 1, height: '100%', minHeight: 0 }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiGrid /> Hotspot Explorer
             </div>
             {block.content?.imageUrl ? (
-              <div style={{ position: 'relative', width: '100%', height: '140px', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
-                <img src={resolveMediaUrl(block.content.imageUrl)} alt="Hotspot explorer source" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div style={{ position: 'relative', width: '100%', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block' }}>
+                <img src={resolveMediaUrl(block.content.imageUrl)} alt="Hotspot explorer source" style={{ width: '100%', display: 'block' }} />
                 {(block.content.hotspots || []).map((h, hidx) => (
                   <div
                     key={h.id || hidx}
@@ -2900,7 +2907,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'functional_reading' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #818cf8', background: '#eef2ff', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #818cf8', background: '#eef2ff', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#3730a3', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiFileText /> Functional Reading
             </div>
@@ -2914,7 +2921,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'audio_mystery' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #67e8f9', background: '#ecfeff', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #67e8f9', background: '#ecfeff', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0891b2', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiVolume2 /> Audio Mystery
             </div>
@@ -3172,6 +3179,25 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     if (idx === -1) return;
     const cloned = JSON.parse(JSON.stringify(block));
     cloned.id = `block-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Shift top and left of the cloned block to avoid exact overlap
+    if (cloned.styles) {
+      if (cloned.styles.top) {
+        const topVal = parseInt(cloned.styles.top) || 0;
+        cloned.styles.top = `${topVal + 30}px`;
+      } else {
+        cloned.styles.top = '30px';
+      }
+      if (cloned.styles.left) {
+        const leftVal = parseInt(cloned.styles.left) || 0;
+        cloned.styles.left = `${leftVal + 30}px`;
+      } else {
+        cloned.styles.left = '30px';
+      }
+    } else {
+      cloned.styles = { top: '30px', left: '30px' };
+    }
+
     elements.splice(idx + 1, 0, cloned);
     setScreenForm(prev => ({ ...prev, elements }));
     pushHistory(elements);
@@ -3830,6 +3856,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     const expId = targetExpId || selectedExperience?.id;
     if (!expId) {
       setPreviewPayload(null);
+      if (view !== 'preview') setPreviousView(view);
       setView('preview');
       return;
     }
@@ -3862,6 +3889,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         setPreviewActivityIndex(actIdx);
         setPreviewScreenIndex(scrIdx);
         setPreviewAnswerIndex(null);
+        if (view !== 'preview') setPreviousView(view);
         setView('preview');
       } else {
         showFeedback('Failed to start preview', 'error');
@@ -4451,6 +4479,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 key={item.key}
                 onClick={() => {
                   if (item.key === 'preview') {
+                    if (view !== 'preview') setPreviousView(view);
                     if (selectedExperience?.id) {
                       handleStartPreview();
                     } else {
@@ -6999,11 +7028,23 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
                                           onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Listen to the audio and write down what you hear." />
                                       </div>
-                                      <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Audio URL / File Path</label>
-                                        <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.url || ''}
-                                          onChange={e => handleUpdateBlockContent('url', e.target.value)} placeholder="e.g. audio/dictation_1.mp3 or media library URL" />
-                                      </div>
+                                      <MediaUploadField
+                                        label="Audio File"
+                                        value={selectedBlock.content?.url || ''}
+                                        mediaType="audio"
+                                        onChange={newUrl => handleUpdateBlockContent('url', newUrl)}
+                                        actionLoading={actionLoading}
+                                        setActionLoading={setActionLoading}
+                                        showFeedback={(msg, type) => {
+                                          if (type === 'error') {
+                                            setErrorMsg(msg);
+                                            setSuccessMsg('');
+                                          } else {
+                                            setSuccessMsg(msg);
+                                            setErrorMsg('');
+                                          }
+                                        }}
+                                      />
                                     </div>
                                   )}
 
@@ -7493,32 +7534,46 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                               const py = Math.round((e.clientY - rect.top) / rect.height * 250);
                                               const hotspots = [...(selectedBlock.content.hotspots || [])];
                                               if (hotspots.length > 0) {
-                                                hotspots[0] = { ...hotspots[0], x: px, y: py };
+                                                const editIdx = activeHotspotIndex < hotspots.length ? activeHotspotIndex : 0;
+                                                hotspots[editIdx] = { ...hotspots[editIdx], x: px, y: py };
                                                 handleUpdateBlockContent('hotspots', hotspots);
                                               }
                                             }}
-                                            style={{ position: 'relative', width: '100%', height: '120px', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', cursor: 'crosshair', border: '1px solid #cbd5e1' }}
+                                            style={{ position: 'relative', width: '100%', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', cursor: 'crosshair', border: '1px solid #cbd5e1' }}
                                           >
-                                            <img src={resolveMediaUrl(selectedBlock.content.imageUrl)} alt="Picker preview" style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
-                                            {(selectedBlock.content.hotspots || []).slice(0, 1).map((h, idx) => (
-                                              <div
-                                                key={idx}
-                                                style={{
-                                                  position: 'absolute',
-                                                  left: `${(h.x / 400) * 100}%`,
-                                                  top: `${(h.y / 250) * 100}%`,
-                                                  width: '20px',
-                                                  height: '20px',
-                                                  borderRadius: '50%',
-                                                  border: '2px solid #ef4444',
-                                                  background: 'rgba(239, 68, 68, 0.4)',
-                                                  transform: 'translate(-50%, -50%)',
-                                                  pointerEvents: 'none'
-                                                }}
-                                              />
-                                            ))}
+                                            <img src={resolveMediaUrl(selectedBlock.content.imageUrl)} alt="Picker preview" style={{ width: '100%', display: 'block', pointerEvents: 'none' }} />
+                                            {(selectedBlock.content.hotspots || []).map((h, idx) => {
+                                              const isActive = idx === activeHotspotIndex;
+                                              return (
+                                                <div
+                                                  key={idx}
+                                                  style={{
+                                                    position: 'absolute',
+                                                    left: `${(h.x / 400) * 100}%`,
+                                                    top: `${(h.y / 250) * 100}%`,
+                                                    width: isActive ? '20px' : '14px',
+                                                    height: isActive ? '20px' : '14px',
+                                                    borderRadius: '50%',
+                                                    border: isActive ? '2px solid #ef4444' : '1.5px solid #f97316',
+                                                    background: isActive ? 'rgba(239, 68, 68, 0.5)' : 'rgba(249, 115, 22, 0.4)',
+                                                    transform: 'translate(-50%, -50%)',
+                                                    pointerEvents: 'none',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    color: '#fff',
+                                                    fontSize: '8px',
+                                                    fontWeight: 'bold'
+                                                  }}
+                                                >
+                                                  {idx + 1}
+                                                </div>
+                                              );
+                                            })}
                                           </div>
-                                          <span style={{ fontSize: '0.6rem', color: '#64748b' }}>Currently editing first hotspot coordinates. Click anywhere on image to position.</span>
+                                          <span style={{ fontSize: '0.6rem', color: '#64748b' }}>
+                                            Currently editing Hotspot #{activeHotspotIndex + 1} ({selectedBlock.content?.hotspots?.[activeHotspotIndex]?.name || 'Unnamed'}). Click anywhere on image to position.
+                                          </span>
                                         </div>
                                       )}
 
@@ -7529,14 +7584,30 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                             const hotspots = [...(selectedBlock.content?.hotspots || [])];
                                             hotspots.push({ id: `hotspot_${Date.now()}`, name: `Target ${hotspots.length + 1}`, x: 50, y: 50, width: 80, height: 80, info: '', hint: '' });
                                             handleUpdateBlockContent('hotspots', hotspots);
+                                            setActiveHotspotIndex(hotspots.length - 1);
                                           }}>
                                           + Add Hotspot
                                         </button>
                                       </div>
 
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '180px', overflowY: 'auto' }}>
-                                        {(selectedBlock.content?.hotspots || []).map((h, hIdx) => (
-                                          <div key={h.id || hIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                        {(selectedBlock.content?.hotspots || []).map((h, hIdx) => {
+                                          const isActiveHotspot = hIdx === activeHotspotIndex;
+                                          return (
+                                            <div
+                                              key={h.id || hIdx}
+                                              onClick={() => setActiveHotspotIndex(hIdx)}
+                                              style={{
+                                                background: isActiveHotspot ? '#eff6ff' : '#f8fafc',
+                                                border: isActiveHotspot ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+                                                borderRadius: '8px',
+                                                padding: '0.5rem',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '0.35rem',
+                                                cursor: 'pointer'
+                                              }}
+                                            >
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                               <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b' }}>Hotspot #{hIdx + 1}</span>
                                               <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
@@ -7585,7 +7656,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                 onChange={e => { const hs = [...selectedBlock.content.hotspots]; hs[hIdx].hint = e.target.value; handleUpdateBlockContent('hotspots', hs); }} />
                                             </div>
                                           </div>
-                                        ))}
+                                            );
+                                          })}
                                       </div>
                                     </div>
                                   )}
@@ -8212,10 +8284,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                     </select>
                                   </div>
 
-                                  {selectedBlock.type === 'image' && (
+                                  {['image', 'video', 'audio', 'media', 'hotspot_explorer', 'functional_reading', 'roleplay_simulation', 'audio_mystery', 'true_false', 'quiz', 'voice_recorder', 'drag_drop', 'writing_prompt', 'dictation'].includes(selectedBlock.type) && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
                                       <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Image Crop / Fit Mode</label>
+                                        <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Crop / Fit Mode</label>
                                         <select
                                           className="cs-form-input"
                                           style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
@@ -8223,13 +8295,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                           onChange={e => handleUpdateBlockStyles('objectFit', e.target.value)}
                                         >
                                           <option value="cover">Crop to Fit (Cover)</option>
-                                          <option value="contain">Show Entire Image (Contain)</option>
+                                          <option value="contain">Show Entire Element (Contain)</option>
                                           <option value="fill">Stretch to Fill (Fill)</option>
                                         </select>
                                       </div>
 
                                       <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Image Height</label>
+                                        <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Element Height</label>
                                         <select
                                           className="cs-form-input"
                                           style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
@@ -8587,13 +8659,34 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                return (
                  <div style={{ padding: '0.5rem 1rem', background: 'transparent' }}>
                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
-                     <div>
-                       <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 4px 0', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                         <FiPlay style={{ color: '#0284c7' }} /> Runtime Preview Library
-                       </h1>
-                       <p style={{ fontSize: '0.84rem', color: '#64748b', margin: 0 }}>
-                         Select any lesson below (drafted or published) to test its interactive student runtime screens.
-                       </p>
+                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                       <button
+                         className="cs-icon-btn"
+                         onClick={() => setView(previousView || 'dashboard')}
+                         style={{
+                           background: '#ffffff',
+                           border: '1.5px solid #cbd5e1',
+                           borderRadius: '8px',
+                           padding: '6px 10px',
+                           cursor: 'pointer',
+                           display: 'flex',
+                           alignItems: 'center',
+                           justifyContent: 'center',
+                           color: '#475569',
+                           boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                         }}
+                         title="Back"
+                       >
+                         <FiArrowLeft style={{ fontSize: '1.1rem' }} />
+                       </button>
+                       <div>
+                         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 4px 0', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                           <FiPlay style={{ color: '#0284c7' }} /> Runtime Preview Library
+                         </h1>
+                         <p style={{ fontSize: '0.84rem', color: '#64748b', margin: 0 }}>
+                           Select any lesson below (drafted or published) to test its interactive student runtime screens.
+                         </p>
+                       </div>
                      </div>
                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                        {/* Small Search Bar */}
@@ -8784,7 +8877,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     </button>
                     <button
                       className="cs-btn-outline"
-                      onClick={() => setView('screen-builder')}
+                      onClick={() => setView(previousView || 'screen-builder')}
                       style={{
                         background: '#f1f5f9',
                         border: '1px solid #e2e8f0',
@@ -8799,7 +8892,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         gap: '6px'
                       }}
                     >
-                      Back to Editor
+                      {['screen-builder', 'activity-builder', 'experience-builder'].includes(previousView) ? 'Back to Editor' : 'Back'}
                     </button>
                     <div style={{ borderLeft: '1px solid #cbd5e1', height: '24px' }} />
                     <div>
@@ -8848,7 +8941,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <button
                       className="cs-btn-primary"
                       style={{ background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)', color: '#ffffff', border: 'none', borderRadius: '10px', padding: '0.5rem 1.25rem', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(11,87,208,0.25)', display: 'flex', alignItems: 'center', gap: '6px' }}
-                      onClick={() => setView('experience-builder')}
+                      onClick={() => setView(previousView || 'experience-builder')}
                     >
                       <FiX style={{ fontSize: '1rem' }} /> Exit Preview
                     </button>

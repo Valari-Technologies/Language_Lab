@@ -127,6 +127,10 @@ class SchoolViewSet(CMSBaseViewSet):
         lan_phone = data.get("lan_phone") or data.get("lan") or ""
         school_code = data.get("school_code") or ""
         contact_email = data.get("contactEmail") or data.get("email") or ""
+        if phone:
+            cleaned_phone = "".join(c for c in phone if c.isdigit())
+            if len(cleaned_phone) != 10 or len(phone) != 10:
+                return Response({"error": "Phone number must be exactly 10 numeric digits."}, status=status.HTTP_400_BAD_REQUEST)
         if contact_email:
             if School.objects.filter(email=contact_email).exists() or School.objects.filter(contactEmail=contact_email).exists():
                 return Response({"error": "A school with this email address already registered."}, status=status.HTTP_400_BAD_REQUEST)
@@ -183,7 +187,8 @@ class SchoolViewSet(CMSBaseViewSet):
                 email=admin_email,
                 full_name=admin_name,
                 role=User.Role.SCHOOL_ADMIN,
-                password=admin_password
+                password=admin_password,
+                phone_no=phone
             )
             
             school.schoolAdminId = admin_user
@@ -251,10 +256,19 @@ Language Lab Team
         )
 
     def update(self, request, *args, **kwargs):
+        new_phone = request.data.get("phone")
+        if new_phone:
+            cleaned_phone = "".join(c for c in new_phone if c.isdigit())
+            if len(cleaned_phone) != 10 or len(new_phone) != 10:
+                return Response({"error": "Phone number must be exactly 10 numeric digits."}, status=status.HTTP_400_BAD_REQUEST)
+
         response = super().update(request, *args, **kwargs)
         if response.status_code == status.HTTP_200_OK:
             instance = self.get_object()
             new_email = request.data.get("email") or request.data.get("contactEmail")
+            if new_phone and instance.schoolAdminId:
+                instance.schoolAdminId.phone_no = new_phone
+                instance.schoolAdminId.save(update_fields=["phone_no"])
             if new_email:
                 instance.email = new_email
                 instance.contactEmail = new_email

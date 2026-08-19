@@ -11,6 +11,15 @@ import {
 } from 'react-icons/fi';
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
+import { API_BASE_URL } from './config';
+
+const resolveMediaUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  const path = url.startsWith('/') ? url : '/' + url;
+  return `${base}${path}`;
+};
 import teacherHeaderBanner from './assets/6.jpeg';
 import teacherBg from './assets/teacher_bg.png';
 import logoIcon from './assets/icon.png';
@@ -1269,7 +1278,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           <div className="sd-user-card" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}>
             <div className="sd-user-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
               {user?.profile_picture ? (
-                <img src={user.profile_picture} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
+                <img src={resolveMediaUrl(user.profile_picture)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
               ) : (
                 getUserInitials(user, 'TE')
               )}
@@ -1559,8 +1568,8 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a' }}>Bulk Excel Upload</h4>
                     <p style={{ margin: '0 0 1rem 0', fontSize: '0.84rem', color: '#64748b' }}>
                       Upload an <code>.xlsx</code> or <code>.xls</code> spreadsheet.<br/>
-                      <strong style={{ color: '#ef4444' }}>Mandatory fields:</strong> <code>fullname</code>, <code>grade</code>, <code>section</code>.<br/>
-                      Roll No is auto-generated from <code>fullname</code> (any <code>rollno</code> column is ignored). Optional fields: <code>username</code>, <code>password</code>, <code>email</code>, <code>is_active</code>.
+                      <strong style={{ color: '#ef4444' }}>Mandatory fields:</strong> <code>fullname</code>, <code>grade</code>, <code>section</code>, <code>username</code>, <code>password</code>, <code>email</code>, <code>academic_year</code>.<br/>
+                      Roll No is auto-generated from <code>fullname</code>.
                     </p>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', alignItems: 'center' }}>
                       <input
@@ -1970,6 +1979,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             </>
           )}
 
+{/* ══════════ PROFILE TAB ══════════ */}
           {activeSubTab === 'profile' && !isAnyOverlayOpen && (
             <div style={{ padding: '0.5rem', width: '100%', maxWidth: '1100px', margin: '0 auto' }}>
               <form onSubmit={handleProfileUpdate} style={{ width: '100%' }}>
@@ -1986,7 +1996,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     >
                       <div style={{ width: '96px', height: '96px', borderRadius: '50%', border: '4px solid #eff6ff', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(11, 117, 179, 0.2)', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {user?.profile_picture ? (
-                          <img src={user.profile_picture} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <img src={resolveMediaUrl(user.profile_picture)} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
                           <div style={{ width: '100%', height: '100%', background: '#0b75b3', color: '#fff', fontWeight: 800, fontSize: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             {getUserInitials(user, 'U')}
@@ -2132,7 +2142,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
                             setProfileForm({ ...profileForm, phone_no: cleaned });
                           }}
-                          placeholder="+91 98765 43210" 
+                          placeholder="Enter 10 digit phone number" 
                           style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                           onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
                           onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}

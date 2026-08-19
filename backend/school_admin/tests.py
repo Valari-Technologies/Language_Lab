@@ -139,8 +139,8 @@ class BulkUploadAPITests(TestCase):
     def test_teacher_uploading_student_sheet_allowed(self):
         # Teacher uploads valid student sheet with password strength validated
         excel_file = create_mock_excel(
-            ["fullname", "rollno", "grade", "section", "username", "password", "email"],
-            [["Student One", "roll1", "grade1", "sec1", "student_new_1", "SecurePass@123", "student1@edu.com"]]
+            ["fullname", "rollno", "grade", "section", "username", "password", "email", "academic_year"],
+            [["Student One", "roll1", "grade1", "sec1", "student_new_1", "SecurePass@123", "student1@edu.com", "2025 - 2026"]]
         )
         response = self.client.post(
             self.url,
@@ -156,8 +156,8 @@ class BulkUploadAPITests(TestCase):
     def test_school_admin_upload_teachers_and_students_allowed(self):
         # 1. School Admin uploads teachers
         excel_file_teacher = create_mock_excel(
-            ["name", "email", "qualification", "password"],
-            [["Teacher New One", "teacher_new_1@school.com", "M.A. English", "SecurePass@123"]]
+            ["name", "email", "username", "password", "phone_no", "qualification", "class", "section", "academic_year"],
+            [["Teacher New One", "teacher_new_1@school.com", "teacher_new_1", "SecurePass@123", "9876543210", "M.A. English", "Class 6", "A", "2025 - 2026"]]
         )
         response_t = self.client.post(
             self.url,
@@ -166,12 +166,12 @@ class BulkUploadAPITests(TestCase):
         )
         self.assertEqual(response_t.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response_t.data["created"], 1)
-        self.assertTrue(Teacher.objects.filter(user__username="teacher_new_1@school.com", school=self.school_a).exists())
+        self.assertTrue(Teacher.objects.filter(user__username="teacher_new_1", school=self.school_a).exists())
 
         # 2. School Admin uploads students
         excel_file_student = create_mock_excel(
-            ["fullname", "rollno", "grade", "section", "username", "password"],
-            [["Student Two", "roll2", "grade2", "sec2", "student_new_2", "SecurePass@123"]]
+            ["fullname", "rollno", "grade", "section", "username", "password", "email", "academic_year"],
+            [["Student Two", "roll2", "grade2", "sec2", "student_new_2", "SecurePass@123", "student2@edu.com", "2025 - 2026"]]
         )
         response_s = self.client.post(
             self.url,
@@ -208,8 +208,8 @@ class BulkUploadAPITests(TestCase):
     def test_school_tenant_isolation_enforcement(self):
         # School Admin A tries to link a new teacher to Class B (which belongs to School B)
         excel_file = create_mock_excel(
-            ["name", "email", "class_id", "password"],
-            [["Teacher Isolated", "t_isolated_1@edu.com", self.class_b.class_id, "SecurePass@123"]]
+            ["name", "email", "username", "password", "phone_no", "qualification", "class", "section", "academic_year", "class_id"],
+            [["Teacher Isolated", "t_isolated_1@edu.com", "t_isolated_1", "SecurePass@123", "9876543210", "B.Ed", "Class 6", "A", "2025 - 2026", self.class_b.class_id]]
         )
         excel_file.name = "data.xlsx"
         response = self.client.post(
@@ -223,7 +223,7 @@ class BulkUploadAPITests(TestCase):
         self.assertIn("does not exist or does not belong to this school", response.data["errors"][0]["error"])
         
         # Verify no orphan user created
-        self.assertFalse(User.objects.filter(username="t_isolated_1@edu.com").exists())
+        self.assertFalse(User.objects.filter(username="t_isolated_1").exists())
 
     def test_partial_success_and_transaction_rollback(self):
         # Create an existing user to trigger duplicate email error on Row 3
@@ -234,12 +234,12 @@ class BulkUploadAPITests(TestCase):
         # Row 4: Missing email field (Fails)
         # Row 5: Valid
         excel_file = create_mock_excel(
-            ["name", "email", "password"],
+            ["name", "email", "username", "password", "phone_no", "qualification", "class", "section", "academic_year"],
             [
-                ["Teacher Valid 1", "t_valid_1@edu.com", "SecurePass@123"],
-                ["Teacher Duplicate", "t_duplicate@edu.com", "SecurePass@123"],
-                ["Teacher Missing Email", "", ""],
-                ["Teacher Valid 2", "t_valid_2@edu.com", "SecurePass@123"]
+                ["Teacher Valid 1", "t_valid_1@edu.com", "t_valid_1", "SecurePass@123", "9876543210", "B.Ed", "Class 6", "A", "2025 - 2026"],
+                ["Teacher Duplicate", "t_duplicate@edu.com", "t_dup", "SecurePass@123", "9876543210", "B.Ed", "Class 6", "A", "2025 - 2026"],
+                ["Teacher Missing Email", "", "", "", "", "", "", "", ""],
+                ["Teacher Valid 2", "t_valid_2@edu.com", "t_valid_2", "SecurePass@123", "9876543210", "B.Ed", "Class 6", "A", "2025 - 2026"]
             ]
         )
         excel_file.name = "data.xlsx"
@@ -258,12 +258,12 @@ class BulkUploadAPITests(TestCase):
         self.assertEqual(response.data["errors"][1]["row"], 4)
         
         # Verify valid users exist and failed users do not exist
-        self.assertTrue(User.objects.filter(username="t_valid_1@edu.com").exists())
-        self.assertTrue(User.objects.filter(username="t_valid_2@edu.com").exists())
+        self.assertTrue(User.objects.filter(username="t_valid_1").exists())
+        self.assertTrue(User.objects.filter(username="t_valid_2").exists())
 
     def test_super_admin_bypass_and_school_id_requirement(self):
         # 1. Super Admin upload without school_id (Fails)
-        excel_file = create_mock_excel(["name", "email", "password"], [["Super Teacher", "t_super_1@edu.com", "SecurePass@123"]])
+        excel_file = create_mock_excel(["name", "email", "username", "password", "phone_no", "qualification", "class", "section", "academic_year"], [["Super Teacher", "t_super_1@edu.com", "t_super_1", "SecurePass@123", "9876543210", "B.Ed", "Class 6", "A", "2025 - 2026"]])
         excel_file.name = "data.xlsx"
         response_fail = self.client.post(
             self.url,
@@ -286,7 +286,7 @@ class BulkUploadAPITests(TestCase):
         )
         self.assertEqual(response_success.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response_success.data["created"], 1)
-        self.assertTrue(Teacher.objects.filter(user__username="t_super_1@edu.com", school=self.school_a).exists())
+        self.assertTrue(Teacher.objects.filter(user__username="t_super_1", school=self.school_a).exists())
 
     def test_school_bulk_upload_success(self):
         headers = ["schoolname", "email", "password", "admin name", "location"]
