@@ -1402,7 +1402,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         tags: experienceForm.tags || [],
         thumbnail: experienceForm.thumbnail || '',
         experience_type: experienceForm.experience_type || 'LESSON',
-        mastery_threshold: experienceForm.experience_type === 'ASSESSMENT' ? (parseInt(experienceForm.mastery_threshold) || 70) : 70
+        mastery_threshold: parseInt(experienceForm.mastery_threshold) || 70
       };
 
       let res;
