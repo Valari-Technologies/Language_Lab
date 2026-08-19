@@ -114,12 +114,12 @@ class BulkUploadAPITests(TestCase):
         self.url = reverse("bulk-upload")
 
     def test_unauthenticated_upload_rejected(self):
-        excel_file = create_mock_excel(["fullname", "rollno", "grade", "section"], [["s1", "r1", "g1", "sec1"]])
+        excel_file = create_mock_excel(["fullname", "class", "section", "roll no", "status", "academy year"], [["s1", "g1", "sec1", "r1", "active", "2025 - 2026"]])
         response = self.client.post(self.url, {"file": excel_file, "upload_type": "student"})
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_student_upload_denied(self):
-        excel_file = create_mock_excel(["fullname", "rollno", "grade", "section"], [["s1", "r1", "g1", "sec1"]])
+        excel_file = create_mock_excel(["fullname", "class", "section", "roll no", "status", "academy year"], [["s1", "g1", "sec1", "r1", "active", "2025 - 2026"]])
         response = self.client.post(
             self.url,
             {"file": excel_file, "upload_type": "student"},
@@ -139,8 +139,8 @@ class BulkUploadAPITests(TestCase):
     def test_teacher_uploading_student_sheet_allowed(self):
         # Teacher uploads valid student sheet with password strength validated
         excel_file = create_mock_excel(
-            ["fullname", "rollno", "grade", "section", "username", "password", "email", "academic_year"],
-            [["Student One", "roll1", "grade1", "sec1", "student_new_1", "SecurePass@123", "student1@edu.com", "2025 - 2026"]]
+            ["fullname", "class", "section", "roll no", "status", "academy year"],
+            [["Student One", "grade1", "sec1", "roll1", "active", "2025 - 2026"]]
         )
         response = self.client.post(
             self.url,
@@ -150,8 +150,8 @@ class BulkUploadAPITests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["created"], 1)
         self.assertEqual(response.data["failed"], 0)
-        self.assertTrue(User.objects.filter(username="student_new_1").exists())
-        self.assertTrue(Student.objects.filter(user__username="student_new_1", school=self.school_a).exists())
+        self.assertTrue(User.objects.filter(username="studentone").exists())
+        self.assertTrue(Student.objects.filter(user__username="studentone", school=self.school_a).exists())
 
     def test_school_admin_upload_teachers_and_students_allowed(self):
         # 1. School Admin uploads teachers
@@ -170,8 +170,8 @@ class BulkUploadAPITests(TestCase):
 
         # 2. School Admin uploads students
         excel_file_student = create_mock_excel(
-            ["fullname", "rollno", "grade", "section", "username", "password", "email", "academic_year"],
-            [["Student Two", "roll2", "grade2", "sec2", "student_new_2", "SecurePass@123", "student2@edu.com", "2025 - 2026"]]
+            ["fullname", "class", "section", "roll no", "status", "academy year"],
+            [["Student Two", "grade2", "sec2", "roll2", "active", "2025 - 2026"]]
         )
         response_s = self.client.post(
             self.url,
@@ -180,7 +180,7 @@ class BulkUploadAPITests(TestCase):
         )
         self.assertEqual(response_s.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response_s.data["created"], 1)
-        self.assertTrue(Student.objects.filter(user__username="student_new_2", school=self.school_a).exists())
+        self.assertTrue(Student.objects.filter(user__username="studenttwo", school=self.school_a).exists())
 
     def test_invalid_file_infrastructure_rejected(self):
         # 1. Invalid file extension

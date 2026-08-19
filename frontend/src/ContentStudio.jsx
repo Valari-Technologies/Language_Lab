@@ -1233,6 +1233,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     mastery_threshold: 70
   });
 
+  const [showActivityModal, setShowActivityModal] = useState(false);
   const [activityForm, setActivityForm] = useState({
     title: '',
     description: '',
@@ -1356,7 +1357,22 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         setOutcomesText(textStr);
         setIsNewExperience(false);
         if (changeViewToBuilder) {
-          setView('experience-builder');
+          if (data.experience_type === 'ASSESSMENT') {
+            const defaultActivity = (data.activities || []).find(a => 
+              (a.skills && a.skills.some(s => s.name === 'assessment' || s === 'assessment')) || 
+              (a.activity_type === 'ASSESSMENT')
+            );
+            if (defaultActivity) {
+              setSelectedActivity(defaultActivity);
+              setScreens(defaultActivity.screens || []);
+              setView('screen-builder');
+              setIsEditingScreen(false);
+            } else {
+              setView('experience-builder');
+            }
+          } else {
+            setView('experience-builder');
+          }
         }
       } else {
         showFeedback('Failed to load experience details', 'error');
@@ -1422,6 +1438,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         showFeedback('Experience saved successfully');
         loadExperiencesData();
         loadRecentExperiences();
+        const detailRes = await apiFetch(`/api/v1/content/experiences/${data.id}/`);
+        if (detailRes.ok) {
+          return await detailRes.json();
+        }
+        return data;
       } else {
         const errData = await res.json().catch(() => ({}));
         showFeedback(extractErrorMessage(errData, 'Failed to save experience'), 'error');
@@ -1576,13 +1597,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         });
         const activityScreens = data.screens || [];
         setScreens(activityScreens);
+        if (targetView === 'activity-builder') {
+          setShowActivityModal(true);
+        }
         if (targetView === 'screen-builder') {
-          if (activityScreens.length > 0) {
-            loadScreenDetail(activityScreens[0]);
-          } else {
-            setView('screen-builder');
-            setIsEditingScreen(false);
-          }
+          setView('screen-builder');
+          setIsEditingScreen(false);
         } else if (targetView) {
           setView(targetView);
         }
@@ -1602,7 +1622,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
     setActionLoading(true);
     try {
-      const selectedSkillNames = Array.isArray(activityForm.skills) ? activityForm.skills : [];
+      let selectedSkillNames = Array.isArray(activityForm.skills) ? activityForm.skills : [];
+      if (selectedExperience?.experience_type === 'ASSESSMENT') {
+        selectedSkillNames = ['assessment'];
+      }
       if (selectedSkillNames.length === 0) {
         showFeedback('Please select a Module for this activity first.', 'error');
         setActionLoading(false);
@@ -4474,7 +4497,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               { key: 'preview', label: 'Runtime Preview', icon: <FiPlay /> },
               { key: 'publish', label: 'Publish Center', icon: <FiDownload /> },
               { key: 'profile', label: 'Profile Settings', icon: <FiUser /> },
-            ].map(item => (
+            ].filter(item => {
+              if (selectedExperience?.experience_type === 'ASSESSMENT' && item.key === 'activity-builder') {
+                return false;
+              }
+              return true;
+            }).map(item => (
               <button
                 key={item.key}
                 onClick={() => {
@@ -4853,7 +4881,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
                   
                   <div className="cs-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem' }}>
                       <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Lesson Details</h3>
                     </div>
 
@@ -5267,7 +5295,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           {view === 'experience-builder' && (
             <>
               {/* Top header - breadcrumb only for new experience */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   {isNewExperience && (
                     <button className="cs-icon-btn" onClick={() => setView('experiences')}><FiArrowLeft /></button>
@@ -5307,11 +5335,37 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         <input className="cs-form-input" type="text" value={experienceForm.title}
                           onChange={e => setExperienceForm({ ...experienceForm, title: e.target.value })} />
                       </div>
-                      <div className="cs-form-group">
-                        <label className="cs-form-label">Description <span style={{ color: '#ef4444' }}>*</span></label>
-                        <textarea className="cs-form-input" style={{ minHeight: '75px', resize: 'vertical' }} value={experienceForm.description}
-                          onChange={e => setExperienceForm({ ...experienceForm, description: e.target.value })} />
-                        <div style={{ textAlign: 'right', fontSize: '0.68rem', color: '#94a3b8', marginTop: 4 }}>{experienceForm.description?.length || 0} / 200</div>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div className="cs-form-group">
+                          <label className="cs-form-label">Experience Type <span style={{ color: '#ef4444' }}>*</span></label>
+                          <select className="cs-form-input" value={experienceForm.experience_type || 'LESSON'}
+                            onChange={e => setExperienceForm({ ...experienceForm, experience_type: e.target.value })}>
+                            <option value="LESSON">Lesson</option>
+                            <option value="ASSESSMENT">Assessment</option>
+                          </select>
+                        </div>
+                        <div className="cs-form-group">
+                          <label className="cs-form-label">Grade <span style={{ color: '#ef4444' }}>*</span></label>
+                          <select className="cs-form-input" value={experienceForm.grade}
+                            onChange={e => setExperienceForm({ ...experienceForm, grade: e.target.value })}>
+                            <option value="">Select Grade</option>
+                            {gradesList.length > 0 ? (
+                              gradesList.map(g => (
+                                <option key={g.id} value={g.id}>{g.grade_name}</option>
+                              ))
+                            ) : (
+                              <>
+                                <option value="40">Grade 3</option>
+                                <option value="41">Grade 4</option>
+                                <option value="42">Grade 5</option>
+                                <option value="17">Grade 6</option>
+                                <option value="43">Grade 7</option>
+                                <option value="44">Grade 8</option>
+                              </>
+                            )}
+                          </select>
+                        </div>
                       </div>
                     </div>
 
@@ -5344,35 +5398,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }}>
                     <div className="cs-form-group">
-                      <label className="cs-form-label">Experience Type <span style={{ color: '#ef4444' }}>*</span></label>
-                      <select className="cs-form-input" value={experienceForm.experience_type || 'LESSON'}
-                        onChange={e => setExperienceForm({ ...experienceForm, experience_type: e.target.value })}>
-                        <option value="LESSON">Lesson</option>
-                        <option value="ASSESSMENT">Assessment</option>
-                      </select>
-                    </div>
-                    <div className="cs-form-group">
-                      <label className="cs-form-label">Grade <span style={{ color: '#ef4444' }}>*</span></label>
-                      <select className="cs-form-input" value={experienceForm.grade}
-                        onChange={e => setExperienceForm({ ...experienceForm, grade: e.target.value })}>
-                        <option value="">Select Grade</option>
-                        {gradesList.length > 0 ? (
-                          gradesList.map(g => (
-                            <option key={g.id} value={g.id}>{g.grade_name}</option>
-                          ))
-                        ) : (
-                          <>
-                            <option value="40">Grade 3</option>
-                            <option value="41">Grade 4</option>
-                            <option value="42">Grade 5</option>
-                            <option value="17">Grade 6</option>
-                            <option value="43">Grade 7</option>
-                            <option value="44">Grade 8</option>
-                          </>
-                        )}
-                      </select>
-                    </div>
-                    <div className="cs-form-group">
                       <label className="cs-form-label">Difficulty <span style={{ color: '#ef4444' }}>*</span></label>
                       <select className="cs-form-input" value={experienceForm.difficulty}
                         onChange={e => setExperienceForm({ ...experienceForm, difficulty: e.target.value })}>
@@ -5381,9 +5406,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         <option value="Master">Master</option>
                       </select>
                     </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }}>
                     <div className="cs-form-group">
                       <label className="cs-form-label">Estimated Duration (min)</label>
                       <input
@@ -5399,66 +5421,98 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       />
                     </div>
                     <div className="cs-form-group">
-                      <label className="cs-form-label">Language</label>
-                      <div style={{
-                        display: 'flex', alignItems: 'center', gap: '0.5rem',
-                        padding: '0.45rem 0.75rem',
-                        background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px',
-                        fontSize: '0.82rem', color: '#374151', fontWeight: 600, height: '36px'
-                      }}>
-                        🌐 English
-                        <FiLock style={{ marginLeft: 'auto', color: '#94a3b8', fontSize: '0.75rem' }} />
-                      </div>
+                      <label className="cs-form-label">Mastery Threshold (%)</label>
+                      <input
+                        className="cs-form-input"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={experienceForm.mastery_threshold === undefined ? 70 : experienceForm.mastery_threshold}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setExperienceForm({
+                            ...experienceForm,
+                            mastery_threshold: val === '' ? '' : Math.min(100, Math.max(0, parseInt(val) || 0))
+                          });
+                        }}
+                      />
                     </div>
-                    {experienceForm.experience_type === 'ASSESSMENT' ? (
-                      <div className="cs-form-group">
-                        <label className="cs-form-label">Mastery Threshold (%)</label>
-                        <input
-                          className="cs-form-input"
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={experienceForm.mastery_threshold === undefined ? 70 : experienceForm.mastery_threshold}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setExperienceForm({
-                              ...experienceForm,
-                              mastery_threshold: val === '' ? '' : Math.min(100, Math.max(0, parseInt(val) || 0))
-                            });
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="cs-form-group" style={{ opacity: 0, pointerEvents: 'none' }}></div>
-                    )}
                   </div>
 
-                  {/* Learning outcomes - simple textarea */}
-                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
-                    <label className="cs-form-label" style={{ display: 'block', marginBottom: '0.5rem' }}>Learning Outcomes</label>
-                    <textarea
-                      className="cs-form-input"
-                      placeholder="Enter each learning outcome on a new line..."
-                      style={{ minHeight: '90px', resize: 'vertical', fontSize: '0.82rem', lineHeight: 1.6, fontFamily: 'inherit' }}
-                      value={outcomesText}
-                      onChange={e => {
-                        setOutcomesText(e.target.value);
-                        // Also keep learningOutcomes in sync as structured objects for Save
-                        const lines = e.target.value.split('\n').filter(l => l.trim() !== '');
-                        setLearningOutcomes(lines.map((l, i) => ({ id: i, text: l })));
-                      }}
-                    />
-                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '4px' }}>One outcome per line. Press Enter to add more.</div>
+                                    {/* Description & Learning Outcomes in a 2-column row (No top/bottom border line) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', paddingTop: '1rem' }}>
+                    <div className="cs-form-group">
+                      <label className="cs-form-label">Description <span style={{ color: '#ef4444' }}>*</span></label>
+                      <textarea className="cs-form-input" style={{ minHeight: '90px', resize: 'vertical' }} value={experienceForm.description}
+                        onChange={e => setExperienceForm({ ...experienceForm, description: e.target.value })} />
+                      <div style={{ textAlign: 'right', fontSize: '0.68rem', color: '#94a3b8', marginTop: 4 }}>{experienceForm.description?.length || 0} / 200</div>
+                    </div>
+
+                    <div className="cs-form-group">
+                      <label className="cs-form-label">Learning Outcomes</label>
+                      <textarea
+                        className="cs-form-input"
+                        placeholder="Enter each learning outcome on a new line..."
+                        style={{ minHeight: '90px', resize: 'vertical', fontSize: '0.82rem', lineHeight: 1.6, fontFamily: 'inherit' }}
+                        value={outcomesText}
+                        onChange={e => {
+                          setOutcomesText(e.target.value);
+                          const lines = e.target.value.split('\n').filter(l => l.trim() !== '');
+                          setLearningOutcomes(lines.map((l, i) => ({ id: i, text: l })));
+                        }}
+                      />
+                      <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '4px' }}>One outcome per line. Press Enter to add more.</div>
+                    </div>
                   </div>
 
-                  {/* Save button at the bottom */}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '1.25rem', marginTop: '0.5rem' }}>
+                  {/* Save button at the bottom (No top border line) */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '1.25rem', marginTop: '0.5rem' }}>
                     <button
                       onClick={async () => {
-                        await handleSaveExperience();
-                        setSelectedActivity(null);
-                        setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
-                        setView('activity-builder');
+                        const savedExp = await handleSaveExperience();
+                        if (savedExp) {
+                          const expType = savedExp.experience_type || 'LESSON';
+                          if (expType === 'ASSESSMENT') {
+                            let defaultActivity = (savedExp.activities || []).find(a => 
+                              (a.skills && a.skills.some(s => s.name === 'assessment' || s === 'assessment')) || 
+                              (a.activity_type === 'ASSESSMENT')
+                            );
+                            if (!defaultActivity) {
+                              const skillIds = activitySkillOptions
+                                .filter(s => s.name === 'assessment')
+                                .map(s => s.id);
+                              const payload = {
+                                experience: savedExp.id,
+                                title: 'Assessment',
+                                description: 'Default assessment activity',
+                                learning_objective: 'Assessment',
+                                estimated_duration: savedExp.estimated_duration || 30,
+                                mastery_threshold: savedExp.mastery_threshold || 70,
+                                skill_ids: skillIds,
+                                activity_type: 'ASSESSMENT'
+                              };
+                              const createRes = await apiFetch('/api/v1/content/activities/', {
+                                method: 'POST',
+                                body: JSON.stringify(payload)
+                              });
+                              if (createRes.ok) {
+                                defaultActivity = await createRes.json();
+                              }
+                            }
+                            if (defaultActivity) {
+                              setSelectedActivity(defaultActivity);
+                              setScreens(defaultActivity.screens || []);
+                              setView('screen-builder');
+                              setIsEditingScreen(false);
+                            } else {
+                              showFeedback('Failed to initialize assessment activity.', 'error');
+                            }
+                          } else {
+                            setSelectedActivity(null);
+                            setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
+                            setView('activity-builder');
+                          }
+                        }
                       }}
                       style={{
                         display: 'flex', alignItems: 'center', gap: '6px',
@@ -5480,7 +5534,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           {view === 'activity-builder' && (
             <>
               {/* Activity Builder header — breadcrumb only when experience is saved */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   {selectedExperience?.id && (
                     <button className="cs-icon-btn" onClick={() => setView('experience-builder')}><FiArrowLeft /></button>
@@ -5510,227 +5564,229 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               </div>
 
               {/* Layout grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '1.25rem', alignItems: 'start' }}>
-                {/* LEFT COLUMN: Activity Form */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.25rem', alignItems: 'start' }}>
+                {/* RIGHT COLUMN: Activities */}
+                {selectedExperience?.experience_type !== 'ASSESSMENT' ? (
                   <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                      {/* Activity Title field removed - Module serves as activity designation */}
-                      <div className="cs-form-group" style={{ gridColumn: '1 / -1' }}>
-                        <label className="cs-form-label">Modules</label>
-                        <select
-                          className="cs-form-input"
-                          style={{ height: '36px', fontSize: '0.78rem', borderRadius: '8px', border: '1px solid #cbd5e1', padding: '0 0.5rem', background: '#fff' }}
-                          value={Array.isArray(activityForm.skills) && activityForm.skills.length > 0 ? activityForm.skills[0] : ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setActivityForm({ ...activityForm, skills: val ? [val] : [] });
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
+                      <div>
+                        <h3 className="cs-card-title" style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0 }}>Activities</h3>
+                        {selectedExperience?.experience_type !== 'ASSESSMENT' && (
+                          <div className="cs-card-sub" style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>
+                            Sequence of activities (1 to 5 allowed. Current: {activities.length}/5)
+                          </div>
+                        )}
+                      </div>
+                      {selectedExperience?.experience_type !== 'ASSESSMENT' && (
+                        <button
+                          type="button"
+                          disabled={activities.length >= 5}
+                          onClick={() => {
+                            if (activities.length >= 5) return;
+                            setSelectedActivity(null);
+                            setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
+                            setScreens([]);
+                            setShowActivityModal(true);
+                          }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '4px',
+                            background: activities.length >= 5 ? '#e2e8f0' : '#0b57d0',
+                            color: activities.length >= 5 ? '#94a3b8' : '#ffffff',
+                            border: 'none', borderRadius: '6px',
+                            padding: '0.35rem 0.75rem', fontWeight: 700, fontSize: '0.75rem',
+                            cursor: activities.length >= 5 ? 'not-allowed' : 'pointer'
                           }}
                         >
-                          <option value="">-- Choose Module --</option>
-                          {activitySkillOptions.length > 0 ? (
-                            activitySkillOptions.map(skill => (
-                              <option key={skill.id} value={skill.name}>
-                                {skill.name.charAt(0).toUpperCase() + skill.name.slice(1)}
-                              </option>
-                            ))
-                          ) : (
-                            ['listening', 'speaking', 'reading', 'writing', 'grammar', 'phonetics', 'assessment'].map(name => (
-                              <option key={name} value={name}>
-                                {name.charAt(0).toUpperCase() + name.slice(1)}
-                              </option>
-                            ))
-                          )}
-                        </select>
-                      </div>
-                      <div className="cs-form-group">
-                        <label className="cs-form-label">Description</label>
-                        <textarea className="cs-form-input" style={{ minHeight: '65px' }} value={activityForm.description}
-                          onChange={e => setActivityForm({ ...activityForm, description: e.target.value })} />
-                        <div style={{ textAlign: 'right', fontSize: '0.68rem', color: '#94a3b8', marginTop: 2 }}>{activityForm.description?.length || 0} / 300</div>
-                      </div>
-                      <div className="cs-form-group">
-                        <label className="cs-form-label">Learning Objective</label>
-                        <textarea className="cs-form-input" style={{ minHeight: '65px' }} value={activityForm.objective}
-                          onChange={e => setActivityForm({ ...activityForm, objective: e.target.value })} />
-                        <div style={{ textAlign: 'right', fontSize: '0.68rem', color: '#94a3b8', marginTop: 2 }}>{activityForm.objective?.length || 0} / 300</div>
-                      </div>
+                          <FiPlus /> New
+                        </button>
+                      )}
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                      <div className="cs-form-group">
-                        <label className="cs-form-label">Estimated Duration (min)</label>
-                        <input
-                          className="cs-form-input"
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={activityForm.duration === 0 ? '' : activityForm.duration}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setActivityForm({ ...activityForm, duration: val === '' ? '' : Math.max(0, parseInt(val) || 0) });
-                          }}
-                        />
-                      </div>
-                      <div className="cs-form-group">
-                        <label className="cs-form-label">Mastery Threshold (%)</label>
-                        <input
-                          className="cs-form-input"
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="10"
-                          value={activityForm.mastery === 0 ? '' : activityForm.mastery}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (val === '') {
-                              setActivityForm({ ...activityForm, mastery: '' });
-                            } else {
-                              const parsed = parseInt(val) || 0;
-                              setActivityForm({ ...activityForm, mastery: Math.min(100, Math.max(0, parsed)) });
-                            }
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '1.25rem', borderTop: '1px solid #f1f5f9', paddingTop: '1.25rem' }}>
-                      <button
-                        onClick={handleSaveActivity}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: '6px',
-                          background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
-                          color: '#ffffff', border: 'none', borderRadius: '10px',
-                          padding: '0.5rem 1.25rem', fontWeight: 700, fontSize: '0.82rem',
-                          cursor: 'pointer', boxShadow: '0 2px 8px rgba(11,87,208,0.25)'
-                        }}
-                      >
-                        Save Activity
-                      </button>
-                    </div>
-                  </div>
-                </div>
 
-                {/* RIGHT COLUMN: Activities */}
-                <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
-                    <div>
-                      <h3 className="cs-card-title" style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0 }}>Activities</h3>
-                      <div className="cs-card-sub" style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>
-                        Sequence of activities (1 to 5 allowed. Current: {activities.length}/5)
+                    {activities.length === 0 ? (
+                      <div style={{ fontSize: '0.78rem', color: '#64748b', textAlign: 'center', padding: '1.5rem', border: '1.5px dashed #cbd5e1', borderRadius: '8px' }}>
+                        No activities added yet. Save the current form above to add your first activity.
                       </div>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={activities.length >= 5}
-                      onClick={() => {
-                        if (activities.length >= 5) return;
-                        setSelectedActivity(null);
-                        setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
-                        setScreens([]);
-                      }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '4px',
-                        background: activities.length >= 5 ? '#e2e8f0' : '#0b57d0',
-                        color: activities.length >= 5 ? '#94a3b8' : '#ffffff',
-                        border: 'none', borderRadius: '6px',
-                        padding: '0.35rem 0.75rem', fontWeight: 700, fontSize: '0.75rem',
-                        cursor: activities.length >= 5 ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      <FiPlus /> New
-                    </button>
-                  </div>
-
-                  {activities.length === 0 ? (
-                    <div style={{ fontSize: '0.78rem', color: '#64748b', textAlign: 'center', padding: '1.5rem', border: '1.5px dashed #cbd5e1', borderRadius: '8px' }}>
-                      No activities added yet. Save the current form above to add your first activity.
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                      {activities.map((act, index) => {
-                        const isSelected = selectedActivity?.id === act.id;
-                        return (
-                          <div
-                            key={act.id || index}
-                            onClick={() => loadActivityDetail(act)}
-                            data-testid="activity-card"
-                            data-activity-title={act.title}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '1rem',
-                              padding: '0.75rem 1rem',
-                              borderRadius: '10px',
-                              border: isSelected ? '1.5px solid #0b57d0' : '1px solid #e2e8f0',
-                              background: isSelected ? '#f0f9ff' : '#ffffff',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s'
-                            }}
-                          >
-                            {/* Reorder Arrows */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }} onClick={e => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                onClick={() => handleMoveActivity(index, -1)}
-                                disabled={index === 0}
-                                style={{ background: 'none', border: 'none', cursor: index === 0 ? 'not-allowed' : 'pointer', color: index === 0 ? '#cbd5e1' : '#64748b', padding: '2px', display: 'flex' }}
-                              >
-                                <FiChevronUp />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleMoveActivity(index, 1)}
-                                disabled={index === activities.length - 1}
-                                style={{ background: 'none', border: 'none', cursor: index === activities.length - 1 ? 'not-allowed' : 'pointer', color: index === activities.length - 1 ? '#cbd5e1' : '#64748b', padding: '2px', display: 'flex' }}
-                              >
-                                <FiChevronDown />
-                              </button>
-                            </div>
-
-                            {/* Index badge */}
-                            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: isSelected ? '#0b57d0' : '#f1f5f9', color: isSelected ? '#ffffff' : '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.82rem' }}>
-                              {index + 1}
-                            </div>
-
-                            {/* Info */}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>{act.title}</span>
-                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>({act.estimated_duration || 5} min)</span>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        {activities.map((act, index) => {
+                          const isSelected = selectedActivity?.id === act.id;
+                          return (
+                            <div
+                              key={act.id || index}
+                              onClick={() => loadActivityDetail(act, 'screen-builder')}
+                              data-testid="activity-card"
+                              data-activity-title={act.title}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '1rem',
+                                padding: '0.75rem 1rem',
+                                borderRadius: '10px',
+                                border: isSelected ? '1.5px solid #0b57d0' : '1px solid #e2e8f0',
+                                background: isSelected ? '#f0f9ff' : '#ffffff',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s'
+                              }}
+                            >
+                              {/* Reorder Arrows */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }} onClick={e => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveActivity(index, -1)}
+                                  disabled={index === 0}
+                                  style={{ background: 'none', border: 'none', cursor: index === 0 ? 'not-allowed' : 'pointer', color: index === 0 ? '#cbd5e1' : '#64748b', padding: '2px', display: 'flex' }}
+                                >
+                                  <FiChevronUp />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveActivity(index, 1)}
+                                  disabled={index === activities.length - 1}
+                                  style={{ background: 'none', border: 'none', cursor: index === activities.length - 1 ? 'not-allowed' : 'pointer', color: index === activities.length - 1 ? '#cbd5e1' : '#64748b', padding: '2px', display: 'flex' }}
+                                >
+                                  <FiChevronDown />
+                                </button>
                               </div>
 
-                              <p style={{ fontSize: '0.72rem', color: '#64748b', margin: '2px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {act.learning_objective || act.description || 'No objective set.'}
-                              </p>
-                            </div>
+                              {/* Index badge */}
+                              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: isSelected ? '#0b57d0' : '#f1f5f9', color: isSelected ? '#ffffff' : '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.82rem' }}>
+                                {index + 1}
+                              </div>
 
-                            {/* Actions */}
-                            <div style={{ display: 'flex', gap: '0.25rem' }} onClick={e => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                className="cs-icon-btn"
-                                onClick={() => loadActivityDetail(act, 'screen-builder')}
-                                title="Edit Activity"
-                                style={{ padding: '4px' }}
-                              >
-                                <FiEdit2 />
-                              </button>
-                              <button
-                                type="button"
-                                className="cs-icon-btn"
-                                onClick={() => handleDeleteActivity(act.id)}
-                                title="Delete Activity"
-                                style={{ padding: '4px', color: '#ef4444' }}
-                              >
-                                <FiTrash2 />
-                              </button>
+                              {/* Info */}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>{act.title}</span>
+                                  <span style={{ fontSize: '0.7rem', color: '#64748b' }}>({act.estimated_duration || 5} min)</span>
+                                </div>
+                              </div>
+
+                              {/* Actions */}
+                              <div style={{ display: 'flex', gap: '0.25rem' }} onClick={e => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  className="cs-icon-btn"
+                                  onClick={() => loadActivityDetail(act, 'activity-builder')}
+                                  title="Edit Activity"
+                                  style={{ padding: '4px' }}
+                                >
+                                  <FiEdit2 />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="cs-icon-btn"
+                                  onClick={() => handleDeleteActivity(act.id)}
+                                  title="Delete Activity"
+                                  style={{ padding: '4px', color: '#ef4444' }}
+                                >
+                                  <FiTrash2 />
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {/* Activity Settings Modal */}
+                {showActivityModal && (
+                  <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)',
+                    backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999
+                  }}>
+                    <div style={{
+                      background: '#ffffff', borderRadius: '16px', width: '450px',
+                      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                      padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                          {selectedActivity ? 'Edit Activity Settings' : 'Create New Activity'}
+                        </h3>
+                        <button
+                          onClick={() => setShowActivityModal(false)}
+                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', fontSize: '1.1rem' }}
+                        >
+                          <FiX />
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <div className="cs-form-group">
+                          <label className="cs-form-label">Modules</label>
+                          <select
+                            className="cs-form-input"
+                            style={{ height: '36px', fontSize: '0.78rem', borderRadius: '8px', border: '1px solid #cbd5e1', padding: '0 0.5rem', background: '#fff' }}
+                            value={Array.isArray(activityForm.skills) && activityForm.skills.length > 0 ? activityForm.skills[0] : ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setActivityForm({ ...activityForm, skills: val ? [val] : [] });
+                            }}
+                          >
+                            <option value="">-- Choose Module --</option>
+                            {activitySkillOptions.length > 0 ? (
+                              activitySkillOptions
+                                .filter(skill => skill.name !== 'assessment')
+                                .map(skill => (
+                                  <option key={skill.id} value={skill.name}>
+                                    {skill.name.charAt(0).toUpperCase() + skill.name.slice(1)}
+                                  </option>
+                                ))
+                            ) : (
+                              ['listening', 'speaking', 'reading', 'writing', 'grammar', 'phonetics'].map(name => (
+                                <option key={name} value={name}>
+                                  {name.charAt(0).toUpperCase() + name.slice(1)}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                        </div>
+
+                        <div className="cs-form-group">
+                          <label className="cs-form-label">Estimated Duration (min)</label>
+                          <input
+                            className="cs-form-input"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={activityForm.duration === 0 ? '' : activityForm.duration}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setActivityForm({ ...activityForm, duration: val === '' ? '' : Math.max(0, parseInt(val) || 0) });
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+                        <button
+                          onClick={() => setShowActivityModal(false)}
+                          className="cs-btn-outline"
+                          style={{ padding: '0.45rem 1rem', fontSize: '0.8rem', borderRadius: '8px' }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={async () => {
+                            await handleSaveActivity();
+                            setShowActivityModal(false);
+                          }}
+                          style={{
+                            background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
+                            color: '#ffffff', border: 'none', borderRadius: '8px',
+                            padding: '0.45rem 1.25rem', fontWeight: 700, fontSize: '0.8rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Save Changes
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
-
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -7035,15 +7091,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         onChange={newUrl => handleUpdateBlockContent('url', newUrl)}
                                         actionLoading={actionLoading}
                                         setActionLoading={setActionLoading}
-                                        showFeedback={(msg, type) => {
-                                          if (type === 'error') {
-                                            setErrorMsg(msg);
-                                            setSuccessMsg('');
-                                          } else {
-                                            setSuccessMsg(msg);
-                                            setErrorMsg('');
-                                          }
-                                        }}
+                                        showFeedback={showFeedback}
                                       />
                                     </div>
                                   )}
@@ -8395,7 +8443,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minHeight: 'calc(100vh - 120px)' }}>
                 {/* Breadcrumbs and Top Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
                   <div>
                     <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
                       <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Lessons Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Lesson Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('activity-builder')}>{selectedActivity?.title || 'Activity Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Screen Builder Overview</span>
@@ -8464,11 +8512,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <div>
                         <span style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', fontWeight: 700 }}>Active Activity</span>
                         <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: '2px 0 0 0' }}>{selectedActivity.title}</h2>
-                        {selectedActivity.skills && selectedActivity.skills.length > 0 && (
-                          <div style={{ fontSize: '0.72rem', color: '#0b57d0', fontWeight: 600, marginTop: '2px', textTransform: 'capitalize' }}>
-                            Module: {typeof selectedActivity.skills[0] === 'object' ? selectedActivity.skills[0].name : selectedActivity.skills[0]}
-                          </div>
-                        )}
                       </div>
                       <div style={{ display: 'flex', gap: '1.5rem' }}>
                         <div style={{ textAlign: 'right' }}>
@@ -8658,7 +8701,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
              if (!previewPayload || !selectedExperience) {
                return (
                  <div style={{ padding: '0.5rem 1rem', background: 'transparent' }}>
-                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', paddingBottom: '0.5rem' }}>
                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
                        <button
                          className="cs-icon-btn"
@@ -9155,7 +9198,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           {view === 'publish' && (
             <>
               {/* Top Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.5rem' }}>
                 <div>
                   <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
                     <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Lesson Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Lesson'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Publish Center</span>
@@ -9880,7 +9923,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 }}
                 onClick={e => e.stopPropagation()}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem' }}>
                   <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span>AI Assistant</span>
                   </h3>

@@ -48,7 +48,10 @@ class ExperienceViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
 
     def get_permissions(self):
-        if self.action in ("destroy", "list", "retrieve", "preview", "activities"):
+        if self.action in ("list", "retrieve", "activities"):
+            from accounts.permissions import IsContentCreatorOrSuperAdminOrSchoolUser
+            return [IsAuthenticated(), IsContentCreatorOrSuperAdminOrSchoolUser()]
+        if self.action in ("destroy", "preview"):
             return [IsAuthenticated(), IsContentCreatorOrSuperAdmin()]
         return [IsAuthenticated(), IsContentCreator()]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]

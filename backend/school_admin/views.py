@@ -186,12 +186,20 @@ class BulkUploadAPIView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
         elif upload_type == "student":
-            required_cols = ["fullname", "grade", "section", "username", "password", "email", "academic_year"]
+            required_cols = ["fullname", "class", "section", "roll no", "status", "academy year"]
             for col in required_cols:
-                matched = any(col.replace("_", "").replace(" ", "") in h.replace("_", "").replace(" ", "") or (col == "fullname" and "name" in h) for h in headers)
+                norm_col = col.replace("_", "").replace(" ", "").lower()
+                matched = any(
+                    norm_col in h.replace("_", "").replace(" ", "").lower() or 
+                    (norm_col == "fullname" and "name" in h.lower()) or 
+                    (norm_col == "class" and "grade" in h.lower()) or
+                    (norm_col == "rollno" and "roll" in h.lower()) or
+                    (norm_col == "academyyear" and "academic" in h.lower())
+                    for h in headers
+                )
                 if not matched:
                     return Response(
-                        {"error": f"Missing required column header: '{col}' for student imports."},
+                        {"error": f"Missing required column header: '{col}' for student imports. Mandatory: fullname, class, section, roll no, status, academy year"},
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
@@ -422,35 +430,49 @@ class BulkUploadAPIView(APIView):
 
                         elif upload_type == "student":
                             fullname_val = get_val(row_data, "fullname", "full_name", "full name", "name", "student_name")
-                            grade_val = get_val(row_data, "grade", "class", "grade_name", "grade name")
+                            grade_val = get_val(row_data, "class", "grade", "grade_name", "grade name")
                             section_val = get_val(row_data, "section", "class_section", "class section")
-                            username_val = get_val(row_data, "username", "user", "user_name")
-                            password_val = get_val(row_data, "password", "pass")
-                            email_val = get_val(row_data, "email", "email_address", "email address")
-                            academic_year_val = get_val(row_data, "academic_year", "academic year", "year")
+                            roll_no_val = get_val(row_data, "roll_no", "roll no", "rollnumber", "roll number")
+                            status_val = get_val(row_data, "status", "is_active", "is active", "active")
+                            academic_year_val = get_val(row_data, "academy_year", "academy year", "academic_year", "academic year", "year")
 
                             if not fullname_val or not str(fullname_val).strip(): raise ValueError("fullname is required for student.")
-                            if not grade_val or not str(grade_val).strip(): raise ValueError("grade is required for student.")
+                            if not grade_val or not str(grade_val).strip(): raise ValueError("class/grade is required for student.")
                             if not section_val or not str(section_val).strip(): raise ValueError("section is required for student.")
-                            if not username_val or not str(username_val).strip(): raise ValueError("username is required for student.")
-                            if not password_val or not str(password_val).strip(): raise ValueError("password is required for student.")
-                            if not email_val or not str(email_val).strip(): raise ValueError("email is required for student.")
-                            if not academic_year_val or not str(academic_year_val).strip(): raise ValueError("academic_year is required for student.")
+                            if not roll_no_val or not str(roll_no_val).strip(): raise ValueError("roll no is required for student.")
+                            if status_val is None or not str(status_val).strip(): raise ValueError("status is required for student.")
+                            if not academic_year_val or not str(academic_year_val).strip(): raise ValueError("academy year is required for student.")
 
                             full_name = str(fullname_val).strip()
                             grade = str(grade_val).strip()
                             section = str(section_val).strip()
-                            username = str(username_val).strip()
-                            password = str(password_val).strip()
-                            email = str(email_val).strip()
+                            roll_no = str(roll_no_val).strip()
+                            status_str = str(status_val).strip().lower()
                             academic_year = str(academic_year_val).strip()
 
-                            if User.objects.filter(username=username).exists():
-                                raise ValueError(f"Username '{username}' already exists.")
+                            # Auto generate lms login code (username) from full name
+                            clean_name = "".join(ch for ch in full_name if ch.isalnum()).lower()
+                            if not clean_name:
+                                clean_name = "student"
+                            username = clean_name
+                            orig_username = username
+                            suffix = 1
+                            while User.objects.filter(username=username).exists():
+                                username = f"{orig_username}{suffix}"
+                                suffix += 1
+
+                            # Password defaults to username (or lms login code)
+                            password = username
+                            # Email defaults to username@lingualab.com
+                            email = f"{username}@lingualab.com"
+
+                            # Parse status (is_active)
+                            is_active = True
+                            if status_str in ["inactive", "false", "0", "no", "disabled"]:
+                                is_active = False
+
                             if User.objects.filter(email=email).exists():
                                 raise ValueError(f"A user with email '{email}' already exists.")
-
-                            roll_no = generate_roll_no(full_name)
 
                             # Create Django auth user
                             new_user = User.objects.create_user(
@@ -459,7 +481,7 @@ class BulkUploadAPIView(APIView):
                                 email=email,
                                 full_name=full_name,
                                 role=User.Role.STUDENT,
-                                is_active=True
+                                is_active=is_active
                             )
 
                             # Create Student profile record

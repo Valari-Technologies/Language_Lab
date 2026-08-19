@@ -146,3 +146,16 @@ class IsAuthenticatedOrLMSClient(BasePermission):
             return True
         return False
 
+
+class IsContentCreatorOrSuperAdminOrSchoolUser(BasePermission):
+    """
+    Grants access to CONTENT_CREATOR, SUPER_ADMIN, SCHOOL_ADMIN, TEACHER, and STUDENT users.
+    """
+    def has_permission(self, request, view):
+        return bool(
+            request.user and
+            request.user.is_authenticated and
+            (getattr(request.user, "role", None) in ["CONTENT_CREATOR", "SUPER_ADMIN", "SCHOOL_ADMIN", "TEACHER", "STUDENT"] or request.user.is_superuser)
+        )
+
+

@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   FiVolume2, FiImage, FiMonitor, FiFileText, FiEdit2, FiMic, 
   FiCheckCircle,
-  FiActivity, FiType, FiGrid
+  FiActivity, FiType, FiGrid, FiHelpCircle, FiUsers
 } from 'react-icons/fi';
 import { API_BASE_URL } from './config';
 
@@ -868,6 +868,113 @@ export default function PreviewCanvasRenderer({
             </div>
           );
         }
+
+      case 'you_ask':
+        return (
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FiHelpCircle /> You Ask Block
+            </div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>
+              {block.content?.prompt || 'Ask a question about the topic'}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.68rem', color: '#64748b' }}>
+              <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: block.content?.recordingRequired ? '#10b981' : '#ef4444' }}></span>
+              Recording Required | Max Duration: {block.content?.maxDuration || 60}s
+            </div>
+          </div>
+        );
+
+      case 'roleplay_simulation':
+        return (
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #c084fc', background: '#faf5ff', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#6b21a8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FiUsers /> Roleplay Simulation
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+              <strong>Scenario:</strong> {block.content?.scenario || 'Scenario details...'}
+            </div>
+            <div style={{ fontSize: '0.7rem', border: '1px dashed #d8b4fe', padding: '6px', borderRadius: '6px', background: '#fff' }}>
+              <strong>NPC speaker:</strong> {block.content?.npcCharacter || 'NPC'}
+              <div style={{ fontSize: '0.66rem', color: '#475569', marginTop: '2px' }}>
+                Conversation contains {(block.content?.conversation || []).length} turns.
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'hotspot_explorer':
+        {
+          const resolvedImg = resolveUrl ? resolveUrl(block.content?.imageUrl) : defaultResolveUrl(block.content?.imageUrl);
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f8fafc', borderRadius: '8px', padding: '0.75rem', position: 'relative', overflow: 'hidden', flex: 1, height: '100%', minHeight: 0 }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiGrid /> Hotspot Explorer
+              </div>
+              {block.content?.imageUrl ? (
+                <div style={{ position: 'relative', width: '100%', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block' }}>
+                  <img src={resolvedImg} alt="Hotspot explorer source" style={{ width: '100%', display: 'block' }} />
+                  {(block.content.hotspots || []).map((h, hidx) => (
+                    <div
+                      key={h.id || hidx}
+                      style={{
+                        position: 'absolute',
+                        left: `${(h.x / 400) * 100}%`,
+                        top: `${(h.y / 250) * 100}%`,
+                        width: `${(h.width / 400) * 100}%`,
+                        height: `${(h.height / 250) * 100}%`,
+                        border: '2px solid #ef4444',
+                        background: 'rgba(239, 68, 68, 0.25)',
+                        color: '#fff',
+                        fontSize: '9px',
+                        padding: '1px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {h.name || `H${hidx + 1}`}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', border: '1px dashed #cbd5e1', borderRadius: '6px', color: '#94a3b8', fontSize: '0.7rem' }}>
+                  No target explorer image selected
+                </div>
+              )}
+            </div>
+          );
+        }
+
+      case 'functional_reading':
+        return (
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #818cf8', background: '#eef2ff', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#3730a3', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FiFileText /> Functional Reading
+            </div>
+            <div style={{ fontSize: '0.7rem', color: '#475569' }}>
+              <strong>Document Type:</strong> <span style={{ textTransform: 'uppercase', fontWeight: 700 }}>{block.content?.documentType || 'form'}</span>
+            </div>
+            <div style={{ fontSize: '0.68rem', color: '#64748b' }}>
+              Questions configured: {(block.content?.questions || []).length}
+            </div>
+          </div>
+        );
+
+      case 'audio_mystery':
+        return (
+          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #67e8f9', background: '#ecfeff', borderRadius: '8px', padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0891b2', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FiVolume2 /> Audio Mystery
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#475569' }}>
+              <strong>Question:</strong> {block.content?.question || 'Mystery description question...'}
+            </div>
+            <div style={{ fontSize: '0.68rem', color: '#64748b' }}>
+              Clues configuration: {(block.content?.clues || []).length} progressive clues.
+            </div>
+          </div>
+        );
 
       default:
         return null;

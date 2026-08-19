@@ -59,8 +59,10 @@ class StudentSerializer(serializers.ModelSerializer):
             username = attrs.get("username", "").strip()
             if not username:
                 full_name = attrs.get("full_name", "")
-                prefix = (full_name[:3]).upper().ljust(3, "X")
-                username = f"{prefix}001"
+                clean_name = "".join(c for c in full_name if c.isalnum()).lower()
+                if not clean_name:
+                    clean_name = "student"
+                username = clean_name
 
             counter = 1
             base_username = username

@@ -64,6 +64,19 @@ const generateRollNo = (fullName, existingStudents = []) => {
   return candidate;
 };
 
+const generateLmsLoginCode = (fullName, existingStudents = []) => {
+  const cleanName = (fullName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!cleanName) return '';
+  const takenUsernames = new Set((existingStudents || []).map(s => (s.username || '').toLowerCase()));
+  let candidate = cleanName;
+  let suffix = 1;
+  while (takenUsernames.has(candidate)) {
+    candidate = `${cleanName}${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+};
+
 /* ─── Static chart data (reference-matched visual) ─── */
 const CHART_MONTHS = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
 const CHART_LINES = [
@@ -1994,8 +2007,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a' }}>Bulk Excel Upload</h4>
                     <p style={{ margin: '0 0 1rem 0', fontSize: '0.84rem', color: '#64748b' }}>
                       Upload an <code>.xlsx</code> or <code>.xls</code> spreadsheet.<br/>
-                      <strong style={{ color: '#ef4444' }}>Mandatory fields:</strong> <code>fullname</code>, <code>grade</code>, <code>section</code>, <code>username</code>, <code>password</code>, <code>email</code>, <code>academic_year</code>.<br/>
-                      Roll No is auto-generated from <code>fullname</code>.
+                      <strong style={{ color: '#ef4444' }}>Mandatory fields:</strong> <code>fullname</code>, <code>class</code>, <code>section</code>, <code>roll no</code>, <code>status</code>, <code>academy year</code>.<br/>
+                      LMS login code is auto-generated from <code>fullname</code>.
                     </p>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', alignItems: 'center' }}>
                       <input
@@ -2416,7 +2429,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <tr key={s.id || i}>
                           <td>
                             <span className="sd-name-cell-primary">{s.title ? s.title.toUpperCase() : ''}</span>
-                            <span className="sd-name-cell-email">{s.description?.slice(0, 50) || ''}</span>
                           </td>
                           <td>{s.grade_name ? String(s.grade_name).replace('Grade', 'Class') : (s.grade && `Class ${s.grade}`) || 'N/A'}</td>
                           <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
@@ -2969,7 +2981,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             setStudentForm(prev => ({
                               ...prev,
                               full_name,
-                              username: modalType === 'add' ? generateRollNo(full_name, students) : prev.username
+                              username: modalType === 'add' ? generateLmsLoginCode(full_name, students) : prev.username
                             }));
                           }} required placeholder="e.g. Arjun Sharma"/>
                       </div>
