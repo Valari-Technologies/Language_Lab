@@ -79,5 +79,18 @@ jobs:
 
             $COMPOSE -f docker-compose.prod.yml --env-file .env.prod up -d --build
             $COMPOSE -f docker-compose.prod.yml --env-file .env.prod ps
-            curl -fsS -I http://127.0.0.1
+
+            for attempt in $(seq 1 30); do
+              if curl -fsS -I http://127.0.0.1; then
+                echo "Application health check passed."
+                exit 0
+              fi
+
+              echo "Health check attempt $attempt failed; waiting for frontend/backend startup..."
+              sleep 3
+            done
+
+            echo "Application health check failed after retries."
+            $COMPOSE -f docker-compose.prod.yml --env-file .env.prod logs --tail=80 frontend backend
+            exit 1
           REMOTE_SCRIPT
