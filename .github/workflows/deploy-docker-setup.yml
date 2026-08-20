@@ -1,0 +1,83 @@
+name: Deploy Docker Setup Branch
+
+on:
+  push:
+    branches:
+      - feature/docker-setup
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy-feature-docker-setup
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+      REMOTE_DIR: /opt/languagelab
+      ARCHIVE_PATH: /tmp/languagelab-release.tgz
+
+    steps:
+      - name: Checkout feature/docker-setup
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        run: |
+          test -n "$VPS_HOST" || (echo "Missing VPS_HOST secret" && exit 1)
+          test -n "$VPS_USER" || (echo "Missing VPS_USER secret" && exit 1)
+          test -n "$VPS_PASSWORD" || (echo "Missing VPS_PASSWORD secret" && exit 1)
+
+      - name: Install SSH password helper
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+      - name: Create deployment archive
+        run: |
+          tar \
+            --exclude='.git' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='node_modules' \
+            --exclude='frontend/node_modules' \
+            --exclude='backend/media' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            -czf "$ARCHIVE_PATH" .
+
+      - name: Upload archive to VPS
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+          SSHPASS="$VPS_PASSWORD" sshpass -e ssh "$VPS_USER@$VPS_HOST" "mkdir -p '$REMOTE_DIR'"
+          SSHPASS="$VPS_PASSWORD" sshpass -e scp "$ARCHIVE_PATH" "$VPS_USER@$VPS_HOST:/tmp/languagelab-release.tgz"
+
+      - name: Rebuild and restart Docker stack
+        run: |
+          SSHPASS="$VPS_PASSWORD" sshpass -e ssh "$VPS_USER@$VPS_HOST" <<'REMOTE_SCRIPT'
+            set -euo pipefail
+
+            REMOTE_DIR="/opt/languagelab"
+            cd "$REMOTE_DIR"
+
+            tar -xzf /tmp/languagelab-release.tgz -C "$REMOTE_DIR"
+
+            if [ ! -f .env.prod ]; then
+              echo "Missing $REMOTE_DIR/.env.prod. Create it on the VPS before deploying."
+              exit 1
+            fi
+
+            COMPOSE="docker compose"
+            if ! docker compose version >/dev/null 2>&1; then
+              COMPOSE="docker-compose"
+            fi
+
+            $COMPOSE -f docker-compose.prod.yml --env-file .env.prod up -d --build
+            $COMPOSE -f docker-compose.prod.yml --env-file .env.prod ps
+            curl -fsS -I http://127.0.0.1
+          REMOTE_SCRIPT

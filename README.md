@@ -157,6 +157,34 @@ python manage.py seed_demo_data --no-reset-passwords
 
 ---
 
+## Production Deploy Runner Notes
+
+The GitHub Actions workflow at `.github/workflows/deploy-docker-setup.yml` deploys the project to the VPS whenever code is pushed to:
+
+```text
+feature/docker-setup
+```
+
+It can also be run manually from GitHub Actions using `workflow_dispatch`.
+
+Required GitHub repository secrets:
+
+```text
+VPS_HOST=187.52.116.48
+VPS_USER=root
+VPS_PASSWORD=<VPS root password>
+```
+
+The workflow packages the repository, uploads it to `/opt/languagelab`, preserves the server-only `.env.prod`, then runs:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+```
+
+Before enabling this on a new VPS, create `/opt/languagelab/.env.prod` on the server. Do not commit production env files or secrets to the repo.
+
+---
+
 ## 🧪 Verification Commands
 
 Before deploying or pushing changes, ensure the build and tests pass cleanly:
