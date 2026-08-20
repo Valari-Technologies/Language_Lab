@@ -41,6 +41,44 @@ const getUserInitials = (u, defaultVal = 'U') => {
   return name.slice(0, 2).toUpperCase();
 };
 
+const UserAvatar = ({ user, size = 'small', initials = 'U' }) => {
+  const [hasError, setHasError] = useState(false);
+  const pic = user?.profile_picture;
+  const validPic = pic && pic.toLowerCase() !== 'avatar' && !pic.toLowerCase().endsWith('/avatar') && !pic.toLowerCase().endsWith('/avatar/');
+
+  useEffect(() => {
+    setHasError(false);
+  }, [pic]);
+
+  if (!validPic || hasError) {
+    return (
+      <div style={{
+        width: '100%',
+        height: '100%',
+        background: '#0b75b3',
+        color: '#fff',
+        fontWeight: 800,
+        fontSize: size === 'small' ? '0.9rem' : '2rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '50%'
+      }}>
+        {getUserInitials(user, initials)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={resolveMediaUrl(pic)}
+      alt=""
+      onError={() => setHasError(true)}
+      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+    />
+  );
+};
+
 const incrementVersion = (versionStr) => {
   if (!versionStr) return "1.0.0";
   const parts = versionStr.split('.').map(Number);
@@ -110,6 +148,36 @@ const MediaUploadField = ({ label, value, mediaType, onChange, actionLoading, se
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    const detectFileType = (f) => {
+      const mime = f.type || '';
+      if (mime.startsWith('image/')) return 'image';
+      if (mime.startsWith('video/')) return 'video';
+      if (mime.startsWith('audio/')) return 'audio';
+      const ext = f.name.split('.').pop().toLowerCase();
+      if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) return 'image';
+      if (['mp4', 'webm', 'ogg', 'avi', 'mov', 'mkv', 'wmv'].includes(ext)) return 'video';
+      if (['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'].includes(ext)) return 'audio';
+      return 'other';
+    };
+
+    const fType = detectFileType(file);
+    if (fType === 'image' && file.size > 10 * 1024 * 1024) {
+      showFeedback("Image is too large. Upload less than 10MB.", "error");
+      e.target.value = null;
+      return;
+    }
+    if (fType === 'video' && file.size > 200 * 1024 * 1024) {
+      showFeedback("Video is too large. Upload less than 200MB.", "error");
+      e.target.value = null;
+      return;
+    }
+    if (fType === 'audio' && file.size > 50 * 1024 * 1024) {
+      showFeedback("Audio is too large. Upload less than 50MB.", "error");
+      e.target.value = null;
+      return;
+    }
+
     e.target.value = null;
 
     const formData = new FormData();
@@ -580,6 +648,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     showFeedback('Editor populated with generated AI content!');
   };
 
+const formatDifficulty = (val) => {
+  if (!val) return '';
+  const lower = val.toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+};
 
   const handleSelectExperience = (id) => {
     setSelectedExperienceIds(prev =>
@@ -782,6 +855,39 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
   };
 
+  const handleMarkAllRead = async () => {
+    try {
+      const res = await apiFetch('/api/v1/dashboard/notifications', { method: 'POST' });
+      if (res.ok) {
+        setNotifications(notifications.map(n => ({ ...n, read: true })));
+      }
+    } catch (e) {
+      console.error('Failed to mark notifications read', e);
+    }
+  };
+
+  const handleDeleteNotification = async (id) => {
+    try {
+      const res = await apiFetch(`/api/v1/dashboard/notifications?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setNotifications(notifications.filter(n => n.id !== id));
+      }
+    } catch (e) {
+      console.error('Failed to delete notification', e);
+    }
+  };
+
+  const handleClearAllNotifications = async () => {
+    try {
+      const res = await apiFetch('/api/v1/dashboard/notifications', { method: 'DELETE' });
+      if (res.ok) {
+        setNotifications([]);
+      }
+    } catch (e) {
+      console.error('Failed to clear notifications', e);
+    }
+  };
+
   const loadGrades = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/grades/');
@@ -819,7 +925,27 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
   };
 
+  const loadUserProfile = async () => {
+    try {
+      const res = await apiFetch('/api/users/profile/');
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentUserState(data);
+        if (onUpdateUser) onUpdateUser(data);
+        setProfileForm({
+          username: data.username || 'content_creator',
+          email: data.email || '',
+          full_name: data.full_name || '',
+          phone_no: data.phone_no || ''
+        });
+      }
+    } catch (e) {
+      console.error('Failed to load user profile', e);
+    }
+  };
+
   useEffect(() => {
+    loadUserProfile();
     loadExperiencesData();
     loadMediaData();
     loadSummaryData();
@@ -1226,7 +1352,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     grade: '',
     subject: [],
     language: 'English',
-    difficulty: 'Intermediate',
+    difficulty: 'INTERMEDIATE',
     duration: 15,
     tags: [],
     experience_type: 'LESSON',
@@ -1338,7 +1464,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           grade: data.grade || '',
           subject: subjectArray,
           language: data.language || 'English',
-          difficulty: data.difficulty || 'Intermediate',
+          difficulty: data.difficulty || 'INTERMEDIATE',
           duration: data.estimated_duration || 0,
           tags: data.tags || [],
           thumbnail: data.thumbnail || '',
@@ -3673,6 +3799,36 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const handleMediaUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    const detectFileType = (f) => {
+      const mime = f.type || '';
+      if (mime.startsWith('image/')) return 'image';
+      if (mime.startsWith('video/')) return 'video';
+      if (mime.startsWith('audio/')) return 'audio';
+      const ext = f.name.split('.').pop().toLowerCase();
+      if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) return 'image';
+      if (['mp4', 'webm', 'ogg', 'avi', 'mov', 'mkv', 'wmv'].includes(ext)) return 'video';
+      if (['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'].includes(ext)) return 'audio';
+      return 'other';
+    };
+
+    const fType = detectFileType(file);
+    if (fType === 'image' && file.size > 10 * 1024 * 1024) {
+      showFeedback("Image is too large. Upload less than 10MB.", "error");
+      e.target.value = null;
+      return;
+    }
+    if (fType === 'video' && file.size > 200 * 1024 * 1024) {
+      showFeedback("Video is too large. Upload less than 200MB.", "error");
+      e.target.value = null;
+      return;
+    }
+    if (fType === 'audio' && file.size > 50 * 1024 * 1024) {
+      showFeedback("Audio is too large. Upload less than 50MB.", "error");
+      e.target.value = null;
+      return;
+    }
+
     // Reset the input so the same file can be uploaded again if needed
     e.target.value = null;
 
@@ -3707,6 +3863,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const handleThumbnailUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      showFeedback("Image is too large. Upload less than 10MB.", "error");
+      e.target.value = null;
+      return;
+    }
     setActionLoading(true);
     try {
       const formData = new FormData();
@@ -4603,11 +4764,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
             <div className="cs-profile-card" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}>
               <div className="cs-profile-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                {currentUserState?.profile_picture ? (
-                  <img src={resolveMediaUrl(currentUserState.profile_picture)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
-                ) : (
-                  getUserInitials(currentUserState, 'CC')
-                )}
+                <UserAvatar user={currentUserState} size="small" initials="CC" />
               </div>
               <div className="cs-profile-info" style={{ flex: 1 }}>
                 <div className="cs-profile-name">{currentUserState?.full_name || currentUserState?.username || 'Content Creator'}</div>
@@ -4685,7 +4842,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: '8px', width: '300px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', zIndex: 1000, padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
                       <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>Notifications</span>
-                      <button style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }} onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true, is_read: true })))}>Mark all read</button>
+                      <button style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }} onClick={handleMarkAllRead}>Mark all read</button>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
                       {notifications.length === 0 ? (
@@ -4703,7 +4860,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                 <span style={{ fontSize: '0.75rem', color: '#475569' }}>{message}</span>
                                 <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{time}</span>
                               </div>
-                              <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); setNotifications(notifications.filter(item => item.id !== n.id)); }} title="Delete">
+                              <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); handleDeleteNotification(n.id); }} title="Delete">
                                 <FiX size={14} />
                               </button>
                             </div>
@@ -4922,7 +5079,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                             <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Difficulty</span>
                             <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <span style={{ width: 6, height: 6, borderRadius: '50%', background: detailExperience.difficulty === 'BEGINNER' ? '#10b981' : detailExperience.difficulty === 'MASTER' ? '#ef4444' : '#3b82f6' }} />
-                              {detailExperience.difficulty}
+                              {detailExperience.difficulty_display || formatDifficulty(detailExperience.difficulty)}
                             </div>
                           </div>
                           <div>
@@ -5105,7 +5262,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           grade: '',
                           subject: [],
                           language: 'English',
-                          difficulty: 'Medium',
+                          difficulty: 'INTERMEDIATE',
                           duration: 15,
                           tags: [],
                           experience_type: 'LESSON',
@@ -5196,7 +5353,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                             <td>
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: row.difficulty === 'BEGINNER' ? '#10b981' : row.difficulty === 'MASTER' ? '#ef4444' : '#3b82f6' }} />
-                                {row.difficulty_display || row.difficulty}
+                                {row.difficulty_display || formatDifficulty(row.difficulty)}
                               </span>
                             </td>
                             <td>
@@ -5314,7 +5471,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     {experienceForm.grade && (
                       <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
                         {gradesList.find(g => String(g.id) === String(experienceForm.grade))?.grade_name}
-                        {experienceForm.difficulty ? ` · ${experienceForm.difficulty}` : ''}
+                        {experienceForm.difficulty ? ` · ${formatDifficulty(experienceForm.difficulty)}` : ''}
                         {experienceForm.duration ? ` · Est. ${experienceForm.duration} min` : ''}
                       </div>
                     )}
@@ -5401,9 +5558,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <label className="cs-form-label">Difficulty <span style={{ color: '#ef4444' }}>*</span></label>
                       <select className="cs-form-input" value={experienceForm.difficulty}
                         onChange={e => setExperienceForm({ ...experienceForm, difficulty: e.target.value })}>
-                        <option value="Beginner">Beginner</option>
-                        <option value="Intermediate">Intermediate</option>
-                        <option value="Master">Master</option>
+                        <option value="BEGINNER">Beginner</option>
+                        <option value="INTERMEDIATE">Intermediate</option>
+                        <option value="MASTER">Master</option>
                       </select>
                     </div>
                     <div className="cs-form-group">
@@ -5554,7 +5711,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
                         {activityForm.title && <span>{activityForm.title} · </span>}
                         {gradesList.find(g => String(g.id) === String(selectedExperience?.grade_id || selectedExperience?.grade))?.grade_name || ''}
-                        {selectedExperience?.difficulty ? ` · ${selectedExperience.difficulty}` : ''}
+                        {selectedExperience?.difficulty ? ` · ${formatDifficulty(selectedExperience.difficulty_display || selectedExperience.difficulty)}` : ''}
                       </div>
                     )}
                   </div>
@@ -6353,40 +6510,78 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                   }
                                 ].map(cat => {
                                   const activeModule = (() => {
+                                    // 1. Check selectedActivity/activityForm skills
                                     const rawSkills = selectedActivity?.skills || activityForm?.skills || [];
                                     if (Array.isArray(rawSkills) && rawSkills.length > 0) {
                                       const first = rawSkills[0];
-                                      if (typeof first === 'object' && first !== null) {
-                                        return (first.name || '').toLowerCase();
+                                      const name = typeof first === 'object' && first !== null ? (first.name || '') : String(first);
+                                      const nameLower = name.toLowerCase();
+                                      if (['listening', 'speaking', 'reading', 'writing', 'grammar', 'phonetics'].includes(nameLower)) {
+                                        return nameLower;
                                       }
-                                      if (typeof first === 'string') {
-                                        return first.toLowerCase();
+                                    }
+                                    // 2. Check selectedExperience subject
+                                    const subj = selectedExperience?.subject;
+                                    const subjStr = Array.isArray(subj) ? subj.join(' ') : String(subj || '');
+                                    const subjLower = subjStr.toLowerCase();
+                                    for (const m of ['listening', 'speaking', 'reading', 'writing', 'grammar', 'phonetics']) {
+                                      if (subjLower.includes(m)) {
+                                        return m;
                                       }
                                     }
                                     return '';
                                   })();
 
                                   const MODULE_ELEMENTS = {
-                                    listening: ['heading', 'audio', 'video', 'sequence', 'dictation', 'quiz', 'mcq', 'text', 'image', 'audio_mystery'],
-                                    speaking: ['heading', 'dialogue', 'input', 'voice_recorder', 'pronunciation', 'role_play', 'audio', 'image', 'video', 'text', 'you_ask', 'roleplay_simulation'],
-                                    reading: ['text', 'heading', 'image', 'quiz', 'mcq', 'match', 'flashcard', 'memory', 'word_search', 'reading_passage', 'audio', 'video', 'hotspot_explorer', 'functional_reading'],
-                                    writing: ['fill_blank', 'sentence_builder', 'writing_prompt', 'text', 'heading', 'image', 'video', 'audio'],
-                                    grammar: ['heading', 'true_false', 'drag_drop', 'grammar_correction', 'quiz', 'mcq', 'fill_blank', 'match', 'sequence', 'image', 'video', 'audio', 'text'],
-                                    phonetics: ['heading', 'pronunciation', 'audio', 'video', 'quiz', 'mcq', 'text', 'image', 'voice_recorder', 'drag_drop', 'fill_blank'],
-                                    assessment: ['quiz', 'mcq', 'fill_blank', 'drag_drop', 'heading', 'text', 'image', 'video', 'audio', 'you_ask', 'hotspot_explorer', 'functional_reading', 'audio_mystery', 'roleplay_simulation']
+                                    listening: [
+                                      'heading', 'text', 'image', 'audio', 'video', 'dialogue', 
+                                      'audio_mystery', 'quiz', 'true_false', 'fill_blank', 
+                                      'match_items', 'sequence', 'dictation', 'hotspot_explorer', 
+                                      'roleplay_simulation'
+                                    ],
+                                    speaking: [
+                                      'heading', 'text', 'image', 'audio', 'video', 'dialogue', 
+                                      'voice_recorder', 'you_ask', 'hotspot_explorer', 
+                                      'roleplay_simulation', 'pronunciation', 'quiz', 'input'
+                                    ],
+                                    reading: [
+                                      'heading', 'text', 'image', 'audio', 'video', 'reading_passage', 
+                                      'functional_reading', 'quiz', 'true_false', 'fill_blank', 
+                                      'match_items', 'sequence', 'drag_drop', 'hotspot_explorer', 
+                                      'input', 'word_search'
+                                    ],
+                                    writing: [
+                                      'heading', 'text', 'image', 'audio', 'video', 'writing_prompt', 
+                                      'sentence_starter', 'input', 'sentence_builder', 'fill_blank', 
+                                      'sequence', 'drag_drop'
+                                    ],
+                                    grammar: [
+                                      'heading', 'text', 'image', 'audio', 'video', 'dialogue', 
+                                      'grammar_correction', 'quiz', 'fill_blank', 'true_false', 
+                                      'match_items', 'sequence', 'drag_drop', 'sentence_builder', 
+                                      'input', 'dictation'
+                                    ],
+                                    phonetics: [
+                                      'heading', 'text', 'image', 'audio', 'video', 'dialogue', 
+                                      'pronunciation', 'voice_recorder', 'listen_repeat', 'minimal_pair', 
+                                      'identify_sound', 'quiz', 'dictation', 'match_items'
+                                    ]
                                   };
 
                                   const allowedTypes = MODULE_ELEMENTS[activeModule] || [];
 
                                   const isAllowed = (tmplType) => {
+                                    if (selectedExperience?.experience_type === 'ASSESSMENT') return true;
                                     if (!activeModule) return true;
-                                    if (activeModule === 'assessment') return true;
                                     const mapped = tmplType.toLowerCase();
                                     if (mapped === 'quiz') {
                                       return allowedTypes.includes('quiz') || allowedTypes.includes('mcq');
                                     }
                                     if (mapped === 'match_items') {
                                       return allowedTypes.includes('match') || allowedTypes.includes('match_items');
+                                    }
+                                    if (mapped === 'roleplay_simulation' || mapped === 'role_play') {
+                                      return allowedTypes.includes('roleplay_simulation') || allowedTypes.includes('role_play');
                                     }
                                     return allowedTypes.includes(mapped);
                                   };
@@ -6749,8 +6944,32 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                           onChange={async (e) => {
                                             const file = e.target.files[0];
                                             if (!file) return;
-                                            if ((selectedBlock.type === 'image' || file.type.startsWith('image/')) && file.size > 10 * 1024 * 1024) {
-                                              showFeedback("Image is too large. Max size is 10MB.", "error");
+
+                                            const detectFileType = (f) => {
+                                              const mime = f.type || '';
+                                              if (mime.startsWith('image/')) return 'image';
+                                              if (mime.startsWith('video/')) return 'video';
+                                              if (mime.startsWith('audio/')) return 'audio';
+                                              const ext = f.name.split('.').pop().toLowerCase();
+                                              if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) return 'image';
+                                              if (['mp4', 'webm', 'ogg', 'avi', 'mov', 'mkv', 'wmv'].includes(ext)) return 'video';
+                                              if (['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'].includes(ext)) return 'audio';
+                                              return 'other';
+                                            };
+
+                                            const fType = detectFileType(file);
+                                            if (fType === 'image' && file.size > 10 * 1024 * 1024) {
+                                              showFeedback("Image is too large. Upload less than 10MB.", "error");
+                                              e.target.value = null;
+                                              return;
+                                            }
+                                            if (fType === 'video' && file.size > 200 * 1024 * 1024) {
+                                              showFeedback("Video is too large. Upload less than 200MB.", "error");
+                                              e.target.value = null;
+                                              return;
+                                            }
+                                            if (fType === 'audio' && file.size > 50 * 1024 * 1024) {
+                                              showFeedback("Audio is too large. Upload less than 50MB.", "error");
                                               e.target.value = null;
                                               return;
                                             }
@@ -8520,7 +8739,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <span style={{ fontSize: '0.68rem', color: '#64748b', display: 'block' }}>Total Duration</span>
-                          <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>{Math.ceil(screens.reduce((acc, scr) => acc + (scr.estimated_duration || 60), 0) / 60)} min</span>
+                          <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>{selectedActivity.estimated_duration || selectedActivity.duration || 0} min</span>
                         </div>
                       </div>
                     </div>
@@ -9482,13 +9701,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       style={{ position: 'relative', margin: '0.5rem 0' }}
                     >
                       <div style={{ width: '96px', height: '96px', borderRadius: '50%', border: '4px solid #eff6ff', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(11, 117, 179, 0.2)', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {currentUserState?.profile_picture ? (
-                          <img src={resolveMediaUrl(currentUserState.profile_picture)} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        ) : (
-                          <div style={{ width: '100%', height: '100%', background: '#0b75b3', color: '#fff', fontWeight: 800, fontSize: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {getUserInitials(currentUserState, 'CC')}
-                          </div>
-                        )}
+                        <UserAvatar user={currentUserState} size="large" initials="CC" />
                       </div>
                       <button
                         type="button"
@@ -9513,7 +9726,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           >
                             <FiUpload size={14} /> Upload New
                           </button>
-                          {currentUserState?.profile_picture && (
+                          {currentUserState?.profile_picture && currentUserState.profile_picture.toLowerCase() !== 'avatar' && !currentUserState.profile_picture.toLowerCase().endsWith('/avatar') && !currentUserState.profile_picture.toLowerCase().endsWith('/avatar/') && (
                             <button
                               type="button"
                               onClick={() => {
@@ -10321,16 +10534,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       )}
 
       {showNotifModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#ffffff', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ backgroundColor: '#ffffff', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundImage: `url(${contentStudioBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ backgroundColor: 'transparent', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid rgba(15,23,42,0.08)', background: 'rgba(255, 255, 255, 0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ backgroundColor: '#4f46e5', color: '#ffffff', width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
                   <FiBell />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Content Studio Notifications & Announcements</h3>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Content Studio Notifications</h3>
                   <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Stay updated with scenario building and media assets alerts</p>
                 </div>
               </div>
@@ -10340,13 +10553,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             </div>
 
             {/* Modal Body */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', flex: 1, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', flex: 1, overflow: 'hidden', backgroundColor: 'transparent', padding: '24px' }}>
               {/* Left Column: Notifications */}
-              <div style={{ borderRight: '1px solid #f1f5f9', padding: '24px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+              <div style={{ width: '100%', maxWidth: '800px', padding: '24px', display: 'flex', flexDirection: 'column', overflowY: 'auto', backgroundColor: 'rgba(255, 255, 255, 0.85)', backdropFilter: 'blur(16px)', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.08)', border: '1px solid rgba(255,255,255,0.25)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#334155' }}>Recent Studio Alerts</h4>
                   {notifications.length > 0 && (
-                    <button style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setNotifications([])}>
+                    <button style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }} onClick={handleClearAllNotifications}>
                       <FiTrash2 size={14} /> Clear all
                     </button>
                   )}
@@ -10365,7 +10578,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       const time = n.time || (n.created_at ? new Date(n.created_at).toLocaleDateString() : 'Recently');
                       const read = n.read !== undefined ? n.read : n.is_read;
                       return (
-                        <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: read ? '#f8fafc' : '#f0fdf4', border: `1px solid ${read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative' }}>
+                        <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: read ? '#ffffff' : '#f0fdf4', border: `1px solid ${read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
                           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: read ? 600 : 700 }}>{title}</span>
                             <span style={{ fontSize: '0.8rem', color: '#475569' }}>{message}</span>
@@ -10373,11 +10586,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           </div>
                           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                             {!read && (
-                              <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={() => setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true, is_read: true } : item))}>
+                              <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={async () => {
+                                try {
+                                  await apiFetch('/api/v1/dashboard/notifications', { method: 'POST' });
+                                  setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true, is_read: true } : item));
+                                } catch (e) { console.error(e); }
+                              }}>
                                 Mark read
                               </button>
                             )}
-                            <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setNotifications(notifications.filter(item => item.id !== n.id))} title="Delete">
+                            <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleDeleteNotification(n.id)} title="Delete">
                               <FiX size={16} />
                             </button>
                           </div>
@@ -10385,26 +10603,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       );
                     })
                   )}
-                </div>
-              </div>
-
-              {/* Right Column: Announcements */}
-              <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', backgroundColor: '#fafafa', overflowY: 'auto' }}>
-                <h4 style={{ margin: '0 0 16px 0', fontSize: '1rem', fontWeight: 600, color: '#334155' }}>Studio Announcements</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#e0e7ff', color: '#4f46e5', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Studio Guide</span>
-                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Media Asset Optimization Guidelines</h5>
-                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>All uploaded audio files should be in MP3/WAV format under 5MB, and images should be optimized to preserve fast loading times on client devices.</p>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 1 day ago</span>
-                  </div>
-
-                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#fee2e2', color: '#ef4444', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Build Notice</span>
-                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Package Verification Failure Fixes</h5>
-                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>If package build validation fails due to unlinked audio tracks, check the block elements properties and re-run verification before publishing.</p>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 3 days ago</span>
-                  </div>
                 </div>
               </div>
             </div>

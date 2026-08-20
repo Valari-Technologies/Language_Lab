@@ -48,7 +48,7 @@ class ExperienceViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
 
     def get_permissions(self):
-        if self.action in ("list", "retrieve", "activities"):
+        if self.action in ("retrieve", "activities"):
             from accounts.permissions import IsContentCreatorOrSuperAdminOrSchoolUser
             return [IsAuthenticated(), IsContentCreatorOrSuperAdminOrSchoolUser()]
         if self.action in ("destroy", "preview"):
@@ -692,102 +692,20 @@ class DashboardNotificationsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
-        role = getattr(user, "role", "STUDENT")
-        notifications = Notification.objects.filter(user=request.user).order_by("-created_at")[:10]
-        if not notifications.exists():
-            if role == "SUPER_ADMIN":
-                # Superadmin needs approval alerts and system alerts
-                Notification.objects.create(
-                    user=user,
-                    title="Experience Approval Request",
-                    message="Content Creator submitted 'Grade 5 Speaking Scenario' for approval.",
-                    notification_type=Notification.NotificationType.INFO,
-                    is_read=False
-                )
-                Notification.objects.create(
-                    user=user,
-                    title="System Check Status",
-                    message="Weekly packaging and checksum check completed with zero errors.",
-                    notification_type=Notification.NotificationType.INFO,
-                    is_read=True
-                )
-            elif role == "SCHOOL_ADMIN":
-                # School admin needs teacher additions, class registrations, and report notifications
-                Notification.objects.create(
-                    user=user,
-                    title="Teacher Registered",
-                    message="A new teacher account was successfully registered and assigned class Grade 6-A.",
-                    notification_type=Notification.NotificationType.INFO,
-                    is_read=False
-                )
-                Notification.objects.create(
-                    user=user,
-                    title="School Performance Report Ready",
-                    message="Consolidated monthly grade logs and student activity reports are now available.",
-                    notification_type=Notification.NotificationType.INFO,
-                    is_read=True
-                )
-            elif role == "TEACHER":
-                # Teacher needs student progress reports and student crud alerts
-                Notification.objects.create(
-                    user=user,
-                    title="Student Performance Alert",
-                    message="Student performance report for Grade 6-B is generated. 3 student scores need review.",
-                    notification_type=Notification.NotificationType.WARNING,
-                    is_read=False
-                )
-                Notification.objects.create(
-                    user=user,
-                    title="Student Enrollment Update",
-                    message="Two new students enrolled in Grade 6-B Class roster.",
-                    notification_type=Notification.NotificationType.INFO,
-                    is_read=True
-                )
-            elif role == "CONTENT_CREATOR":
-                # Content creator needs LMS connect, report push, content pull, and super admin approve notification
-                Notification.objects.create(
-                    user=user,
-                    title="LMS Connect Success",
-                    message="Successfully connected to target Electron LMS build instance.",
-                    notification_type=Notification.NotificationType.INFO,
-                    is_read=False
-                )
-                Notification.objects.create(
-                    user=user,
-                    title="Experience Approved",
-                    message="Super Admin approved your speaking scenario 'The Lost Picnic'.",
-                    notification_type=Notification.NotificationType.INFO,
-                    is_read=False
-                )
-                Notification.objects.create(
-                    user=user,
-                    title="Content Package Pull Complete",
-                    message="Pulled latest packaging templates successfully.",
-                    notification_type=Notification.NotificationType.INFO,
-                    is_read=True
-                )
-                Notification.objects.create(
-                    user=user,
-                    title="LMS Report Push Complete",
-                    message="Successfully pushed compiled package version build details.",
-                    notification_type=Notification.NotificationType.INFO,
-                    is_read=True
-                )
-            else:
-                Notification.objects.create(
-                    user=user,
-                    title="System Notification",
-                    message="Welcome to LinguaLab Educational Platform.",
-                    notification_type=Notification.NotificationType.INFO,
-                    is_read=True
-                )
-            notifications = Notification.objects.filter(user=request.user).order_by("-created_at")[:10]
+        notifications = Notification.objects.filter(user=request.user).order_by("-created_at")[:15]
         serializer = NotificationSerializer(notifications, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
         Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+        return Response({"status": "success"}, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        notif_id = request.query_params.get("id")
+        if notif_id:
+            Notification.objects.filter(user=request.user, id=notif_id).delete()
+        else:
+            Notification.objects.filter(user=request.user).delete()
         return Response({"status": "success"}, status=status.HTTP_200_OK)
 
 
@@ -1225,12 +1143,15 @@ class SuperAdminExperienceViewSet(viewsets.ViewSet):
     def list(self, request):
         """GET /api/v1/super-admin/experiences/"""
         status_param = request.query_params.get("status")
+        grade_param = request.query_params.get("grade")
         queryset = Experience.objects.filter(is_deleted=False).select_related("grade", "created_by")
         if status_param:
             queryset = queryset.filter(status=status_param)
         else:
             # By default or if none, list experiences that are not draft
             queryset = queryset.exclude(status="DRAFT")
+        if grade_param:
+            queryset = queryset.filter(grade_id=grade_param)
 
         # Serializer
         serializer = ExperienceSerializer(queryset, many=True)

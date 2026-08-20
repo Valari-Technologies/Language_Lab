@@ -45,6 +45,44 @@ const resolvePreviewUrl = (url) => {
   return `${base}${path}`;
 };
 
+const UserAvatar = ({ user, size = 'small', initials = 'U' }) => {
+  const [hasError, setHasError] = useState(false);
+  const pic = user?.profile_picture;
+  const validPic = pic && pic.toLowerCase() !== 'avatar' && !pic.toLowerCase().endsWith('/avatar') && !pic.toLowerCase().endsWith('/avatar/');
+
+  useEffect(() => {
+    setHasError(false);
+  }, [pic]);
+
+  if (!validPic || hasError) {
+    return (
+      <div style={{
+        width: '100%',
+        height: '100%',
+        background: '#0b75b3',
+        color: '#fff',
+        fontWeight: 800,
+        fontSize: size === 'small' ? '0.9rem' : '2rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '50%'
+      }}>
+        {getUserInitials(user, initials)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={resolvePreviewUrl(pic)}
+      alt=""
+      onError={() => setHasError(true)}
+      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+    />
+  );
+};
+
 const getPreviewMediaUrl = (screen, type) => {
   if (!screen) return '';
   const element = screen.elements?.find(el => el.type === type);
@@ -480,6 +518,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [experiences, setExperiences] = useState([]);
   const [submittedExperiences, setSubmittedExperiences] = useState([]);
   const [saExpFilter, setSaExpFilter] = useState('');
+  const [saGradeFilter, setSaGradeFilter] = useState('');
   const [saExpPage, setSaExpPage] = useState(1);
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectRemark, setRejectRemark] = useState('');
@@ -516,12 +555,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: "School Onboarding Request", message: "New school onboarding request received from Apex International Academy.", time: "30 mins ago", type: "info", read: false },
-    { id: 2, title: "Sync Ingestion Completed", message: "SCAD World School completed offline data ingestion (142 student logs synced).", time: "2 hours ago", type: "success", read: false },
-    { id: 3, title: "System Sync Warning", message: "Apex International Academy reported offline telemetry synchronization timeout.", time: "1 day ago", type: "warning", read: true },
-    { id: 4, title: "System Maintenance", message: "Database backup & system optimization completed successfully.", time: "Yesterday", type: "system", read: true },
-  ]);
+  const [notifications, setNotifications] = useState([]);
   const [showRecentActivityModal, setShowRecentActivityModal] = useState(false);
   const [recentActivitiesList, setRecentActivitiesList] = useState([]);
 
@@ -868,9 +902,11 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
   const loadSuperAdminExperiences = async () => {
     try {
-      const url = saExpFilter
-        ? `/api/v1/super-admin/experiences/?status=${saExpFilter}`
-        : '/api/v1/super-admin/experiences/';
+      const params = [];
+      if (saExpFilter) params.push(`status=${saExpFilter}`);
+      if (saGradeFilter) params.push(`grade=${saGradeFilter}`);
+      const queryString = params.length ? `?${params.join('&')}` : '';
+      const url = `/api/v1/super-admin/experiences/${queryString}`;
       const res = await apiFetch(url);
       if (res.ok) {
         const data = await res.json();
@@ -1035,14 +1071,81 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     setDeleteConfirm({ show: true, id: 'bulk-users', type: 'users', isBulk: true, count: selectedUserIds.length, ids: [...selectedUserIds] });
   };
 
+  const loadNotifications = async () => {
+    try {
+      const res = await apiFetch('/api/v1/dashboard/notifications');
+      if (res.ok) {
+        setNotifications(await res.json());
+      }
+    } catch (e) {
+      console.error('Failed to load notifications', e);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      const res = await apiFetch('/api/v1/dashboard/notifications', { method: 'POST' });
+      if (res.ok) {
+        setNotifications(notifications.map(n => ({ ...n, read: true })));
+      }
+    } catch (e) {
+      console.error('Failed to mark notifications read', e);
+    }
+  };
+
+  const handleDeleteNotification = async (id) => {
+    try {
+      const res = await apiFetch(`/api/v1/dashboard/notifications?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setNotifications(notifications.filter(n => n.id !== id));
+      }
+    } catch (e) {
+      console.error('Failed to delete notification', e);
+    }
+  };
+
+  const handleClearAllNotifications = async () => {
+    try {
+      const res = await apiFetch('/api/v1/dashboard/notifications', { method: 'DELETE' });
+      if (res.ok) {
+        setNotifications([]);
+      }
+    } catch (e) {
+      console.error('Failed to clear notifications', e);
+    }
+  };
+
+  const loadUserProfile = async () => {
+    try {
+      const res = await apiFetch('/api/users/profile/');
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+        if (onUpdateUser) onUpdateUser(data);
+        setProfileForm({
+          username: data.username || '',
+          email: data.email || '',
+          full_name: data.full_name || '',
+          phone_no: data.phone_no || '',
+          current_password: '',
+          password: ''
+        });
+      }
+    } catch (e) {
+      console.error('Failed to load user profile', e);
+    }
+  };
+
   const loadAllData = async () => {
     setLoading(true);
     try {
       await Promise.allSettled([
+        loadUserProfile(),
         loadSchools(), loadPublishContents(), loadDashboardStats(),
         loadGrades(), loadExperiences(), loadExperienceBuilders(),
         loadSchoolAdmins(), loadTeachers(), loadStudents(),
         loadSuperAdminExperiences(), loadRecentActivities(),
+        loadNotifications()
       ]);
     } catch (e) {
       console.error('Failed to load data from backend server.', e);
@@ -1056,7 +1159,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     if (activeTab === 'experiences') {
       loadSuperAdminExperiences();
     }
-  }, [saExpFilter, activeTab]);
+  }, [saExpFilter, saGradeFilter, activeTab]);
   useEffect(() => {
     const handleOutsideClick = () => {
       setActiveDropdown(null);
@@ -1669,11 +1772,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
           <div className="sd-user-card" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}>
             <div className="sd-user-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-              {user?.profile_picture ? (
-                <img src={resolvePreviewUrl(user.profile_picture)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
-              ) : (
-                getUserInitials(user, 'AD')
-              )}
+              <UserAvatar user={user} size="small" initials="AD" />
             </div>
             <div className="sd-user-meta" style={{ flex: 1 }}>
               <div className="sd-user-name">{profileForm.full_name || user?.full_name || user?.username || 'Super Admin'}</div>
@@ -1763,7 +1862,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: '8px', width: '300px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', zIndex: 1000, padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
                     <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>Notifications</span>
-                    <button style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }} onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true })))}>Mark all read</button>
+                    <button style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }} onClick={handleMarkAllRead}>Mark all read</button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
                     {notifications.length === 0 ? (
@@ -1771,14 +1870,14 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     ) : (
                       notifications.map(n => (
                         <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: n.read ? 'transparent' : '#f0fdf4', borderLeft: n.read ? 'none' : '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', textAlign: 'left' }}>
-                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
-                            <span style={{ fontSize: '0.75rem', color: '#475569' }}>{n.message || n.text}</span>
-                            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
-                          </div>
-                          <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); setNotifications(notifications.filter(item => item.id !== n.id)); }} title="Delete">
-                            <FiX size={14} />
-                          </button>
+                           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                             <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
+                             <span style={{ fontSize: '0.75rem', color: '#475569' }}>{n.message || n.text}</span>
+                             <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
+                           </div>
+                           <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); handleDeleteNotification(n.id); }} title="Delete">
+                             <FiX size={14} />
+                           </button>
                         </div>
                       ))
                     )}
@@ -2982,6 +3081,18 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     <select
                       className="sd-form-input"
                       style={{ width: '140px', height: '38px', padding: '0 0.5rem', fontSize: '0.82rem', borderRadius: '8px' }}
+                      value={saGradeFilter}
+                      onChange={e => { setSaGradeFilter(e.target.value); setSaExpPage(1); }}
+                    >
+                      <option value="">All Grades</option>
+                      {grades.map(g => (
+                        <option key={g.id} value={g.id}>{g.grade_name}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      className="sd-form-input"
+                      style={{ width: '140px', height: '38px', padding: '0 0.5rem', fontSize: '0.82rem', borderRadius: '8px' }}
                       value={saExpFilter}
                       onChange={e => { setSaExpFilter(e.target.value); setSaExpPage(1); }}
                     >
@@ -3150,13 +3261,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         style={{ position: 'relative', margin: '0.5rem 0' }}
                       >
                         <div style={{ width: '96px', height: '96px', borderRadius: '50%', border: '4px solid #eff6ff', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(11, 117, 179, 0.2)', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {user?.profile_picture ? (
-                            <img src={resolvePreviewUrl(user.profile_picture)} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          ) : (
-                            <div style={{ width: '100%', height: '100%', background: '#0b75b3', color: '#fff', fontWeight: 800, fontSize: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              {getUserInitials(user, 'U')}
-                            </div>
-                          )}
+                          <UserAvatar user={user} size="large" initials="U" />
                         </div>
                         <button
                           type="button"
@@ -3181,7 +3286,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             >
                               <FiUpload size={14} /> Upload New
                             </button>
-                            {user?.profile_picture && (
+                            {user?.profile_picture && user.profile_picture.toLowerCase() !== 'avatar' && !user.profile_picture.toLowerCase().endsWith('/avatar') && !user.profile_picture.toLowerCase().endsWith('/avatar/') && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -4825,17 +4930,17 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       )}
 
       {showNotifModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#ffffff', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ backgroundColor: '#ffffff', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundImage: `url(${superAdminBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ backgroundColor: 'transparent', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid rgba(15,23,42,0.08)', background: 'rgba(255, 255, 255, 0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ backgroundColor: '#4f46e5', color: '#ffffff', width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
                   <FiBell />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Notifications & announcements</h3>
-                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Stay updated with recent alerts and platform activity</p>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Notifications</h3>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Stay updated with recent alerts</p>
                 </div>
               </div>
               <button style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s' }} onClick={() => setShowNotifModal(false)}>
@@ -4844,13 +4949,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             </div>
 
             {/* Modal Body */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', flex: 1, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', flex: 1, overflow: 'hidden', backgroundColor: 'transparent', padding: '24px' }}>
               {/* Left Column: Notifications */}
-              <div style={{ borderRight: '1px solid #f1f5f9', padding: '24px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+              <div style={{ width: '100%', maxWidth: '800px', padding: '24px', display: 'flex', flexDirection: 'column', overflowY: 'auto', backgroundColor: 'rgba(255, 255, 255, 0.85)', backdropFilter: 'blur(16px)', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.08)', border: '1px solid rgba(255,255,255,0.25)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#334155' }}>Recent Alerts</h4>
                   {notifications.length > 0 && (
-                    <button style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setNotifications([])}>
+                    <button style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }} onClick={handleClearAllNotifications}>
                       <FiTrash2 size={14} /> Clear all
                     </button>
                   )}
@@ -4864,7 +4969,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     </div>
                   ) : (
                     notifications.map(n => (
-                      <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: n.read ? '#f8fafc' : '#f0fdf4', border: `1px solid ${n.read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative' }}>
+                      <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: n.read ? '#ffffff' : '#f0fdf4', border: `1px solid ${n.read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
                           <span style={{ fontSize: '0.8rem', color: '#475569' }}>{n.message || n.text}</span>
@@ -4872,44 +4977,22 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         </div>
                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                           {!n.read && (
-                            <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={() => setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true } : item))}>
+                            <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={async () => {
+                              try {
+                                await apiFetch('/api/v1/dashboard/notifications', { method: 'POST' });
+                                setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true } : item));
+                              } catch (e) { console.error(e); }
+                            }}>
                               Mark read
                             </button>
                           )}
-                          <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setNotifications(notifications.filter(item => item.id !== n.id))} title="Delete">
+                          <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleDeleteNotification(n.id)} title="Delete">
                             <FiX size={16} />
                           </button>
                         </div>
                       </div>
                     ))
                   )}
-                </div>
-              </div>
-
-              {/* Right Column: Announcements */}
-              <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', backgroundColor: '#fafafa', overflowY: 'auto' }}>
-                <h4 style={{ margin: '0 0 16px 0', fontSize: '1rem', fontWeight: 600, color: '#334155' }}>System Announcements</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#fee2e2', color: '#ef4444', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Maintenance</span>
-                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Scheduled System Upgrade</h5>
-                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>The language lab portal will undergo essential server migration on Saturday from 2:00 AM to 4:00 AM UTC. Some services might be temporarily offline.</p>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 1 day ago</span>
-                  </div>
-
-                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#e0e7ff', color: '#4f46e5', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Feature Release</span>
-                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Enhanced Analytics Dashboard</h5>
-                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>Super Admins can now download full PDF grade reports and access engagement metrics with real-time graphs and teacher activity charts.</p>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 3 days ago</span>
-                  </div>
-
-                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#dcfce7', color: '#16a34a', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Tip</span>
-                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Security Recommendation</h5>
-                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>Ensure all school administrators update their security credentials and password requirements for the new semester.</p>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 1 week ago</span>
-                  </div>
                 </div>
               </div>
             </div>

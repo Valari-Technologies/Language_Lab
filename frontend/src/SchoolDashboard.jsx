@@ -45,6 +45,44 @@ const getUserInitials = (u, defaultVal = 'U') => {
   return name.slice(0, 2).toUpperCase();
 };
 
+const UserAvatar = ({ user, size = 'small', initials = 'U' }) => {
+  const [hasError, setHasError] = useState(false);
+  const pic = user?.profile_picture;
+  const validPic = pic && pic.toLowerCase() !== 'avatar' && !pic.toLowerCase().endsWith('/avatar') && !pic.toLowerCase().endsWith('/avatar/');
+
+  useEffect(() => {
+    setHasError(false);
+  }, [pic]);
+
+  if (!validPic || hasError) {
+    return (
+      <div style={{
+        width: '100%',
+        height: '100%',
+        background: '#0b75b3',
+        color: '#fff',
+        fontWeight: 800,
+        fontSize: size === 'small' ? '0.9rem' : '2rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '50%'
+      }}>
+        {getUserInitials(user, initials)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={resolveMediaUrl(pic)}
+      alt=""
+      onError={() => setHasError(true)}
+      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+    />
+  );
+};
+
 /* ─── Auto-generate a student roll no from their name, e.g. "Rahul" -> "RAH001" ───
    The numeric part continues from the total number of existing students (school-wide),
    so it never restarts at 001 once other students already exist — e.g. with 4 students
@@ -353,6 +391,9 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [teachers,       setTeachers]       = useState([]);
   const [students,       setStudents]       = useState([]);
   const [classes,        setClasses]        = useState([]);
+  const [schClassFilter, setSchClassFilter] = useState('');
+  const [schSectionFilter, setSchSectionFilter] = useState('');
+  const [schLessonClassFilter, setSchLessonClassFilter] = useState('');
   const [experiences,      setExperiences]      = useState([]);
   const [schools,        setSchools]        = useState([]);
   const [grades,         setGrades]         = useState(defaultGradesList);
@@ -409,12 +450,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
   const [pwModalError, setPwModalError] = useState('');
   const [currentTime, setCurrentTime]             = useState(new Date());
-  const [notifications, setNotifications]         = useState([
-    { id: 1, title: "Teacher Activity Alert", message: "Mr. Ramesh assigned 2 new Speaking lessons to Grade 8.", time: "45 mins ago", type: "info", read: false },
-    { id: 2, title: "Lab Sync Health", message: "Lab 2 Server successfully synced 120 student sessions to cloud.", time: "3 hours ago", type: "success", read: false },
-    { id: 3, title: "Student Enrolment", message: "12 new students enrolled in Grade 5-B roster.", time: "1 day ago", type: "info", read: true },
-    { id: 4, title: "Library Update", message: "15 new English Lab modules added by Central Curriculum Team.", time: "3 days ago", type: "system", read: true },
-  ]);
+  const [notifications, setNotifications]         = useState([]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [showHelpModal,     setShowHelpModal]     = useState(false);
@@ -526,14 +562,80 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     } catch (e) { console.error('Failed to load reports data', e); }
   };
 
+  const loadNotifications = async () => {
+    try {
+      const res = await apiFetch('/api/v1/dashboard/notifications');
+      if (res.ok) {
+        setNotifications(await res.json());
+      }
+    } catch (e) {
+      console.error('Failed to load notifications', e);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      const res = await apiFetch('/api/v1/dashboard/notifications', { method: 'POST' });
+      if (res.ok) {
+        setNotifications(notifications.map(n => ({ ...n, read: true })));
+      }
+    } catch (e) {
+      console.error('Failed to mark notifications read', e);
+    }
+  };
+
+  const handleDeleteNotification = async (id) => {
+    try {
+      const res = await apiFetch(`/api/v1/dashboard/notifications?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setNotifications(notifications.filter(n => n.id !== id));
+      }
+    } catch (e) {
+      console.error('Failed to delete notification', e);
+    }
+  };
+
+  const handleClearAllNotifications = async () => {
+    try {
+      const res = await apiFetch('/api/v1/dashboard/notifications', { method: 'DELETE' });
+      if (res.ok) {
+        setNotifications([]);
+      }
+    } catch (e) {
+      console.error('Failed to clear notifications', e);
+    }
+  };
+
+  const loadUserProfile = async () => {
+    try {
+      const res = await apiFetch('/api/users/profile/');
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+        if (onUpdateUser) onUpdateUser(data);
+        setProfileForm({
+          username: data.username || '',
+          email: data.email || '',
+          full_name: data.full_name || '',
+          phone_no: data.phone_no || '',
+          current_password: '',
+          password: ''
+        });
+      }
+    } catch (e) {
+      console.error('Failed to load user profile', e);
+    }
+  };
+
   const loadAllData = async () => {
     setLoading(true);
     setErrorMsg('');
     try {
       await Promise.all([
-        loadDashboardData(), loadSchools(), loadGrades(),
+        loadUserProfile(), loadDashboardData(), loadSchools(), loadGrades(),
         loadTeachers(), loadStudents(), loadClasses(),
-        loadExperiences(), loadReportsData(), loadStudentCompletionReport()
+        loadExperiences(), loadReportsData(), loadStudentCompletionReport(),
+        loadNotifications()
       ]);
     } catch (e) { setErrorMsg('Error loading dashboard data.'); }
     finally { setLoading(false); }
@@ -1093,6 +1195,33 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     } finally { setActionLoading(false); }
   };
 
+  const getFilteredClasses = () => {
+    return classes.filter(c => {
+      if (schClassFilter) {
+        const name = c.class_name || '';
+        const match = name.match(/\d+/);
+        const gradeNum = match ? match[0] : '';
+        if (gradeNum !== schClassFilter) return false;
+      }
+      if (schSectionFilter) {
+        const sec = c.section ? c.section.replace('Section', '').trim() : '';
+        if (sec !== schSectionFilter) return false;
+      }
+      return true;
+    });
+  };
+
+  const getFilteredExperiences = () => {
+    return experiences.filter(exp => {
+      if (schLessonClassFilter) {
+        const gradeNum = exp.grade_name ? exp.grade_name.match(/\d+/) : null;
+        const expGrade = gradeNum ? gradeNum[0] : '';
+        return expGrade === schLessonClassFilter;
+      }
+      return true;
+    });
+  };
+
   /* ── Filter helpers ── */
   const filterList = (list) => {
     if (!searchQuery) return list;
@@ -1118,6 +1247,9 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const goTo = (tab) => {
     setActiveSubTab(tab);
     setSearchQuery('');
+    setSchClassFilter('');
+    setSchSectionFilter('');
+    setSchLessonClassFilter('');
     setIsSidebarOpen(false);
     setTeacherPage(1);
     setStudentPage(1);
@@ -1431,11 +1563,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
           <div className="sd-user-card" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}>
             <div className="sd-user-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-              {user?.profile_picture ? (
-                <img src={resolveMediaUrl(user.profile_picture)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
-              ) : (
-                getUserInitials(user, 'SA')
-              )}
+              <UserAvatar user={user} size="small" initials="SA" />
             </div>
             <div className="sd-user-meta" style={{ flex: 1 }}>
               <div className="sd-user-name">{profileForm.full_name || user?.full_name || user?.username || 'School Admin'}</div>
@@ -1479,7 +1607,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: '8px', width: '300px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', zIndex: 1000, padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
                     <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>Notifications</span>
-                    <button style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }} onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true })))}>Mark all read</button>
+                    <button style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }} onClick={handleMarkAllRead}>Mark all read</button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
                     {notifications.length === 0 ? (
@@ -1487,14 +1615,14 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     ) : (
                       notifications.map(n => (
                         <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: n.read ? 'transparent' : '#f0fdf4', borderLeft: n.read ? 'none' : '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', textAlign: 'left' }}>
-                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
-                            <span style={{ fontSize: '0.75rem', color: '#475569' }}>{n.message || n.text}</span>
-                            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
-                          </div>
-                          <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); setNotifications(notifications.filter(item => item.id !== n.id)); }} title="Delete">
-                            <FiX size={14} />
-                          </button>
+                           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                             <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
+                             <span style={{ fontSize: '0.75rem', color: '#475569' }}>{n.message || n.text}</span>
+                             <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
+                           </div>
+                           <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); handleDeleteNotification(n.id); }} title="Delete">
+                             <FiX size={14} />
+                           </button>
                         </div>
                       ))
                     )}
@@ -2273,7 +2401,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           {/* ══════════ CLASSES TAB ══════════ */}
           {activeSubTab === 'classes' && !isAnyOverlayOpen && (
             <>
-             
               <div className="sd-card" style={{ padding:'1.25rem 1.5rem' }}>
                 <div className="sd-table-toolbar">
                   <div className="sd-table-search">
@@ -2285,19 +2412,41 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       onChange={e => { setSearchQuery(e.target.value); setClassPage(1); }}
                     />
                   </div>
-                  <div className="sd-table-actions">
+                  <div className="sd-table-actions" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    <select
+                      className="sd-form-input"
+                      style={{ width: '130px', height: '38px', padding: '0 0.5rem', fontSize: '0.82rem', borderRadius: '8px' }}
+                      value={schClassFilter}
+                      onChange={e => { setSchClassFilter(e.target.value); setClassPage(1); }}
+                    >
+                      <option value="">All Classes</option>
+                      {[3, 4, 5, 6, 7, 8].map(n => (
+                        <option key={n} value={String(n)}>Class {n}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      className="sd-form-input"
+                      style={{ width: '130px', height: '38px', padding: '0 0.5rem', fontSize: '0.82rem', borderRadius: '8px' }}
+                      value={schSectionFilter}
+                      onChange={e => { setSchSectionFilter(e.target.value); setClassPage(1); }}
+                    >
+                      <option value="">All Sections</option>
+                      {['A', 'B', 'C', 'D'].map(sec => (
+                        <option key={sec} value={sec}>Section {sec}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 <div className="sd-table-wrap">
                   <table className="sd-table">
-
                     <thead>
                       <tr>
                         {isSelectModeClasses && (
                           <th className="sd-checkbox-cell">
                             <input
                               type="checkbox"
-                              checked={classes.length > 0 && selectedClassIds.length === filterList(classes).length}
+                              checked={getFilteredClasses().length > 0 && selectedClassIds.length === filterList(getFilteredClasses()).length}
                               onChange={handleSelectAllClasses}
                             />
                           </th>
@@ -2312,7 +2461,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     </thead>
                     <tbody>
                       {(() => {
-                        const assignedClasses = filterList(classes).filter(c => c.teacher_name);
+                        const assignedClasses = filterList(getFilteredClasses()).filter(c => c.teacher_name);
                         return (
                           <>
                             {paginate(assignedClasses, classPage).map((c, i) => {
@@ -2386,7 +2535,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                   </table>
                 </div>
                 <Pagination
-                  total={filterList(classes).filter(c => c.teacher_name).length}
+                  total={filterList(getFilteredClasses()).filter(c => c.teacher_name).length}
                   perPage={PER_PAGE}
                   page={classPage}
                   onPage={setClassPage}
@@ -2411,7 +2560,17 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     />
                   </div>
                   <div className="sd-table-actions">
-                    {/* <button className="sd-btn-filter"><FiFilter/>Filters</button> */}
+                    <select
+                      className="sd-form-input"
+                      style={{ width: '130px', height: '38px', padding: '0 0.5rem', fontSize: '0.82rem', borderRadius: '8px' }}
+                      value={schLessonClassFilter}
+                      onChange={e => { setSchLessonClassFilter(e.target.value); setExperiencePage(1); }}
+                    >
+                      <option value="">All Classes</option>
+                      {[3, 4, 5, 6, 7, 8].map(n => (
+                        <option key={n} value={String(n)}>Class {n}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 <div className="sd-table-wrap">
@@ -2425,28 +2584,28 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {paginate(filterList(experiences), experiencePage).map((s, i) => (
+                      {paginate(filterList(getFilteredExperiences()), experiencePage).map((s, i) => (
                         <tr key={s.id || i}>
                           <td>
                             <span className="sd-name-cell-primary">{s.title ? s.title.toUpperCase() : ''}</span>
                           </td>
                           <td>{s.grade_name ? String(s.grade_name).replace('Grade', 'Class') : (s.grade && `Class ${s.grade}`) || 'N/A'}</td>
                           <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
-                            <span className={`sd-badge ${s.difficulty === 'BEGINNER' ? 'sd-badge-active' : s.difficulty === 'MASTER' ? 'sd-badge-leave' : 'sd-badge-review'}`}>
+                            <span className={`sd-badge ${s.difficulty === 'BEGINNER' ? 'sd-badge-active' : s.difficulty === 'MASTER' ? 'sd-badge-leave' : s.difficulty === 'REVIEW' || s.difficulty === 'REJECTED' ? 'sd-badge-review' : 'sd-badge-review'}`}>
                               {s.difficulty || 'INTERMEDIATE'}
                             </span>
                           </td>
                           <td>{s.estimated_duration ? `${s.estimated_duration} min` : '—'}</td>
                         </tr>
                       ))}
-                      {filterList(experiences).length === 0 && (
+                      {filterList(getFilteredExperiences()).length === 0 && (
                         <tr><td colSpan="4" className="sd-empty-state">No lessons found.</td></tr>
                       )}
                     </tbody>
                   </table>
                 </div>
                 <Pagination
-                  total={filterList(experiences).length}
+                  total={filterList(getFilteredExperiences()).length}
                   perPage={PER_PAGE}
                   page={experiencePage}
                   onPage={setExperiencePage}
@@ -2667,13 +2826,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       style={{ position: 'relative', margin: '0.5rem 0' }}
                     >
                       <div style={{ width: '96px', height: '96px', borderRadius: '50%', border: '4px solid #eff6ff', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(11, 117, 179, 0.2)', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {user?.profile_picture ? (
-                          <img src={user.profile_picture} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        ) : (
-                          <div style={{ width: '100%', height: '100%', background: '#0b75b3', color: '#fff', fontWeight: 800, fontSize: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {getUserInitials(user, 'U')}
-                          </div>
-                        )}
+                        <UserAvatar user={user} size="large" initials="U" />
                       </div>
                       <button
                         type="button"
@@ -2698,7 +2851,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           >
                             <FiUpload size={14} /> Upload New
                           </button>
-                          {user?.profile_picture && (
+                          {user?.profile_picture && user.profile_picture.toLowerCase() !== 'avatar' && !user.profile_picture.toLowerCase().endsWith('/avatar') && !user.profile_picture.toLowerCase().endsWith('/avatar/') && (
                             <button
                               type="button"
                               onClick={() => {
@@ -3910,17 +4063,17 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       )}
 
       {showNotifModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#ffffff', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ backgroundColor: '#ffffff', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundImage: `url(${schoolBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ backgroundColor: 'transparent', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid rgba(15,23,42,0.08)', background: 'rgba(255, 255, 255, 0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ backgroundColor: '#4f46e5', color: '#ffffff', width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
                   <FiBell />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>School Notifications & Announcements</h3>
-                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Stay updated with school activities and admin updates</p>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>School Notifications</h3>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Stay updated with school activities</p>
                 </div>
               </div>
               <button style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s' }} onClick={() => setShowNotifModal(false)}>
@@ -3929,13 +4082,13 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             </div>
 
             {/* Modal Body */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', flex: 1, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', flex: 1, overflow: 'hidden', backgroundColor: 'transparent', padding: '24px' }}>
               {/* Left Column: Notifications */}
-              <div style={{ borderRight: '1px solid #f1f5f9', padding: '24px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+              <div style={{ width: '100%', maxWidth: '800px', padding: '24px', display: 'flex', flexDirection: 'column', overflowY: 'auto', backgroundColor: 'rgba(255, 255, 255, 0.85)', backdropFilter: 'blur(16px)', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.08)', border: '1px solid rgba(255,255,255,0.25)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#334155' }}>Recent School Alerts</h4>
                   {notifications.length > 0 && (
-                    <button style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setNotifications([])}>
+                    <button style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }} onClick={handleClearAllNotifications}>
                       <FiTrash2 size={14} /> Clear all
                     </button>
                   )}
@@ -3949,7 +4102,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     </div>
                   ) : (
                     notifications.map(n => (
-                      <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: n.read ? '#f8fafc' : '#f0fdf4', border: `1px solid ${n.read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative' }}>
+                      <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: n.read ? '#ffffff' : '#f0fdf4', border: `1px solid ${n.read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
                           <span style={{ fontSize: '0.8rem', color: '#475569' }}>{n.message || n.text}</span>
@@ -3957,44 +4110,22 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         </div>
                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                           {!n.read && (
-                            <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={() => setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true } : item))}>
+                            <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={async () => {
+                              try {
+                                await apiFetch('/api/v1/dashboard/notifications', { method: 'POST' });
+                                setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true } : item));
+                              } catch (e) { console.error(e); }
+                            }}>
                               Mark read
                             </button>
                           )}
-                          <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setNotifications(notifications.filter(item => item.id !== n.id))} title="Delete">
+                          <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleDeleteNotification(n.id)} title="Delete">
                             <FiX size={16} />
                           </button>
                         </div>
                       </div>
                     ))
                   )}
-                </div>
-              </div>
-
-              {/* Right Column: Announcements */}
-              <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', backgroundColor: '#fafafa', overflowY: 'auto' }}>
-                <h4 style={{ margin: '0 0 16px 0', fontSize: '1rem', fontWeight: 600, color: '#334155' }}>School Announcements</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#e0e7ff', color: '#4f46e5', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Enrollment</span>
-                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Academic Year 2026/27 Enrollment</h5>
-                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>New student registration is now open. School admins should verify classroom allocations and teacher assignments before August 15.</p>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 2 days ago</span>
-                  </div>
-
-                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#fee2e2', color: '#ef4444', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Maintenance</span>
-                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Data Sync & Reporting System Offline</h5>
-                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>School-wide performance logs will be synced. Reports download features will be briefly unavailable on Sunday evening.</p>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 4 days ago</span>
-                  </div>
-
-                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#dcfce7', color: '#16a34a', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Curriculum</span>
-                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>New Listening Exercises Added</h5>
-                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>The global Content Studio has published 15 new interactive speaking scenarios. Teachers can now assign them to classrooms.</p>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 1 week ago</span>
-                  </div>
                 </div>
               </div>
             </div>

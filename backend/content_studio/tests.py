@@ -124,6 +124,29 @@ class ContentStudioAPITests(APITestCase):
         response = self.client.get(reverse("experience-list"))
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_super_admin_experiences_list_filtering(self):
+        """Verify super-admin/experiences/ list filtering by grade, status."""
+        self.client.force_authenticate(user=self.super_admin)
+        
+        response = self.client.get(reverse("super-admin-experiences-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], self.experience2.id)
+
+        response = self.client.get(reverse("super-admin-experiences-list"), {"grade": self.grade4.id})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], self.experience2.id)
+
+        response = self.client.get(reverse("super-admin-experiences-list"), {"grade": self.grade3.id})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 0)
+
+        response = self.client.get(reverse("super-admin-experiences-list"), {"status": "DRAFT", "grade": self.grade3.id})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], self.experience1.id)
+
     def test_experiences_list_filtering(self):
         """Verify list endpoint filtering by grade, status, and search."""
         self.client.force_authenticate(user=self.content_creator)

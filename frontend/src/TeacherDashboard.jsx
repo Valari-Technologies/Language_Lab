@@ -46,6 +46,44 @@ const getUserInitials = (u, defaultVal = 'U') => {
   return name.slice(0, 2).toUpperCase();
 };
 
+const UserAvatar = ({ user, size = 'small', initials = 'U' }) => {
+  const [hasError, setHasError] = useState(false);
+  const pic = user?.profile_picture;
+  const validPic = pic && pic.toLowerCase() !== 'avatar' && !pic.toLowerCase().endsWith('/avatar') && !pic.toLowerCase().endsWith('/avatar/');
+
+  useEffect(() => {
+    setHasError(false);
+  }, [pic]);
+
+  if (!validPic || hasError) {
+    return (
+      <div style={{
+        width: '100%',
+        height: '100%',
+        background: '#0b75b3',
+        color: '#fff',
+        fontWeight: 800,
+        fontSize: size === 'small' ? '0.9rem' : '2rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '50%'
+      }}>
+        {getUserInitials(user, initials)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={resolveMediaUrl(pic)}
+      alt=""
+      onError={() => setHasError(true)}
+      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+    />
+  );
+};
+
 /* ─── Auto-generate a student roll no from their name, e.g. "Rahul" -> "RAH001" ───
    The numeric part continues from the total number of existing students (school-wide),
    so it never restarts at 001 once other students already exist — e.g. with 4 students
@@ -328,6 +366,8 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [data,     setData]     = useState(null);
   const [students, setStudents] = useState([]);
   const [classes,  setClasses]  = useState([]);
+  const [tchClassFilter, setTchClassFilter] = useState('');
+  const [tchSectionFilter, setTchSectionFilter] = useState('');
   const [schools,  setSchools]  = useState([]);
   const [grades,   setGrades]   = useState([]);
 
@@ -358,12 +398,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
   const [pwModalError, setPwModalError] = useState('');
   const [currentTime, setCurrentTime]             = useState(new Date());
-  const [notifications, setNotifications]         = useState([
-    { id: 1, title: "Class Activity Submission", message: "35 students from Grade 6-A completed 'Reading Chapter 2 - Quiz'.", time: "10 mins ago", type: "success", read: false },
-    { id: 2, title: "Remedial Alert", message: "5 students scored low in 'Grammar - Past Perfect Tense'. View remedial report.", time: "1 hour ago", type: "warning", read: false },
-    { id: 3, title: "Offline Sync Health", message: "Classroom Tablet Station 3 successfully synced with local server.", time: "4 hours ago", type: "info", read: true },
-    { id: 4, title: "New Lesson Dispatched", message: "New Lesson 'Pronunciation Practice' assigned to your class.", time: "Yesterday", type: "info", read: true },
-  ]);
+  const [notifications, setNotifications]         = useState([]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [showHelpModal,     setShowHelpModal]     = useState(false);
@@ -443,11 +478,79 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     } catch (e) { console.error('Failed to load classes.', e); }
   };
 
+  const loadNotifications = async () => {
+    try {
+      const res = await apiFetch('/api/v1/dashboard/notifications');
+      if (res.ok) {
+        setNotifications(await res.json());
+      }
+    } catch (e) {
+      console.error('Failed to load notifications', e);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      const res = await apiFetch('/api/v1/dashboard/notifications', { method: 'POST' });
+      if (res.ok) {
+        setNotifications(notifications.map(n => ({ ...n, read: true })));
+      }
+    } catch (e) {
+      console.error('Failed to mark notifications read', e);
+    }
+  };
+
+  const handleDeleteNotification = async (id) => {
+    try {
+      const res = await apiFetch(`/api/v1/dashboard/notifications?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setNotifications(notifications.filter(n => n.id !== id));
+      }
+    } catch (e) {
+      console.error('Failed to delete notification', e);
+    }
+  };
+
+  const handleClearAllNotifications = async () => {
+    try {
+      const res = await apiFetch('/api/v1/dashboard/notifications', { method: 'DELETE' });
+      if (res.ok) {
+        setNotifications([]);
+      }
+    } catch (e) {
+      console.error('Failed to clear notifications', e);
+    }
+  };
+
+  const loadUserProfile = async () => {
+    try {
+      const res = await apiFetch('/api/users/profile/');
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+        if (onUpdateUser) onUpdateUser(data);
+        setProfileForm({
+          username: data.username || '',
+          email: data.email || '',
+          full_name: data.full_name || '',
+          phone_no: data.phone_no || '',
+          current_password: '',
+          password: ''
+        });
+      }
+    } catch (e) {
+      console.error('Failed to load user profile', e);
+    }
+  };
+
   const loadAllData = async () => {
     setLoading(true);
     setErrorMsg('');
     try {
-      await Promise.all([loadDashboardData(), loadSchools(), loadGrades(), loadStudents(), loadClasses()]);
+      await Promise.all([
+        loadUserProfile(), loadDashboardData(), loadSchools(),
+        loadGrades(), loadStudents(), loadClasses(), loadNotifications()
+      ]);
     } catch (e) { setErrorMsg('Error loading dashboard data.'); console.error(e); }
     finally { setLoading(false); }
   };
@@ -790,6 +893,22 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     } finally { setActionLoading(false); }
   };
 
+  const getFilteredClasses = () => {
+    return classes.filter(c => {
+      if (tchClassFilter) {
+        const name = c.class_name || '';
+        const match = name.match(/\d+/);
+        const gradeNum = match ? match[0] : '';
+        if (gradeNum !== tchClassFilter) return false;
+      }
+      if (tchSectionFilter) {
+        const sec = c.section ? c.section.replace('Section', '').trim() : '';
+        if (sec !== tchSectionFilter) return false;
+      }
+      return true;
+    });
+  };
+
   /* ── Filter helpers ── */
   const filterList = (list) => {
     if (!searchQuery) return list;
@@ -807,6 +926,8 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const goTo = (tab) => {
     setActiveSubTab(tab);
     setSearchQuery('');
+    setTchClassFilter('');
+    setTchSectionFilter('');
     setIsSidebarOpen(false);
     setStudentPage(1);
     setClassPage(1);
@@ -1290,11 +1411,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
           <div className="sd-user-card" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}>
             <div className="sd-user-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-              {user?.profile_picture ? (
-                <img src={resolveMediaUrl(user.profile_picture)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Avatar" />
-              ) : (
-                getUserInitials(user, 'TE')
-              )}
+              <UserAvatar user={user} size="small" initials="TE" />
             </div>
             <div className="sd-user-meta" style={{ flex: 1 }}>
               <div className="sd-user-name">{profileForm.full_name || user?.full_name || user?.username || 'Teacher'}</div>
@@ -1344,7 +1461,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: '8px', width: '300px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', zIndex: 1000, padding: '12px 16px' }} onClick={e => e.stopPropagation()}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
                     <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>Notifications</span>
-                    <button style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }} onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true })))}>Mark all read</button>
+                    <button style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }} onClick={handleMarkAllRead}>Mark all read</button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
                     {notifications.length === 0 ? (
@@ -1352,14 +1469,14 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     ) : (
                       notifications.map(n => (
                         <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: n.read ? 'transparent' : '#f0fdf4', borderLeft: n.read ? 'none' : '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', textAlign: 'left' }}>
-                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
-                            <span style={{ fontSize: '0.75rem', color: '#475569' }}>{n.message || n.text}</span>
-                            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
-                          </div>
-                          <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); setNotifications(notifications.filter(item => item.id !== n.id)); }} title="Delete">
-                            <FiX size={14} />
-                          </button>
+                           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                             <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
+                             <span style={{ fontSize: '0.75rem', color: '#475569' }}>{n.message || n.text}</span>
+                             <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
+                           </div>
+                           <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); handleDeleteNotification(n.id); }} title="Delete">
+                             <FiX size={14} />
+                           </button>
                         </div>
                       ))
                     )}
@@ -1840,12 +1957,35 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       onChange={e => { setSearchQuery(e.target.value); setClassPage(1); }}
                     />
                   </div>
-                  <div className="sd-table-actions">
+                  <div className="sd-table-actions" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                     {selectedClassIds.length > 0 && (
                       <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteClasses}>
                         <FiTrash2/> Delete Selected ({selectedClassIds.length})
                       </button>
                     )}
+                    <select
+                      className="sd-form-input"
+                      style={{ width: '130px', height: '38px', padding: '0 0.5rem', fontSize: '0.82rem', borderRadius: '8px' }}
+                      value={tchClassFilter}
+                      onChange={e => { setTchClassFilter(e.target.value); setClassPage(1); }}
+                    >
+                      <option value="">All Classes</option>
+                      {[3, 4, 5, 6, 7, 8].map(n => (
+                        <option key={n} value={String(n)}>Class {n}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      className="sd-form-input"
+                      style={{ width: '130px', height: '38px', padding: '0 0.5rem', fontSize: '0.82rem', borderRadius: '8px' }}
+                      value={tchSectionFilter}
+                      onChange={e => { setTchSectionFilter(e.target.value); setClassPage(1); }}
+                    >
+                      <option value="">All Sections</option>
+                      {['A', 'B', 'C', 'D'].map(sec => (
+                        <option key={sec} value={sec}>Section {sec}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 <div className="sd-table-wrap">
@@ -1869,7 +2009,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {paginate(filterList(classes), classPage).map((c, i) => {
+                      {paginate(filterList(getFilteredClasses()), classPage).map((c, i) => {
                         const cid = c.class_id || c.id;
                         return (
                           <tr key={cid || i}>
@@ -1898,13 +2038,13 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           </tr>
                         );
                       })}
-                      {filterList(classes).length === 0 && (
+                      {filterList(getFilteredClasses()).length === 0 && (
                         <tr><td colSpan="6" className="sd-empty-state">No classes found.</td></tr>
                       )}
                     </tbody>
                   </table>
                 </div>
-                <Pagination total={filterList(classes).length} perPage={PER_PAGE} page={classPage} onPage={setClassPage}/>
+                <Pagination total={filterList(getFilteredClasses()).length} perPage={PER_PAGE} page={classPage} onPage={setClassPage}/>
               </div>
             </>
           )}
@@ -2008,13 +2148,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       style={{ position: 'relative', margin: '0.5rem 0' }}
                     >
                       <div style={{ width: '96px', height: '96px', borderRadius: '50%', border: '4px solid #eff6ff', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(11, 117, 179, 0.2)', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {user?.profile_picture ? (
-                          <img src={resolveMediaUrl(user.profile_picture)} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        ) : (
-                          <div style={{ width: '100%', height: '100%', background: '#0b75b3', color: '#fff', fontWeight: 800, fontSize: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {getUserInitials(user, 'U')}
-                          </div>
-                        )}
+                        <UserAvatar user={user} size="large" initials="U" />
                       </div>
                       <button
                         type="button"
@@ -2039,7 +2173,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           >
                             <FiUpload size={14} /> Upload New
                           </button>
-                          {user?.profile_picture && (
+                          {user?.profile_picture && user.profile_picture.toLowerCase() !== 'avatar' && !user.profile_picture.toLowerCase().endsWith('/avatar') && !user.profile_picture.toLowerCase().endsWith('/avatar/') && (
                             <button
                               type="button"
                               onClick={() => {
@@ -2706,17 +2840,17 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       )}
 
       {showNotifModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: '#ffffff', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ backgroundColor: '#ffffff', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundImage: `url(${teacherBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ backgroundColor: 'transparent', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid rgba(15,23,42,0.08)', background: 'rgba(255, 255, 255, 0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ backgroundColor: '#4f46e5', color: '#ffffff', width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
                   <FiBell />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Teacher Notifications & Announcements</h3>
-                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Stay updated with class notifications and academic announcements</p>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Teacher Notifications</h3>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Stay updated with class notifications</p>
                 </div>
               </div>
               <button style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s' }} onClick={() => setShowNotifModal(false)}>
@@ -2725,13 +2859,13 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             </div>
 
             {/* Modal Body */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', flex: 1, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', flex: 1, overflow: 'hidden', backgroundColor: 'transparent', padding: '24px' }}>
               {/* Left Column: Notifications */}
-              <div style={{ borderRight: '1px solid #f1f5f9', padding: '24px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+              <div style={{ width: '100%', maxWidth: '800px', padding: '24px', display: 'flex', flexDirection: 'column', overflowY: 'auto', backgroundColor: 'rgba(255, 255, 255, 0.85)', backdropFilter: 'blur(16px)', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.08)', border: '1px solid rgba(255,255,255,0.25)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#334155' }}>Recent Activity</h4>
                   {notifications.length > 0 && (
-                    <button style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setNotifications([])}>
+                    <button style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }} onClick={handleClearAllNotifications}>
                       <FiTrash2 size={14} /> Clear all
                     </button>
                   )}
@@ -2745,7 +2879,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     </div>
                   ) : (
                     notifications.map(n => (
-                      <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: n.read ? '#f8fafc' : '#f0fdf4', border: `1px solid ${n.read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative' }}>
+                      <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: n.read ? '#ffffff' : '#f0fdf4', border: `1px solid ${n.read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
                           <span style={{ fontSize: '0.8rem', color: '#475569' }}>{n.message || n.text}</span>
@@ -2753,44 +2887,22 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         </div>
                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                           {!n.read && (
-                            <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={() => setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true } : item))}>
+                            <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={async () => {
+                              try {
+                                await apiFetch('/api/v1/dashboard/notifications', { method: 'POST' });
+                                setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true } : item));
+                              } catch (e) { console.error(e); }
+                            }}>
                               Mark read
                             </button>
                           )}
-                          <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setNotifications(notifications.filter(item => item.id !== n.id))} title="Delete">
+                          <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleDeleteNotification(n.id)} title="Delete">
                             <FiX size={16} />
                           </button>
                         </div>
                       </div>
                     ))
                   )}
-                </div>
-              </div>
-
-              {/* Right Column: Announcements */}
-              <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', backgroundColor: '#fafafa', overflowY: 'auto' }}>
-                <h4 style={{ margin: '0 0 16px 0', fontSize: '1rem', fontWeight: 600, color: '#334155' }}>Academic Announcements</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#e0e7ff', color: '#4f46e5', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Guideline</span>
-                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Lesson Plan Formatting Update</h5>
-                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>School administrators have updated lesson plan guidelines for Grade 5 and 6 speaking sections. Please review the new speaking activities criteria in the resource center.</p>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 3 hours ago</span>
-                  </div>
-
-                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#fee2e2', color: '#ef4444', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Submission</span>
-                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Term 1 speaking activity submission</h5>
-                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>The deadline to lock grades and submit performance scores for Grade 4 has been extended. All submissions must be finalized by next Friday.</p>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 1 day ago</span>
-                  </div>
-
-                  <div style={{ padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '20px', backgroundColor: '#dcfce7', color: '#16a34a', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Content Studio</span>
-                    <h5 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>5 New Game-based Templates</h5>
-                    <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.4' }}>Super admin added 5 new memory game templates to the scenario builder, allowing teachers to create customized gamified spelling drills.</p>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posted 5 days ago</span>
-                  </div>
                 </div>
               </div>
             </div>
