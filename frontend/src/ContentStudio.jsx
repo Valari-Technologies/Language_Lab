@@ -6,7 +6,7 @@ import {
   FiGrid, FiBookOpen, FiActivity, FiMonitor, FiFileText,
   FiCheckCircle, FiDownload, FiSettings, FiHelpCircle, FiLogOut,
   FiSearch, FiPlus, FiEdit2, FiTrash2, FiX, FiMenu,
-  FiChevronDown, FiChevronUp, FiBell, FiEye, FiEyeOff,
+  FiChevronDown, FiChevronUp, FiChevronLeft, FiChevronRight, FiBell, FiEye, FiEyeOff,
   FiAlertTriangle, FiImage, FiPlusCircle,
   FiArrowLeft, FiInfo, FiUpload,
   FiPlay, FiCheck,
@@ -296,6 +296,16 @@ const MediaUploadField = ({ label, value, mediaType, onChange, actionLoading, se
 function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUser }) {
   // Views: dashboard, experiences, experience-builder, activity-builder, screen-builder, preview, media, publish, profile
   const [view, setView] = useState('dashboard');
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    return localStorage.getItem('cs_nav_collapsed') === 'true';
+  });
+  const toggleNavCollapsed = () => {
+    setNavCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem('cs_nav_collapsed', String(next));
+      return next;
+    });
+  };
   const [previousView, setPreviousView] = useState('dashboard');
   const [activeHotspotIndex, setActiveHotspotIndex] = useState(0);
   const [isNewExperience, setIsNewExperience] = useState(false);
@@ -4147,6 +4157,10 @@ const formatDifficulty = (val) => {
           position: relative;
           overflow: hidden;
           box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+          transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .cs-sidebar.collapsed {
+          width: 72px;
         }
         .cs-brand {
           padding: 1.5rem;
@@ -4671,16 +4685,38 @@ const formatDifficulty = (val) => {
 
       {/* ── Sidebar ── */}
       {view !== 'preview' && (
-        <aside className="cs-sidebar">
-          <div className="cs-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem 1.25rem' }}>
-            <img src={logoIcon} alt="Logo" style={{ width: '62px', height: '100px', objectFit: 'contain' }} />
-            <div>
-              <h2 className="cs-brand-title">LinguaLab</h2>
-              <span className="cs-brand-sub">Content Studio</span>
-            </div>
+        <aside className={`cs-sidebar ${navCollapsed ? 'collapsed' : ''}`}>
+          <div
+            className="cs-brand"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: navCollapsed ? 'center' : 'flex-start',
+              gap: '0.75rem',
+              padding: navCollapsed ? '1rem 0.5rem' : '1.25rem 1.5rem',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+              overflow: 'hidden'
+            }}
+          >
+            <img
+              src={logoIcon}
+              alt="Logo"
+              style={{
+                width: navCollapsed ? '32px' : '62px',
+                height: navCollapsed ? '52px' : '100px',
+                objectFit: 'contain',
+                transition: 'all 0.2s ease'
+              }}
+            />
+            {!navCollapsed && (
+              <div style={{ transition: 'opacity 0.2s' }}>
+                <h2 className="cs-brand-title">LinguaLab</h2>
+                <span className="cs-brand-sub">Content Studio</span>
+              </div>
+            )}
           </div>
 
-          <nav className="cs-nav">
+          <nav className="cs-nav" style={{ padding: navCollapsed ? '1rem 0.5rem' : '1.5rem 1rem' }}>
             {[
               { key: 'dashboard', label: 'Dashboard', icon: <FiGrid /> },
               { key: 'experiences', label: 'Lesson Library', icon: <FiBookOpen /> },
@@ -4719,20 +4755,22 @@ const formatDifficulty = (val) => {
                 }}
                 className={`cs-nav-item ${view === item.key ? 'active' : ''}`}
                 data-testid={`cs-nav-${item.key}`}
+                title={navCollapsed ? item.label : undefined}
+                style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}
               >
                 {item.icon}
-                <span>{item.label}</span>
+                {!navCollapsed && <span>{item.label}</span>}
               </button>
             ))}
           </nav>
 
-          <div className="cs-sidebar-footer" style={{ position: 'relative' }}>
+          <div className="cs-sidebar-footer" style={{ position: 'relative', padding: navCollapsed ? '0.5rem' : '0.75rem' }}>
             {showProfileDropdown && (
               <div style={{
                 position: 'absolute',
-                bottom: '75px',
-                left: '0.75rem',
-                right: '0.75rem',
+                bottom: '100%',
+                left: '0.5rem',
+                right: '0.5rem',
                 background: '#095d8f',
                 borderRadius: '12px',
                 boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.3)',
@@ -4741,7 +4779,8 @@ const formatDifficulty = (val) => {
                 zIndex: 1000,
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '4px'
+                gap: '4px',
+                marginBottom: '8px'
               }} onClick={(e) => e.stopPropagation()}>
                 <button 
                   onClick={() => { setView('profile'); setShowProfileDropdown(false); }}
@@ -4794,18 +4833,67 @@ const formatDifficulty = (val) => {
               </div>
             )}
 
-            <div className="cs-profile-card" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}>
+            <div
+              className="cs-profile-card"
+              style={{
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: navCollapsed ? 'center' : 'flex-start',
+                padding: navCollapsed ? '0.5rem' : '0.75rem 1rem',
+                gap: '0.75rem',
+                transition: 'all 0.2s',
+                borderRadius: '8px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                marginBottom: '8px'
+              }}
+              onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}
+            >
               <div className="cs-profile-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                 <UserAvatar user={currentUserState} size="small" initials="CC" />
               </div>
-              <div className="cs-profile-info" style={{ flex: 1 }}>
-                <div className="cs-profile-name">{currentUserState?.full_name || currentUserState?.username || 'Content Creator'}</div>
-                <div className="cs-profile-desc">Content Creator</div>
-              </div>
-              <div className="cs-dropdown-icon" style={{ color: 'rgba(255, 255, 255, 0.75)', display: 'flex', alignItems: 'center', fontSize: '1rem' }}>
-                <FiChevronDown />
-              </div>
+              {!navCollapsed && (
+                <>
+                  <div className="cs-profile-info" style={{ flex: 1, minWidth: 0 }}>
+                    <div className="cs-profile-name" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentUserState?.full_name || currentUserState?.username || 'Content Creator'}</div>
+                    <div className="cs-profile-desc" style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)' }}>Content Creator</div>
+                  </div>
+                  <div className="cs-dropdown-icon" style={{ color: 'rgba(255, 255, 255, 0.75)', display: 'flex', alignItems: 'center', fontSize: '1rem' }}>
+                    <FiChevronDown />
+                  </div>
+                </>
+              )}
             </div>
+
+            <button
+              onClick={toggleNavCollapsed}
+              className="cs-sidebar-toggle-btn"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: navCollapsed ? 'center' : 'flex-start',
+                gap: '0.75rem',
+                width: '100%',
+                padding: navCollapsed ? '0.5rem' : '0.6rem 1rem',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: 'none',
+                borderRadius: '8px',
+                color: 'rgba(255, 255, 255, 0.75)',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.2s ease',
+              }}
+              title={navCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+            >
+              {navCollapsed ? <FiChevronRight style={{ fontSize: '1.2rem' }} /> : (
+                <>
+                  <FiChevronLeft style={{ fontSize: '1.2rem' }} />
+                  <span>Collapse Sidebar</span>
+                </>
+              )}
+            </button>
           </div>
         </aside>
       )}
