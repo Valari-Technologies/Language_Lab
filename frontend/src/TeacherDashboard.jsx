@@ -2057,77 +2057,12 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <p className="sd-page-sub">Monitor evaluation metrics and student progression.</p>
               </div>
 
-              {/* Skill breakdown cards */}
-              <div className="sd-card">
-                <div className="sd-card-header">
-                  <div className="sd-card-title">Overall Student Marks</div>
-                  <span className="sd-card-meta">This Semester</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {[
-                    { label: 'Speaking',      pct: 85, color: '#6366f1' },
-                    { label: 'Vocabulary',    pct: 72, color: '#22c55e' },
-                    { label: 'Comprehension', pct: 90, color: '#3b82f6' },
-                    { label: 'Writing',       pct: 68, color: '#f59e0b' },
-                  ].map(skill => (
-                    <div key={skill.label}>
-                      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                        <span style={{ fontSize:'0.83rem', fontWeight:600, color:'#374151' }}>{skill.label}</span>
-                        <span style={{ fontSize:'0.83rem', fontWeight:700, color: skill.color }}>{skill.pct}%</span>
-                      </div>
-                      <div style={{ width:'100%', height:8, background:'#f3f4f6', borderRadius:4, overflow:'hidden' }}>
-                        <div style={{ width:`${skill.pct}%`, height:'100%', background: skill.color, borderRadius:4, transition:'width 0.6s ease' }}/>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Top students */}
-              <div className="sd-card">
-                <div className="sd-card-header">
-                  <div className="sd-card-title">Top 5 Students by Grade</div>
-                  <span className="sd-card-meta">All Classes</span>
-                </div>
-                <div className="sd-activity-list">
-                  {(data?.student_rankings?.length
-                    ? data.student_rankings.slice(0, 5)
-                    : [
-                        { name: 'Sarah Jenkins', score: '95%' },
-                        { name: 'Michael Chen',  score: '92%' },
-                        { name: 'Emma Watson',   score: '89%' },
-                        { name: 'David Miller',  score: '87%' },
-                        { name: 'Jessica Lee',   score: '85%' },
-                      ]
-                  ).map((rank, idx) => (
-                    <div className="sd-activity-item" key={idx}>
-                      <div className="sd-activity-avatar"
-                        style={{ background: ['#f59e0b','#94a3b8','#b45309','#6366f1','#22c55e'][idx] || '#6366f1',
-                          fontSize:'0.78rem', fontWeight:700 }}>
-                        {idx + 1}
-                      </div>
-                      <div className="sd-activity-body">
-                        <div className="sd-activity-name">{rank.name}</div>
-                        <div className="sd-activity-desc">{rank.progress || 'Top performer'}</div>
-                      </div>
-                      <div className="sd-activity-time" style={{ color:'#10b981', fontWeight:700, fontSize:'0.85rem' }}>
-                        {rank.score || '—'}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Grading queue empty state */}
-              <div className="sd-card">
-                <div className="sd-card-header">
-                  <div className="sd-card-title">Grading Queue</div>
-                </div>
-                <div className="sd-reports-empty" style={{ padding:'2.5rem 1rem' }}>
-                  <FiFileText/>
-                  <h3>No pending submissions</h3>
-                  <p>Grading data will appear here once students complete their lesson assessments.</p>
-                </div>
+              <div className="sd-card" style={{ padding: '3rem 1.5rem', textAlign: 'center' }}>
+                <FiBarChart2 style={{ fontSize: '3rem', color: '#94a3b8', marginBottom: '1rem' }} />
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#1e293b', marginBottom: '0.5rem' }}>No Reports Available</h3>
+                <p style={{ color: '#64748b', maxWidth: '450px', margin: '0 auto' }}>
+                  Student progression and evaluation reports will appear here once assignments are completed and submitted.
+                </p>
               </div>
             </>
           )}

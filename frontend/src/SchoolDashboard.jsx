@@ -532,7 +532,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
   const loadExperiences = async () => {
     try {
-      const res = await apiFetch('/api/v1/content/experiences/');
+      const res = await apiFetch('/api/v1/content/experiences/?page_size=1000');
       if (res.ok) { const d = await res.json(); setExperiences(d.results || d); }
     } catch (e) { console.error('Failed to load experiences.', e); }
   };

@@ -48,7 +48,7 @@ class ExperienceViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
 
     def get_permissions(self):
-        if self.action in ("retrieve", "activities"):
+        if self.action in ("list", "retrieve", "activities"):
             from accounts.permissions import IsContentCreatorOrSuperAdminOrSchoolUser
             return [IsAuthenticated(), IsContentCreatorOrSuperAdminOrSchoolUser()]
         if self.action in ("destroy", "preview"):
@@ -65,7 +65,7 @@ class ExperienceViewSet(viewsets.ModelViewSet):
         # Filter for school tenants (only show published experiences)
         role = getattr(self.request.user, "role", None)
         if role in ["SCHOOL_ADMIN", "TEACHER", "STUDENT"]:
-            queryset = queryset.filter(status="APPROVED")
+            queryset = queryset.filter(status__in=["APPROVED", "PUBLISHED"])
         
 
         grade = self.request.query_params.get("grade")
@@ -602,12 +602,8 @@ class DashboardRecentActivityAPIView(APIView):
         role = getattr(user, "role", "STUDENT")
         activities = []
 
-        from django.utils import timezone
-        from datetime import timedelta
-        cutoff = timezone.now() - timedelta(days=7)
-
         if role in ["SUPER_ADMIN", "CONTENT_CREATOR"]:
-            recent_experiences = Experience.objects.filter(is_deleted=False, updated_at__gte=cutoff).order_by("-updated_at")[:15]
+            recent_experiences = Experience.objects.filter(is_deleted=False).order_by("-updated_at")[:15]
             for s in recent_experiences:
                 activities.append({
                     "id": f"experience-{s.id}",
@@ -616,7 +612,7 @@ class DashboardRecentActivityAPIView(APIView):
                     "timestamp": s.updated_at
                 })
 
-            recent_media = Media.objects.filter(upload_date__gte=cutoff).order_by("-upload_date")[:15]
+            recent_media = Media.objects.all().order_by("-upload_date")[:15]
             for m in recent_media:
                 activities.append({
                     "id": f"media-{m.id}",
@@ -634,7 +630,7 @@ class DashboardRecentActivityAPIView(APIView):
                 school = user.school_admin_profile.school
             
             if school:
-                recent_teachers = Teacher.objects.filter(school=school, created_at__gte=cutoff).order_by("-created_at")[:10]
+                recent_teachers = Teacher.objects.filter(school=school).order_by("-created_at")[:10]
                 for t in recent_teachers:
                     activities.append({
                         "id": f"teacher-{t.teacher_id}",
@@ -643,7 +639,7 @@ class DashboardRecentActivityAPIView(APIView):
                         "timestamp": t.created_at
                     })
                 
-                recent_classes = Class.objects.filter(school=school, created_at__gte=cutoff).order_by("-created_at")[:10]
+                recent_classes = Class.objects.filter(school=school).order_by("-created_at")[:10]
                 for c in recent_classes:
                     activities.append({
                         "id": f"class-{c.class_id}",
@@ -652,7 +648,7 @@ class DashboardRecentActivityAPIView(APIView):
                         "timestamp": c.created_at
                     })
 
-                recent_students = Student.objects.filter(school=school, created_at__gte=cutoff).order_by("-created_at")[:10]
+                recent_students = Student.objects.filter(school=school).order_by("-created_at")[:10]
                 for st in recent_students:
                     activities.append({
                         "id": f"student-{st.student_id}",
@@ -667,7 +663,7 @@ class DashboardRecentActivityAPIView(APIView):
             
             teacher = Teacher.objects.filter(user=user).first()
             if teacher:
-                recent_students = Student.objects.filter(school=teacher.school, created_at__gte=cutoff).order_by("-created_at")[:15]
+                recent_students = Student.objects.filter(school=teacher.school).order_by("-created_at")[:15]
                 for st in recent_students:
                     activities.append({
                         "id": f"student-{st.student_id}",
