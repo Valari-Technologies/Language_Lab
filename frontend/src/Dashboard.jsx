@@ -501,6 +501,16 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     setCustomAlert({ show: true, title, message, type });
   };
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    return localStorage.getItem('sa_nav_collapsed') === 'true';
+  });
+  const toggleNavCollapsed = () => {
+    setNavCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem('sa_nav_collapsed', String(next));
+      return next;
+    });
+  };
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('');
   const [selectedLocationFilter, setSelectedLocationFilter] = useState('');
@@ -1675,41 +1685,81 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       {/* ═════════════════
           SIDEBAR
           ═════════════════ */}
-      <aside className={`sd-sidebar${isSidebarOpen ? ' open' : ''}`}>
-        <div className="sd-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem 1.25rem' }}>
-          <img src={logoIcon} alt="Logo" style={{ width: '62px', height: '100px', objectFit: 'contain' }} />
-          <div>
-            <div className="sd-brand-name">LinguaLab</div>
-            <div className="sd-brand-sub">Admin Portal</div>
-          </div>
+      <aside
+        className={`sd-sidebar${isSidebarOpen ? ' open' : ''}`}
+        style={{
+          width: navCollapsed ? '72px' : '260px',
+          transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+        }}
+      >
+        <div
+          className="sd-brand"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: navCollapsed ? 'center' : 'space-between',
+            gap: '0.75rem',
+            padding: navCollapsed ? '1rem 0.5rem' : '1.75rem 1.5rem 1.5rem',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+            overflow: 'hidden'
+          }}
+        >
+          {!navCollapsed && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <img src={logoIcon} alt="Logo" style={{ width: '48px', height: '76px', objectFit: 'contain' }} />
+              <div>
+                <div className="sd-brand-name">LinguaLab</div>
+                <div className="sd-brand-sub">Admin Portal</div>
+              </div>
+            </div>
+          )}
+          <button
+            onClick={toggleNavCollapsed}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'rgba(255, 255, 255, 0.75)',
+              cursor: 'pointer',
+              padding: '6px',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+            title={navCollapsed ? 'Expand sidebar' : 'Close sidebar'}
+          >
+            <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="20px" width="20px" xmlns="http://www.w3.org/2000/svg">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="9" y1="3" x2="9" y2="21"></line>
+            </svg>
+          </button>
         </div>
 
-        <nav className="sd-nav">
-          <button className={`sd-nav-item${activeTab === 'dashboard' ? ' active' : ''}`} onClick={() => goTo('dashboard')}>
-            <FiGrid /><span>Dashboard</span>
+        <nav className="sd-nav" style={{ padding: navCollapsed ? '1rem 0.5rem' : '1.5rem 1rem' }}>
+          <button className={`sd-nav-item${activeTab === 'dashboard' ? ' active' : ''}`} onClick={() => goTo('dashboard')} title={navCollapsed ? 'Dashboard' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
+            <FiGrid />{!navCollapsed && <span>Dashboard</span>}
           </button>
-          <button className={`sd-nav-item${activeTab === 'schools' ? ' active' : ''}`} onClick={() => goTo('schools')}>
-            <FiBookOpen /><span>Manage Schools</span>
+          <button className={`sd-nav-item${activeTab === 'schools' ? ' active' : ''}`} onClick={() => goTo('schools')} title={navCollapsed ? 'Manage Schools' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
+            <FiBookOpen />{!navCollapsed && <span>Manage Schools</span>}
           </button>
-          <button className={`sd-nav-item${activeTab === 'experiences' ? ' active' : ''}`} onClick={() => goTo('experiences')}>
-            <FiFileText /><span>Manage Lessons</span>
+          <button className={`sd-nav-item${activeTab === 'experiences' ? ' active' : ''}`} onClick={() => goTo('experiences')} title={navCollapsed ? 'Manage Lessons' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
+            <FiFileText />{!navCollapsed && <span>Manage Lessons</span>}
           </button>
-          {/* Subscriptions tab temporarily removed */}
-          {/* <button className={`sd-nav-item${activeTab === 'subscriptions' ? ' active' : ''}`} onClick={() => goTo('subscriptions')}>
-            <FiCheckCircle /><span>Subscriptions</span>
-          </button> */}
-          <button className={`sd-nav-item${activeTab === 'profile' ? ' active' : ''}`} onClick={() => goTo('profile')}>
-            <FiUser /><span>Profile Settings</span>
+          <button className={`sd-nav-item${activeTab === 'profile' ? ' active' : ''}`} onClick={() => goTo('profile')} title={navCollapsed ? 'Profile Settings' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
+            <FiUser />{!navCollapsed && <span>Profile Settings</span>}
           </button>
         </nav>
 
-        <div className="sd-sidebar-bottom" style={{ position: 'relative' }}>
+        <div className="sd-sidebar-bottom" style={{ position: 'relative', padding: navCollapsed ? '0.5rem' : '0.75rem' }}>
           {showProfileDropdown && (
             <div style={{
               position: 'absolute',
-              bottom: '75px',
-              left: '0.75rem',
-              right: '0.75rem',
+              bottom: '100%',
+              left: '0.5rem',
+              right: '0.5rem',
               background: '#095d8f',
               borderRadius: '12px',
               boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.3)',
@@ -1718,7 +1768,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               zIndex: 1000,
               display: 'flex',
               flexDirection: 'column',
-              gap: '4px'
+              gap: '4px',
+              marginBottom: '8px'
             }} onClick={(e) => e.stopPropagation()}>
               <button
                 onClick={() => { goTo('profile'); setShowProfileDropdown(false); }}
@@ -1771,17 +1822,35 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             </div>
           )}
 
-          <div className="sd-user-card" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}>
+          <div
+            className="sd-user-card"
+            style={{
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: navCollapsed ? 'center' : 'flex-start',
+              padding: navCollapsed ? '0.5rem' : '0.75rem 1rem',
+              gap: '0.75rem',
+              transition: 'all 0.2s',
+              borderRadius: '8px',
+              background: 'rgba(255, 255, 255, 0.05)'
+            }}
+            onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}
+          >
             <div className="sd-user-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
               <UserAvatar user={user} size="small" initials="AD" />
             </div>
-            <div className="sd-user-meta" style={{ flex: 1 }}>
-              <div className="sd-user-name">{profileForm.full_name || user?.full_name || user?.username || 'Super Admin'}</div>
-              <div className="sd-user-role">Super Admin</div>
-            </div>
-            <div style={{ color: 'rgba(255, 255, 255, 0.75)', display: 'flex', alignItems: 'center', fontSize: '1rem' }}>
-              <FiChevronDown />
-            </div>
+            {!navCollapsed && (
+              <>
+                <div className="sd-user-meta" style={{ flex: 1, minWidth: 0 }}>
+                  <div className="sd-user-name" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profileForm.full_name || user?.full_name || user?.username || 'Super Admin'}</div>
+                  <div className="sd-user-role" style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)' }}>Super Admin</div>
+                </div>
+                <div style={{ color: 'rgba(255, 255, 255, 0.75)', display: 'flex', alignItems: 'center', fontSize: '1rem' }}>
+                  <FiChevronDown />
+                </div>
+              </>
+            )}
           </div>
         </div>
       </aside>

@@ -4691,29 +4691,53 @@ const formatDifficulty = (val) => {
             style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: navCollapsed ? 'center' : 'flex-start',
+              justifyContent: navCollapsed ? 'center' : 'space-between',
               gap: '0.75rem',
               padding: navCollapsed ? '1rem 0.5rem' : '1.25rem 1.5rem',
               borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
               overflow: 'hidden'
             }}
           >
-            <img
-              src={logoIcon}
-              alt="Logo"
-              style={{
-                width: navCollapsed ? '32px' : '62px',
-                height: navCollapsed ? '52px' : '100px',
-                objectFit: 'contain',
-                transition: 'all 0.2s ease'
-              }}
-            />
             {!navCollapsed && (
-              <div style={{ transition: 'opacity 0.2s' }}>
-                <h2 className="cs-brand-title">LinguaLab</h2>
-                <span className="cs-brand-sub">Content Studio</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <img
+                  src={logoIcon}
+                  alt="Logo"
+                  style={{
+                    width: '48px',
+                    height: '76px',
+                    objectFit: 'contain'
+                  }}
+                />
+                <div>
+                  <h2 className="cs-brand-title">LinguaLab</h2>
+                  <span className="cs-brand-sub">Content Studio</span>
+                </div>
               </div>
             )}
+            <button
+              onClick={toggleNavCollapsed}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'rgba(255, 255, 255, 0.75)',
+                cursor: 'pointer',
+                padding: '6px',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+              title={navCollapsed ? 'Expand sidebar' : 'Close sidebar'}
+            >
+              <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="20px" width="20px" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="3" x2="9" y2="21"></line>
+              </svg>
+            </button>
           </div>
 
           <nav className="cs-nav" style={{ padding: navCollapsed ? '1rem 0.5rem' : '1.5rem 1rem' }}>
@@ -4844,8 +4868,7 @@ const formatDifficulty = (val) => {
                 gap: '0.75rem',
                 transition: 'all 0.2s',
                 borderRadius: '8px',
-                background: 'rgba(255, 255, 255, 0.05)',
-                marginBottom: '8px'
+                background: 'rgba(255, 255, 255, 0.05)'
               }}
               onClick={(e) => { e.stopPropagation(); setShowProfileDropdown(!showProfileDropdown); }}
             >
@@ -4864,36 +4887,6 @@ const formatDifficulty = (val) => {
                 </>
               )}
             </div>
-
-            <button
-              onClick={toggleNavCollapsed}
-              className="cs-sidebar-toggle-btn"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: navCollapsed ? 'center' : 'flex-start',
-                gap: '0.75rem',
-                width: '100%',
-                padding: navCollapsed ? '0.5rem' : '0.6rem 1rem',
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: 'none',
-                borderRadius: '8px',
-                color: 'rgba(255, 255, 255, 0.75)',
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.2s ease',
-              }}
-              title={navCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-            >
-              {navCollapsed ? <FiChevronRight style={{ fontSize: '1.2rem' }} /> : (
-                <>
-                  <FiChevronLeft style={{ fontSize: '1.2rem' }} />
-                  <span>Collapse Sidebar</span>
-                </>
-              )}
-            </button>
           </div>
         </aside>
       )}
