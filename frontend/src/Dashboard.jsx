@@ -101,6 +101,7 @@ const getPreviewMediaUrl = (screen, type) => {
 
 import logoIcon from './assets/icon.png';
 import AvatarCropperModal from './AvatarCropperModal';
+import HelpSupportModal from './HelpSupportModal';
 
 const INDIAN_STATES_AND_CITIES = {
   "Tamil Nadu": [
@@ -4439,34 +4440,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
 
       {/* ── Help & Support Modal ── */}
-      {showHelpModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowHelpModal(false)}>
-          <div style={{ background: '#ffffff', borderRadius: '16px', padding: '2rem', width: '480px', maxWidth: '90vw', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>Help & Support</h2>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '1.25rem' }} onClick={() => setShowHelpModal(false)}><FiX /></button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {[
-                { icon: '🏫', title: 'School Management Guide', desc: 'How to onboard new schools, issue license keys, and manage portal roles.', action: '#' },
-                { icon: '🔄', title: 'Offline Sync Troubleshooting', desc: 'Resolving telemetry ingestion conflicts from Electron LMS apps.', action: '#' },
-                { icon: '🛡️', title: 'System Audit & Security', desc: 'Managing global admin permissions and monitoring API health.', action: '#' },
-                { icon: '📞', title: 'Priority Support Contact', desc: 'Email: superadmin-support@lingualab.edu | Emergency Line: +91 98765 43210', action: 'mailto:superadmin-support@lingualab.edu' },
-              ].map((item, idx) => (
-                <a key={idx} href={item.action} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', textDecoration: 'none', color: '#334155', transition: 'background 0.15s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}>
-                  <span style={{ fontSize: '1.5rem' }}>{item.icon}</span>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{item.title}</div>
-                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{item.desc}</div>
-                  </div>
-                </a>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <HelpSupportModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
 
       {/* ── Lessons table action dropdown (fixed-position, never clipped by table overflow) ── */}
       {typeof activeDropdown === 'number' && activeDropdown !== null && (() => {

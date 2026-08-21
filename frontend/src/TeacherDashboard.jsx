@@ -24,6 +24,7 @@ import teacherHeaderBanner from './assets/6.jpeg';
 import teacherBg from './assets/teacher_bg.png';
 import logoIcon from './assets/icon.png';
 import AvatarCropperModal from './AvatarCropperModal';
+import HelpSupportModal from './HelpSupportModal';
 
 const getUserInitials = (u, defaultVal = 'U') => {
   if (!u) return defaultVal;
@@ -353,6 +354,8 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   /* ── Bulk Upload ── */
   const [importActive,   setImportActive]   = useState(false);
   const [uploadSummary,  setUploadSummary]  = useState(null);
+  const [selectedFile,   setSelectedFile]   = useState(null);
+  const [selectedFileName, setSelectedFileName] = useState('');
 
   /* ── Modals ── */
   const [showModal,   setShowModal]   = useState(false);
@@ -755,16 +758,24 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   };
 
   /* ── Bulk Upload ── */
-  const handleBulkUpload = async (e) => {
+  const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    setSelectedFile(file);
+    setSelectedFileName(file.name);
+    setUploadSummary(null);
+    setErrorMsg('');
+  };
+
+  const handleBulkImport = async () => {
+    if (!selectedFile) return;
     setErrorMsg('');
     setSuccessMsg('');
     setUploadSummary(null);
     setActionLoading(true);
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', selectedFile);
     formData.append('upload_type', 'student');
 
     try {
@@ -788,7 +799,26 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       setErrorMsg('Failed to upload file. Check connections.');
     } finally {
       setActionLoading(false);
-      e.target.value = '';
+      setSelectedFile(null);
+      setSelectedFileName('');
+    }
+  };
+
+  const handleDownloadTemplate = async (type) => {
+    try {
+      const res = await apiFetch(`/api/cms/v1/bulk-upload/?type=${type}`);
+      if (!res.ok) { setErrorMsg('Failed to download template.'); return; }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${type}_import_template.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setErrorMsg('Failed to download template.');
     }
   };
 
@@ -1688,62 +1718,125 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
                 {importActive && (
                   <div style={{
-                    border: '2px dashed #2563eb',
-                    borderRadius: '8px',
-                    padding: '1.5rem',
-                    background: '#f8fafc',
-                    marginBottom: '1rem',
-                    textAlign: 'center'
+                    background: '#ffffff',
+                    borderRadius: '12px',
+                    padding: '2rem',
+                    marginBottom: '1.5rem',
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
                   }}>
-                    <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a' }}>Bulk Excel Upload</h4>
-                    <p style={{ margin: '0 0 1rem 0', fontSize: '0.84rem', color: '#64748b' }}>
-                      Upload an <code>.xlsx</code> or <code>.xls</code> spreadsheet.<br/>
-                      <strong style={{ color: '#ef4444' }}>Mandatory fields:</strong> <code>fullname</code>, <code>class</code>, <code>section</code>, <code>roll no</code>, <code>status</code>, <code>academy year</code>.<br/>
-                      LMS login code is auto-generated from <code>fullname</code>.
-                    </p>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', alignItems: 'center' }}>
-                      <input
-                        type="file"
-                        accept=".xlsx, .xls"
-                        onChange={handleBulkUpload}
-                        disabled={actionLoading}
-                        style={{ display: 'none' }}
-                        id="teacher-bulk-upload-student-input"
-                      />
-                      <label htmlFor="teacher-bulk-upload-student-input" className="sd-btn-primary" style={{ cursor: 'pointer' }}>
-                        {actionLoading ? 'Uploading...' : 'Choose Excel File'}
-                      </label>
-                      <button className="sd-btn-cancel" onClick={() => { setImportActive(false); setUploadSummary(null); }}>
-                        Cancel
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                      <div>
+                        <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Bulk Import Students</h3>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+                          Upload a file to import many students at once. Supported formats: Excel (.xlsx/.xls).
+                        </p>
+                      </div>
+                      <button
+                        className="sd-btn-cancel"
+                        style={{ marginLeft: '1rem', flexShrink: 0 }}
+                        onClick={() => { setImportActive(false); setUploadSummary(null); setSelectedFile(null); setSelectedFileName(''); }}
+                      >
+                        <FiX /> Close
                       </button>
                     </div>
-                    {uploadSummary && (
+
+                    {/* Expected columns table */}
+                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', marginTop: '1rem' }}>
                       <div style={{
-                        marginTop: '1.25rem',
-                        padding: '1rem',
-                        background: '#f1f5f9',
-                        borderRadius: '6px',
-                        textAlign: 'left',
-                        fontSize: '0.84rem'
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '0.85rem 1.25rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0'
                       }}>
+                        <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>Expected columns</span>
+                        <button
+                          className="sd-btn-outline"
+                          style={{ fontSize: '0.82rem', gap: '0.4rem', display: 'flex', alignItems: 'center' }}
+                          onClick={() => handleDownloadTemplate('student')}
+                        >
+                          <FiUpload style={{ transform: 'rotate(180deg)' }} /> Download Template
+                        </button>
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
+                        <thead>
+                          <tr style={{ background: '#f8fafc' }}>
+                            <th style={{ textAlign: 'left', padding: '0.6rem 1.25rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: '0.05em' }}>Column</th>
+                            <th style={{ textAlign: 'left', padding: '0.6rem 1.25rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: '0.05em' }}>Required</th>
+                            <th style={{ textAlign: 'left', padding: '0.6rem 1.25rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: '0.05em' }}>Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            { col: 'fullname', req: true, desc: 'Full name of the student' },
+                            { col: 'class', req: true, desc: 'Class/Grade name' },
+                            { col: 'section', req: true, desc: 'Section (e.g. A, B, C)' },
+                            { col: 'roll no', req: true, desc: 'Roll number' },
+                            { col: 'status', req: true, desc: 'Status (e.g. active, inactive)' },
+                            { col: 'academy year', req: true, desc: 'Academic year (e.g. 2025-2026)' },
+                          ].map((item, idx) => (
+                            <tr key={idx} style={{ borderTop: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '0.55rem 1.25rem' }}>
+                                <code style={{ background: '#f1f5f9', padding: '2px 7px', borderRadius: '4px', fontSize: '0.82rem', color: '#334155', fontFamily: 'monospace' }}>{item.col}</code>
+                              </td>
+                              <td style={{ padding: '0.55rem 1.25rem' }}>
+                                <span style={{
+                                  display: 'inline-block', padding: '2px 10px', borderRadius: '4px',
+                                  fontSize: '0.75rem', fontWeight: 600,
+                                  background: item.req ? '#dbeafe' : '#f1f5f9',
+                                  color: item.req ? '#1d4ed8' : '#64748b',
+                                }}>{item.req ? 'Required' : 'Optional'}</span>
+                              </td>
+                              <td style={{ padding: '0.55rem 1.25rem', color: '#475569' }}>{item.desc}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div style={{ padding: '0.75rem 1.25rem', background: '#fffbeb', borderTop: '1px solid #fef3c7', fontSize: '0.8rem', color: '#92400e' }}>
+                        LMS login code is auto-generated from <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>fullname</code>.
+                      </div>
+                    </div>
+
+                    {/* File upload section */}
+                    <div style={{ marginTop: '1.5rem' }}>
+                      <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '0.5rem', fontSize: '0.95rem' }}>Student File</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                        <input
+                          type="file"
+                          accept=".xlsx, .xls"
+                          onChange={handleFileSelect}
+                          disabled={actionLoading}
+                          style={{ display: 'none' }}
+                          id="teacher-bulk-upload-student-input"
+                        />
+                        <label htmlFor="teacher-bulk-upload-student-input" className="sd-btn-outline" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                          Choose File
+                        </label>
+                        <span style={{ color: '#64748b', fontSize: '0.84rem' }}>{selectedFileName || 'No file selected'}</span>
+                      </div>
+                      <p style={{ margin: '0.35rem 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>Supported formats: .xlsx, .xls</p>
+                    </div>
+
+                    <div style={{ marginTop: '1.25rem' }}>
+                      <button
+                        className="sd-btn-primary"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+                        disabled={!selectedFile || actionLoading}
+                        onClick={handleBulkImport}
+                      >
+                        <FiUpload /> {actionLoading ? 'Importing...' : 'Import Students'}
+                      </button>
+                    </div>
+
+                    {uploadSummary && (
+                      <div style={{ marginTop: '1.25rem', padding: '1rem', background: '#f1f5f9', borderRadius: '8px', textAlign: 'left', fontSize: '0.84rem' }}>
                         <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Upload Result:</div>
                         <div style={{ display: 'flex', gap: '2rem', marginBottom: '0.5rem' }}>
                           <span style={{ color: '#16a34a', fontWeight: 600 }}>Created: {uploadSummary.created}</span>
                           <span style={{ color: '#ef4444', fontWeight: 600 }}>Failed: {uploadSummary.failed}</span>
                         </div>
                         {uploadSummary.errors && uploadSummary.errors.length > 0 && (
-                          <div style={{
-                            maxHeight: '120px',
-                            overflowY: 'auto',
-                            background: '#fff',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: '4px',
-                            padding: '0.5rem'
-                          }}>
+                          <div style={{ maxHeight: '120px', overflowY: 'auto', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '0.5rem' }}>
                             {uploadSummary.errors.map((err, idx) => (
-                              <div key={idx} style={{ color: '#b91c1c', marginBottom: '0.25rem' }}>
-                                Row {err.row}: {err.error}
-                              </div>
+                              <div key={idx} style={{ color: '#b91c1c', marginBottom: '0.25rem' }}>Row {err.row}: {err.error}</div>
                             ))}
                           </div>
                         )}
@@ -2456,6 +2549,42 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </span>
                     </span>
                   </div>
+
+                  <hr style={{ border: 0, borderTop: '1px solid #e2e8f0', margin: '0.5rem 0' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <h4 style={{ fontSize: '1rem', fontWeight: 600, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FiBookOpen style={{ color: '#4f46e5' }} /> Assigned Lessons
+                    </h4>
+                    {selectedClassCrudDetail.assigned_lessons && selectedClassCrudDetail.assigned_lessons.length > 0 ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.75rem', marginTop: '0.25rem' }}>
+                        {selectedClassCrudDetail.assigned_lessons.map((lesson, idx) => (
+                          <div
+                            key={lesson.id || idx}
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '4px',
+                              padding: '0.75rem 1rem',
+                              background: '#f8fafc',
+                              borderRadius: '8px',
+                              border: '1px solid #e2e8f0',
+                            }}
+                          >
+                            <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9rem' }}>
+                              {lesson.experience_title}
+                            </span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>
+                              <span>Ref: {lesson.experience_ref}</span>
+                              <span>Assigned: {new Date(lesson.assigned_at).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        ))
+                      }
+                      </div>
+                    ) : (
+                      <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.85rem' }}>No lessons assigned to this class or grade.</span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2737,34 +2866,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
 
       {/* ── Help & Support Modal ── */}
-      {showHelpModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowHelpModal(false)}>
-          <div style={{ background: '#ffffff', borderRadius: '16px', padding: '2rem', width: '480px', maxWidth: '90vw', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>Help & Support</h2>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '1.25rem' }} onClick={() => setShowHelpModal(false)}><FiX/></button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {[
-                { icon: '📝', title: 'Assigning Lessons', desc: 'How to dispatch lessons and quizzes to specific classes or student groups.', action: '#' },
-                { icon: '💡', title: 'Understanding Remedial Insights', desc: 'Identifying struggling students and reviewing AI foundation hints.', action: '#' },
-                { icon: '📡', title: 'Offline Classroom Sync', desc: 'Connecting classroom tablets to local offline LMS sync station.', action: '#' },
-                { icon: '💁', title: 'Teacher Support Desk', desc: 'Raise an issue regarding student progress logs or missing lesson packs.', action: '#' },
-              ].map((item, idx) => (
-                <a key={idx} href={item.action} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', textDecoration: 'none', color: '#334155' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}>
-                  <span style={{ fontSize: '1.5rem' }}>{item.icon}</span>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{item.title}</div>
-                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{item.desc}</div>
-                  </div>
-                </a>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <HelpSupportModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
 
       {cropImageSrc && (
         <AvatarCropperModal 

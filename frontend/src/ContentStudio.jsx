@@ -19,6 +19,7 @@ import contentCreatorHeaderBanner from './assets/3.jpeg';
 import contentStudioBg from './assets/contentbg.png';
 import logoIcon from './assets/icon.png';
 import AvatarCropperModal from './AvatarCropperModal';
+import HelpSupportModal from './HelpSupportModal';
 
 const getUserInitials = (u, defaultVal = 'U') => {
   if (!u) return defaultVal;
@@ -338,6 +339,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [filterDifficulty, setFilterDifficulty] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterTag, setFilterTag] = useState('');
+  const [filterSearch, setFilterSearch] = useState('');
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -672,6 +674,7 @@ const formatDifficulty = (val) => {
         if (filterDifficulty) params.append('difficulty', filterDifficulty.toUpperCase());
         if (filterStatus) params.append('status', filterStatus.toUpperCase());
         if (filterTag) params.append('tags', filterTag);
+        if (filterSearch) params.append('search', filterSearch);
         params.append('page_size', '100'); // fetch all up to backend max_page_size
 
         const res = await apiFetch(`/api/v1/content/experiences/?${params.toString()}`);
@@ -775,6 +778,7 @@ const formatDifficulty = (val) => {
       if (filterDifficulty) params.append('difficulty', filterDifficulty.toUpperCase());
       if (filterStatus) params.append('status', filterStatus.toUpperCase());
       if (filterTag) params.append('tags', filterTag);
+      if (filterSearch) params.append('search', filterSearch);
       params.append('page', targetPage);
 
       const url = `/api/v1/content/experiences/?${params.toString()}`;
@@ -1003,7 +1007,7 @@ const formatDifficulty = (val) => {
   useEffect(() => {
     setPage(1);
     loadExperiencesData(1);
-  }, [filterGrade, filterSubject, filterDifficulty, filterStatus, filterTag]);
+  }, [filterGrade, filterSubject, filterDifficulty, filterStatus, filterTag, filterSearch]);
 
   useEffect(() => {
     if (currentPath && currentPath.startsWith('/content-studio/editor/')) {
@@ -1105,6 +1109,7 @@ const formatDifficulty = (val) => {
 
   // ── Full Screen Studio States ──
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(true);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [viewportMode, setViewportMode] = useState('desktop'); // 'desktop' | 'tablet' | 'mobile'
   const [zoomLevel, setZoomLevel] = useState(100);
 
@@ -1591,11 +1596,11 @@ const formatDifficulty = (val) => {
     setCustomAlert({ show: true, title, message, type });
   };
   const [publishVersion, setPublishVersion] = useState('');
-  const [publishNotes, setPublishNotes] = useState('Initial release of the experience.');
+  const [publishNotes, setPublishNotes] = useState('');
 
   useEffect(() => {
-    if (view === 'publish' && selectedExperience?.id) {
-      loadPublishData(selectedExperience.id);
+    if (view === 'publish') {
+      loadPublishData(selectedExperience?.id);
     }
   }, [view, selectedExperience?.id]);
 
@@ -3962,32 +3967,42 @@ const formatDifficulty = (val) => {
   };
 
   const loadPublishData = async (experienceId) => {
-    if (!experienceId) return;
     try {
-      const resStatus = await apiFetch(`/api/v1/content/publish/${experienceId}/`);
-      if (resStatus.ok) {
-        const statusData = await resStatus.json();
-        setPublishStatus(statusData);
-        if (statusData?.latest_version) {
-          setPublishVersion(incrementVersion(statusData.latest_version.version_number));
+      if (experienceId) {
+        const resStatus = await apiFetch(`/api/v1/content/publish/${experienceId}/`);
+        if (resStatus.ok) {
+          const statusData = await resStatus.json();
+          setPublishStatus(statusData);
+          // Clear defaults — user must enter version/notes manually
+          setPublishVersion('');
+          setPublishNotes('');
         } else {
-          setPublishVersion("1.0.0");
+          setPublishVersion('');
+          setPublishNotes('');
         }
       } else {
-        setPublishVersion("1.0.0");
+        setPublishStatus(null);
+        setPublishVersion('');
+        setPublishNotes('');
       }
-      const resHistory = await apiFetch(`/api/v1/content/publish/history/${experienceId}/`);
+
+      // Fetch GLOBAL history (all lessons) for the build history table
+      const resHistory = await apiFetch(`/api/v1/content/publish/history/all/`);
       if (resHistory.ok) {
         const histData = await resHistory.json();
         setPublishHistory(histData.versions || []);
-        if (histData.versions && histData.versions.length > 0 && !publishVersion) {
-          setPublishVersion(incrementVersion(histData.versions[0].version_number));
-        }
       }
-      // Load validation report dynamically on entering publish center
-      const resVal = await apiFetch(`/api/v1/content/validation/${experienceId}/run/`, { method: 'POST' });
-      if (resVal.ok) {
-        setValidationReport(await resVal.json());
+
+      if (experienceId) {
+        // Fetch this lesson's activities with real screen_count from backend
+        const resActs = await apiFetch(`/api/v1/content/experiences/${experienceId}/activities/`);
+        if (resActs.ok) {
+          const actsData = await resActs.json();
+          const actsArr = actsData.results || actsData || [];
+          setActivities(actsArr);
+        }
+      } else {
+        setActivities([]);
       }
 
     } catch (e) {
@@ -3997,11 +4012,15 @@ const formatDifficulty = (val) => {
 
   const handlePublishExperience = async () => {
     if (!selectedExperience || !selectedExperience.id) {
-      triggerAlert("No active experience selected.", "No Experience Selected", "warning");
+      triggerAlert('No active experience selected.', 'No Experience Selected', 'warning');
       return;
     }
     if (!publishVersion || !publishVersion.trim()) {
-      triggerAlert("Please enter a valid version number (e.g. 1.0.0).", "Invalid Version", "warning");
+      triggerAlert('Please enter a valid version number (e.g. 1.0.0).', 'Version Required', 'warning');
+      return;
+    }
+    if (!publishNotes || !publishNotes.trim()) {
+      triggerAlert('Please enter release notes describing what changed in this build.', 'Release Notes Required', 'warning');
       return;
     }
 
@@ -4014,15 +4033,28 @@ const formatDifficulty = (val) => {
       });
       if (res.status === 200 || res.status === 201) {
         showFeedback('Experience submitted to Super Admin for approval.');
-        setPublishNotes('Initial release of the experience.');
+        setPublishNotes('');
+        setPublishVersion('');
         loadPublishData(selectedExperience.id);
         loadExperiencesData();
       } else {
         const errData = await res.json().catch(() => ({}));
+        // Handle empty-screen error with detailed list
+        if (errData.empty_screens && errData.empty_screens.length > 0) {
+          const screenList = errData.empty_screens
+            .map(s => `• ${s.activity} → "${s.screen}"`)
+            .join('\n');
+          triggerAlert(
+            `The following screens have no content blocks. Please add at least one block to each screen before submitting for approval:\n\n${screenList}`,
+            'Empty Screens Detected',
+            'error'
+          );
+          return;
+        }
         if (errData.validation_report) {
           setValidationReport(errData.validation_report);
         }
-        showFeedback(errData.error || 'Publishing failed. Make sure experience has no validation errors.', 'error');
+        showFeedback(errData.error || 'Publishing failed. Make sure all screens have content blocks.', 'error');
       }
     } catch (err) {
       console.error(err);
@@ -4822,13 +4854,17 @@ const formatDifficulty = (val) => {
         {/* Header Bar */}
         {view !== 'preview' && (
           <header className="cs-header">
-            <div className="cs-header-search-wrap">
-              <FiSearch className="cs-header-search-icon" />
-              <input
-                className="cs-search-input"
-                type="text"
-                placeholder={view === 'experiences' ? "Search lessons by title, grade, subject" : "Search lessons, activities..."}
-              />
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <h2 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                {view === 'dashboard' && 'Dashboard'}
+                {view === 'experiences' && 'Lesson Library'}
+                {view === 'experience-builder' && 'Lesson Builder'}
+                {view === 'activity-builder' && 'Activity Builder'}
+                {view === 'screen-builder' && 'Screen Builder'}
+                {view === 'media' && 'Media Library'}
+                {view === 'publish' && 'Publish Center'}
+                {view === 'profile' && 'Profile Settings'}
+              </h2>
             </div>
             <div className="cs-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}>
               <div style={{ position: 'relative' }}>
@@ -5158,10 +5194,6 @@ const formatDifficulty = (val) => {
                 </div>
               ) : (
                 <>
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>Lesson Library</h1>
-                    <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' }}>Create, manage and organize all learning experiences.</p>
-                  </div>
 
               {/* Filters list row */}
               <div style={{ marginBottom: '1.5rem', padding: '0' }}>
@@ -5197,10 +5229,26 @@ const formatDifficulty = (val) => {
                         <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', letterSpacing: '0.02em' }}>Status</span>
                         <select className="cs-filter-select" style={{ width: '100%', height: '36px', fontSize: '0.78rem', background: '#ffffff', border: '1px solid #d1d5db', borderRadius: '8px', padding: '0 0.5rem', color: '#1e293b', cursor: 'pointer' }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                           <option value="">All Status</option>
+                          <option value="approved">Approved</option>
                           <option value="draft">Draft</option>
-                          <option value="published">Published</option>
-                          <option value="archived">Archived</option>
+                          <option value="pending">Pending</option>
+                          <option value="rejected">Rejected</option>
                         </select>
+                      </div>
+
+                      {/* Search input for lessons */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: 180 }}>
+                        <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', letterSpacing: '0.02em' }}>Search</span>
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                          <FiSearch style={{ position: 'absolute', left: 10, color: '#94a3b8', fontSize: '0.85rem', pointerEvents: 'none' }} />
+                          <input
+                            type="text"
+                            value={filterSearch}
+                            onChange={e => setFilterSearch(e.target.value)}
+                            placeholder="Search lessons..."
+                            style={{ width: '100%', height: '36px', fontSize: '0.78rem', background: '#ffffff', border: '1px solid #d1d5db', borderRadius: '8px', padding: '0 0.75rem 0 2rem', color: '#1e293b', outline: 'none' }}
+                          />
+                        </div>
                       </div>
                     </div>
 
@@ -5312,7 +5360,7 @@ const formatDifficulty = (val) => {
                       </tr>
                     ) : (
                       experiences.map((row, idx) => (
-                        <tr key={row.id} style={{ cursor: 'pointer' }} onClick={() => loadExperienceDetail(row, true)}>
+                        <tr key={row.id} style={{ cursor: 'pointer' }} onClick={() => handleStartPreview(row.id)}>
                           {isSelectMode && (
                             <td style={{ paddingLeft: '1.5rem' }} onClick={e => e.stopPropagation()}>
                               <input
@@ -5382,10 +5430,10 @@ const formatDifficulty = (val) => {
                                   zIndex: 100, display: 'flex', flexDirection: 'column', width: '110px', overflow: 'hidden'
                                 }}>
                                   <button
-                                    onClick={() => { setActiveMenuId(null); handleViewDetails(row.id); }}
+                                    onClick={() => { setActiveMenuId(null); handleStartPreview(row.id); }}
                                     style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem', textAlign: 'left', cursor: 'pointer', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}
                                   >
-                                    <FiEye style={{ fontSize: '0.85rem' }} /> View
+                                    <FiPlay style={{ fontSize: '0.85rem' }} /> Preview
                                   </button>
                                   <button
                                     onClick={() => { setActiveMenuId(null); loadExperienceDetail(row, true); }}
@@ -5458,11 +5506,6 @@ const formatDifficulty = (val) => {
                     <button className="cs-icon-btn" onClick={() => setView('experiences')}><FiArrowLeft /></button>
                   )}
                   <div>
-                    {isNewExperience && (
-                      <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                        <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Lessons Library</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Lessons Builder</span>
-                      </div>
-                    )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: isNewExperience ? '4px' : 0 }}>
                       <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>
                         {isNewExperience ? 'New Lesson' : 'Lessons Builder'}
@@ -5700,13 +5743,10 @@ const formatDifficulty = (val) => {
                     {selectedExperience?.id && (
                       <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
                         <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Lessons Library</span> &nbsp;&gt;&nbsp;
-                        <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>Lessons Builder</span> &nbsp;&gt;&nbsp;
-                        <span style={{ fontWeight: 600 }}>Activity Builder</span>
+                        <span style={{ fontWeight: 600 }}>Activity Builder</span> 
                       </div>
                     )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: selectedExperience?.id ? '4px' : 0 }}>
-                      <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>Activity Builder</h1>
-                    </div>
+                    
                     {(activityForm.title || selectedExperience) && (
                       <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
                         {activityForm.title && <span>{activityForm.title} · </span>}
@@ -6298,17 +6338,24 @@ const formatDifficulty = (val) => {
                   overflow: hidden;
                   box-shadow: -2px 0 8px rgba(15,23,42,0.04);
                   z-index: 2;
+                  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-left-width 0.25s;
+                }
+                .fss-right.collapsed {
+                  width: 0px !important;
+                  border-left-width: 0px !important;
                 }
                 .fss-right-header {
                   padding: 0.85rem 0.95rem 0.6rem 0.95rem;
                   border-bottom: 1px solid #f1f5f9;
                   flex-shrink: 0;
+                  min-width: 340px;
                 }
                 .fss-right-scroll {
                   flex: 1;
                   overflow-y: auto;
                   padding: 0.85rem;
                   scrollbar-width: thin;
+                  min-width: 340px;
                   scrollbar-color: #cbd5e1 transparent;
                 }
                 .fss-right-scroll::-webkit-scrollbar { width: 4px; }
@@ -6365,7 +6412,6 @@ const formatDifficulty = (val) => {
                         "Enter new screen title:", "Rename Screen Title", screenForm.title, "Screen Title",
                         (newTitle) => { if (newTitle && newTitle.trim()) setScreenForm({ ...screenForm, title: newTitle.trim() }); }
                       )} />
-                      <span style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '0.62rem', padding: '2px 7px', borderRadius: '10px', fontWeight: 700, flexShrink: 0 }}>{screenForm.screen_type}</span>
                     </div>
 
                     {/* Center: Tools */}
@@ -6380,6 +6426,33 @@ const formatDifficulty = (val) => {
                         <span>Redo</span>
                       </button>
                       <div className="fss-toolbar-divider" />
+
+                      {selectedBlockId && (
+                        <>
+                          <button
+                            className="fss-toolbar-btn"
+                            title="Delete Selected Element"
+                            onClick={() => handleDeleteBlock(selectedBlockId)}
+                            style={{
+                              color: '#dc2626',
+                              background: '#fef2f2',
+                              border: '1px solid #fee2e2',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '0.75rem',
+                              padding: '0.35rem 0.6rem',
+                              fontWeight: 700,
+                              borderRadius: '6px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <FiTrash2 style={{ fontSize: '0.85rem' }} />
+                            <span>Delete Element</span>
+                          </button>
+                          <div className="fss-toolbar-divider" />
+                        </>
+                      )}
 
 
 
@@ -6415,8 +6488,8 @@ const formatDifficulty = (val) => {
                         <FiCheck style={{ fontSize: '0.9rem' }} /> Save Draft
                       </button>
                       <div className="fss-toolbar-divider" />
-                      <button className="fss-toolbar-btn" title="Toggle left panel (Tab)" onClick={() => setLeftPanelCollapsed(c => !c)} style={{ padding: '0.35rem 0.5rem' }}>
-                        <FiMenu style={{ fontSize: '1rem' }} />
+                      <button className="fss-toolbar-btn" title="Toggle Right Panel" onClick={() => setRightPanelCollapsed(c => !c)} style={{ padding: '0.35rem 0.5rem', background: rightPanelCollapsed ? 'none' : '#f1f5f9' }}>
+                        <FiMenu style={{ fontSize: '1rem', transform: 'scaleX(-1)' }} />
                       </button>
                     </div>
                   </header>
@@ -6694,10 +6767,14 @@ const formatDifficulty = (val) => {
                     </div>
 
                     {/* ── RIGHT PROPERTIES PANEL ── */}
-                    <div className="fss-right">
+                    <div className={`fss-right ${rightPanelCollapsed ? 'collapsed' : 'expanded'}`}>
                       <div className="fss-right-header">
-                        <h3 style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0f172a', margin: '0 0 2px 0' }}>Configuration Properties</h3>
-                        <span style={{ fontSize: '0.62rem', color: '#64748b' }}>Edit details for the active element</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <h3 style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0f172a', margin: '0 0 2px 0' }}>Configuration Properties</h3>
+                            <span style={{ fontSize: '0.62rem', color: '#64748b' }}>Edit details for the active element</span>
+                          </div>
+                        </div>
 
                         {/* Tab Selector */}
                         <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.2rem', gap: '0.75rem', marginTop: '0.6rem' }}>
@@ -8661,34 +8738,6 @@ const formatDifficulty = (val) => {
               </>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minHeight: 'calc(100vh - 120px)' }}>
-                {/* Breadcrumbs and Top Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                      <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Lessons Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Lesson Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('activity-builder')}>{selectedActivity?.title || 'Activity Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Screen Builder Overview</span>
-                    </div>
-                    <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '6px 0 0 0', color: '#0f172a', letterSpacing: '-0.02em' }}>Screen Library</h1>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-
-                    <button
-                      onClick={handleAddNewScreen}
-                      disabled={!selectedActivity?.id}
-                      data-testid="add-new-screen-btn"
-                      style={{
-                        background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
-                        color: '#ffffff', border: 'none', borderRadius: '10px',
-                        padding: '0.5rem 1.25rem', fontWeight: 700, fontSize: '0.82rem',
-                        cursor: !selectedActivity?.id ? 'not-allowed' : 'pointer',
-                        boxShadow: '0 2px 8px rgba(11,87,208,0.25)',
-                        opacity: !selectedActivity?.id ? 0.6 : 1
-                      }}
-                    >
-                      + Add New Screen
-                    </button>
-                  </div>
-                </div>
 
                 {/* Main Content Body */}
                 {!selectedActivity?.id ? (
@@ -8727,12 +8776,12 @@ const formatDifficulty = (val) => {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     {/* Activity context card */}
-                    <div style={{ background: '#f8fafc', padding: '1rem 1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ background: '#f8fafc', padding: '1.0rem 1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
                         <span style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', fontWeight: 700 }}>Active Activity</span>
                         <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: '2px 0 0 0' }}>{selectedActivity.title}</h2>
                       </div>
-                      <div style={{ display: 'flex', gap: '1.5rem' }}>
+                      <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
                         <div style={{ textAlign: 'right' }}>
                           <span style={{ fontSize: '0.68rem', color: '#64748b', display: 'block' }}>Total Screens</span>
                           <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>{screens.length}</span>
@@ -8741,6 +8790,22 @@ const formatDifficulty = (val) => {
                           <span style={{ fontSize: '0.68rem', color: '#64748b', display: 'block' }}>Total Duration</span>
                           <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>{selectedActivity.estimated_duration || selectedActivity.duration || 0} min</span>
                         </div>
+                        <button
+                          onClick={handleAddNewScreen}
+                          disabled={!selectedActivity?.id}
+                          data-testid="add-new-screen-btn"
+                          style={{
+                            background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
+                            color: '#ffffff', border: 'none', borderRadius: '10px',
+                            padding: '0.5rem 1.25rem', fontWeight: 700, fontSize: '0.82rem',
+                            cursor: !selectedActivity?.id ? 'not-allowed' : 'pointer',
+                            boxShadow: '0 2px 8px rgba(11,87,208,0.25)',
+                            opacity: !selectedActivity?.id ? 0.6 : 1,
+                            marginLeft: '0.5rem'
+                          }}
+                        >
+                          + Add New Screen
+                        </button>
                       </div>
                     </div>
 
@@ -8799,27 +8864,7 @@ const formatDifficulty = (val) => {
                                   {scr.title || 'Untitled Screen'}
                                 </h3>
                                 <div style={{ display: 'flex', gap: '8px', fontSize: '0.72rem', color: '#64748b', marginTop: '2px', alignItems: 'center' }}>
-                                  <span className="cs-badge" style={{
-                                    background: scr.screen_type === 'INFORMATION' ? '#e0f2fe' :
-                                      scr.screen_type === 'IMAGE' ? '#dcfce7' :
-                                        scr.screen_type === 'VIDEO' ? '#f3e8ff' :
-                                          scr.screen_type === 'SPEAKING' ? '#e0f9ff' :
-                                            scr.screen_type === 'QUIZ' ? '#ffedd5' : '#f1f5f9',
-                                    color: scr.screen_type === 'INFORMATION' ? '#0369a1' :
-                                      scr.screen_type === 'IMAGE' ? '#15803d' :
-                                        scr.screen_type === 'VIDEO' ? '#7c3aed' :
-                                          scr.screen_type === 'SPEAKING' ? '#0891b2' :
-                                            scr.screen_type === 'QUIZ' ? '#ea580c' : '#475569',
-                                    fontSize: '0.62rem',
-                                    fontWeight: 700,
-                                    padding: '1px 6px',
-                                    borderRadius: '4px'
-                                  }}>
-                                    {scr.screen_type}
-                                  </span>
-                                  <span>⏱️ {scr.estimated_duration || 60}s</span>
-                                  <span>•</span>
-                                  <span>🧱 {elementsCount} Blocks</span>
+                                  <span>🧱 {elementsCount} {elementsCount === 1 ? 'Block' : 'Blocks'}</span>
                                 </div>
                               </div>
                             </div>
@@ -9418,39 +9463,14 @@ const formatDifficulty = (val) => {
             <>
               {/* Top Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.5rem' }}>
-                <div>
-                  <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                    <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Lesson Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Lesson'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Publish Center</span>
-                  </div>
-                  <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: 8, color: '#0f172a' }}>
-                    Publish Center
-                    {validationReport ? (
-                      <span
-                        style={{
-                          background: validationReport.status === 'FAILED' ? '#fee2e2' : '#dcfce7',
-                          color: validationReport.status === 'FAILED' ? '#b91c1c' : '#15803d',
-                          fontSize: '10px',
-                          padding: '3px 8px',
-                          borderRadius: 12,
-                          fontWeight: 700
-                        }}
-                      >
-                        {validationReport.status === 'FAILED' ? '✗ Validation Failed' : '✓ Validation Passed'}
-                      </span>
-                    ) : (
-                      <span style={{ background: '#f1f5f9', color: '#64748b', fontSize: '10px', padding: '3px 8px', borderRadius: 12, fontWeight: 700 }}>
-                        Running validation...
-                      </span>
-                    )}
-                  </h1>
-                </div>
+                
                 <div style={{ display: 'flex', gap: '0.55rem' }}>
                   <button className="cs-btn-outline" onClick={() => setView('experiences')}>Back to Library</button>
                 </div>
               </div>
 
-              {/* Main 2-Column Dashboard Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1.25rem', marginBottom: '1.5rem' }}>
+              {/* Main Content: single full-width column */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '1.5rem' }}>
 
                 {/* LEFT COLUMN: Compile Form & Build History */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -9458,7 +9478,7 @@ const formatDifficulty = (val) => {
                   {/* Card 1: Experience Build & Compiler Form */}
                   <div className="cs-card">
                     <h3 style={{ fontSize: '0.92rem', fontWeight: 700, borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', margin: '0 0 1rem 0', color: '#0f172a' }}>
-                      Generate New EnglishLab Package (.elab)
+                      Generate New EnglishLab Package (.zip)
                     </h3>
 
                     <div style={{ display: 'flex', gap: '1.25rem', marginBottom: '1rem', alignItems: 'flex-start' }}>
@@ -9478,9 +9498,10 @@ const formatDifficulty = (val) => {
                           {selectedExperience?.title || 'Lesson'}
                         </h4>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', fontSize: '0.72rem', color: '#475569', marginTop: '6px' }}>
-                          <span>Target: <strong>{gradesList.find(g => String(g.id) === String(selectedExperience?.grade_id || selectedExperience?.grade))?.grade_name || 'Grade 4'}</strong></span>
+                          <span>Target: <strong>{selectedExperience?.grade_name || gradesList.find(g => String(g.id) === String(selectedExperience?.grade_id || selectedExperience?.grade))?.grade_name || '—'}</strong></span>
+                          <span>Difficulty: <strong>{selectedExperience?.difficulty_display || selectedExperience?.difficulty || '—'}</strong></span>
                           <span>Activities: <strong>{activities.length}</strong></span>
-                          <span>Screens: <strong>{activities.reduce((acc, act) => acc + (act.screens?.length || 0), 0)}</strong></span>
+                          <span>Screens: <strong>{activities.reduce((acc, act) => acc + (act.screen_count ?? act.screens?.length ?? 0), 0)}</strong></span>
                         </div>
                       </div>
                     </div>
@@ -9526,7 +9547,7 @@ const formatDifficulty = (val) => {
                         onClick={handlePublishExperience}
                         disabled={actionLoading}
                       >
-                        {actionLoading ? 'Compiling Build...' : 'Build & Publish .elab Package'}
+                        {actionLoading ? 'Compiling Build...' : 'Build & Publish the Package'}
                       </button>
                     </div>
                   </div>
@@ -9544,6 +9565,7 @@ const formatDifficulty = (val) => {
                         <thead>
                           <tr>
                             <th>L.No</th>
+                            <th>LESSON</th>
                             <th>VERSION</th>
                             <th>PACKAGE FILE</th>
                             <th>SIZE</th>
@@ -9555,17 +9577,19 @@ const formatDifficulty = (val) => {
                         <tbody>
                           {publishHistory.length === 0 ? (
                             <tr>
-                              <td colSpan="7" style={{ textAlign: 'center', color: '#64748b', padding: '1.5rem', fontSize: '0.82rem' }}>
+                              <td colSpan="8" style={{ textAlign: 'center', color: '#64748b', padding: '1.5rem', fontSize: '0.82rem' }}>
                                 No builds published yet. Specify a version above to compile.
                               </td>
                             </tr>
                           ) : (
                             publishHistory.map((pkg, idx) => {
-                              const zipFilename = `${selectedExperience?.title?.replace(/\s+/g, '_') || 'Experience'}_v${pkg.version_number || '1.0.0'}.zip`;
+                              const lessonTitle = pkg.experience_title || selectedExperience?.title || 'Experience';
+                              const zipFilename = `${lessonTitle.replace(/\s+/g, '_')}_v${pkg.version_number || '1.0.0'}.zip`;
                               const isLatest = idx === 0;
                               return (
                                 <tr key={pkg.id}>
                                   <td style={{ fontWeight: 700, color: '#475569' }}>{publishHistory.length - idx}</td>
+                                  <td style={{ fontWeight: 700, color: '#0f172a', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pkg.experience_title || selectedExperience?.title || '—'}</td>
                                   <td style={{ fontWeight: 700, color: '#0284c7' }}>v{pkg.version_number || '—'}</td>
                                   <td style={{ color: '#475569', fontSize: '0.72rem', fontFamily: 'monospace' }}>{zipFilename}</td>
                                   <td>{pkg.package_size ? formatBytes(pkg.package_size) : '—'}</td>
@@ -9601,80 +9625,6 @@ const formatDifficulty = (val) => {
                     </div>
                   </div>
                 </div>
-
-                {/* RIGHT COLUMN: Assign, Validation & Reports */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-
-
-
-                  {/* Card 3: Validation Check Report */}
-                  <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                    <h3 style={{ fontSize: '0.85rem', fontWeight: 700, borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', margin: '0 0 0.75rem 0', color: '#0f172a' }}>
-                      Experience Validation Status
-                    </h3>
-
-                    {validationReport ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.75rem', flex: 1, minHeight: 0 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ color: '#64748b', fontWeight: 600 }}>OVERALL CHECK</span>
-                          <span className={`cs-badge`}
-                            style={{
-                              background: validationReport.status === 'FAILED' ? '#fee2e2' : (validationReport.status === 'PASSED' ? '#dcfce7' : '#fef3c7'),
-                              color: validationReport.status === 'FAILED' ? '#991b1b' : (validationReport.status === 'PASSED' ? '#166534' : '#92400e'),
-                              fontWeight: 700,
-                              fontSize: '9px'
-                            }}>
-                            {validationReport.status.replace(/_/g, ' ')}
-                          </span>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.35rem', textAlign: 'center', background: '#f8fafc', padding: '6px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                          <div>
-                            <div style={{ fontWeight: 800, color: '#16a34a', fontSize: '1rem' }}>{validationReport.passed}</div>
-                            <div style={{ fontSize: '8px', color: '#64748b', fontWeight: 700 }}>PASSED</div>
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 800, color: '#d97706', fontSize: '1rem' }}>{validationReport.warnings}</div>
-                            <div style={{ fontSize: '8px', color: '#64748b', fontWeight: 700 }}>WARNINGS</div>
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 800, color: '#dc2626', fontSize: '1rem' }}>{validationReport.errors}</div>
-                            <div style={{ fontSize: '8px', color: '#64748b', fontWeight: 700 }}>ERRORS</div>
-                          </div>
-                        </div>
-
-                        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.45rem', maxHeight: '140px', paddingRight: '4px' }}>
-                          {validationReport.results && validationReport.results.filter(r => r.severity !== 'PASSED').length === 0 ? (
-                            <div style={{ color: '#16a34a', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', fontWeight: 600, padding: '1rem 0', justifyContent: 'center', textAlign: 'center' }}>
-                              <span style={{ fontSize: '1.5rem' }}>✓</span>
-                              <span style={{ fontSize: '0.75rem' }}>Ready for compilation & distribution!</span>
-                            </div>
-                          ) : (
-                            validationReport.results && validationReport.results.filter(r => r.severity !== 'PASSED').map((res, i) => (
-                              <div key={i} style={{
-                                padding: '6px 8px',
-                                borderRadius: 6,
-                                background: res.severity === 'ERROR' ? '#fef2f2' : '#fffbeb',
-                                color: res.severity === 'ERROR' ? '#991b1b' : '#92400e',
-                                borderLeft: `3px solid ${res.severity === 'ERROR' ? '#ef4444' : '#f59e0b'}`,
-                                fontSize: '0.7rem',
-                                lineHeight: '1.3'
-                              }}>
-                                <span style={{ fontWeight: 800 }}>{res.severity === 'ERROR' ? '🚨 ERROR: ' : '⚠️ WARNING: '}</span>
-                                {res.message}
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#64748b', fontSize: '0.75rem' }}>
-                        Running validation check...
-                      </div>
-                    )}
-                  </div>
-                </div>
-
               </div>
             </>
           )}
@@ -9683,10 +9633,7 @@ const formatDifficulty = (val) => {
           {/* ── View 9: Profile Settings ── */}
           {view === 'profile' && (
             <div style={{ padding: '0.5rem', width: '100%', maxWidth: '1100px', margin: '0 auto' }}>
-              <div className="sd-page-header" style={{ marginBottom: '2rem' }}>
-                <h1 className="sd-page-title" style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a' }}>Profile Settings</h1>
-                <p className="sd-page-sub" style={{ fontSize: '0.88rem', color: '#64748b', marginTop: '4px' }}>Manage your personal details and authentication options</p>
-              </div>
+              
 
               <form onSubmit={handleProfileUpdate} style={{ width: '100%' }}>
                 <div style={{ display: 'flex', flexDirection: 'row', gap: '2rem', flexWrap: 'wrap', alignItems: 'stretch' }}>
@@ -10462,69 +10409,30 @@ const formatDifficulty = (val) => {
                   >
                     Cancel
                   </button>
-                  <button
-                    type="button"
-                    data-testid="prompt-modal-confirm"
-                    style={{
-                      flex: 1,
-                      padding: '0.65rem 1rem',
-                      borderRadius: '10px',
-                      backgroundColor: '#0b57d0',
-                      color: '#ffffff',
-                      border: 'none',
-                      fontWeight: 600,
-                      fontSize: '0.88rem',
-                      cursor: 'pointer',
-                      textAlign: 'center'
-                    }}
-                    onClick={() => {
-                      if (!customPrompt.value || !customPrompt.value.trim()) {
-                        setCustomPrompt(prev => ({ ...prev, error: 'This field is required.' }));
-                        return;
-                      }
-                      customPrompt.onConfirm && customPrompt.onConfirm(customPrompt.value);
-                      setCustomPrompt(prev => ({ ...prev, show: false }));
-                    }}
-                  >
-                    Confirm
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+                   <button
+                     type="button"
+                     data-testid="prompt-modal-confirm"
+                     style={{ flex: 1, padding: '0.65rem 1rem', borderRadius: '10px', backgroundColor: '#0b57d0', color: '#ffffff', border: 'none', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer', textAlign: 'center' }}
+                     onClick={() => {
+                       if (!customPrompt.value || !customPrompt.value.trim()) {
+                         setCustomPrompt(prev => ({ ...prev, error: 'This field is required.' }));
+                         return;
+                       }
+                       customPrompt.onConfirm && customPrompt.onConfirm(customPrompt.value);
+                       setCustomPrompt(prev => ({ ...prev, show: false }));
+                     }}
+                   >
+                     Confirm
+                   </button>
+                 </div>
+               </div>
+             </div>
+           )}
+         </div>
+       </div>
 
-        </div>
-      </div>
-
-      {/* ── Help & Support Modal ── */}
-      {showHelpModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowHelpModal(false)}>
-          <div style={{ background: '#ffffff', borderRadius: '16px', padding: '2rem', width: '480px', maxWidth: '90vw', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>Help & Support</h2>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '1.25rem' }} onClick={() => setShowHelpModal(false)}><FiX /></button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {[
-                { icon: '🤖', title: 'AI Assistant Tutorial', desc: 'How to generate Quizzes, Dialogues, and Fill-in-the-Blanks with AI prompts.', action: '#' },
-                { icon: '🎙️', title: 'Media & Speech Block Guide', desc: 'Recommended audio/video specs and voice recorder setup.', action: '#' },
-                { icon: '🧩', title: 'Adaptive Remedial Flow', desc: 'Setting up foundation sub-questions for student incorrect attempts.', action: '#' },
-                { icon: '⌨️', title: 'Keyboard Shortcuts', desc: 'Ctrl+S (Save), Ctrl+Z (Undo), Space (Preview Mode).', action: '#' },
-              ].map((item, idx) => (
-                <a key={idx} href={item.action} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', textDecoration: 'none', color: '#334155', transition: 'background 0.15s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}>
-                  <span style={{ fontSize: '1.5rem' }}>{item.icon}</span>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{item.title}</div>
-                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{item.desc}</div>
-                  </div>
-                </a>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* -- Help & Support Modal -- */}
+      <HelpSupportModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
       {cropImageSrc && (
         <AvatarCropperModal 
           src={cropImageSrc}
