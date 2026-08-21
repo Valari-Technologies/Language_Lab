@@ -127,6 +127,64 @@ Language_lab/
 
 ---
 
+## Demo Seed Runner Notes
+
+Use the demo seed after migrations when setting up a fresh local, staging, or demo machine. The command is idempotent, so it can be rerun safely to recreate/update the demo school, roles, classes, sample Content Studio experience, assignment, and attempt data.
+
+### Local Docker
+```bash
+docker compose run --rm backend sh -c "python manage.py migrate && python manage.py seed_demo_data"
+```
+
+### Production Docker
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T backend python manage.py seed_demo_data
+```
+
+### Demo Credentials
+```text
+Super Admin      username=super_admin      password=SuperAdmin@123
+Content Creator  username=content_creator  password=Creator@123
+School Admin     username=school_admin     password=SchoolAdmin@123
+Teacher          username=teacher_demo     password=Teacher@123
+Student/LMS      username=DEMO001          password=DEMO001
+```
+
+For existing demo environments where passwords should not be reset, run:
+```bash
+python manage.py seed_demo_data --no-reset-passwords
+```
+
+---
+
+## Production Deploy Runner Notes
+
+The GitHub Actions workflow at `.github/workflows/deploy-docker-setup.yml` deploys the project to the VPS whenever code is pushed to:
+
+```text
+feature/docker-setup
+```
+
+It can also be run manually from GitHub Actions using `workflow_dispatch`.
+
+Required GitHub repository secrets:
+
+```text
+VPS_HOST=187.52.116.48
+VPS_USER=root
+VPS_PASSWORD=<VPS root password>
+```
+
+The workflow packages the repository, uploads it to `/opt/languagelab`, preserves the server-only `.env.prod`, then runs:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+```
+
+Before enabling this on a new VPS, create `/opt/languagelab/.env.prod` on the server. Do not commit production env files or secrets to the repo.
+
+---
+
 ## 🧪 Verification Commands
 
 Before deploying or pushing changes, ensure the build and tests pass cleanly:
