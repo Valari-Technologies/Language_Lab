@@ -7,7 +7,7 @@ import {
   FiCheckCircle, FiFileText,
   FiAward, FiLock,
   FiChevronLeft, FiChevronRight, FiEye, FiEyeOff,
-  FiCornerDownRight, FiXCircle, FiMoreVertical, FiAlertTriangle, FiInfo, FiRefreshCw, FiUpload, FiClock
+  FiCornerDownRight, FiXCircle, FiMoreVertical, FiAlertTriangle, FiInfo, FiRefreshCw, FiUpload, FiClock, FiActivity
 } from 'react-icons/fi';
 import PreviewCanvasRenderer from './PreviewCanvasRenderer';
 import './Dashboard.css';
@@ -1689,7 +1689,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         className={`sd-sidebar${isSidebarOpen ? ' open' : ''}`}
         style={{
           width: navCollapsed ? '72px' : '260px',
-          transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+          transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          overflow: showProfileDropdown ? 'visible' : 'hidden'
         }}
       >
         <div
@@ -1757,9 +1758,10 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           {showProfileDropdown && (
             <div style={{
               position: 'absolute',
-              bottom: '100%',
-              left: '0.5rem',
-              right: '0.5rem',
+              bottom: navCollapsed ? '10px' : '100%',
+              left: navCollapsed ? '76px' : '0.5rem',
+              right: navCollapsed ? 'auto' : '0.5rem',
+              width: navCollapsed ? '180px' : 'auto',
               background: '#095d8f',
               borderRadius: '12px',
               boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.3)',
@@ -1769,7 +1771,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               display: 'flex',
               flexDirection: 'column',
               gap: '4px',
-              marginBottom: '8px'
+              marginBottom: navCollapsed ? '0' : '8px'
             }} onClick={(e) => e.stopPropagation()}>
               <button
                 onClick={() => { goTo('profile'); setShowProfileDropdown(false); }}
@@ -2030,7 +2032,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               </div>
 
               {/* 4 Stat Cards */}
-              <div className="sd-stat-row" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+              <div className="sd-stat-row" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.65rem' }}>
                 {[
                   {
                     label: 'Total Schools',
@@ -2052,11 +2054,11 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     icon: <FiFileText />,
                   },
                   {
-                    label: 'Draft Lessons',
-                    value: submittedExperiences.filter(e => e.status?.toUpperCase() === 'DRAFT').length,
-                    color: '#f59e0b',
-                    bg: '#fffbeb',
-                    icon: <FiEdit2 />,
+                    label: 'Pending Lessons',
+                    value: submittedExperiences.filter(e => e.status?.toUpperCase() === 'PENDING_APPROVAL').length,
+                    color: '#ea580c',
+                    bg: '#ffedd5',
+                    icon: <FiActivity />,
                   },
                   {
                     label: 'Approved Lessons',
@@ -2065,14 +2067,21 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     bg: '#e0fdf4',
                     icon: <FiCheckCircle />,
                   },
+                  {
+                    label: 'Rejected Lessons',
+                    value: submittedExperiences.filter(e => e.status?.toUpperCase() === 'REJECTED').length,
+                    color: '#ef4444',
+                    bg: '#fef2f2',
+                    icon: <FiXCircle />,
+                  },
                 ].map((s, i) => (
-                  <div className="sd-stat-card sd-stat-card--horizontal" key={i} style={{ alignItems: 'center' }}>
-                    <div className="sd-stat-card-left" style={{ gap: '0.45rem' }}>
-                      <div className="sd-stat-label" style={{ fontSize: '0.78rem', color: '#64748b' }}>{s.label}</div>
-                      <div className="sd-stat-value" style={{ fontSize: '2rem', marginTop: 0 }}>{s.value}</div>
+                  <div className="sd-stat-card sd-stat-card--horizontal" key={i} style={{ alignItems: 'center', padding: '0.45rem 0.65rem' }}>
+                    <div className="sd-stat-card-left" style={{ gap: '0.35rem' }}>
+                      <div className="sd-stat-label" style={{ fontSize: '0.72rem', color: '#64748b', whiteSpace: 'nowrap' }}>{s.label}</div>
+                      <div className="sd-stat-value" style={{ fontSize: '1.5rem', fontWeight: 800, marginTop: 0 }}>{s.value}</div>
                     </div>
                     <div className="sd-stat-card-right">
-                      <div className="sd-stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
+                      <div className="sd-stat-icon" style={{ background: s.bg, color: s.color, width: '22px', height: '22px', borderRadius: '6px', fontSize: '0.9rem' }}>{s.icon}</div>
                     </div>
                   </div>
                 ))}

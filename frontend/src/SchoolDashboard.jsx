@@ -1502,7 +1502,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         className={`sd-sidebar${isSidebarOpen ? ' open' : ''}`}
         style={{
           width: navCollapsed ? '72px' : '260px',
-          transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+          transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          overflow: showProfileDropdown ? 'visible' : 'hidden'
         }}
       >
         {/* Brand */}
@@ -1581,9 +1582,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           {showProfileDropdown && (
             <div style={{
               position: 'absolute',
-              bottom: '100%',
-              left: '0.5rem',
-              right: '0.5rem',
+              bottom: navCollapsed ? '10px' : '100%',
+              left: navCollapsed ? '76px' : '0.5rem',
+              right: navCollapsed ? 'auto' : '0.5rem',
+              width: navCollapsed ? '180px' : 'auto',
               background: '#095d8f',
               borderRadius: '12px',
               boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.3)',
@@ -1593,7 +1595,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               display: 'flex',
               flexDirection: 'column',
               gap: '4px',
-              marginBottom: '8px'
+              marginBottom: navCollapsed ? '0' : '8px'
             }} onClick={(e) => e.stopPropagation()}>
               <button 
                 onClick={() => { goTo('profile'); setShowProfileDropdown(false); }}
@@ -3443,6 +3445,11 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         onChange={e => setStudentForm({...studentForm, is_active:e.target.checked})}/>
                       Active Status
                     </label>
+                    {modalType === 'add' && (
+                      <p style={{fontSize:'0.75rem',color:'#2563eb',margin:'0.5rem 0 1rem',fontStyle:'italic',background:'#eff6ff',padding:'0.4rem 0.6rem',borderRadius:'6px'}}>
+                        🔑 Login: <strong>Roll No</strong> is used as both username and initial password.
+                      </p>
+                    )}
                   </>)}
 
                   {/* Class fields */}

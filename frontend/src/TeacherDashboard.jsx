@@ -1110,12 +1110,12 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           border-right: 1px solid rgba(255, 255, 255, 0.03) !important;
           position: relative;
           overflow: hidden;
-          width: 260px !important;
+          width: 260px;
         }
 
         .sd-brand {
           border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-          padding: 1.75rem 1.5rem 1.5rem !important;
+          padding: 1.75rem 1.5rem 1.5rem;
         }
         .sd-brand-name {
           color: #ffffff !important;
@@ -1129,12 +1129,12 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           font-weight: 500 !important;
         }
         .sd-nav {
-          padding: 1.5rem 1rem !important;
+          padding: 1.5rem 1rem;
           gap: 4px !important;
         }
         .sd-nav-item {
           color: rgba(255, 255, 255, 0.9) !important;
-          padding: 0.75rem 1rem !important;
+          padding: 0.75rem 1rem;
           font-size: 0.9rem !important;
           font-weight: 500 !important;
           border-radius: 8px !important;
@@ -1240,7 +1240,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         }
         .sd-stat-row {
           display: grid !important;
-          grid-template-columns: repeat(5, 1fr) !important;
+          grid-template-columns: repeat(3, 1fr) !important;
           gap: 0.75rem !important;
           margin-bottom: 1.5rem !important;
         }
@@ -1350,7 +1350,8 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         className={`sd-sidebar${isSidebarOpen ? ' open' : ''}`}
         style={{
           width: navCollapsed ? '72px' : '260px',
-          transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+          transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          overflow: showProfileDropdown ? 'visible' : 'hidden'
         }}
       >
         {/* Brand */}
@@ -1424,9 +1425,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           {showProfileDropdown && (
             <div style={{
               position: 'absolute',
-              bottom: '100%',
-              left: '0.5rem',
-              right: '0.5rem',
+              bottom: navCollapsed ? '10px' : '100%',
+              left: navCollapsed ? '76px' : '0.5rem',
+              right: navCollapsed ? 'auto' : '0.5rem',
+              width: navCollapsed ? '180px' : 'auto',
               background: '#095d8f',
               borderRadius: '12px',
               boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.3)',
@@ -1436,7 +1438,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               display: 'flex',
               flexDirection: 'column',
               gap: '4px',
-              marginBottom: '8px'
+              marginBottom: navCollapsed ? '0' : '8px'
             }} onClick={(e) => e.stopPropagation()}>
               <button 
                 onClick={() => { goTo('profile'); setShowProfileDropdown(false); }}
@@ -1657,13 +1659,13 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               </div>
 
               {/* Stat cards */}
-              <div className="sd-stat-row" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+              <div className="sd-stat-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
                 {[
                   { label: 'Assigned Classes', value: statClasses, color: '#22c55e', bg: '#dcfce7', icon: <FiBookOpen /> },
                   { label: 'Total Students', value: statStudents, color: '#3b82f6', bg: '#dbeafe', icon: <FiUsers /> },
                   { label: 'Active Lessons', value: statExperiences, color: '#a855f7', bg: '#f3e8ff', icon: <FiFileText /> },
-                  { label: "Today's Lessons",   value: statLessons,   color: '#f97316', bg: '#ffedd5', icon: <FiClock/> },
-                  { label: 'Completion Rate',   value: '—',           color: '#10b981', bg: '#d1fae5', icon: <FiTrendingUp/> },
+
+
                 ].map((s, i) => (
                   <div className="sd-stat-card" key={i}>
                     <div className="sd-stat-card-icon-part" style={{ background: s.bg, color: s.color }}>

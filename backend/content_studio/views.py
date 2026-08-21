@@ -839,6 +839,25 @@ class PublishViewSet(viewsets.ViewSet):
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
+        # Block publish if any screen has an empty canvas (no blocks)
+        empty_screens = []
+        for activity in experience.activities.all():
+            for screen in activity.screens.all():
+                elements = (screen.content or {}).get("elements", [])
+                if not elements:
+                    empty_screens.append({
+                        "activity": activity.title or f"Activity {activity.id}",
+                        "screen": screen.title or f"Screen {screen.id}",
+                    })
+        if empty_screens:
+            return Response(
+                {
+                    "error": "Cannot publish: one or more screens have no content blocks.",
+                    "empty_screens": empty_screens,
+                },
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
         # Duplicate version check
         if version:
             try:
@@ -908,6 +927,22 @@ class PublishViewSet(viewsets.ViewSet):
             status=status.HTTP_200_OK,
         )
 
+    def global_history(self, request):
+        """GET /api/v1/content/publish/history/all/ — all published builds across all lessons"""
+        from accounts.permissions import IsSuperAdmin, IsContentCreatorOrSuperAdminOrSchoolUser
+        all_versions = (
+            PublishVersion.objects
+            .select_related("published_package__experience", "published_by")
+            .order_by("-published_at")
+        )
+        data = []
+        for v in all_versions:
+            exp = v.published_package.experience if v.published_package else None
+            entry = PublishVersionSerializer(v).data
+            entry["experience_title"] = exp.title if exp else "—"
+            entry["experience_id"] = exp.id if exp else None
+            data.append(entry)
+        return Response({"versions": data}, status=status.HTTP_200_OK)
 
 class PackageViewSet(viewsets.ViewSet):
     """

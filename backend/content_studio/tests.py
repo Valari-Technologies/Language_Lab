@@ -1115,7 +1115,7 @@ class PublishPipelineTests(APITestCase):
             screen_type="INFORMATION",
             display_order=1,
             estimated_duration=30,
-            content={"text": "Hello world"},
+            content={"elements": [{"id": "1", "type": "text", "props": {"value": "Hello world"}}]},
         )
 
         # An invalid experience (no activities) for 422 tests
@@ -1360,7 +1360,7 @@ class PublishPipelineTests(APITestCase):
         )
 
         # Attach media reference to screen content
-        self.scr.content = {"image_id": media.id}
+        self.scr.content = {"elements": [{"id": "1", "type": "image", "props": {"image_id": media.id}}]}
         self.scr.save()
 
         self.client.force_authenticate(user=self.content_creator)

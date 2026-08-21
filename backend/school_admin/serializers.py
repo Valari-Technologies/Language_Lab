@@ -163,10 +163,19 @@ class ClassSerializer(serializers.ModelSerializer):
     teacher_name = serializers.SerializerMethodField()
     section = serializers.SerializerMethodField()
     assigned_teacher_ids = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
+    assigned_lessons = serializers.SerializerMethodField()
 
     class Meta:
         model = Class
-        fields = ['class_id', 'school', 'school_name', 'class_name', 'grade', 'grade_name', 'section', 'academic_year', 'is_active', 'teacher_name', 'assigned_teacher_ids', 'created_at', 'updated_at']
+        fields = ['class_id', 'school', 'school_name', 'class_name', 'grade', 'grade_name', 'section', 'academic_year', 'is_active', 'teacher_name', 'assigned_teacher_ids', 'assigned_lessons', 'created_at', 'updated_at']
+
+    def get_assigned_lessons(self, obj):
+        from django.db.models import Q
+        from assessments.models import ExperienceAssignment
+        assignments = ExperienceAssignment.objects.filter(school=obj.school).filter(
+            Q(class_obj=obj) | Q(grade=obj.grade)
+        ).values("id", "experience_ref", "experience_title", "assigned_at")
+        return list(assignments)
 
     def get_teacher_name(self, obj):
         teachers = Teacher.objects.filter(teacherclass__class_obj=obj)

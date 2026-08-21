@@ -2210,9 +2210,17 @@ const formatDifficulty = (val) => {
   };
 
   const handleDropBlock = (type) => {
+    if (!type || typeof type !== 'string') return;
+    const allowedTypes = ['heading', 'text', 'image', 'audio', 'video', 'dialogue', 'quiz', 'match', 'fill_blanks', 'hotspots', 'drag_drop', 'hotspot_explorer'];
+    const normalizedType = type.toLowerCase().replace(' ', '_');
+    if (!allowedTypes.includes(normalizedType)) {
+      console.warn("Rejected invalid block type on drop:", type);
+      return;
+    }
+
     const newBlock = {
       id: `block-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      type: type.toLowerCase(),
+      type: normalizedType,
       content: {},
       styles: {}
     };
@@ -2541,7 +2549,8 @@ const formatDifficulty = (val) => {
                 <img
                   src={resolveMediaUrl(block.content.url)}
                   alt="Canvas block illustration"
-                  style={{ width: '100%', height: '100%', objectFit: block.styles?.objectFit || 'contain', display: 'block' }}
+                  draggable={false}
+                  style={{ width: '100%', height: '100%', objectFit: block.styles?.objectFit || 'contain', display: 'block', pointerEvents: 'none' }}
                 />
               </div>
             ) : (
@@ -2620,7 +2629,7 @@ const formatDifficulty = (val) => {
         {block.type === 'quiz' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', flex: 1, height: '100%' }}>
             <div style={{ border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.78rem', fontWeight: 600, color: '#c2410c' }}>
-              ❓ {block.content?.question || 'Empty Quiz Question Description'}
+              {block.content?.question || 'Empty Quiz Question Description'}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', flex: 1, height: '100%', justifyContent: 'space-between' }}>
               {(block.content?.options || ['', '', '', '']).map((opt, oIdx) => {
@@ -3038,7 +3047,7 @@ const formatDifficulty = (val) => {
             </div>
             {block.content?.imageUrl ? (
               <div style={{ position: 'relative', width: '100%', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block' }}>
-                <img src={resolveMediaUrl(block.content.imageUrl)} alt="Hotspot explorer source" style={{ width: '100%', display: 'block' }} />
+                <img src={resolveMediaUrl(block.content.imageUrl)} alt="Hotspot explorer source" draggable={false} style={{ width: '100%', display: 'block', pointerEvents: 'none' }} />
                 {(block.content.hotspots || []).map((h, hidx) => (
                   <div
                     key={h.id || hidx}
@@ -4685,7 +4694,7 @@ const formatDifficulty = (val) => {
 
       {/* ── Sidebar ── */}
       {view !== 'preview' && (
-        <aside className={`cs-sidebar ${navCollapsed ? 'collapsed' : ''}`}>
+        <aside className={`cs-sidebar ${navCollapsed ? 'collapsed' : ''}`} style={{ overflow: showProfileDropdown ? 'visible' : 'hidden' }}>
           <div
             className="cs-brand"
             style={{
@@ -4792,9 +4801,10 @@ const formatDifficulty = (val) => {
             {showProfileDropdown && (
               <div style={{
                 position: 'absolute',
-                bottom: '100%',
-                left: '0.5rem',
-                right: '0.5rem',
+                bottom: navCollapsed ? '10px' : '100%',
+                left: navCollapsed ? '76px' : '0.5rem',
+                right: navCollapsed ? 'auto' : '0.5rem',
+                width: navCollapsed ? '180px' : 'auto',
                 background: '#095d8f',
                 borderRadius: '12px',
                 boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.3)',
@@ -4804,7 +4814,7 @@ const formatDifficulty = (val) => {
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '4px',
-                marginBottom: '8px'
+                marginBottom: navCollapsed ? '0' : '8px'
               }} onClick={(e) => e.stopPropagation()}>
                 <button 
                   onClick={() => { setView('profile'); setShowProfileDropdown(false); }}
@@ -5581,27 +5591,27 @@ const formatDifficulty = (val) => {
           {view === 'experience-builder' && (
             <>
               {/* Top header - breadcrumb only for new experience */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  {isNewExperience && (
+              {isNewExperience && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <button className="cs-icon-btn" onClick={() => setView('experiences')}><FiArrowLeft /></button>
-                  )}
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: isNewExperience ? '4px' : 0 }}>
-                      <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>
-                        {isNewExperience ? 'New Lesson' : 'Lessons Builder'}
-                      </h1>
-                    </div>
-                    {experienceForm.grade && (
-                      <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                        {gradesList.find(g => String(g.id) === String(experienceForm.grade))?.grade_name}
-                        {experienceForm.difficulty ? ` · ${formatDifficulty(experienceForm.difficulty)}` : ''}
-                        {experienceForm.duration ? ` · Est. ${experienceForm.duration} min` : ''}
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '4px' }}>
+                        <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>
+                          New Lesson
+                        </h1>
                       </div>
-                    )}
+                      {experienceForm.grade && (
+                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                          {gradesList.find(g => String(g.id) === String(experienceForm.grade))?.grade_name}
+                          {experienceForm.difficulty ? ` · ${formatDifficulty(experienceForm.difficulty)}` : ''}
+                          {experienceForm.duration ? ` · Est. ${experienceForm.duration} min` : ''}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Layout: full-width single column */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -8819,6 +8829,15 @@ const formatDifficulty = (val) => {
               </>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minHeight: 'calc(100vh - 120px)' }}>
+                {/* Breadcrumbs and Top Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  <div>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                      <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Lessons Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Lesson Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('activity-builder')}>{selectedActivity?.title || 'Activity Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Screen Builder Overview</span>
+                    </div>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '6px 0 0 0', color: '#0f172a', letterSpacing: '-0.02em' }}>Screen Library</h1>
+                  </div>
+                </div>
 
                 {/* Main Content Body */}
                 {!selectedActivity?.id ? (

@@ -75,6 +75,8 @@ class ActivitySerializer(serializers.ModelSerializer):
     )
     title = serializers.CharField(required=False, allow_blank=True)
 
+    screen_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Activity
         fields = [
@@ -90,10 +92,14 @@ class ActivitySerializer(serializers.ModelSerializer):
             "mastery_threshold",
             "activity_type",
             "display_order",
+            "screen_count",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["display_order"]
+        read_only_fields = ["display_order", "screen_count"]
+
+    def get_screen_count(self, obj):
+        return obj.screens.count()
 
     def validate_experience(self, value):
         if value.is_deleted:

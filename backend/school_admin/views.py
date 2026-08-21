@@ -61,6 +61,68 @@ class BulkUploadAPIView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser]
 
+    # ── Template columns definitions ──
+    TEACHER_COLUMNS = [
+        {"column": "name",          "required": True,  "description": "Full name of the teacher"},
+        {"column": "email",         "required": True,  "description": "Email address (must be unique)"},
+        {"column": "username",      "required": True,  "description": "Login username (must be unique)"},
+        {"column": "password",      "required": True,  "description": "Initial login password"},
+        {"column": "phone_no",      "required": True,  "description": "Phone number"},
+        {"column": "qualification", "required": True,  "description": "Qualification (e.g. B.Ed, M.A.)"},
+        {"column": "class",         "required": True,  "description": "Class/Grade to assign"},
+        {"column": "section",       "required": True,  "description": "Section (e.g. A, B, C)"},
+        {"column": "academic_year", "required": True,  "description": "Academic year (e.g. 2025-2026)"},
+    ]
+
+    STUDENT_COLUMNS = [
+        {"column": "fullname",      "required": True,  "description": "Full name of the student"},
+        {"column": "class",         "required": True,  "description": "Class/Grade name"},
+        {"column": "section",       "required": True,  "description": "Section (e.g. A, B, C)"},
+        {"column": "roll no",       "required": True,  "description": "Roll number"},
+        {"column": "status",        "required": True,  "description": "Status (e.g. active, inactive)"},
+        {"column": "academy year",  "required": True,  "description": "Academic year (e.g. 2025-2026)"},
+    ]
+
+    def get(self, request, *args, **kwargs):
+        """GET /api/cms/v1/bulk-upload/?type=teacher|student — download .xlsx template."""
+        from django.http import HttpResponse
+        from io import BytesIO
+
+        upload_type = request.query_params.get("type", "").lower()
+        if upload_type not in ("teacher", "student"):
+            return Response(
+                {"error": "Query param 'type' is required. Must be 'teacher' or 'student'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        columns = self.TEACHER_COLUMNS if upload_type == "teacher" else self.STUDENT_COLUMNS
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = f"{upload_type.capitalize()} Import Template"
+
+        # Write header row
+        for col_idx, col_def in enumerate(columns, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=col_def["column"])
+            cell.font = openpyxl.styles.Font(bold=True)
+
+        # Auto-size columns roughly
+        for col_idx, col_def in enumerate(columns, start=1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = max(len(col_def["column"]) + 5, 15)
+
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        filename = f"{upload_type}_import_template.xlsx"
+        response = HttpResponse(
+            buf.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
     def post(self, request, *args, **kwargs):
         # 1. Enforce RBAC logic and permission matrix
         user = request.user
