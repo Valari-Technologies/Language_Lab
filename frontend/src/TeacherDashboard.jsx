@@ -381,6 +381,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [classes,  setClasses]  = useState([]);
   const [tchClassFilter, setTchClassFilter] = useState('');
   const [tchSectionFilter, setTchSectionFilter] = useState('');
+  const [studentClassFilter, setStudentClassFilter] = useState('');
   const [schools,  setSchools]  = useState([]);
   const [grades,   setGrades]   = useState([]);
 
@@ -393,7 +394,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const isAnyOverlayOpen = showModal || showClassCrudDetailModal || showStudentCrudDetailModal;
 
   const [studentForm, setStudentForm] = useState({
-    username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: '2025 - 2026', is_active: true
+    class_id: '', username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: '2025 - 2026', is_active: true
   });
   const [classForm, setClassForm] = useState({
     class_name: '', school: '', grade: '', section: 'A',
@@ -648,7 +649,19 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const initForm = (tab, entity = null) => {
     setErrorMsg('');
     if (tab === 'students') {
+      let matchedClassId = '';
+      if (entity) {
+        const studentGradeVal = entity.grade ? (entity.grade.startsWith('Grade') ? entity.grade.replace('Grade', 'Class') : entity.grade) : '';
+        const matchedClass = classes.find(c => {
+          const classGradeVal = c.grade_name ? c.grade_name.replace('Grade', 'Class') : `Class ${c.grade}`;
+          return studentGradeVal === classGradeVal &&
+                 (entity.section || '').toUpperCase() === (c.section || '').toUpperCase() &&
+                 (entity.academic_year || '').replace(" ", "") === (c.academic_year || '').replace(" ", "");
+        });
+        if (matchedClass) matchedClassId = matchedClass.class_id;
+      }
       setStudentForm(entity ? {
+        class_id: matchedClassId,
         username: entity.username || '', password: '',
         email: entity.email || '', full_name: entity.full_name || '',
         roll_no: entity.roll_no || '',
@@ -656,7 +669,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         section: entity.section || '',
         academic_year: entity.academic_year || '2025 - 2026',
         is_active: entity.is_active !== undefined ? entity.is_active : true
-      } : { username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: '2025 - 2026', is_active: true });
+      } : { class_id: '', username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: '2025 - 2026', is_active: true });
     } else if (tab === 'classes') {
       const extractedSec = entity && entity.class_name && ['A','B','C','D'].includes(entity.class_name.slice(-1).toUpperCase()) ? entity.class_name.slice(-1).toUpperCase() : 'A';
       const defaultGradeId = grades[0]?.id || '';
@@ -949,6 +962,18 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     });
   };
 
+  const getFilteredStudents = () => {
+    let list = students;
+    if (studentClassFilter) {
+      list = list.filter(s => {
+        const gradeVal = s.grade ? String(s.grade).replace('Grade', 'Class').replace(' ', '').toUpperCase() : '';
+        const filterVal = String(studentClassFilter).replace('Grade', 'Class').replace(' ', '').toUpperCase();
+        return gradeVal === filterVal;
+      });
+    }
+    return filterList(list);
+  };
+
   /* ── Filter helpers ── */
   const filterList = (list) => {
     if (!searchQuery) return list;
@@ -968,6 +993,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     setSearchQuery('');
     setTchClassFilter('');
     setTchSectionFilter('');
+    setStudentClassFilter('');
     setIsSidebarOpen(false);
     setStudentPage(1);
     setClassPage(1);
@@ -1750,14 +1776,27 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               
               <div className="sd-card" style={{ padding: '1.25rem 1.5rem' }}>
                 <div className="sd-table-toolbar">
-                  <div className="sd-table-search">
-                    <FiSearch/>
-                    <input
-                      type="text"
-                      placeholder="Search students..."
-                      value={searchQuery}
-                      onChange={e => { setSearchQuery(e.target.value); setStudentPage(1); }}
-                    />
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    <div className="sd-table-search">
+                      <FiSearch/>
+                      <input
+                        type="text"
+                        placeholder="Search students..."
+                        value={searchQuery}
+                        onChange={e => { setSearchQuery(e.target.value); setStudentPage(1); }}
+                      />
+                    </div>
+                    <select
+                      className="sd-form-input"
+                      style={{ width: '160px', height: '38px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem' }}
+                      value={studentClassFilter}
+                      onChange={e => { setStudentClassFilter(e.target.value); setStudentPage(1); }}
+                    >
+                      <option value="">All Classes</option>
+                      {[3, 4, 5, 6, 7, 8].map(num => (
+                        <option key={num} value={`Class ${num}`}>Class {num}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="sd-table-actions">
                     <button
@@ -1922,7 +1961,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           <th className="sd-checkbox-cell">
                             <input
                               type="checkbox"
-                              checked={students.length > 0 && selectedStudentIds.length === filterList(students).length}
+                              checked={students.length > 0 && selectedStudentIds.length === getFilteredStudents().length}
                               onChange={handleSelectAllStudents}
                             />
                           </th>
@@ -1938,7 +1977,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {paginate(filterList(students), studentPage).map((s, i) => {
+                      {paginate(getFilteredStudents(), studentPage).map((s, i) => {
                         const sid = s.student_id || s.id;
                         return (
                           <tr key={sid || i}>
@@ -1956,8 +1995,8 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             </td>
                             <td>{s.roll_no || 'N/A'}</td>
                             <td><span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>{s.username || 'N/A'}</span></td>
-                            <td>{s.grade ? String(s.grade).replace('Grade', 'Class') : 'N/A'}</td>
-                            <td>{s.section || 'N/A'}</td>
+                            <td>{s.grade ? (String(s.grade).startsWith('Class') || String(s.grade).startsWith('Grade') ? String(s.grade).replace('Grade', 'Class') : `Class ${s.grade}`) : 'N/A'}</td>
+                            <td>{s.section ? (String(s.section).startsWith('Section') ? s.section : `Section ${s.section}`) : 'N/A'}</td>
                             <td style={{ textAlign: 'center' }}>{s.academic_year || '2025 - 2026'}</td>
                             <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
                               <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
@@ -2092,7 +2131,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           </tr>
                         );
                       })}
-                      {filterList(students).length === 0 && (
+                      {getFilteredStudents().length === 0 && (
                         <tr>
                           <td colSpan={isSelectModeStudents ? "7" : "6"} className="sd-empty-state">No students found.</td>
                         </tr>
@@ -2100,7 +2139,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     </tbody>
                   </table>
                 </div>
-                <Pagination total={filterList(students).length} perPage={PER_PAGE} page={studentPage} onPage={setStudentPage}/>
+                <Pagination total={getFilteredStudents().length} perPage={PER_PAGE} page={studentPage} onPage={setStudentPage}/>
               </div>
             </>
           )}
@@ -2447,7 +2486,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             setStudentForm(prev => ({
                               ...prev,
                               full_name,
-                              username: modalType === 'add' ? generateLmsLoginCode(full_name, students) : prev.username
+                              username: modalType === 'add' ? generateRollNo(full_name, students) : prev.username
                             }));
                           }} required placeholder="e.g. Arjun Sharma"/>
                       </div>
@@ -2464,30 +2503,45 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </div>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Class *</label>
-                        <select className="sd-form-input" value={studentForm.grade || ''}
-                          onChange={e => setStudentForm({...studentForm, grade: e.target.value})} required>
+                        <select className="sd-form-input" value={studentForm.class_id || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val) {
+                              const selectedClass = classes.find(c => String(c.class_id) === String(val));
+                              if (selectedClass) {
+                                setStudentForm(prev => ({
+                                  ...prev,
+                                  class_id: val,
+                                  grade: selectedClass.grade_name ? selectedClass.grade_name.replace('Grade', 'Class') : `Class ${selectedClass.grade}`,
+                                  section: selectedClass.section || '',
+                                  academic_year: selectedClass.academic_year || '2025 - 2026'
+                                }));
+                              }
+                            } else {
+                              setStudentForm(prev => ({
+                                ...prev,
+                                class_id: '',
+                                grade: '',
+                                section: '',
+                                academic_year: '2025 - 2026'
+                              }));
+                            }
+                          }} required>
                           <option value="">-- Select Class --</option>
-                          {[3, 4, 5, 6, 7, 8].map(num => (
-                            <option key={num} value={`Class ${num}`}>Class {num}</option>
+                          {classes.map(c => (
+                            <option key={c.class_id} value={c.class_id}>{c.class_name} ({c.academic_year})</option>
                           ))}
                         </select>
                       </div>
                     </div>
                     <div className="sd-form-row">
                       <div className="sd-form-group">
-                        <label className="sd-form-label">Section *</label>
-                        <select className="sd-form-input" value={studentForm.section || ''}
-                          onChange={e => setStudentForm({...studentForm, section: e.target.value})} required>
-                          <option value="">-- Select Section --</option>
-                          {['A', 'B', 'C', 'D'].map(letter => (
-                            <option key={letter} value={letter}>Section {letter}</option>
-                          ))}
-                        </select>
+                        <label className="sd-form-label">Section</label>
+                        <input className="sd-form-input" type="text" value={studentForm.section || ''} readOnly style={{ backgroundColor:'#e2e8f0', cursor:'not-allowed' }} placeholder="Auto-populated from Class"/>
                       </div>
                       <div className="sd-form-group">
-                        <label className="sd-form-label">Academic Year *</label>
-                        <input className="sd-form-input" type="text" value={studentForm.academic_year || ''}
-                          onChange={e => setStudentForm({...studentForm, academic_year: e.target.value})} placeholder="e.g. 2025 - 2026" required/>
+                        <label className="sd-form-label">Academic Year</label>
+                        <input className="sd-form-input" type="text" value={studentForm.academic_year || ''} readOnly style={{ backgroundColor:'#e2e8f0', cursor:'not-allowed' }} placeholder="Auto-populated from Class"/>
                       </div>
                     </div>
 

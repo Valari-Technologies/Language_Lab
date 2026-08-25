@@ -17,6 +17,17 @@ class Teacher(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.school.school_name}"
 
+    def delete(self, *args, **kwargs):
+        from .models import Class, TeacherClass
+        classes = list(Class.objects.filter(teacherclass__teacher=self))
+        user = self.user
+        super().delete(*args, **kwargs)
+        if user and user.pk:
+            user.delete()
+        for c in classes:
+            if Class.objects.filter(pk=c.pk).exists():
+                Class.objects.filter(pk=c.pk).delete()
+
 
 class Class(models.Model):
     class_id = models.AutoField(primary_key=True)
@@ -29,14 +40,14 @@ class Class(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def delete(self, *args, **kwargs):
-        # Import inside method to avoid circular imports
-        from .models import TeacherClass
-        teachers = [tc.teacher for tc in TeacherClass.objects.filter(class_obj=self)]
+        from .models import Teacher, TeacherClass
+        teachers = list(Teacher.objects.filter(teacherclass__class_obj=self))
         super().delete(*args, **kwargs)
         for t in teachers:
-            if t.user:
-                t.user.delete()
-            t.delete()
+            if Teacher.objects.filter(pk=t.pk).exists():
+                Teacher.objects.filter(pk=t.pk).delete()
+                if t.user and t.user.pk:
+                    t.user.delete()
 
     class Meta:
         db_table = "cms_class"

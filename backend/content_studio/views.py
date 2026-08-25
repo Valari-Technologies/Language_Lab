@@ -101,6 +101,8 @@ class ExperienceViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         instance.is_deleted = True
         instance.save()
+        # Delete associated PublishedPackage to cascade delete obsolete version entries
+        PublishedPackage.objects.filter(experience=instance).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["post"])
@@ -932,6 +934,7 @@ class PublishViewSet(viewsets.ViewSet):
         from accounts.permissions import IsSuperAdmin, IsContentCreatorOrSuperAdminOrSchoolUser
         all_versions = (
             PublishVersion.objects
+            .filter(published_package__experience__is_deleted=False)
             .select_related("published_package__experience", "published_by")
             .order_by("-published_at")
         )

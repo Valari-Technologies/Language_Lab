@@ -353,6 +353,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [publishPage, setPublishPage] = useState(1);
 
   // Multi-select and View Details states for Experiences
   const [selectedExperienceIds, setSelectedExperienceIds] = useState([]);
@@ -1504,10 +1505,7 @@ const formatDifficulty = (val) => {
               (a.activity_type === 'ASSESSMENT')
             );
             if (defaultActivity) {
-              setSelectedActivity(defaultActivity);
-              setScreens(defaultActivity.screens || []);
-              setView('screen-builder');
-              setIsEditingScreen(false);
+              await loadActivityDetail(defaultActivity.id, 'screen-builder');
             } else {
               setView('experience-builder');
             }
@@ -1981,10 +1979,16 @@ const formatDifficulty = (val) => {
     }
   };
 
-  const handleAddBlock = (type) => {
+  const handleAddBlock = (type, dropX = null, dropY = null) => {
+    if (!type) return;
+
+    let normalizedType = type.toLowerCase().replace(' ', '_');
+    if (normalizedType === 'fill_in_blanks' || normalizedType === 'fill in blanks') normalizedType = 'fill_blank';
+    if (normalizedType === 'match_items' || normalizedType === 'match items') normalizedType = 'match';
+
     const newBlock = {
       id: `block-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      type: type.toLowerCase(),
+      type: normalizedType,
       content: {},
       styles: {}
     };
@@ -2182,21 +2186,30 @@ const formatDifficulty = (val) => {
       };
     }
 
-    let maxTop = 0;
-    if (screenForm.elements && screenForm.elements.length > 0) {
-      screenForm.elements.forEach(el => {
-        const topVal = parseInt(el.styles?.top) || 0;
-        const blockH = el.styles?.minHeight ? (parseInt(el.styles.minHeight) || 100) : 100;
-        if (topVal + blockH > maxTop) {
-          maxTop = topVal + blockH;
-        }
-      });
+    let nextTop = 20;
+    let nextLeft = 20;
+
+    if (dropX !== null && dropY !== null) {
+      nextTop = Math.max(0, dropY);
+      nextLeft = Math.max(0, dropX);
+    } else {
+      let maxTop = 0;
+      if (screenForm.elements && screenForm.elements.length > 0) {
+        screenForm.elements.forEach(el => {
+          const topVal = parseInt(el.styles?.top) || 0;
+          const blockH = el.styles?.minHeight ? (parseInt(el.styles.minHeight) || 100) : 100;
+          if (topVal + blockH > maxTop) {
+            maxTop = topVal + blockH;
+          }
+        });
+      }
+      nextTop = maxTop === 0 ? 20 : maxTop + 16;
     }
-    const nextTop = maxTop === 0 ? 20 : maxTop + 16;
+
     newBlock.styles = {
       ...newBlock.styles,
       top: `${nextTop}px`,
-      left: '20px'
+      left: `${nextLeft}px`
     };
 
     const updatedElements = [...(screenForm.elements || []), newBlock];
@@ -2209,160 +2222,8 @@ const formatDifficulty = (val) => {
     showFeedback(`Added ${type.replace('_', ' ')} block`);
   };
 
-  const handleDropBlock = (type) => {
-    if (!type || typeof type !== 'string') return;
-    const allowedTypes = ['heading', 'text', 'image', 'audio', 'video', 'dialogue', 'quiz', 'match', 'fill_blanks', 'hotspots', 'drag_drop', 'hotspot_explorer'];
-    const normalizedType = type.toLowerCase().replace(' ', '_');
-    if (!allowedTypes.includes(normalizedType)) {
-      console.warn("Rejected invalid block type on drop:", type);
-      return;
-    }
-
-    const newBlock = {
-      id: `block-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      type: normalizedType,
-      content: {},
-      styles: {}
-    };
-
-    if (type.toLowerCase() === 'heading') {
-      newBlock.content = { text: 'New Heading', tag: 'H2' };
-      newBlock.styles = { fontFamily: 'Poppins', fontSize: '32px', color: '#1F2937', alignment: 'Center', fontWeight: 'Bold' };
-    } else if (type.toLowerCase() === 'text') {
-      newBlock.content = { text: 'New text block body...' };
-      newBlock.styles = { fontFamily: 'Poppins', fontSize: '16px', color: '#334155', alignment: 'Left', fontWeight: 'Normal' };
-    } else if (type.toLowerCase() === 'image') {
-      newBlock.content = { url: '', caption: '' };
-    } else if (type.toLowerCase() === 'audio') {
-      newBlock.content = { url: '', title: 'Audio Clip' };
-    } else if (type.toLowerCase() === 'video') {
-      newBlock.content = { url: '' };
-    } else if (type.toLowerCase() === 'dialogue') {
-      newBlock.content = {
-        steps: [
-          { step: 1, name: 'Ben', text: 'Hello!', avatarColor: '#3b82f6', side: 'left' }
-        ]
-      };
-    } else if (type.toLowerCase() === 'quiz' || type.toLowerCase() === 'mcq') {
-      newBlock.type = 'quiz';
-      newBlock.content = {
-        question: 'Question text?',
-        options: [{ text: 'Option A' }, { text: 'Option B' }, { text: 'Option C' }, { text: 'Option D' }],
-        correctAnswerIndex: 0
-      };
-    } else if (type.toLowerCase() === 'dictation') {
-      newBlock.type = 'dictation';
-      newBlock.content = { url: '', question: 'Listen and type what you hear.' };
-    } else if (type.toLowerCase() === 'grammar_correction') {
-      newBlock.type = 'grammar_correction';
-      newBlock.content = { incorrectSentence: 'They is going to school.', correctedSentence: 'They are going to school.' };
-    } else if (type.toLowerCase() === 'reading_passage') {
-      newBlock.type = 'reading_passage';
-      newBlock.content = { title: 'Reading Passage', passage: 'Read this text carefully...', question: 'Did you understand the text?' };
-    } else if (type.toLowerCase() === 'writing_prompt') {
-      newBlock.type = 'writing_prompt';
-      newBlock.content = { prompt: 'Write about your favorite hobby.', placeholder: 'Start writing here...', minWords: 10 };
-    } else if (type.toLowerCase() === 'voice_recorder' || type.toLowerCase() === 'voice recorder') {
-      newBlock.type = 'voice_recorder';
-      newBlock.content = { prompt: 'Please record your response.' };
-    } else if (type.toLowerCase() === 'drag_drop' || type.toLowerCase() === 'drag and drop' || type.toLowerCase() === 'drag_and_drop') {
-      newBlock.type = 'drag_drop';
-      newBlock.content = {
-        question: 'Drag the correct words to their destinations.',
-        pairs: [
-          { id: 'pair-1', source: 'Apple', target: 'Fruit' },
-          { id: 'pair-2', source: 'Carrot', target: 'Vegetable' }
-        ]
-      };
-    } else if (type.toLowerCase() === 'fill_blank' || type.toLowerCase() === 'fill in blanks' || type.toLowerCase() === 'fill_in_blanks') {
-      newBlock.type = 'fill_blank';
-      newBlock.content = {
-        question: 'Complete the sentence by filling in the blanks.',
-        items: [{ id: 'item-1', text: 'The quick brown [fox] jumps over the lazy [dog].' }]
-      };
-    } else if (type.toLowerCase() === 'match_items' || type.toLowerCase() === 'match items' || type.toLowerCase() === 'match') {
-      newBlock.type = 'match';
-      newBlock.content = {
-        question: 'Match the items in Column A with Column B.',
-        leftItems: ['Dog', 'Cat'],
-        rightItems: ['Bark', 'Meow']
-      };
-    } else if (type.toLowerCase() === 'sequence' || type.toLowerCase() === 'sequence / order') {
-      newBlock.type = 'sequence';
-      newBlock.content = {
-        question: 'Arrange the items in the correct order.',
-        items: ['Step 1: Get out of bed', 'Step 2: Brush your teeth', 'Step 3: Eat breakfast']
-      };
-    } else if (type.toLowerCase() === 'flashcard') {
-      newBlock.type = 'flashcard';
-      newBlock.content = {
-        cards: [
-          { id: 'card-1', front: 'Hello', back: 'Greeting in English' },
-          { id: 'card-2', front: 'Bonjour', back: 'Greeting in French' }
-        ]
-      };
-    } else if (type.toLowerCase() === 'sentence_builder' || type.toLowerCase() === 'sentence builder') {
-      newBlock.type = 'sentence_builder';
-      newBlock.content = {
-        question: 'Reorder the words to make a correct sentence.',
-        sentence: 'Learning English is fun and easy',
-        words: ['Learning', 'English', 'is', 'fun', 'and', 'easy']
-      };
-    } else if (type.toLowerCase() === 'word_search' || type.toLowerCase() === 'word search / crossword') {
-      newBlock.type = 'word_search';
-      newBlock.content = {
-        question: 'Find the hidden words in the grid.',
-        words: ['DASHBOARD', 'STUDIO', 'TEACHER'],
-        gridSize: 8
-      };
-    } else if (type.toLowerCase() === 'pronunciation') {
-      newBlock.type = 'pronunciation';
-      newBlock.content = {
-        question: 'Practice pronouncing words correctly',
-        items: [{ id: 'item-1', word: 'Hello', phonetic: '/həˈloʊ/' }]
-      };
-    } else if (type.toLowerCase() === 'role_play' || type.toLowerCase() === 'role play') {
-      newBlock.type = 'role_play';
-      newBlock.content = { title: 'Introduction', prompt: 'Introduce yourself.', script: [{ speaker: 'A', text: 'Hi! How are you?' }, { speaker: 'B', text: 'Im good, thanks!' }] };
-    } else if (type.toLowerCase() === 'input') {
-      newBlock.type = 'input';
-      newBlock.content = { placeholder: 'Type your answer here...' };
-    } else if (type.toLowerCase() === 'memory') {
-      newBlock.type = 'memory';
-      newBlock.content = { cards: ['Apple', 'Fruit', 'Carrot', 'Vegetable'] };
-    } else if (type.toLowerCase() === 'crossword') {
-      newBlock.type = 'crossword';
-      newBlock.content = { question: 'Solve the crossword grid.', words: [] };
-    } else if (type.toLowerCase() === 'true_false' || type.toLowerCase() === 'true false' || type.toLowerCase() === 'true/false') {
-      newBlock.type = 'true_false';
-      newBlock.content = { question: 'Is this statement true?', correctAnswer: true };
-    }
-
-    let maxTop = 0;
-    if (screenForm.elements && screenForm.elements.length > 0) {
-      screenForm.elements.forEach(el => {
-        const topVal = parseInt(el.styles?.top) || 0;
-        const blockH = el.styles?.minHeight ? (parseInt(el.styles.minHeight) || 100) : 100;
-        if (topVal + blockH > maxTop) {
-          maxTop = topVal + blockH;
-        }
-      });
-    }
-    const nextTop = maxTop === 0 ? 20 : maxTop + 16;
-    newBlock.styles = {
-      ...newBlock.styles,
-      top: `${nextTop}px`,
-      left: '20px'
-    };
-
-    const updatedElements = [...(screenForm.elements || []), newBlock];
-    setScreenForm(prev => ({
-      ...prev,
-      elements: updatedElements
-    }));
-    pushHistory(updatedElements);
-    setSelectedBlockId(newBlock.id);
-    showFeedback(`Added ${type.replace('_', ' ')} block`);
+  const handleDropBlock = (type, dropX = null, dropY = null) => {
+    handleAddBlock(type, dropX, dropY);
   };
 
   const handleDropOnSlot = (e) => {
@@ -2371,13 +2232,21 @@ const formatDifficulty = (val) => {
     const data = e.dataTransfer.getData("text/plain");
     if (!data) return;
 
+    const canvasEl = e.currentTarget.closest('[data-canvas-area="true"]') || e.currentTarget;
+    const rect = canvasEl.getBoundingClientRect();
+    const scale = previewScaleFactor || 1;
+    
+    // Account for absolute editor canvas coordinate scaling
+    const dropX = (e.clientX - rect.left) / scale;
+    const dropY = (e.clientY - rect.top) / scale;
+
     if (data.startsWith("block:")) {
-      // Reordering is handled via the move up/down controls; dropping back onto the canvas is a no-op.
+      // Reordering via move controls
     } else if (data.startsWith("type:")) {
       const type = data.replace("type:", "");
-      handleDropBlock(type);
+      handleDropBlock(type, dropX, dropY);
     } else {
-      handleDropBlock(data);
+      handleDropBlock(data, dropX, dropY);
     }
   };
 
@@ -3986,6 +3855,7 @@ const formatDifficulty = (val) => {
   };
 
   const loadPublishData = async (experienceId) => {
+    setPublishPage(1);
     try {
       if (experienceId) {
         const resStatus = await apiFetch(`/api/v1/content/publish/${experienceId}/`);
@@ -9675,21 +9545,33 @@ const formatDifficulty = (val) => {
                           </tr>
                         </thead>
                         <tbody>
-                          {publishHistory.length === 0 ? (
-                            <tr>
-                              <td colSpan="8" style={{ textAlign: 'center', color: '#64748b', padding: '1.5rem', fontSize: '0.82rem' }}>
-                                No builds published yet. Specify a version above to compile.
-                              </td>
-                            </tr>
-                          ) : (
-                            publishHistory.map((pkg, idx) => {
+                          {(() => {
+                            const PUBLISH_PER_PAGE = 5;
+                            const paginatedHistory = publishHistory.slice((publishPage - 1) * PUBLISH_PER_PAGE, publishPage * PUBLISH_PER_PAGE);
+                            if (paginatedHistory.length === 0) {
+                              return (
+                                <tr>
+                                  <td colSpan="8" style={{ textAlign: 'center', color: '#64748b', padding: '1.5rem', fontSize: '0.82rem' }}>
+                                    No builds published yet. Specify a version above to compile.
+                                  </td>
+                                </tr>
+                              );
+                            }
+                            return paginatedHistory.map((pkg, idx) => {
                               const lessonTitle = pkg.experience_title || selectedExperience?.title || 'Experience';
                               const zipFilename = `${lessonTitle.replace(/\s+/g, '_')}_v${pkg.version_number || '1.0.0'}.zip`;
-                              const isLatest = idx === 0;
+                              // The actual overall list index for the current item
+                              const overallIdx = (publishPage - 1) * PUBLISH_PER_PAGE + idx;
+                              const isLatest = overallIdx === 0;
                               return (
                                 <tr key={pkg.id}>
-                                  <td style={{ fontWeight: 700, color: '#475569' }}>{publishHistory.length - idx}</td>
-                                  <td style={{ fontWeight: 700, color: '#0f172a', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pkg.experience_title || selectedExperience?.title || '—'}</td>
+                                  <td style={{ fontWeight: 700, color: '#475569' }}>{publishHistory.length - overallIdx}</td>
+                                  <td 
+                                    style={{ fontWeight: 700, color: '#0f172a', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                    title={lessonTitle}
+                                  >
+                                    {lessonTitle}
+                                  </td>
                                   <td style={{ fontWeight: 700, color: '#0284c7' }}>v{pkg.version_number || '—'}</td>
                                   <td style={{ color: '#475569', fontSize: '0.72rem', fontFamily: 'monospace' }}>{zipFilename}</td>
                                   <td>{pkg.package_size ? formatBytes(pkg.package_size) : '—'}</td>
@@ -9718,11 +9600,50 @@ const formatDifficulty = (val) => {
                                   </td>
                                 </tr>
                               );
-                            })
-                          )}
+                            });
+                          })()}
                         </tbody>
                       </table>
                     </div>
+
+                    {/* Pagination Footer */}
+                    {publishHistory.length > 5 && (
+                      <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #f1f5f9' }}>
+                        <div className="cs-pagination-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                            Showing {publishHistory.length > 0 ? (publishPage - 1) * 5 + 1 : 0} to {Math.min(publishPage * 5, publishHistory.length)} of {publishHistory.length} builds
+                          </span>
+                          <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                            <button 
+                              className="cs-page-link" 
+                              disabled={publishPage === 1} 
+                              onClick={() => setPublishPage(publishPage - 1)}
+                              style={{ cursor: publishPage === 1 ? 'not-allowed' : 'pointer', opacity: publishPage === 1 ? 0.5 : 1 }}
+                            >
+                              &lt;
+                            </button>
+                            {Array.from({ length: Math.max(1, Math.ceil(publishHistory.length / 5)) }, (_, i) => i + 1).map(pageNum => (
+                              <button
+                                key={pageNum}
+                                className={`cs-page-link ${publishPage === pageNum ? 'active' : ''}`}
+                                onClick={() => setPublishPage(pageNum)}
+                                style={{ cursor: 'pointer' }}
+                              >
+                                {pageNum}
+                              </button>
+                            ))}
+                            <button 
+                              className="cs-page-link" 
+                              disabled={publishPage >= Math.ceil(publishHistory.length / 5)} 
+                              onClick={() => setPublishPage(publishPage + 1)}
+                              style={{ cursor: publishPage >= Math.ceil(publishHistory.length / 5) ? 'not-allowed' : 'pointer', opacity: publishPage >= Math.ceil(publishHistory.length / 5) ? 0.5 : 1 }}
+                            >
+                              &gt;
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

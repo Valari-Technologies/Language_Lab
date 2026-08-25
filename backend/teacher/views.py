@@ -63,13 +63,13 @@ class StudentViewSet(CMSBaseViewSet):
             for cls in teacher_classes:
                 grade_norm = normalize_grade(cls.grade.grade_name if cls.grade else "")
                 section_norm = normalize_section(extract_class_section(cls.class_name))
-                ay_norm = (cls.academic_year or "").strip().upper()
+                ay_norm = (cls.academic_year or "").replace(" ", "").upper()
                 assigned_lookup.add((grade_norm, section_norm, ay_norm))
 
             for student in queryset:
                 s_grade = normalize_grade(student.grade)
                 s_section = normalize_section(student.section)
-                s_ay = (student.academic_year or "").strip().upper()
+                s_ay = (student.academic_year or "").replace(" ", "").upper()
                 
                 if (s_grade, s_section, s_ay) in assigned_lookup:
                     matching_ids.append(student.student_id)

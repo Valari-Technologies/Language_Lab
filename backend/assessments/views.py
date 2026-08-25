@@ -433,11 +433,22 @@ class ReportsClassesAPIView(APIView):
     def get(self, request):
         school = get_user_school(request.user)
         if request.user.role == "TEACHER":
-            classes = Class.objects.filter(teacherclass__teacher__user=request.user)
+            classes_queryset = Class.objects.filter(teacherclass__teacher__user=request.user)
         elif school:
-            classes = Class.objects.filter(school=school)
+            classes_queryset = Class.objects.filter(school=school)
         else:
-            classes = Class.objects.all()
+            classes_queryset = Class.objects.all()
+
+        # Deduplicate classes by normalized name and academic year to prevent duplicates in report
+        seen = set()
+        classes = []
+        for c in classes_queryset:
+            norm_name = (c.class_name or "").strip().upper()
+            norm_year = (c.academic_year or "").replace(" ", "").strip()
+            key = (norm_name, norm_year)
+            if key not in seen:
+                seen.add(key)
+                classes.append(c)
         
         attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user)
         

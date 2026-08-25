@@ -446,27 +446,37 @@ class BulkUploadAPIView(APIView):
                                             raise ve
                                         raise ValueError(f"Invalid class_id in list: '{id_str}' must be an integer.")
                             else:
-                                import re
-                                grade_match = re.search(r"\d+", class_grade)
-                                grade_num = grade_match.group(0) if grade_match else class_grade
-                                
-                                grade_obj = Grade.objects.filter(grade_name__icontains=grade_num).first()
-                                if not grade_obj:
-                                    try:
-                                        s_ord = int(grade_num)
-                                    except ValueError:
-                                        s_ord = 1
-                                    grade_obj = Grade.objects.create(grade_name=f"Class {grade_num}", sort_order=s_ord)
+                                grades_list = [g.strip() for g in str(class_grade).split(",") if g.strip()]
+                                sections_list = [s.strip() for s in str(class_section).split(",") if s.strip()]
 
-                                target_class_name = f"Class {grade_num}-{class_section}"
-                                class_obj, _ = Class.objects.get_or_create(
-                                    class_name=target_class_name,
-                                    school=school,
-                                    grade=grade_obj,
-                                    academic_year=academic_year,
-                                    defaults={"is_active": True}
-                                )
-                                classes_to_link.append(class_obj)
+                                for i, g_val in enumerate(grades_list):
+                                    import re
+                                    grade_match = re.search(r"\d+", g_val)
+                                    grade_num = grade_match.group(0) if grade_match else g_val
+
+                                    sec_val = "A"
+                                    if i < len(sections_list):
+                                        sec_val = sections_list[i]
+                                    elif len(sections_list) > 0:
+                                        sec_val = sections_list[-1]
+
+                                    grade_obj = Grade.objects.filter(grade_name__icontains=grade_num).first()
+                                    if not grade_obj:
+                                        try:
+                                            s_ord = int(grade_num)
+                                        except ValueError:
+                                            s_ord = 1
+                                        grade_obj = Grade.objects.create(grade_name=f"Class {grade_num}", sort_order=s_ord)
+
+                                    target_class_name = f"Class {grade_num}-{sec_val}"
+                                    class_obj, _ = Class.objects.get_or_create(
+                                        class_name=target_class_name,
+                                        school=school,
+                                        grade=grade_obj,
+                                        academic_year=academic_year,
+                                        defaults={"is_active": True}
+                                    )
+                                    classes_to_link.append(class_obj)
 
                             # Create Django auth user
                             new_user = User.objects.create_user(
@@ -583,10 +593,7 @@ class TeacherViewSet(CMSBaseViewSet):
         )
 
     def perform_destroy(self, instance):
-        user = instance.user
         super().perform_destroy(instance)
-        if user:
-            user.delete()
 
 
 class ClassViewSet(CMSBaseViewSet):

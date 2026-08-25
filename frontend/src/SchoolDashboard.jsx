@@ -407,6 +407,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [schClassFilter, setSchClassFilter] = useState('');
   const [schSectionFilter, setSchSectionFilter] = useState('');
   const [schLessonClassFilter, setSchLessonClassFilter] = useState('');
+  const [studentClassFilter, setStudentClassFilter] = useState('');
+  const [teacherClassFilter, setTeacherClassFilter] = useState('');
   const [experiences,      setExperiences]      = useState([]);
   const [schools,        setSchools]        = useState([]);
   const [grades,         setGrades]         = useState(defaultGradesList);
@@ -417,6 +419,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [classesReport,           setClassesReport]           = useState([]);
   const [studentsReport,          setStudentsReport]          = useState([]);
   const [studentCompletionReport, setStudentCompletionReport] = useState([]);
+  const [completionPage, setCompletionPage] = useState(1);
 
   /* ── Detail modals ── */
   const [selectedExperienceDetail, setSelectedExperienceDetail] = useState(null);
@@ -440,9 +443,11 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
   /* ── Forms ── */
   const [showTeacherPassword, setShowTeacherPassword] = useState(false);
+  const [tempClassGrade, setTempClassGrade] = useState('');
+  const [tempClassSection, setTempClassSection] = useState('');
   const [teacherForm, setTeacherForm] = useState({
     username: '', password: '', email:'', full_name:'', phone_no:'', is_active:true, school:'', qualification:'', assigned_class_ids: [],
-    class_grade: '', class_section: '', academic_year: '2025 - 2026'
+    classes_list: [], academic_year: '2025 - 2026'
   });
   const [studentForm, setStudentForm] = useState({
     username:'', password:'', email:'', full_name:'', roll_no:'', grade:'', section:'', academic_year: '2025 - 2026', is_active:true
@@ -551,6 +556,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   };
 
   const loadStudentCompletionReport = async () => {
+    setCompletionPage(1);
     try {
       const res = await apiFetch('/api/v1/reports/student-completion/');
       if (res.ok) {
@@ -757,18 +763,30 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     setErrorMsg('');
     const defaultSchool = getSelectedSchoolId();
     if (tab === 'teachers') {
-      let class_grade = '';
-      let class_section = '';
+      let parsedClasses = [];
       let academic_year = '2025 - 2026';
       if (entity && entity.assigned_class_ids && entity.assigned_class_ids.length > 0) {
-        const firstClassId = entity.assigned_class_ids[0];
-        const clsObj = classes.find(c => c.class_id === firstClassId);
-        if (clsObj) {
-          const matchNum = (clsObj.class_name || '').match(/\d+/);
-          class_grade = matchNum ? matchNum[0] : '';
-          class_section = (clsObj.section || '').replace('Section ', '').trim().toUpperCase() || (clsObj.class_name && clsObj.class_name.includes('-') ? clsObj.class_name.split('-').pop().trim().toUpperCase() : '');
-          academic_year = clsObj.academic_year || '2025 - 2026';
-        }
+        entity.assigned_class_ids.forEach(cid => {
+          const clsObj = classes.find(c => Number(c.class_id || c.id) === Number(cid));
+          if (clsObj) {
+            academic_year = clsObj.academic_year || academic_year;
+            const matchNum = (clsObj.class_name || '').match(/\d+/);
+            const grade = matchNum ? matchNum[0] : '';
+            const section = (clsObj.section || '').replace('Section ', '').trim().toUpperCase() || (clsObj.class_name && clsObj.class_name.includes('-') ? clsObj.class_name.split('-').pop().trim().toUpperCase() : '');
+            if (grade && section) {
+              parsedClasses.push({ grade, section });
+            }
+          }
+        });
+      }
+      if (parsedClasses.length === 0 && entity && entity.assigned_classes) {
+        const parts = entity.assigned_classes.split(',').map(s => s.trim()).filter(Boolean);
+        parts.forEach(p => {
+          const match = p.match(/Class\s+(\d+)\-([A-D])/i);
+          if (match) {
+            parsedClasses.push({ grade: match[1], section: match[2] });
+          }
+        });
       }
       setTeacherForm(entity ? {
         username: entity.username || '',
@@ -780,12 +798,11 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         school: entity.school || defaultSchool,
         qualification: entity.qualification || '',
         assigned_class_ids: entity.assigned_class_ids || [],
-        class_grade,
-        class_section,
+        classes_list: parsedClasses,
         academic_year
       } : { username: '', password: '', email:'', full_name:'', phone_no:'', is_active:true,
             school: defaultSchool, qualification:'', assigned_class_ids: [],
-            class_grade: '', class_section: '', academic_year: '2025 - 2026' });
+            classes_list: [], academic_year: '2025 - 2026' });
     } else if (tab === 'students') {
       setStudentForm(entity ? {
         username: entity.username || '', password: '', email: entity.email || '',
@@ -851,54 +868,70 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           return;
         }
 
-        let classId = null;
-        const targetClassName = `Class ${teacherForm.class_grade}-${teacherForm.class_section}`;
+        const assignedClassIds = [];
         const targetAcademicYear = teacherForm.academic_year;
 
-        const existingClass = classes.find(c => 
-          (c.class_name || '').toLowerCase() === targetClassName.toLowerCase() && 
-          (c.academic_year || '') === targetAcademicYear
-        );
-
-        if (existingClass) {
-          classId = existingClass.class_id || existingClass.id;
-        } else {
-          const gradeNum = teacherForm.class_grade;
-          const gradeObj = grades.find(g => (g.grade_name || '').toLowerCase().includes(gradeNum));
-          const gradeId = gradeObj ? gradeObj.id : null;
-
-          if (!gradeId) {
-            setErrorMsg(`Grade for Class ${gradeNum} is not registered in the system.`);
-            setActionLoading(false);
-            return;
-          }
-
-          const classPostRes = await apiFetch('/api/cms/v1/classes/', {
-            method: 'POST',
-            body: JSON.stringify({
-              school: parseInt(teacherForm.school),
-              class_name: targetClassName,
-              grade: gradeId,
-              academic_year: targetAcademicYear,
-              is_active: true
-            })
-          });
-
-          if (!classPostRes.ok) {
-            setErrorMsg('Failed to automatically create the specified class.');
-            setActionLoading(false);
-            return;
-          }
-
-          const createdClassData = await classPostRes.json();
-          classId = createdClassData.data?.class_id || createdClassData.data?.id || createdClassData.class_id || createdClassData.id;
-          await loadClasses();
+        if (!teacherForm.classes_list || teacherForm.classes_list.length === 0) {
+          setErrorMsg('Please add at least one Class & Section for the teacher.');
+          setActionLoading(false);
+          return;
         }
 
-        body = { 
-          ...teacherForm, 
+        for (const cls of teacherForm.classes_list) {
+          const targetClassName = `Class ${cls.grade}-${cls.section}`;
+          const existingClass = classes.find(c => 
+            (c.class_name || '').toLowerCase() === targetClassName.toLowerCase() && 
+            (c.academic_year || '') === targetAcademicYear
+          );
+
+          if (existingClass) {
+            assignedClassIds.push(existingClass.class_id || existingClass.id);
+          } else {
+            const gradeNum = cls.grade;
+            const gradeObj = grades.find(g => (g.grade_name || '').toLowerCase().includes(gradeNum));
+            const gradeId = gradeObj ? gradeObj.id : null;
+
+            if (!gradeId) {
+              setErrorMsg(`Grade for Class ${gradeNum} is not registered in the system.`);
+              setActionLoading(false);
+              return;
+            }
+
+            const classPostRes = await apiFetch('/api/cms/v1/classes/', {
+              method: 'POST',
+              body: JSON.stringify({
+                school: parseInt(teacherForm.school),
+                class_name: targetClassName,
+                grade: gradeId,
+                academic_year: targetAcademicYear,
+                is_active: true
+              })
+            });
+
+            if (!classPostRes.ok) {
+              setErrorMsg(`Failed to automatically create class Class ${gradeNum}-${cls.section}.`);
+              setActionLoading(false);
+              return;
+            }
+
+            const createdClassData = await classPostRes.json();
+            const classId = createdClassData.data?.class_id || createdClassData.data?.id || createdClassData.class_id || createdClassData.id;
+            assignedClassIds.push(classId);
+          }
+        }
+
+        await loadClasses();
+
+        body = {
+          username: teacherForm.username,
+          password: teacherForm.password,
+          email: teacherForm.email,
+          full_name: teacherForm.full_name,
+          phone_no: teacherForm.phone_no,
+          is_active: teacherForm.is_active,
+          qualification: teacherForm.qualification,
           school: parseInt(teacherForm.school),
-          assigned_class_ids: classId ? [classId] : []
+          assigned_class_ids: assignedClassIds
         };
         if (modalType === 'edit' && !body.password) {
           delete body.password;
@@ -1235,6 +1268,28 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     } finally { setActionLoading(false); }
   };
 
+  const getFilteredTeachers = () => {
+    let list = teachers;
+    if (teacherClassFilter) {
+      list = list.filter(t => 
+        t.assigned_class_ids && t.assigned_class_ids.includes(parseInt(teacherClassFilter))
+      );
+    }
+    return filterList(list);
+  };
+
+  const getFilteredStudents = () => {
+    let list = students;
+    if (studentClassFilter) {
+      list = list.filter(s => {
+        const gradeVal = s.grade ? String(s.grade).replace('Grade', 'Class').replace(' ', '').toUpperCase() : '';
+        const filterVal = String(studentClassFilter).replace('Grade', 'Class').replace(' ', '').toUpperCase();
+        return gradeVal === filterVal;
+      });
+    }
+    return filterList(list);
+  };
+
   const getFilteredClasses = () => {
     return classes.filter(c => {
       if (schClassFilter) {
@@ -1290,6 +1345,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     setSchClassFilter('');
     setSchSectionFilter('');
     setSchLessonClassFilter('');
+    setStudentClassFilter('');
+    setTeacherClassFilter('');
     setIsSidebarOpen(false);
     setTeacherPage(1);
     setStudentPage(1);
@@ -1878,14 +1935,27 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
              
               <div className="sd-card" style={{ padding:'1.25rem 1.5rem' }}>
                 <div className="sd-table-toolbar">
-                  <div className="sd-table-search">
-                    <FiSearch/>
-                    <input
-                      type="text"
-                      placeholder="Search teachers..."
-                      value={searchQuery}
-                      onChange={e => { setSearchQuery(e.target.value); setTeacherPage(1); }}
-                    />
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    <div className="sd-table-search">
+                      <FiSearch/>
+                      <input
+                        type="text"
+                        placeholder="Search teachers..."
+                        value={searchQuery}
+                        onChange={e => { setSearchQuery(e.target.value); setTeacherPage(1); }}
+                      />
+                    </div>
+                    <select
+                      className="sd-form-input"
+                      style={{ width: '160px', height: '38px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem' }}
+                      value={teacherClassFilter}
+                      onChange={e => { setTeacherClassFilter(e.target.value); setTeacherPage(1); }}
+                    >
+                      <option value="">All Classes</option>
+                      {classes.map(c => (
+                        <option key={c.class_id} value={c.class_id}>{c.class_name} ({c.academic_year})</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="sd-table-actions">
                     <button
@@ -2079,7 +2149,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           <th className="sd-checkbox-cell">
                             <input
                               type="checkbox"
-                              checked={teachers.length > 0 && selectedTeacherIds.length === filterList(teachers).length}
+                              checked={teachers.length > 0 && selectedTeacherIds.length === getFilteredTeachers().length}
                               onChange={handleSelectAllTeachers}
                             />
                           </th>
@@ -2092,7 +2162,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {paginate(filterList(teachers), teacherPage).map((t, i) => {
+                      {paginate(getFilteredTeachers(), teacherPage).map((t, i) => {
                         const tid = t.teacher_id || t.id;
                         return (
                           <tr key={tid || i}>
@@ -2262,14 +2332,14 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           </tr>
                         );
                       })}
-                      {filterList(teachers).length === 0 && (
+                      {getFilteredTeachers().length === 0 && (
                         <tr><td colSpan={isSelectModeTeachers ? "6" : "5"} className="sd-empty-state">No teachers found.</td></tr>
                       )}
                     </tbody>
                   </table>
                 </div>
                 <Pagination
-                  total={filterList(teachers).length}
+                  total={getFilteredTeachers().length}
                   perPage={PER_PAGE}
                   page={teacherPage}
                   onPage={setTeacherPage}
@@ -2284,14 +2354,27 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               
               <div className="sd-card" style={{ padding:'1.25rem 1.5rem' }}>
                 <div className="sd-table-toolbar">
-                  <div className="sd-table-search">
-                    <FiSearch/>
-                    <input
-                      type="text"
-                      placeholder="Search students..."
-                      value={searchQuery}
-                      onChange={e => { setSearchQuery(e.target.value); setStudentPage(1); }}
-                    />
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    <div className="sd-table-search">
+                      <FiSearch/>
+                      <input
+                        type="text"
+                        placeholder="Search students..."
+                        value={searchQuery}
+                        onChange={e => { setSearchQuery(e.target.value); setStudentPage(1); }}
+                      />
+                    </div>
+                    <select
+                      className="sd-form-input"
+                      style={{ width: '160px', height: '38px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem' }}
+                      value={studentClassFilter}
+                      onChange={e => { setStudentClassFilter(e.target.value); setStudentPage(1); }}
+                    >
+                      <option value="">All Classes</option>
+                      {[3, 4, 5, 6, 7, 8].map(num => (
+                        <option key={num} value={`Class ${num}`}>Class {num}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="sd-table-actions">
                     <button
@@ -2458,7 +2541,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           <th className="sd-checkbox-cell">
                             <input
                               type="checkbox"
-                              checked={students.length > 0 && selectedStudentIds.length === filterList(students).length}
+                              checked={students.length > 0 && selectedStudentIds.length === getFilteredStudents().length}
                               onChange={handleSelectAllStudents}
                             />
                           </th>
@@ -2474,7 +2557,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {paginate(filterList(students), studentPage).map((s, i) => {
+                      {paginate(getFilteredStudents(), studentPage).map((s, i) => {
                         const sid = s.student_id || s.id;
                         return (
                           <tr key={sid || i}>
@@ -2492,8 +2575,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             </td>
                             <td>{s.roll_no || 'N/A'}</td>
                             <td><span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>{s.username || 'N/A'}</span></td>
-                            <td>{s.grade ? String(s.grade).replace('Grade', 'Class') : 'N/A'}</td>
-                            <td>{s.section || 'N/A'}</td>
+                            <td>{s.grade ? (String(s.grade).startsWith('Class') || String(s.grade).startsWith('Grade') ? String(s.grade).replace('Grade', 'Class') : `Class ${s.grade}`) : 'N/A'}</td>
+                            <td>{s.section ? (String(s.section).startsWith('Section') ? s.section : `Section ${s.section}`) : 'N/A'}</td>
                             <td style={{ textAlign: 'center' }}>{s.academic_year || '2025 - 2026'}</td>
                             <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
                               <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
@@ -2642,14 +2725,14 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           </tr>
                         );
                       })}
-                      {filterList(students).length === 0 && (
+                      {getFilteredStudents().length === 0 && (
                         <tr><td colSpan={isSelectModeStudents ? "7" : "6"} className="sd-empty-state">No students found.</td></tr>
                       )}
                     </tbody>
                   </table>
                 </div>
                 <Pagination
-                  total={filterList(students).length}
+                  total={getFilteredStudents().length}
                   perPage={PER_PAGE}
                   page={studentPage}
                   onPage={setStudentPage}
@@ -2738,7 +2821,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                     </td>
                                   )}
                                   <td>
-                                    <span className="sd-name-cell-primary">{c.class_name}</span>
+                                    <span className="sd-name-cell-primary">{c.class_name ? c.class_name.split('-')[0].trim() : '—'}</span>
                                   </td>
                                   <td style={{ textAlign: 'center' }}>
                                     <span style={{ fontWeight: 600, color: '#4f46e5', background: '#ede9fe', padding: '2px 10px', borderRadius: '20px', fontSize: '0.82rem' }}>
@@ -3017,53 +3100,72 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <p>Completion data will appear once lessons are assigned and synced from the LMS.</p>
                       </div>
                     ) : (
-                      <div className="sd-table-wrap">
-                        <table className="sd-table">
-                          <thead>
-                            <tr>
-                              <th>Student Profile</th>
-                              <th>Assigned Lessons</th>
-                              <th>Completed</th>
-                              <th>Completion Progress</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {studentCompletionReport.map((row) => {
-                              const pct = row.total_assigned_experiences > 0
-                                ? Math.round((row.completed_experiences_count / row.total_assigned_experiences) * 100)
-                                : 0;
-                              const barColor = pct === 100 ? '#16a34a' : pct >= 60 ? '#f59e0b' : '#ef4444';
-                              return (
-                                <tr key={row.student_id}>
-                                  <td>
-                                    <span className="sd-name-cell-primary">{row.student_name}</span>
-                                  </td>
-                                  <td style={{ textAlign: 'center', fontWeight: 600 }}>
-                                    {row.total_assigned_experiences}
-                                  </td>
-                                  <td style={{ textAlign: 'center', fontWeight: 600, color: '#16a34a' }}>
-                                    {row.completed_experiences_count}
-                                  </td>
-                                  <td style={{ minWidth: 160 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                      <div style={{ flex: 1, height: 8, background: '#f3f4f6', borderRadius: 4, overflow: 'hidden' }}>
-                                        <div style={{
-                                          width: `${pct}%`, height: '100%',
-                                          background: barColor, borderRadius: 4,
-                                          transition: 'width 0.6s ease'
-                                        }}/>
-                                      </div>
-                                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: barColor, minWidth: 34 }}>
-                                        {pct}%
-                                      </span>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                      <>
+                        <div className="sd-table-wrap">
+                          <table className="sd-table">
+                            <thead>
+                              <tr>
+                                <th>Student Profile</th>
+                                <th>Assigned Lessons</th>
+                                <th>Completed</th>
+                                <th>Completion Progress</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(() => {
+                                const COMPLETION_PER_PAGE = 5;
+                                const paginatedCompletion = studentCompletionReport.slice(
+                                  (completionPage - 1) * COMPLETION_PER_PAGE,
+                                  completionPage * COMPLETION_PER_PAGE
+                                );
+                                return paginatedCompletion.map((row) => {
+                                  const pct = row.total_assigned_experiences > 0
+                                    ? Math.round((row.completed_experiences_count / row.total_assigned_experiences) * 100)
+                                    : 0;
+                                  const barColor = pct === 100 ? '#16a34a' : pct >= 60 ? '#f59e0b' : '#ef4444';
+                                  return (
+                                    <tr key={row.student_id}>
+                                      <td>
+                                        <span className="sd-name-cell-primary">{row.student_name}</span>
+                                      </td>
+                                      <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                                        {row.total_assigned_experiences}
+                                      </td>
+                                      <td style={{ textAlign: 'center', fontWeight: 600, color: '#16a34a' }}>
+                                        {row.completed_experiences_count}
+                                      </td>
+                                      <td style={{ minWidth: 160 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                          <div style={{ flex: 1, height: 8, background: '#f3f4f6', borderRadius: 4, overflow: 'hidden' }}>
+                                            <div style={{
+                                              width: `${pct}%`, height: '100%',
+                                              background: barColor, borderRadius: 4,
+                                              transition: 'width 0.6s ease'
+                                            }}/>
+                                          </div>
+                                          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: barColor, minWidth: 34 }}>
+                                            {pct}%
+                                          </span>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                });
+                              })()}
+                            </tbody>
+                          </table>
+                        </div>
+                        {studentCompletionReport.length > 5 && (
+                          <div style={{ marginTop: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                            <Pagination
+                              total={studentCompletionReport.length}
+                              perPage={5}
+                              page={completionPage}
+                              onPage={setCompletionPage}
+                            />
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </>
@@ -3304,16 +3406,16 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 1.5fr auto', gap: '1rem', alignItems: 'end', marginBottom: '1.5rem' }}>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Academic Year *</label>
                         <input className="sd-form-input" type="text" value={teacherForm.academic_year}
                           onChange={e => setTeacherForm({...teacherForm, academic_year:e.target.value})} placeholder="e.g. 2025 - 2026" required/>
                       </div>
                       <div className="sd-form-group">
-                        <label className="sd-form-label">Class *</label>
-                        <select className="sd-form-input" value={teacherForm.class_grade}
-                          onChange={e => setTeacherForm({...teacherForm, class_grade:e.target.value})} required>
+                        <label className="sd-form-label">Class</label>
+                        <select className="sd-form-input" value={tempClassGrade}
+                          onChange={e => setTempClassGrade(e.target.value)}>
                           <option value="">-- Select Class --</option>
                           {[3, 4, 5, 6, 7, 8].map(num => (
                             <option key={num} value={String(num)}>Class {num}</option>
@@ -3321,14 +3423,95 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         </select>
                       </div>
                       <div className="sd-form-group">
-                        <label className="sd-form-label">Section *</label>
-                        <select className="sd-form-input" value={teacherForm.class_section}
-                          onChange={e => setTeacherForm({...teacherForm, class_section:e.target.value})} required>
+                        <label className="sd-form-label">Section</label>
+                        <select className="sd-form-input" value={tempClassSection}
+                          onChange={e => setTempClassSection(e.target.value)}>
                           <option value="">-- Select Section --</option>
                           {['A', 'B', 'C', 'D'].map(letter => (
                             <option key={letter} value={letter}>Section {letter}</option>
                           ))}
                         </select>
+                      </div>
+                      <div className="sd-form-group">
+                        <button
+                          type="button"
+                          className="sd-btn-outline"
+                          onClick={() => {
+                            if (tempClassGrade && tempClassSection) {
+                              const exists = teacherForm.classes_list?.some(c => c.grade === tempClassGrade && c.section === tempClassSection);
+                              if (!exists) {
+                                setTeacherForm(prev => ({
+                                  ...prev,
+                                  classes_list: [...(prev.classes_list || []), { grade: tempClassGrade, section: tempClassSection }]
+                                }));
+                              }
+                              setTempClassGrade('');
+                              setTempClassSection('');
+                            }
+                          }}
+                          style={{ height: '42px', padding: '0 1.25rem', fontSize: '0.85rem' }}
+                        >
+                          + Add Class
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '1.5rem' }}>
+                      <label className="sd-form-label">Assigned Classes & Sections *</label>
+                      <div style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '0.5rem',
+                        padding: '0.5rem',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '8px',
+                        minHeight: '48px',
+                        background: '#f8fafc',
+                        alignItems: 'center'
+                      }}>
+                        {(!teacherForm.classes_list || teacherForm.classes_list.length === 0) && (
+                          <span style={{ color: '#94a3b8', fontSize: '0.82rem', paddingLeft: '0.5rem' }}>No classes added yet. Use the dropdowns above to add class and section.</span>
+                        )}
+                        {teacherForm.classes_list?.map((cls, idx) => (
+                          <span
+                            key={idx}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              padding: '4px 10px',
+                              backgroundColor: '#eff6ff',
+                              color: '#1d4ed8',
+                              borderRadius: '20px',
+                              fontSize: '0.8rem',
+                              fontWeight: 600,
+                              border: '1px solid #bfdbfe'
+                            }}
+                          >
+                            Class {cls.grade}-{cls.section}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTeacherForm(prev => ({
+                                  ...prev,
+                                  classes_list: prev.classes_list.filter((_, i) => i !== idx)
+                                }));
+                              }}
+                              style={{
+                                border: 'none',
+                                background: 'none',
+                                color: '#ef4444',
+                                cursor: 'pointer',
+                                fontSize: '0.9rem',
+                                fontWeight: 'bold',
+                                padding: 0,
+                                marginLeft: '4px'
+                              }}
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        ))}
                       </div>
                     </div>
 

@@ -1650,6 +1650,10 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     setSchoolsPage(1); setUsersPage(1); setGradesPage(1);
     setExperiencesPage(1); setExperienceBuildersPage(1); setPublishPage(1);
     setIsSidebarOpen(false);
+    if (tab === 'dashboard') {
+      loadDashboardStats();
+      loadRecentActivities();
+    }
     onTabChange(tab);
   };
 
