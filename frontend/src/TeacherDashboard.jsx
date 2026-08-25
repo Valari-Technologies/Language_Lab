@@ -234,7 +234,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [activeSubTab, setActiveSubTab] = useState('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(() => {
-    return localStorage.getItem('teacherd_nav_collapsed') === 'true';
+    return localStorage.getItem('teacherd_nav_collapsed') !== 'false';
   });
   const toggleNavCollapsed = () => {
     setNavCollapsed(prev => {

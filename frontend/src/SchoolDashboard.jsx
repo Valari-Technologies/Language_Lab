@@ -254,7 +254,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   };
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(() => {
-    return localStorage.getItem('schoold_nav_collapsed') === 'true';
+    return localStorage.getItem('schoold_nav_collapsed') !== 'false';
   });
   const toggleNavCollapsed = () => {
     setNavCollapsed(prev => {

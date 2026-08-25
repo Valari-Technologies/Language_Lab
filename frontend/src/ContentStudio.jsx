@@ -297,7 +297,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   // Views: dashboard, experiences, experience-builder, activity-builder, screen-builder, preview, media, publish, profile
   const [view, setView] = useState('dashboard');
   const [navCollapsed, setNavCollapsed] = useState(() => {
-    return localStorage.getItem('cs_nav_collapsed') === 'true';
+    return localStorage.getItem('cs_nav_collapsed') !== 'false';
   });
   const toggleNavCollapsed = () => {
     setNavCollapsed(prev => {

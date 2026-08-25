@@ -502,7 +502,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   };
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(() => {
-    return localStorage.getItem('sa_nav_collapsed') === 'true';
+    return localStorage.getItem('sa_nav_collapsed') !== 'false';
   });
   const toggleNavCollapsed = () => {
     setNavCollapsed(prev => {
