@@ -461,23 +461,89 @@ export default function PreviewCanvasRenderer({
         );
 
       case 'sequence':
-        const items = block.content?.items || [];
-        const seqQuestion = block.content?.question || 'Sort items in correct sequence';
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#92400e' }}>
-              🔢 {seqQuestion}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.25rem' }}>
-              {items.map((item, idx) => (
-                <div key={idx} style={{ background: '#ffffff', border: '1px solid #fef3c7', borderRadius: '6px', padding: '6px 8px', fontSize: '0.72rem', fontWeight: 600, color: '#451a03', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ background: '#fef3c7', color: '#b45309', borderRadius: '4px', padding: '1px 5px', fontSize: '0.62rem', fontWeight: 800 }}>{idx + 1}</span>
-                  <span>{item || `Step description ${idx + 1}`}</span>
+        {
+          const blockSeqKey = `${activeScreenId}_${block.id}`;
+          const originalItems = block.content?.items || [];
+          
+          let activeOrder = previewAnswers[blockSeqKey];
+          if (!activeOrder) {
+            // Shuffle initially so student has to rearrange it
+            activeOrder = [...originalItems];
+          }
+          
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#92400e' }}>
+                  🔢 {seqQuestion}
                 </div>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const shuffled = [...originalItems].sort(() => Math.random() - 0.5);
+                    setPreviewAnswers(prev => ({
+                      ...prev,
+                      [blockSeqKey]: shuffled
+                    }));
+                  }}
+                  style={{ background: 'none', border: '1px solid #b45309', color: '#b45309', borderRadius: '4px', fontSize: '0.62rem', fontWeight: 700, padding: '2px 6px', cursor: 'pointer' }}
+                >
+                  Shuffle Items
+                </button>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.25rem' }}>
+                {activeOrder.map((item, idx) => (
+                  <div key={idx} style={{ background: '#ffffff', border: '1px solid #fef3c7', borderRadius: '6px', padding: '6px 8px', fontSize: '0.72rem', fontWeight: 600, color: '#451a03', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ background: '#fef3c7', color: '#b45309', borderRadius: '4px', padding: '1px 5px', fontSize: '0.62rem', fontWeight: 800 }}>{idx + 1}</span>
+                    <span style={{ flex: 1 }}>{item || `Step description ${idx + 1}`}</span>
+                    
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() => {
+                        const updated = [...activeOrder];
+                        const temp = updated[idx];
+                        updated[idx] = updated[idx - 1];
+                        updated[idx - 1] = temp;
+                        setPreviewAnswers(prev => ({
+                          ...prev,
+                          [blockSeqKey]: updated
+                        }));
+                      }}
+                      style={{ background: 'none', border: 'none', color: idx === 0 ? '#cbd5e1' : '#b45309', cursor: idx === 0 ? 'default' : 'pointer', fontSize: '0.75rem' }}
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === activeOrder.length - 1}
+                      onClick={() => {
+                        const updated = [...activeOrder];
+                        const temp = updated[idx];
+                        updated[idx] = updated[idx + 1];
+                        updated[idx + 1] = temp;
+                        setPreviewAnswers(prev => ({
+                          ...prev,
+                          [blockSeqKey]: updated
+                        }));
+                      }}
+                      style={{ background: 'none', border: 'none', color: idx === activeOrder.length - 1 ? '#cbd5e1' : '#b45309', cursor: idx === activeOrder.length - 1 ? 'default' : 'pointer', fontSize: '0.75rem' }}
+                    >
+                      ▼
+                    </button>
+                  </div>
+                ))}
+              </div>
+              
+              {JSON.stringify(activeOrder) === JSON.stringify(originalItems) && originalItems.length > 0 && (
+                <span style={{ color: '#16a34a', fontSize: '0.68rem', fontWeight: 700, marginTop: '4px', alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  ✓ Correct Order!
+                </span>
+              )}
             </div>
-          </div>
-        );
+          );
+        }
 
       case 'flashcard':
         const cards = block.content?.cards || [];
@@ -594,81 +660,213 @@ export default function PreviewCanvasRenderer({
         );
 
       case 'word_search':
-        const wordQuestion = block.content?.question || 'Word Search Puzzle';
-        const grid = [
-          ['L', 'A', 'N', 'G', 'U', 'A', 'G', 'E'],
-          ['E', 'X', 'P', 'E', 'R', 'I', 'E', 'N'],
-          ['A', 'C', 'T', 'I', 'V', 'I', 'T', 'Y'],
-          ['S', 'C', 'R', 'E', 'E', 'N', 'P', 'C']
-        ];
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#faf5ff', padding: '1rem', borderRadius: '12px', border: '1px solid #f3e8ff', marginTop: '0.5rem' }}>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#6b21a8' }}>
-              🔍 {wordQuestion}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '4px', maxWidth: '240px', margin: '0 auto', background: '#f3e8ff', padding: '4px', borderRadius: '8px' }}>
-              {grid.flatMap((row, rIdx) => row.map((char, cIdx) => (
-                <div
-                  key={`${rIdx}-${cIdx}`}
-                  style={{
-                    aspectRatio: '1',
-                    background: '#ffffff',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.68rem',
-                    fontWeight: 800,
-                    color: '#6b21a8',
-                    border: '1px solid #cbd5e1',
-                    cursor: 'pointer'
-                  }}
-                  onClick={(e) => {
-                    const currBg = e.currentTarget.style.backgroundColor;
-                    e.currentTarget.style.backgroundColor = currBg === 'rgb(216, 180, 254)' ? '#ffffff' : '#d8b4fe';
-                  }}
-                >
-                  {char}
+        {
+          const wordQuestion = block.content?.question || 'Word Search Puzzle';
+          const gridSize = block.content?.gridSize || 8;
+          const words = block.content?.words || [];
+
+          // Deterministic seed based on content
+          const seedString = words.join(',') + '_' + gridSize;
+          
+          // Seeded random helper
+          let h = 1779033703 ^ seedString.length;
+          for (let i = 0; i < seedString.length; i++) {
+            h = Math.imul(h ^ seedString.charCodeAt(i), 3432918353);
+            h = (h << 13) | (h >>> 19);
+          }
+          const seededRandom = () => {
+            h = Math.imul(h ^ (h >>> 16), 2246822507);
+            h = Math.imul(h ^ (h >>> 13), 3266489909);
+            return ((h ^= h >>> 16) >>> 0) / 4294967296;
+          };
+
+          // Generate grid deterministically
+          const grid = Array(gridSize).fill(null).map(() => Array(gridSize).fill(''));
+          const directions = [[1, 0], [0, 1]];
+          
+          words.forEach(word => {
+            const cleanWord = word.toUpperCase().replace(/[^A-Z]/g, '');
+            if (!cleanWord) return;
+            
+            let placed = false;
+            let attempts = 0;
+            
+            while (!placed && attempts < 100) {
+              attempts++;
+              const dir = directions[Math.floor(seededRandom() * directions.length)];
+              const dx = dir[0];
+              const dy = dir[1];
+              
+              const startX = Math.floor(seededRandom() * (gridSize - (dx === 1 ? cleanWord.length : 0)));
+              const startY = Math.floor(seededRandom() * (gridSize - (dy === 1 ? cleanWord.length : 0)));
+              
+              let canPlace = true;
+              for (let i = 0; i < cleanWord.length; i++) {
+                const x = startX + i * dx;
+                const y = startY + i * dy;
+                if (grid[y][x] !== '' && grid[y][x] !== cleanWord[i]) {
+                  canPlace = false;
+                  break;
+                }
+              }
+              
+              if (canPlace) {
+                for (let i = 0; i < cleanWord.length; i++) {
+                  const x = startX + i * dx;
+                  const y = startY + i * dy;
+                  grid[y][x] = cleanWord[i];
+                }
+                placed = true;
+              }
+            }
+          });
+          
+          const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+          for (let r = 0; r < gridSize; r++) {
+            for (let c = 0; c < gridSize; c++) {
+              if (grid[r][c] === '') {
+                grid[r][c] = alphabet[Math.floor(seededRandom() * alphabet.length)];
+              }
+            }
+          }
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#faf5ff', padding: '1rem', borderRadius: '12px', border: '1px solid #f3e8ff', marginTop: '0.5rem' }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#6b21a8' }}>
+                🔍 {wordQuestion}
+              </div>
+              <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gridSize}, 1fr)`, gap: '4px', width: '220px', maxWidth: '100%', background: '#f3e8ff', padding: '4px', borderRadius: '8px', boxSizing: 'border-box' }}>
+                  {grid.flatMap((row, rIdx) => row.map((char, cIdx) => (
+                    <div
+                      key={`${rIdx}-${cIdx}`}
+                      style={{
+                        aspectRatio: '1',
+                        background: '#ffffff',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: gridSize > 8 ? '0.55rem' : '0.68rem',
+                        fontWeight: 800,
+                        color: '#6b21a8',
+                        border: '1px solid #cbd5e1',
+                        cursor: 'pointer'
+                      }}
+                      onClick={(e) => {
+                        const currBg = e.currentTarget.style.backgroundColor;
+                        e.currentTarget.style.backgroundColor = currBg === 'rgb(216, 180, 254)' ? '#ffffff' : '#d8b4fe';
+                      }}
+                    >
+                      {char}
+                    </div>
+                  )))}
                 </div>
-              )))}
+                
+                <div style={{ flex: '1', minWidth: '120px' }}>
+                  <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#6b21a8', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Hidden Words</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                    {words.map((w, wIdx) => (
+                      <span key={wIdx} style={{ background: '#f3e8ff', border: '1px solid #d8b4fe', borderRadius: '4px', padding: '2px 6px', fontSize: '0.62rem', fontWeight: 600, color: '#6b21a8' }}>
+                        {w}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        );
+          );
+        }
 
       case 'reading_passage':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f1f5f9', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiFileText /> Reading Passage: {block.content?.title || 'Passage Title'}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#334155', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', whiteSpace: 'pre-wrap', flex: 1, overflowY: 'auto' }}>
-              {block.content?.passage || 'Read this text carefully...'}
-            </div>
-            {block.content?.question && (
-              <div style={{ fontSize: '0.7rem', color: '#475569', fontStyle: 'italic' }}>
-                Question: {block.content?.question}
+        {
+          const blockReadKey = `${activeScreenId}_${block.id}_read`;
+          const isRead = !!previewAnswers[blockReadKey];
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f1f5f9', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiFileText /> Reading Passage: {block.content?.title || 'Passage Title'}
               </div>
-            )}
-            <button disabled style={{ width: 'fit-content', padding: '4px 12px', borderRadius: '20px', background: '#10b981', color: '#fff', border: 'none', fontSize: '0.68rem', fontWeight: 600 }}>Mark as Read</button>
-          </div>
-        );
+              <div style={{ fontSize: '0.72rem', color: '#334155', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', whiteSpace: 'pre-wrap', flex: 1, overflowY: 'auto' }}>
+                {block.content?.passage || 'Read this text carefully...'}
+              </div>
+              {block.content?.question && (
+                <div style={{ fontSize: '0.7rem', color: '#475569', fontStyle: 'italic' }}>
+                  Question: {block.content?.question}
+                </div>
+              )}
+              <button 
+                type="button" 
+                onClick={() => {
+                  setPreviewAnswers(prev => ({
+                    ...prev,
+                    [blockReadKey]: !isRead
+                  }));
+                }}
+                style={{ 
+                  width: 'fit-content', 
+                  padding: '4px 12px', 
+                  borderRadius: '20px', 
+                  background: isRead ? '#d1fae5' : '#10b981', 
+                  color: isRead ? '#065f46' : '#fff', 
+                  border: isRead ? '1px solid #065f46' : 'none', 
+                  fontSize: '0.68rem', 
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                {isRead ? '✓ Read' : 'Mark as Read'}
+              </button>
+            </div>
+          );
+        }
 
       case 'writing_prompt':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fdf2f8', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#9d174d', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiEdit2 /> Writing Prompt (Word Count Gate)
+        {
+          const blockWriteKey = `${activeScreenId}_${block.id}`;
+          const currentText = previewAnswers[blockWriteKey] || '';
+          const wordCount = currentText.trim() === '' ? 0 : currentText.trim().split(/\s+/).length;
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fdf2f8', borderRadius: '8px', padding: '0.75rem', width: '100%', boxSizing: 'border-box' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#9d174d', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiEdit2 /> Writing Prompt (Word Count Gate)
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>
+                Prompt: {block.content?.prompt || 'Write about your favorite hobby.'}
+              </div>
+              <textarea 
+                placeholder={block.content?.placeholder || 'Start writing here...'} 
+                value={currentText}
+                onChange={e => {
+                  const val = e.target.value;
+                  setPreviewAnswers(prev => ({
+                    ...prev,
+                    [blockWriteKey]: val
+                  }));
+                }}
+                style={{ 
+                  width: '100%', 
+                  height: '80px', 
+                  minHeight: '60px', 
+                  borderRadius: '6px', 
+                  border: '1px solid #cbd5e1', 
+                  padding: '6px', 
+                  fontSize: '0.72rem', 
+                  background: '#ffffff', 
+                  resize: 'vertical',
+                  boxSizing: 'border-box' 
+                }} 
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#9d174d', fontWeight: 600 }}>
+                <span>Minimum word count: {block.content?.minWords || 10} words</span>
+                <span>{wordCount} words</span>
+              </div>
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>
-              Prompt: {block.content?.prompt || 'Write about your favorite hobby.'}
-            </div>
-            <textarea disabled placeholder={block.content?.placeholder || 'Start writing here...'} style={{ width: '100%', flex: 1, height: '100%', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '6px', fontSize: '0.72rem', background: '#f8fafc', resize: 'none' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#9d174d', fontWeight: 600 }}>
-              <span>Minimum word count: {block.content?.minWords || 10} words</span>
-              <span>0 words</span>
-            </div>
-          </div>
-        );
+          );
+        }
 
       case 'dictation':
         return (
@@ -1005,7 +1203,7 @@ export default function PreviewCanvasRenderer({
             top: block.styles?.top || '0px',
             width: block.styles?.blockWidth || '100%',
             minHeight: block.styles?.minHeight || 'auto',
-            height: block.styles?.minHeight || 'auto',
+            height: 'auto',
             display: 'flex',
             flexDirection: 'column',
             boxSizing: 'border-box',
@@ -1014,7 +1212,7 @@ export default function PreviewCanvasRenderer({
             zIndex: block.styles?.zIndex || 1,
             wordBreak: 'break-word',
             overflowWrap: 'anywhere',
-            overflow: 'hidden'
+            overflow: 'visible'
           }}
         >
           {renderSingleBlock(block)}

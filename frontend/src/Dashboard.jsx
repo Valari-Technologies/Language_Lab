@@ -4016,14 +4016,46 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         <div className="sd-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) { setPreviewExperience(null); setActivePreviewScreen(null); } }} style={{ zIndex: 9999 }}>
           <div className="sd-modal" style={{ width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', margin: 0, borderRadius: 0, top: 0, left: 0, position: 'fixed', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
             {/* Modal Header */}
-            <div className="sd-modal-header" style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', flexShrink: 0, background: '#f8fafc' }}>
+            <div className="sd-modal-header" style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', flexShrink: 0, background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <span className="sd-modal-title" style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Interactive Student Player Simulator</span>
                 <span style={{ fontSize: '0.85rem', color: '#64748b', marginLeft: '12px', paddingLeft: '12px', borderLeft: '1px solid #cbd5e1' }}>
                   <strong>Lesson:</strong> {previewExperience.title} • <strong>Grade:</strong> {previewExperience.grade_name || `Grade ${previewExperience.grade}`} • <strong>Difficulty:</strong> {previewExperience.difficulty}
                 </span>
               </div>
-              <button className="sd-modal-close" onClick={() => { setPreviewExperience(null); setActivePreviewScreen(null); }}><FiX /></button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                {previewExperience.status === 'PENDING_APPROVAL' && (
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button
+                      type="button"
+                      className="sd-btn-primary"
+                      style={{ padding: '0.5rem 1rem', backgroundColor: '#ef4444', border: 'none', color: '#fff', fontSize: '0.85rem', fontWeight: 600, borderRadius: '6px', cursor: 'pointer' }}
+                      onClick={() => {
+                        setRejectingId(previewExperience.id);
+                        setRejectRemark('');
+                        setShowRejectModal(true);
+                        setPreviewExperience(null);
+                        setActivePreviewScreen(null);
+                      }}
+                    >
+                      ❌ Reject Experience
+                    </button>
+                    <button
+                      type="button"
+                      className="sd-btn-primary"
+                      style={{ padding: '0.5rem 1rem', backgroundColor: '#22c55e', border: 'none', color: '#fff', fontSize: '0.85rem', fontWeight: 600, borderRadius: '6px', cursor: 'pointer' }}
+                      onClick={() => {
+                        handleApproveExperience(previewExperience.id);
+                        setPreviewExperience(null);
+                        setActivePreviewScreen(null);
+                      }}
+                    >
+                      ✅ Approve Experience
+                    </button>
+                  </div>
+                )}
+                <button className="sd-modal-close" onClick={() => { setPreviewExperience(null); setActivePreviewScreen(null); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FiX /></button>
+              </div>
             </div>
 
             {/* Modal Body: Split view */}
@@ -4092,7 +4124,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 flex: 1,
                 display: 'flex',
                 flexDirection: 'column',
-                height: 'calc(100vh - 120px)',
+                height: '100%',
                 overflow: 'hidden',
                 position: 'relative'
               }}>
@@ -4107,7 +4139,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       display: 'flex',
                       justifyContent: 'center',
                       alignItems: 'flex-start',
-                      backgroundColor: '#ffffff'
+                      backgroundColor: '#f1f5f9'
                     }}>
                       <div 
                         ref={previewScaleRef}
@@ -4428,19 +4460,20 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                   {/* Navigation Footer Inside Canvas */}
                   <div className="preview-footer-sticky" style={{ 
                     position: 'sticky',
-                    bottom: 0,
+                    bottom: '1.5rem',
                     left: 0,
                     right: 0,
-                    background: '#ffffff',
-                    borderTop: '1px solid #e2e8f0',
-                    padding: '1rem 1.5rem',
+                    background: 'transparent',
+                    borderTop: 'none',
+                    padding: '0 2rem',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     zIndex: 50,
-                    boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.05)',
+                    boxShadow: 'none',
                     boxSizing: 'border-box',
-                    width: '100%'
+                    width: '100%',
+                    pointerEvents: 'none'
                   }}>
                     {(() => {
                       const flat = getFlatScreens();
@@ -4452,7 +4485,19 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             className="sd-btn-outline"
                             disabled={idx <= 0}
                             onClick={handlePrevScreen}
-                            style={{ padding: '0.45rem 1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            style={{ 
+                              padding: '0.6rem 1.2rem', 
+                              fontSize: '0.85rem', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '6px',
+                              backgroundColor: '#ffffff',
+                              border: '1px solid #cbd5e1',
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              pointerEvents: 'auto'
+                            }}
                           >
                             ← Previous Screen
                           </button>
@@ -4462,7 +4507,19 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             className="sd-btn-outline"
                             disabled={idx === -1 || idx === flat.length - 1}
                             onClick={handleNextScreen}
-                            style={{ padding: '0.45rem 1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            style={{ 
+                              padding: '0.6rem 1.2rem', 
+                              fontSize: '0.85rem', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '6px',
+                              backgroundColor: '#ffffff',
+                              border: '1px solid #cbd5e1',
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              pointerEvents: 'auto'
+                            }}
                           >
                             Next Screen →
                           </button>
@@ -4478,42 +4535,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 </div>
               )}
               </div>
-            </div>
-
-            {/* Sticky Modal Footer: Action controls */}
-            <div className="sd-modal-footer" style={{ position: 'sticky', bottom: 0, backgroundColor: '#ffffff', borderTop: '1px solid #e2e8f0', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100, flexShrink: 0 }}>
-              <button type="button" className="sd-btn-cancel" onClick={() => { setPreviewExperience(null); setActivePreviewScreen(null); }}>Close Preview</button>
-
-              {previewExperience.status === 'PENDING_APPROVAL' && (
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <button
-                    type="button"
-                    className="sd-btn-primary"
-                    style={{ padding: '0.65rem 1.5rem', backgroundColor: '#ef4444', border: 'none', color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}
-                    onClick={() => {
-                      setRejectingId(previewExperience.id);
-                      setRejectRemark('');
-                      setShowRejectModal(true);
-                      setPreviewExperience(null);
-                      setActivePreviewScreen(null);
-                    }}
-                  >
-                    ❌ Reject Experience
-                  </button>
-                  <button
-                    type="button"
-                    className="sd-btn-primary"
-                    style={{ padding: '0.65rem 1.5rem', backgroundColor: '#22c55e', border: 'none', color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}
-                    onClick={() => {
-                      handleApproveExperience(previewExperience.id);
-                      setPreviewExperience(null);
-                      setActivePreviewScreen(null);
-                    }}
-                  >
-                    ✅ Approve Experience
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>

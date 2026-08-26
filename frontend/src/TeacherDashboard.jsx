@@ -382,6 +382,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [tchClassFilter, setTchClassFilter] = useState('');
   const [tchSectionFilter, setTchSectionFilter] = useState('');
   const [studentClassFilter, setStudentClassFilter] = useState('');
+  const [studentSectionFilter, setStudentSectionFilter] = useState('');
   const [schools,  setSchools]  = useState([]);
   const [grades,   setGrades]   = useState([]);
 
@@ -490,6 +491,16 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         setClasses(myClasses);
       }
     } catch (e) { console.error('Failed to load classes.', e); }
+  };
+
+  const handleViewClassCrud = async (class_id) => {
+    try {
+      const res = await apiFetch(`/api/cms/v1/classes/${class_id}/`);
+      if (res.ok) {
+        setSelectedClassCrudDetail(await res.json());
+        setShowClassCrudDetailModal(true);
+      }
+    } catch (e) { console.error('Failed to load class detail', e); }
   };
 
   const loadNotifications = async () => {
@@ -971,6 +982,13 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         return gradeVal === filterVal;
       });
     }
+    if (studentSectionFilter) {
+      list = list.filter(s => {
+        const secVal = s.section ? String(s.section).replace('Section', '').trim().toUpperCase() : '';
+        const filterVal = String(studentSectionFilter).toUpperCase();
+        return secVal === filterVal;
+      });
+    }
     return filterList(list);
   };
 
@@ -994,6 +1012,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     setTchClassFilter('');
     setTchSectionFilter('');
     setStudentClassFilter('');
+    setStudentSectionFilter('');
     setIsSidebarOpen(false);
     setStudentPage(1);
     setClassPage(1);
@@ -1797,6 +1816,18 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <option key={num} value={`Class ${num}`}>Class {num}</option>
                       ))}
                     </select>
+
+                    <select
+                      className="sd-form-input"
+                      style={{ width: '160px', height: '38px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem' }}
+                      value={studentSectionFilter}
+                      onChange={e => { setStudentSectionFilter(e.target.value); setStudentPage(1); }}
+                    >
+                      <option value="">All Sections</option>
+                      {['A', 'B', 'C', 'D'].map(sec => (
+                        <option key={sec} value={sec}>Section {sec}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="sd-table-actions">
                     <button
@@ -2232,7 +2263,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             </td>
                             <td>
                               <div className="sd-action-cell" style={{ justifyContent: 'center' }}>
-                                <button className="sd-icon-action view" style={{ color: '#0b75b3' }} onClick={() => { setSelectedClassCrudDetail(c); setShowClassCrudDetailModal(true); }} title="View">
+                                <button className="sd-icon-action view" style={{ color: '#0b75b3' }} onClick={() => handleViewClassCrud(c.class_id || c.id)} title="View">
                                   <FiEye/>
                                 </button>
                               </div>
@@ -2550,11 +2581,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         onChange={e => setStudentForm({ ...studentForm, is_active: e.target.checked })}/>
                       Account is Active
                     </label>
-                    {modalType === 'add' && (
-                      <p style={{fontSize:'0.75rem',color:'#2563eb',margin:'0.5rem 0 0',fontStyle:'italic',background:'#eff6ff',padding:'0.4rem 0.6rem',borderRadius:'6px'}}>
-                        🔑 Login: <strong>Roll No</strong> is used as both username and initial password.
-                      </p>
-                    )}
+                   
                   </>)}
 
                   {/* Class fields */}

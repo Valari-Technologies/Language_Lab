@@ -408,6 +408,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [schSectionFilter, setSchSectionFilter] = useState('');
   const [schLessonClassFilter, setSchLessonClassFilter] = useState('');
   const [studentClassFilter, setStudentClassFilter] = useState('');
+  const [studentSectionFilter, setStudentSectionFilter] = useState('');
   const [teacherClassFilter, setTeacherClassFilter] = useState('');
   const [experiences,      setExperiences]      = useState([]);
   const [schools,        setSchools]        = useState([]);
@@ -1287,6 +1288,13 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         return gradeVal === filterVal;
       });
     }
+    if (studentSectionFilter) {
+      list = list.filter(s => {
+        const secVal = s.section ? String(s.section).replace('Section', '').trim().toUpperCase() : '';
+        const filterVal = String(studentSectionFilter).toUpperCase();
+        return secVal === filterVal;
+      });
+    }
     return filterList(list);
   };
 
@@ -1346,6 +1354,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     setSchSectionFilter('');
     setSchLessonClassFilter('');
     setStudentClassFilter('');
+    setStudentSectionFilter('');
     setTeacherClassFilter('');
     setIsSidebarOpen(false);
     setTeacherPage(1);
@@ -2373,6 +2382,18 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <option value="">All Classes</option>
                       {[3, 4, 5, 6, 7, 8].map(num => (
                         <option key={num} value={`Class ${num}`}>Class {num}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      className="sd-form-input"
+                      style={{ width: '160px', height: '38px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem' }}
+                      value={studentSectionFilter}
+                      onChange={e => { setStudentSectionFilter(e.target.value); setStudentPage(1); }}
+                    >
+                      <option value="">All Sections</option>
+                      {['A', 'B', 'C', 'D'].map(sec => (
+                        <option key={sec} value={sec}>Section {sec}</option>
                       ))}
                     </select>
                   </div>
@@ -3628,11 +3649,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         onChange={e => setStudentForm({...studentForm, is_active:e.target.checked})}/>
                       Active Status
                     </label>
-                    {modalType === 'add' && (
-                      <p style={{fontSize:'0.75rem',color:'#2563eb',margin:'0.5rem 0 1rem',fontStyle:'italic',background:'#eff6ff',padding:'0.4rem 0.6rem',borderRadius:'6px'}}>
-                        🔑 Login: <strong>Roll No</strong> is used as both username and initial password.
-                      </p>
-                    )}
+                   
                   </>)}
 
                   {/* Class fields */}
@@ -4090,11 +4107,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     onChange={e => setStudentForm({...studentForm, is_active:e.target.checked})}/>
                   Active Status
                 </label>
-                {modalType === 'add' && (
-                  <p style={{fontSize:'0.75rem',color:'#2563eb',margin:'0.5rem 0 0',fontStyle:'italic',background:'#eff6ff',padding:'0.4rem 0.6rem',borderRadius:'6px'}}>
-                    🔑 Login: <strong>Roll No</strong> is used as both username and initial password.
-                  </p>
-                )}
+               
               </>)}
 
               {/* Class fields */}

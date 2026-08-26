@@ -21,13 +21,13 @@ class StudentViewSet(CMSBaseViewSet):
         user = self.request.user
         if user.role == "TEACHER":
             from school_admin.models import Class
+            from django.db.models import Q
+            import re
+
             teacher_classes = Class.objects.filter(teacherclass__teacher__user=user).select_related("grade")
-            
             if not teacher_classes.exists():
                 return queryset.none()
-                
-            matching_ids = []
-            
+
             def extract_class_section(class_name):
                 if not class_name:
                     return ""
@@ -40,7 +40,6 @@ class StudentViewSet(CMSBaseViewSet):
                     return name[-1]
                 return ""
 
-            import re
             def normalize_grade(grade_str):
                 if not grade_str:
                     return ""
@@ -49,33 +48,35 @@ class StudentViewSet(CMSBaseViewSet):
                     return match.group(0)
                 return str(grade_str).strip().upper()
 
-            def normalize_section(sec_str):
-                if not sec_str:
-                    return ""
-                sec = str(sec_str).strip().upper()
-                if sec.startswith("SECTION "):
-                    sec = sec[8:].strip()
-                if len(sec) > 1 and sec[-1].isalpha():
-                    return sec[-1]
-                return sec
-
-            assigned_lookup = set()
+            q_filter = Q()
             for cls in teacher_classes:
                 grade_norm = normalize_grade(cls.grade.grade_name if cls.grade else "")
-                section_norm = normalize_section(extract_class_section(cls.class_name))
+                section_norm = extract_class_section(cls.class_name).strip().upper()
                 ay_norm = (cls.academic_year or "").replace(" ", "").upper()
-                assigned_lookup.add((grade_norm, section_norm, ay_norm))
 
-            for student in queryset:
-                s_grade = normalize_grade(student.grade)
-                s_section = normalize_section(student.section)
-                s_ay = (student.academic_year or "").replace(" ", "").upper()
-                
-                if (s_grade, s_section, s_ay) in assigned_lookup:
-                    matching_ids.append(student.student_id)
-            
-            queryset = queryset.filter(student_id__in=matching_ids)
-            
+                class_q = Q()
+                if grade_norm:
+                    class_q &= (
+                        Q(grade__icontains=grade_norm) |
+                        Q(grade__icontains=f"Grade {grade_norm}") |
+                        Q(grade__icontains=f"Class {grade_norm}")
+                    )
+                if section_norm:
+                    class_q &= (
+                        Q(section__iexact=section_norm) |
+                        Q(section__icontains=f"Section {section_norm}")
+                    )
+                if ay_norm:
+                    ay_with_spaces = f"{ay_norm[:4]} - {ay_norm[5:]}" if len(ay_norm) == 9 and ay_norm[4] == '-' else ay_norm
+                    class_q &= (
+                        Q(academic_year__iexact=ay_norm) |
+                        Q(academic_year__iexact=ay_with_spaces) |
+                        Q(academic_year__isnull=True) |
+                        Q(academic_year="")
+                    )
+                q_filter |= class_q
+
+            queryset = queryset.filter(q_filter)
         return queryset
 
     def perform_destroy(self, instance):

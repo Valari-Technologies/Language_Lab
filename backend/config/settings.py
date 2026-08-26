@@ -43,6 +43,7 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = config("SECURE_HSTS_PRELOAD", default=True, cast=bool)
 
 LMS_SYNC_SECRET = config("LMS_SYNC_SECRET", default="super-secret-key-12345")
+SHOW_DEMO_DATA_IN_REPORTS = config("SHOW_DEMO_DATA_IN_REPORTS", default=False, cast=bool)
 
 
 # Application definition

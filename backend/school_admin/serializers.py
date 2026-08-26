@@ -173,7 +173,7 @@ class ClassSerializer(serializers.ModelSerializer):
         from django.db.models import Q
         from assessments.models import ExperienceAssignment
         assignments = ExperienceAssignment.objects.filter(school=obj.school).filter(
-            Q(class_obj=obj) | Q(grade=obj.grade)
+            Q(class_obj=obj) | Q(class_obj__isnull=True, grade=obj.grade)
         ).values("id", "experience_ref", "experience_title", "assigned_at")
         return list(assignments)
 
