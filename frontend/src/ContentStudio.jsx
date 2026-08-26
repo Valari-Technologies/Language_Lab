@@ -2260,8 +2260,17 @@ const formatDifficulty = (val) => {
     const scale = previewScaleFactor || 1;
     
     // Account for absolute editor canvas coordinate scaling
-    const dropX = (e.clientX - rect.left) / scale;
-    const dropY = (e.clientY - rect.top) / scale;
+    let dropX = (e.clientX - rect.left) / scale;
+    let dropY = (e.clientY - rect.top) / scale;
+
+    // Keep the dropped elements within the canvas area boundary
+    const canvasW = canvasEl.offsetWidth || 1000;
+    const canvasH = canvasEl.offsetHeight || 600;
+    const defaultBlockW = 320;
+    const defaultBlockH = 80;
+
+    dropX = Math.max(0, Math.min(dropX, canvasW - defaultBlockW));
+    dropY = Math.max(0, Math.min(dropY, canvasH - defaultBlockH));
 
     if (data.startsWith("block:")) {
       // Reordering via move controls
