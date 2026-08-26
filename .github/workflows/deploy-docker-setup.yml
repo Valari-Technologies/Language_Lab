@@ -1,9 +1,6 @@
 name: Deploy Docker Setup Branch
 
 on:
-  push:
-    branches:
-      - feature/docker-setup
   workflow_dispatch:
 
 concurrency:
