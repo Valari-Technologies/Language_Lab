@@ -106,18 +106,18 @@ def check_experience_has_activities(experience, activities):
             "message": "Experience has zero activities. At least one activity is required.",
             "item": f"experience-{experience.id}"
         })
-    elif num_activities > 5:
+    elif num_activities > 6:
         results.append({
             "rule": "experience_activities_required",
             "severity": "ERROR",
-            "message": f"Experience has too many activities ({num_activities}). Maximum of 5 activities is allowed.",
+            "message": f"Experience has too many activities ({num_activities}). Maximum of 6 activities is allowed.",
             "item": f"experience-{experience.id}"
         })
     else:
         results.append({
             "rule": "experience_activities_required",
             "severity": "PASSED",
-            "message": f"Experience contains {num_activities} activity/activities (1-5 limit satisfied).",
+            "message": f"Experience contains {num_activities} activity/activities (1-6 limit satisfied).",
             "item": f"experience-{experience.id}"
         })
     return results

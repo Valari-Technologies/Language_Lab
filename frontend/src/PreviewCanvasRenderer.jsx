@@ -464,6 +464,7 @@ export default function PreviewCanvasRenderer({
         {
           const blockSeqKey = `${activeScreenId}_${block.id}`;
           const originalItems = block.content?.items || [];
+          const seqQuestion = block.content?.question || 'Arrange the items in the correct order.';
           
           let activeOrder = previewAnswers[blockSeqKey];
           if (!activeOrder) {
@@ -1201,18 +1202,26 @@ export default function PreviewCanvasRenderer({
             position: 'absolute',
             left: block.styles?.left || '0px',
             top: block.styles?.top || '0px',
-            width: block.styles?.blockWidth || '100%',
-            minHeight: block.styles?.minHeight || 'auto',
-            height: 'auto',
+            padding: '0.85rem',
+            borderRadius: '12px',
+            border: '1.5px solid #e2e8f0',
+            background: '#ffffff',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
             display: 'flex',
             flexDirection: 'column',
             boxSizing: 'border-box',
-            marginBottom: '0.25rem',
             transition: 'all 0.15s',
             zIndex: block.styles?.zIndex || 1,
             wordBreak: 'break-word',
             overflowWrap: 'anywhere',
-            overflow: 'visible'
+            overflow: 'hidden',
+            ...(block.styles?.blockWidth ? { width: block.styles.blockWidth } : { width: '100%' }),
+            ...(block.styles?.height || block.styles?.minHeight ? { minHeight: block.styles.height || block.styles.minHeight, height: block.styles.height || block.styles.minHeight } : { minHeight: '80px' }),
+            fontFamily: block.styles?.fontFamily || 'inherit',
+            fontSize: block.styles?.fontSize || 'inherit',
+            fontWeight: block.styles?.fontWeight === 'Bold' ? 700 : block.styles?.fontWeight === 'SemiBold' ? 600 : block.styles?.fontWeight === 'Normal' ? 400 : 'inherit',
+            color: block.styles?.color || '#1e293b',
+            textAlign: (block.styles?.alignment || 'Left').toLowerCase()
           }}
         >
           {renderSingleBlock(block)}

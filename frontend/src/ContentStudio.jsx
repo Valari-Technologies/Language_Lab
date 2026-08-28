@@ -18,6 +18,7 @@ import './Dashboard.css';
 import contentCreatorHeaderBanner from './assets/3.jpeg';
 import contentStudioBg from './assets/contentbg.png';
 import logoIcon from './assets/icon.png';
+import roundLogo from './assets/favicon.png';
 import AvatarCropperModal from './AvatarCropperModal';
 import HelpSupportModal from './HelpSupportModal';
 
@@ -2195,8 +2196,9 @@ const formatDifficulty = (val) => {
     let nextLeft = 20;
 
     if (dropX !== null && dropY !== null) {
+      const blockWidth = parseInt(newBlock.styles?.blockWidth) || 400;
       nextTop = Math.max(0, dropY);
-      nextLeft = Math.max(0, dropX);
+      nextLeft = Math.max(0, Math.min(dropX, 936 - blockWidth));
     } else {
       let maxTop = 0;
       if (screenForm.elements && screenForm.elements.length > 0) {
@@ -2257,28 +2259,40 @@ const formatDifficulty = (val) => {
 
     const canvasEl = e.currentTarget.closest('[data-canvas-area="true"]') || e.currentTarget;
     const rect = canvasEl.getBoundingClientRect();
-    const scale = previewScaleFactor || 1;
+    const scale = (zoomLevel / 100) || 1;
     
     // Account for absolute editor canvas coordinate scaling
     let dropX = (e.clientX - rect.left) / scale;
     let dropY = (e.clientY - rect.top) / scale;
 
     // Keep the dropped elements within the canvas area boundary
-    const canvasW = canvasEl.offsetWidth || 1000;
+    const canvasW = canvasEl.offsetWidth || 936;
     const canvasH = canvasEl.offsetHeight || 600;
-    const defaultBlockW = 320;
-    const defaultBlockH = 80;
+    const defaultBlockW = 400;
+    const defaultBlockH = 120;
 
     dropX = Math.max(0, Math.min(dropX, canvasW - defaultBlockW));
     dropY = Math.max(0, Math.min(dropY, canvasH - defaultBlockH));
+
+    const handleDropWithFixedStyles = (type, dx, dy) => {
+      const newBlock = createDefaultBlock(type);
+      if (newBlock) {
+        newBlock.styles = {
+          ...newBlock.styles,
+          blockWidth: newBlock.styles?.blockWidth || `${defaultBlockW}px`,
+          minHeight: newBlock.styles?.minHeight || `${defaultBlockH}px`
+        };
+        appendBlockToCanvas(newBlock, dx, dy);
+      }
+    };
 
     if (data.startsWith("block:")) {
       // Reordering via move controls
     } else if (data.startsWith("type:")) {
       const type = data.replace("type:", "");
-      handleDropBlock(type, dropX, dropY);
+      handleDropWithFixedStyles(type, dropX, dropY);
     } else {
-      handleDropBlock(data, dropX, dropY);
+      handleDropWithFixedStyles(data, dropX, dropY);
     }
   };
 
@@ -2298,17 +2312,18 @@ const formatDifficulty = (val) => {
           const draggerEl = e.currentTarget;
           const canvasEl = draggerEl.closest('[data-canvas-area="true"]');
           const elWrapper = draggerEl.closest('[data-block-id]');
+          const scale = (zoomLevel / 100) || 1;
           const move = (mv) => {
             const canvasW = canvasEl ? canvasEl.offsetWidth : 9999;
             const canvasH = canvasEl ? canvasEl.offsetHeight : 9999;
             const elW = elWrapper ? elWrapper.offsetWidth : 200;
             const elH = elWrapper ? elWrapper.offsetHeight : 60;
-            const rawLeft = initLeft + (mv.clientX - startX);
-            const rawTop = initTop + (mv.clientY - startY);
+            const rawLeft = initLeft + (mv.clientX - startX) / scale;
+            const rawTop = initTop + (mv.clientY - startY) / scale;
             const newLeft = Math.max(0, Math.min(rawLeft, canvasW - elW));
             const newTop = Math.max(0, Math.min(rawTop, canvasH - elH));
             const elements = (screenForm.elements || []).map(el2 =>
-              el2.id === block.id ? { ...el2, styles: { ...el2.styles, left: `${newLeft}px`, top: `${newTop}px` } } : el2
+              el2.id === block.id ? { ...el2, styles: { ...el2.styles, left: `${newLeft}px`, top: `${newTop}px`, blockWidth: el2.styles?.blockWidth || `${elW}px` } } : el2
             );
             setScreenForm(prev => ({ ...prev, elements }));
           };
@@ -2469,6 +2484,22 @@ const formatDifficulty = (val) => {
             )}
             {block.content?.caption && (
               <span style={{ fontSize: '0.68rem', color: '#64748b', fontStyle: 'italic' }}>{block.content.caption}</span>
+            )}
+            {block.content?.hasQuestion && (
+              <div style={{ width: '100%', marginTop: '0.35rem', padding: '0.4rem 0.5rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', textAlign: 'left' }}>
+                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  ❓ {block.content.questionText || 'Answer the question:'}
+                </div>
+                {block.content.questionOptions && block.content.questionOptions.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                    {block.content.questionOptions.map((opt, oIdx) => (
+                      <span key={oIdx} style={{ fontSize: '0.6rem', padding: '1px 5px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', color: '#475569' }}>
+                        {opt}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -3055,8 +3086,9 @@ const formatDifficulty = (val) => {
                 const el = e.currentTarget.parentElement;
                 const initH = el.offsetHeight;
                 const initTop = parseInt(block.styles?.top) || 0;
+                const scale = (zoomLevel / 100) || 1;
                 const move = (mv) => {
-                  const deltaY = mv.clientY - startY;
+                  const deltaY = (mv.clientY - startY) / scale;
                   const newH = Math.max(60, initH - deltaY);
                   const newTop = Math.max(0, initTop + deltaY);
                   el.style.minHeight = `${newH}px`;
@@ -3094,9 +3126,10 @@ const formatDifficulty = (val) => {
                 const canvasEl = el.closest('[data-canvas-area="true"]');
                 const canvasH = canvasEl ? canvasEl.offsetHeight : 9999;
                 const elTop = parseInt(block.styles?.top) || 0;
+                const scale = (zoomLevel / 100) || 1;
                 const move = (mv) => {
                   const maxH = Math.max(60, canvasH - elTop);
-                  const newH = Math.min(maxH, Math.max(60, initH + (mv.clientY - startY)));
+                  const newH = Math.min(maxH, Math.max(60, initH + (mv.clientY - startY) / scale));
                   el.style.minHeight = `${newH}px`;
                   el.style.height = `${newH}px`;
                   const elements = (screenForm.elements || []).map(el2 =>
@@ -3129,10 +3162,11 @@ const formatDifficulty = (val) => {
                 const el = e.currentTarget.parentElement;
                 const initW = el.offsetWidth;
                 const initLeft = parseInt(block.styles?.left) || 0;
+                const scale = (zoomLevel / 100) || 1;
                 const move = (mv) => {
-                  const deltaX = mv.clientX - startX;
+                  const deltaX = (mv.clientX - startX) / scale;
                   const newW = Math.max(120, initW - deltaX);
-                  const newLeft = initLeft + (initW - newW);
+                  const newLeft = Math.max(0, initLeft + (initW - newW));
                   el.style.width = `${newW}px`;
                   el.style.left = `${newLeft}px`;
                   const elements = (screenForm.elements || []).map(el2 =>
@@ -3167,9 +3201,10 @@ const formatDifficulty = (val) => {
                 const canvasEl = el.closest('[data-canvas-area="true"]');
                 const canvasW = canvasEl ? canvasEl.offsetWidth : 9999;
                 const elLeft = parseInt(block.styles?.left) || 0;
+                const scale = (zoomLevel / 100) || 1;
                 const move = (mv) => {
                   const maxW = Math.max(120, canvasW - elLeft);
-                  const newW = Math.min(maxW, Math.max(120, initW + (mv.clientX - startX)));
+                  const newW = Math.min(maxW, Math.max(120, initW + (mv.clientX - startX) / scale));
                   el.style.width = `${newW}px`;
                   const elements = (screenForm.elements || []).map(el2 =>
                     el2.id === block.id ? { ...el2, styles: { ...el2.styles, blockWidth: `${newW}px` } } : el2
@@ -3207,11 +3242,12 @@ const formatDifficulty = (val) => {
                 const canvasH = canvasEl ? canvasEl.offsetHeight : 9999;
                 const elLeft = parseInt(block.styles?.left) || 0;
                 const elTop = parseInt(block.styles?.top) || 0;
+                const scale = (zoomLevel / 100) || 1;
                 const move = (mv) => {
                   const maxW = Math.max(120, canvasW - elLeft);
                   const maxH = Math.max(60, canvasH - elTop);
-                  const newW = Math.min(maxW, Math.max(120, initW + (mv.clientX - startX)));
-                  const newH = Math.min(maxH, Math.max(60, initH + (mv.clientY - startY)));
+                  const newW = Math.min(maxW, Math.max(120, initW + (mv.clientX - startX) / scale));
+                  const newH = Math.min(maxH, Math.max(60, initH + (mv.clientY - startY) / scale));
                   el.style.width = `${newW}px`;
                   el.style.minHeight = `${newH}px`;
                   el.style.height = `${newH}px`;
@@ -4670,7 +4706,7 @@ const formatDifficulty = (val) => {
       `}</style>
 
       {/* ── Sidebar ── */}
-      {view !== 'preview' && (
+      {true && (
         <aside className={`cs-sidebar ${navCollapsed ? 'collapsed' : ''}`} style={{ overflow: showProfileDropdown ? 'visible' : 'hidden' }}>
           <div
             className="cs-brand"
@@ -4684,7 +4720,7 @@ const formatDifficulty = (val) => {
               overflow: 'hidden'
             }}
           >
-            {!navCollapsed && (
+            {!navCollapsed ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <img
                   src={logoIcon}
@@ -4700,30 +4736,45 @@ const formatDifficulty = (val) => {
                   <span className="cs-brand-sub">Content Studio</span>
                 </div>
               </div>
+            ) : (
+              <img
+                src={roundLogo}
+                alt="Logo"
+                onClick={toggleNavCollapsed}
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  objectFit: 'contain',
+                  cursor: 'pointer'
+                }}
+                title="Expand sidebar"
+              />
             )}
-            <button
-              onClick={toggleNavCollapsed}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'rgba(255, 255, 255, 0.75)',
-                cursor: 'pointer',
-                padding: '6px',
-                borderRadius: '6px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'background 0.2s'
-              }}
-              onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-              title={navCollapsed ? 'Expand sidebar' : 'Close sidebar'}
-            >
-              <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="20px" width="20px" xmlns="http://www.w3.org/2000/svg">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                <line x1="9" y1="3" x2="9" y2="21"></line>
-              </svg>
-            </button>
+            {!navCollapsed && (
+              <button
+                onClick={toggleNavCollapsed}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'rgba(255, 255, 255, 0.75)',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                title={navCollapsed ? 'Expand sidebar' : 'Close sidebar'}
+              >
+                <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="20px" width="20px" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="9" y1="3" x2="9" y2="21"></line>
+                </svg>
+              </button>
+            )}
           </div>
 
           <nav className="cs-nav" style={{ padding: navCollapsed ? '1rem 0.5rem' : '1.5rem 1rem' }}>
@@ -4881,17 +4932,7 @@ const formatDifficulty = (val) => {
       {/* ── Main Area ── */}
       <div 
         className="cs-content-area" 
-        style={view === 'preview' ? {
-          flex: 1,
-          width: '100vw',
-          height: '100vh',
-          background: '#0f172a',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          padding: 0,
-          margin: 0
-        } : { 
+        style={{ 
           backgroundImage: `url(${contentStudioBg})`, 
           backgroundSize: 'cover', 
           backgroundPosition: 'center bottom', 
@@ -4920,7 +4961,7 @@ const formatDifficulty = (val) => {
         )}
 
         {/* Header Bar */}
-        {view !== 'preview' && (
+        {true && (
           <header className="cs-header">
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <h2 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
@@ -4932,6 +4973,7 @@ const formatDifficulty = (val) => {
                 {view === 'media' && 'Media Library'}
                 {view === 'publish' && 'Publish Center'}
                 {view === 'profile' && 'Profile Settings'}
+                {view === 'preview' && 'Runtime Preview'}
               </h2>
             </div>
             <div className="cs-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}>
@@ -5838,16 +5880,16 @@ const formatDifficulty = (val) => {
                         <h3 className="cs-card-title" style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0 }}>Activities</h3>
                         {selectedExperience?.experience_type !== 'ASSESSMENT' && (
                           <div className="cs-card-sub" style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>
-                            Sequence of activities (1 to 5 allowed. Current: {activities.length}/5)
+                            Sequence of activities (1 to 6 allowed. Current: {activities.length}/6)
                           </div>
                         )}
                       </div>
                       {selectedExperience?.experience_type !== 'ASSESSMENT' && (
                         <button
                           type="button"
-                          disabled={activities.length >= 5}
+                          disabled={activities.length >= 6}
                           onClick={() => {
-                            if (activities.length >= 5) return;
+                            if (activities.length >= 6) return;
                             setSelectedActivity(null);
                             setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
                             setScreens([]);
@@ -5855,11 +5897,11 @@ const formatDifficulty = (val) => {
                           }}
                           style={{
                             display: 'flex', alignItems: 'center', gap: '4px',
-                            background: activities.length >= 5 ? '#e2e8f0' : '#0b57d0',
-                            color: activities.length >= 5 ? '#94a3b8' : '#ffffff',
+                            background: activities.length >= 6 ? '#e2e8f0' : '#0b57d0',
+                            color: activities.length >= 6 ? '#94a3b8' : '#ffffff',
                             border: 'none', borderRadius: '6px',
                             padding: '0.35rem 0.75rem', fontWeight: 700, fontSize: '0.75rem',
-                            cursor: activities.length >= 5 ? 'not-allowed' : 'pointer'
+                            cursor: activities.length >= 6 ? 'not-allowed' : 'pointer'
                           }}
                         >
                           <FiPlus /> New
@@ -6449,6 +6491,11 @@ const formatDifficulty = (val) => {
                   background: #eff6ff;
                   transform: translateX(2px);
                 }
+                .fss-block-palette-item.active {
+                  border-color: #2563eb;
+                  background: #eff6ff;
+                  box-shadow: 0 0 0 1.5px #2563eb;
+                }
               `}</style>
 
                 <div className="fss-overlay">
@@ -6718,15 +6765,9 @@ const formatDifficulty = (val) => {
                                     if (selectedExperience?.experience_type === 'ASSESSMENT') return true;
                                     if (!activeModule) return true;
                                     const mapped = tmplType.toLowerCase();
-                                    if (mapped === 'quiz') {
-                                      return allowedTypes.includes('quiz') || allowedTypes.includes('mcq');
-                                    }
-                                    if (mapped === 'match_items') {
-                                      return allowedTypes.includes('match') || allowedTypes.includes('match_items');
-                                    }
-                                    if (mapped === 'roleplay_simulation' || mapped === 'role_play') {
-                                      return allowedTypes.includes('roleplay_simulation') || allowedTypes.includes('role_play');
-                                    }
+                                    if (mapped === 'quiz') return allowedTypes.includes('quiz') || allowedTypes.includes('mcq');
+                                    if (mapped === 'match_items') return allowedTypes.includes('match') || allowedTypes.includes('match_items');
+                                    if (mapped === 'roleplay_simulation' || mapped === 'role_play') return allowedTypes.includes('roleplay_simulation') || allowedTypes.includes('role_play');
                                     return allowedTypes.includes(mapped);
                                   };
 
@@ -6737,22 +6778,31 @@ const formatDifficulty = (val) => {
                                 }).filter(cat => cat.items.length > 0).map(cat => (
                                   <div key={cat.title}>
                                     <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '0.4rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '2px' }}>{cat.title}</span>
-                                    {cat.items.map(tmpl => (
-                                      <div
-                                        key={tmpl.type}
-                                        onClick={() => handleSelectBlockType(tmpl.type)}
-                                        draggable={true}
-                                        onDragStart={e => { e.dataTransfer.setData("text/plain", `type:${tmpl.type}`); e.dataTransfer.effectAllowed = "move"; }}
-                                        className="fss-block-palette-item"
-                                        data-testid={`add-block-${tmpl.type.toLowerCase()}`}
-                                      >
-                                        <div style={{ background: tmpl.bg, padding: '0.3rem', borderRadius: '6px', display: 'flex', flexShrink: 0 }}>{tmpl.icon}</div>
-                                        <div style={{ flex: 1 }}>
-                                          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e293b' }}>{tmpl.type.replace('_', ' ')}</div>
-                                          <div style={{ fontSize: '0.58rem', color: '#64748b', marginTop: '1px', lineHeight: 1.3 }}>{tmpl.desc}</div>
+                                    {cat.items.map(tmpl => {
+                                      const isPending = (() => {
+                                        if (!pendingBlock) return false;
+                                        let normalizedTmpl = tmpl.type.toLowerCase().replace(' ', '_');
+                                        if (normalizedTmpl === 'fill_in_blanks') normalizedTmpl = 'fill_blank';
+                                        if (normalizedTmpl === 'match_items') normalizedTmpl = 'match';
+                                        return pendingBlock.type === normalizedTmpl;
+                                      })();
+                                      return (
+                                        <div
+                                          key={tmpl.type}
+                                          onClick={() => handleSelectBlockType(tmpl.type)}
+                                          draggable={true}
+                                          onDragStart={e => { e.dataTransfer.setData("text/plain", `type:${tmpl.type}`); e.dataTransfer.effectAllowed = "move"; }}
+                                          className={`fss-block-palette-item${isPending ? ' active' : ''}`}
+                                          data-testid={`add-block-${tmpl.type.toLowerCase()}`}
+                                        >
+                                          <div style={{ background: tmpl.bg, padding: '0.3rem', borderRadius: '6px', display: 'flex', flexShrink: 0 }}>{tmpl.icon}</div>
+                                          <div style={{ flex: 1 }}>
+                                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e293b' }}>{tmpl.type.replace('_', ' ')}</div>
+                                            <div style={{ fontSize: '0.58rem', color: '#64748b', marginTop: '1px', lineHeight: 1.3 }}>{tmpl.desc}</div>
+                                          </div>
                                         </div>
-                                      </div>
-                                    ))}
+                                      );
+                                    })}
                                   </div>
                                 ))}
                               </div>
@@ -6881,8 +6931,8 @@ const formatDifficulty = (val) => {
                             justifyContent: 'space-between', 
                             gap: '0.5rem'
                           }}>
-                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e40af' }}>
-                              Pending Block
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e40af', textTransform: 'capitalize' }}>
+                              {pendingBlock?.type ? pendingBlock.type.replace('_', ' ') + ' Block' : 'New Block'}
                             </span>
                             <div style={{ display: 'flex', gap: '0.4rem' }}>
                               <button 
@@ -7288,17 +7338,75 @@ const formatDifficulty = (val) => {
                                       </div>
 
                                       {selectedBlock.type === 'image' && (
-                                        <div className="cs-form-group">
-                                          <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Caption Text</label>
-                                          <input
-                                            className="cs-form-input"
-                                            style={{ height: '28px', fontSize: '0.78rem' }}
-                                            type="text"
-                                            value={selectedBlock.content?.caption || ''}
-                                            onChange={e => handleUpdateBlockContent('caption', e.target.value)}
-                                            placeholder="Enter caption..."
-                                          />
-                                        </div>
+                                        <>
+                                          <div className="cs-form-group">
+                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Caption Text</label>
+                                            <input
+                                              className="cs-form-input"
+                                              style={{ height: '28px', fontSize: '0.78rem' }}
+                                              type="text"
+                                              value={selectedBlock.content?.caption || ''}
+                                              onChange={e => handleUpdateBlockContent('caption', e.target.value)}
+                                              placeholder="Enter caption..."
+                                            />
+                                          </div>
+
+                                          <div className="cs-form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+                                            <input
+                                              type="checkbox"
+                                              id={`image-has-question-${selectedBlock.id}`}
+                                              checked={!!selectedBlock.content?.hasQuestion}
+                                              onChange={e => handleUpdateBlockContent('hasQuestion', e.target.checked)}
+                                              style={{ cursor: 'pointer' }}
+                                            />
+                                            <label htmlFor={`image-has-question-${selectedBlock.id}`} style={{ fontSize: '0.72rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
+                                              Add Question for this Image
+                                            </label>
+                                          </div>
+
+                                          {selectedBlock.content?.hasQuestion && (
+                                            <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                              <div className="cs-form-group">
+                                                <label className="cs-form-label" style={{ fontSize: '0.65rem', fontWeight: 600 }}>Question Prompt</label>
+                                                <input
+                                                  className="cs-form-input"
+                                                  style={{ height: '26px', fontSize: '0.75rem' }}
+                                                  type="text"
+                                                  value={selectedBlock.content?.questionText || ''}
+                                                  onChange={e => handleUpdateBlockContent('questionText', e.target.value)}
+                                                  placeholder="e.g. What animal is shown in the image?"
+                                                />
+                                              </div>
+
+                                              <div className="cs-form-group">
+                                                <label className="cs-form-label" style={{ fontSize: '0.65rem', fontWeight: 600 }}>Options (comma-separated)</label>
+                                                <input
+                                                  className="cs-form-input"
+                                                  style={{ height: '26px', fontSize: '0.75rem' }}
+                                                  type="text"
+                                                  value={selectedBlock.content?.questionOptions?.join(', ') || ''}
+                                                  onChange={e => {
+                                                    const opts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                                                    handleUpdateBlockContent('questionOptions', opts);
+                                                  }}
+                                                  placeholder="e.g. Lion, Tiger, Elephant"
+                                                />
+                                              </div>
+
+                                              <div className="cs-form-group">
+                                                <label className="cs-form-label" style={{ fontSize: '0.65rem', fontWeight: 600 }}>Correct Answer Value</label>
+                                                <input
+                                                  className="cs-form-input"
+                                                  style={{ height: '26px', fontSize: '0.75rem' }}
+                                                  type="text"
+                                                  value={selectedBlock.content?.correctAnswer || ''}
+                                                  onChange={e => handleUpdateBlockContent('correctAnswer', e.target.value)}
+                                                  placeholder="e.g. Lion"
+                                                />
+                                              </div>
+                                            </div>
+                                          )}
+                                        </>
                                       )}
 
                                       {selectedBlock.type === 'audio' && (
@@ -9583,37 +9691,44 @@ const formatDifficulty = (val) => {
              if (!previewPayload || !selectedExperience) {
                 return (
                   <div style={{ padding: '0.5rem 1rem', background: 'transparent' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', paddingBottom: '0.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', paddingBottom: '0.25rem', borderBottom: '1.5px solid #cbd5e1' }}>
+                      <div style={{ display: 'flex', gap: '1.5rem' }}>
                         <button
-                          className="cs-icon-btn"
-                          onClick={() => setView(previousView || 'dashboard')}
+                          onClick={() => { setPreviewTypeFilter('LESSON'); setPreviewSearch(''); }}
                           style={{
-                            background: '#ffffff',
-                            border: '1.5px solid #cbd5e1',
-                            borderRadius: '8px',
-                            padding: '6px 10px',
+                            padding: '0.75rem 0.5rem',
+                            fontWeight: 700,
+                            fontSize: '0.95rem',
+                            color: previewTypeFilter === 'LESSON' ? '#0284c7' : '#64748b',
+                            border: 'none',
+                            background: 'none',
+                            borderBottom: previewTypeFilter === 'LESSON' ? '3px solid #0284c7' : '3px solid transparent',
                             cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: '#475569',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                            transition: 'all 0.2s ease',
+                            marginBottom: '-3.5px'
                           }}
-                          title="Back"
                         >
-                          <FiArrowLeft style={{ fontSize: '1.1rem' }} />
+                          Lessons
                         </button>
-                        <div>
-                          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 4px 0', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <FiPlay style={{ color: previewTypeFilter === 'ASSESSMENT' ? '#e11d48' : '#0284c7' }} /> Runtime Preview Library
-                          </h1>
-                          <p style={{ fontSize: '0.84rem', color: '#64748b', margin: 0 }}>
-                            Select any {previewTypeFilter === 'ASSESSMENT' ? 'assessment' : 'lesson'} below (drafted or published) to test its interactive student runtime screens.
-                          </p>
-                        </div>
+                        <button
+                          onClick={() => { setPreviewTypeFilter('ASSESSMENT'); setPreviewSearch(''); }}
+                          style={{
+                            padding: '0.75rem 0.5rem',
+                            fontWeight: 700,
+                            fontSize: '0.95rem',
+                            color: previewTypeFilter === 'ASSESSMENT' ? '#e11d48' : '#64748b',
+                            border: 'none',
+                            background: 'none',
+                            borderBottom: previewTypeFilter === 'ASSESSMENT' ? '3px solid #e11d48' : '3px solid transparent',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            marginBottom: '-3.5px'
+                          }}
+                        >
+                          Assessments
+                        </button>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
                         {/* Small Search Bar */}
                         <div style={{ position: 'relative' }}>
                           <FiSearch style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-55%)', color: '#64748b', fontSize: '0.9rem' }} />
@@ -9639,44 +9754,6 @@ const formatDifficulty = (val) => {
                       </div>
                     </div>
 
-                    {/* View Tabs */}
-                    <div style={{ display: 'flex', borderBottom: '1.5px solid #cbd5e1', marginBottom: '1.5rem', gap: '1.5rem' }}>
-                      <button
-                        onClick={() => { setPreviewTypeFilter('LESSON'); setPreviewSearch(''); }}
-                        style={{
-                          padding: '0.75rem 0.5rem',
-                          fontWeight: 700,
-                          fontSize: '0.95rem',
-                          color: previewTypeFilter === 'LESSON' ? '#0284c7' : '#64748b',
-                          border: 'none',
-                          background: 'none',
-                          borderBottom: previewTypeFilter === 'LESSON' ? '3px solid #0284c7' : '3px solid transparent',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          marginBottom: '-1.5px'
-                        }}
-                      >
-                        Lessons
-                      </button>
-                      <button
-                        onClick={() => { setPreviewTypeFilter('ASSESSMENT'); setPreviewSearch(''); }}
-                        style={{
-                          padding: '0.75rem 0.5rem',
-                          fontWeight: 700,
-                          fontSize: '0.95rem',
-                          color: previewTypeFilter === 'ASSESSMENT' ? '#e11d48' : '#64748b',
-                          border: 'none',
-                          background: 'none',
-                          borderBottom: previewTypeFilter === 'ASSESSMENT' ? '3px solid #e11d48' : '3px solid transparent',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          marginBottom: '-1.5px'
-                        }}
-                      >
-                        Assessments
-                      </button>
-                    </div>
- 
                    {sortedExperiences.length === 0 ? (
                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem 2rem', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', textAlign: 'center', gap: '1.25rem' }}>
                        <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: previewTypeFilter === 'ASSESSMENT' ? '#ffe4e6' : '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: previewTypeFilter === 'ASSESSMENT' ? '#e11d48' : '#0284c7' }}>
@@ -9841,28 +9918,7 @@ const formatDifficulty = (val) => {
                     >
                       <FiArrowLeft /> Select Different Lesson
                     </button>
-                    <button
-                      className="cs-btn-outline"
-                      onClick={() => {
-                        setView(previousView || 'screen-builder');
-                        setPreviewPayload(null);
-                      }}
-                      style={{
-                        background: '#f1f5f9',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '8px',
-                        padding: '0.4rem 0.8rem',
-                        fontSize: '0.8rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        color: '#334155',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                      }}
-                    >
-                      {['screen-builder', 'activity-builder', 'experience-builder'].includes(previousView) ? 'Back to Editor' : 'Back'}
-                    </button>
+
                     <div style={{ borderLeft: '1px solid #cbd5e1', height: '24px' }} />
                     <div>
                       <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
@@ -9906,16 +9962,6 @@ const formatDifficulty = (val) => {
                       }}
                     >
                       ↺ Restart Experience
-                    </button>
-                    <button
-                      className="cs-btn-primary"
-                      style={{ background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)', color: '#ffffff', border: 'none', borderRadius: '10px', padding: '0.5rem 1.25rem', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(11,87,208,0.25)', display: 'flex', alignItems: 'center', gap: '6px' }}
-                      onClick={() => {
-                        setView(previousView || 'experience-builder');
-                        setPreviewPayload(null);
-                      }}
-                    >
-                      <FiX style={{ fontSize: '1rem' }} /> Exit Preview
                     </button>
                   </div>
                 </div>
@@ -9991,7 +10037,7 @@ const formatDifficulty = (val) => {
                     flex: 1,
                     display: 'flex',
                     flexDirection: 'column',
-                    height: 'calc(100vh - 80px)',
+                    height: '100%',
                     overflow: 'hidden',
                     position: 'relative'
                   }}>
@@ -10060,7 +10106,6 @@ const formatDifficulty = (val) => {
                                   dragDropSelections={dragDropSelections}
                                   setDragDropSelections={setDragDropSelections}
                                   blankAnswers={blankAnswers}
-                                  setBlankAnswers={setBlankAnswers}
                                   flippedCards={flippedCards}
                                   setFlippedCards={setFlippedCards}
                                   resolveUrl={resolveMediaUrl}
@@ -10091,26 +10136,38 @@ const formatDifficulty = (val) => {
                     }}>
                       <button
                         className="cs-btn-outline"
-                        disabled={previewScreenIndex <= 0}
+                        disabled={previewActivityIndex === 0 && previewScreenIndex === 0}
                         onClick={() => {
-                          setPreviewScreenIndex(prev => prev - 1);
+                          if (previewScreenIndex > 0) {
+                            setPreviewScreenIndex(prev => prev - 1);
+                          } else if (previewActivityIndex > 0) {
+                            const prevActIdx = previewActivityIndex - 1;
+                            const prevActScreens = previewPayload?.activities?.[prevActIdx]?.screens || [];
+                            setPreviewActivityIndex(prevActIdx);
+                            setPreviewScreenIndex(prevActScreens.length > 0 ? prevActScreens.length - 1 : 0);
+                          }
                           setPreviewAnswerIndex(null);
                         }}
-                        style={{ padding: '0.45rem 1.1rem', fontSize: '0.78rem', background: '#ffffff', cursor: previewScreenIndex <= 0 ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 600, color: '#334155' }}
+                        style={{ padding: '0.45rem 1.1rem', fontSize: '0.78rem', background: '#ffffff', cursor: (previewActivityIndex === 0 && previewScreenIndex === 0) ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 600, color: '#334155' }}
                       >
                         ← Previous Screen
                       </button>
                       <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
-                        Screen {previewScreenIndex + 1} of {totalScreens}
+                        Screen {previewScreenIndex + 1} of {totalScreens} (Act {previewActivityIndex + 1} of {previewPayload?.activities?.length || 1})
                       </span>
                       <button
                         className="cs-btn-outline"
-                        disabled={previewScreenIndex >= totalScreens - 1}
+                        disabled={previewActivityIndex >= (previewPayload?.activities?.length || 1) - 1 && previewScreenIndex >= totalScreens - 1}
                         onClick={() => {
-                          setPreviewScreenIndex(prev => prev + 1);
+                          if (previewScreenIndex < totalScreens - 1) {
+                            setPreviewScreenIndex(prev => prev + 1);
+                          } else if (previewActivityIndex < (previewPayload?.activities?.length || 1) - 1) {
+                            setPreviewActivityIndex(prev => prev + 1);
+                            setPreviewScreenIndex(0);
+                          }
                           setPreviewAnswerIndex(null);
                         }}
-                        style={{ padding: '0.45rem 1.1rem', fontSize: '0.78rem', background: '#ffffff', cursor: previewScreenIndex >= totalScreens - 1 ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 600, color: '#334155' }}
+                        style={{ padding: '0.45rem 1.1rem', fontSize: '0.78rem', background: '#ffffff', cursor: (previewActivityIndex >= (previewPayload?.activities?.length || 1) - 1 && previewScreenIndex >= totalScreens - 1) ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 600, color: '#334155' }}
                       >
                         Next Screen →
                       </button>
@@ -10169,6 +10226,43 @@ const formatDifficulty = (val) => {
                           <span>Screens: <strong>{activities.reduce((acc, act) => acc + (act.screen_count ?? act.screens?.length ?? 0), 0)}</strong></span>
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        className="cs-btn-outline"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '0.4rem 0.8rem',
+                          fontSize: '0.72rem',
+                          borderColor: '#cbd5e1',
+                          color: '#dc2626',
+                          background: '#fff5f5',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          alignSelf: 'center'
+                        }}
+                        onClick={async () => {
+                          setActionLoading(true);
+                          try {
+                            const res = await apiFetch(`/api/v1/content/validation/${selectedExperience.id}/run/`, { method: 'POST' });
+                            if (res.ok) {
+                              const report = await res.json();
+                              setValidationReport(report);
+                              setView('validation-report');
+                            } else {
+                              showFeedback('Failed to run validation.', 'error');
+                            }
+                          } catch (err) {
+                            showFeedback('Error running validation.', 'error');
+                          } finally {
+                            setActionLoading(false);
+                          }
+                        }}
+                      >
+                        🔍 Check Validation
+                      </button>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
@@ -10343,6 +10437,113 @@ const formatDifficulty = (val) => {
                 </div>
               </div>
             </>
+          )}
+
+          {/* ───────────────── VIEW: VALIDATION REPORT ───────────────── */}
+          {view === 'validation-report' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '0.5rem', width: '100%', maxWidth: '1000px', margin: '0 auto' }}>
+              {/* Top Header / Navigation */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button
+                  className="cs-btn-outline"
+                  onClick={() => setView('publish')}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 600 }}
+                >
+                  ← Back to Publish Center
+                </button>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b' }}>
+                  EXPERIENCE VALIDATION ENGINE v1.0
+                </span>
+              </div>
+
+              {/* Summary Card */}
+              <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', borderLeft: validationReport?.status === 'PASSED' ? '4px solid #10b981' : '4px solid #ef4444' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: '#1e293b' }}>
+                    Validation Report for "{selectedExperience?.title}"
+                  </h3>
+                  <span
+                    className={`cs-badge ${validationReport?.status === 'PASSED' ? 'cs-badge-published' : ''}`}
+                    style={validationReport?.status === 'PASSED' ? {} : { background: '#fef2f2', color: '#ef4444', border: '1px solid #fee2e2' }}
+                  >
+                    {validationReport?.status === 'PASSED' ? 'PASSED' : 'FAILED'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.78rem', color: '#475569', marginTop: '0.25rem' }}>
+                  <span style={{ color: '#f59e0b' }}>Warnings: <strong>{validationReport?.warnings || 0}</strong></span>
+                  <span style={{ color: '#ef4444' }}>Errors: <strong>{validationReport?.errors || 0}</strong></span>
+                </div>
+              </div>
+
+              {/* Errors & Warnings List */}
+              <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <h4 style={{ fontSize: '0.85rem', fontWeight: 700, margin: 0, borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', color: '#0f172a' }}>
+                  Identified Validation Issues
+                </h4>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {(() => {
+                    const results = validationReport?.results || [];
+                    const issues = results.filter(r => r.severity === 'ERROR' || r.severity === 'WARNING');
+                    if (issues.length === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', padding: '3rem 1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                          <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981', fontSize: '1.5rem' }}>
+                            ✓
+                          </div>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>All Checks Passed!</span>
+                          <span style={{ fontSize: '0.75rem', color: '#64748b', maxWidth: '300px' }}>Your experience metadata, activities, media files, and screen layout are valid and ready to publish.</span>
+                        </div>
+                      );
+                    }
+
+                    return issues.map((issue, idx) => {
+                      const isError = issue.severity === 'ERROR';
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            display: 'flex',
+                            gap: '0.75rem',
+                            padding: '0.75rem',
+                            borderRadius: '8px',
+                            background: isError ? '#fef2f2' : '#fffbeb',
+                            border: isError ? '1px solid #fee2e2' : '1px solid #fef3c7',
+                            alignItems: 'flex-start'
+                          }}
+                        >
+                          <span
+                            style={{
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontSize: '0.58rem',
+                              fontWeight: 800,
+                              color: '#ffffff',
+                              background: isError ? '#ef4444' : '#f59e0b',
+                              textTransform: 'uppercase',
+                              marginTop: '2px'
+                            }}
+                          >
+                            {issue.severity}
+                          </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: isError ? '#991b1b' : '#92400e' }}>
+                              {issue.message}
+                            </span>
+                            {issue.check_name && (
+                              <span style={{ fontSize: '0.62rem', color: '#64748b' }}>
+                                Rule: {issue.check_name}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            </div>
           )}
 
 

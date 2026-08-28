@@ -877,6 +877,21 @@ class PublishViewSet(viewsets.ViewSet):
         experience.pending_release_notes = release_notes
         experience.save(update_fields=["status", "pending_version", "pending_release_notes"])
 
+        # Alert Super Admins via Notification models
+        try:
+            from accounts.models import User
+            from content_studio.models import Notification
+            super_admins = User.objects.filter(role="SUPER_ADMIN")
+            for admin in super_admins:
+                Notification.objects.create(
+                    user=admin,
+                    title="New Approval Request",
+                    message=f"Lesson '{experience.title}' (Version {experience.pending_version}) has been submitted for approval by {request.user.username}.",
+                    notification_type=Notification.NotificationType.INFO
+                )
+        except Exception as e:
+            print("Failed to create approval notifications:", e)
+
         return Response(
             {
                 "message": "Experience submitted to Super Admin for approval.",

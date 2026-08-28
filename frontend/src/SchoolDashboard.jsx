@@ -20,6 +20,7 @@ const resolveMediaUrl = (url) => {
   return `${base}${path}`;
 };
 import logoIcon from './assets/icon.png';
+import roundLogo from './assets/favicon.png';
 import teacherHeaderBanner from './assets/6.jpeg';
 import schoolBg from './assets/school_bg.png';
 import AvatarCropperModal from './AvatarCropperModal';
@@ -1585,7 +1586,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             overflow: 'hidden'
           }}
         >
-          {!navCollapsed && (
+          {!navCollapsed ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <img src={logoIcon} alt="Logo" style={{ width: '48px', height: '76px', objectFit: 'contain' }} />
               <div>
@@ -1593,30 +1594,40 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div className="sd-brand-sub">School Admin Portal</div>
               </div>
             </div>
+          ) : (
+            <img 
+              src={roundLogo} 
+              alt="Logo" 
+              onClick={toggleNavCollapsed} 
+              style={{ width: '28px', height: '28px', objectFit: 'contain', cursor: 'pointer' }} 
+              title="Expand sidebar"
+            />
           )}
-          <button
-            onClick={toggleNavCollapsed}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'rgba(255, 255, 255, 0.75)',
-              cursor: 'pointer',
-              padding: '6px',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'background 0.2s'
-            }}
-            onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-            title={navCollapsed ? 'Expand sidebar' : 'Close sidebar'}
-          >
-            <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="20px" width="20px" xmlns="http://www.w3.org/2000/svg">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="9" y1="3" x2="9" y2="21"></line>
-            </svg>
-          </button>
+          {!navCollapsed && (
+            <button
+              onClick={toggleNavCollapsed}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'rgba(255, 255, 255, 0.75)',
+                cursor: 'pointer',
+                padding: '6px',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+              title={navCollapsed ? 'Expand sidebar' : 'Close sidebar'}
+            >
+              <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="20px" width="20px" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="3" x2="9" y2="21"></line>
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Nav */}

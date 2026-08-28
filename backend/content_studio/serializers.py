@@ -115,8 +115,8 @@ class ActivitySerializer(serializers.ModelSerializer):
 
         experience = attrs.get("experience")
         if experience and not self.instance:
-            if experience.activities.count() >= 5:
-                raise serializers.ValidationError("An experience cannot have more than 5 activities.")
+            if experience.activities.count() >= 6:
+                raise serializers.ValidationError("An experience cannot have more than 6 activities.")
 
         return validate_strict_fields(self, attrs)
 
@@ -166,8 +166,8 @@ class ActivityDetailSerializer(serializers.ModelSerializer):
 
         experience = attrs.get("experience")
         if experience and not self.instance:
-            if experience.activities.count() >= 5:
-                raise serializers.ValidationError("An experience cannot have more than 5 activities.")
+            if experience.activities.count() >= 6:
+                raise serializers.ValidationError("An experience cannot have more than 6 activities.")
 
         return validate_strict_fields(self, attrs)
 
