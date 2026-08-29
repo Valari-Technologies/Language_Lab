@@ -4132,6 +4132,11 @@ const formatDifficulty = (val) => {
               }
             }
           }
+        } else if (payload.activities) {
+          const firstWithScreens = payload.activities.findIndex(a => a.screens && a.screens.length > 0);
+          if (firstWithScreens !== -1) {
+            actIdx = firstWithScreens;
+          }
         }
 
         setPreviewActivityIndex(actIdx);
@@ -4807,8 +4812,12 @@ const formatDifficulty = (val) => {
                   } else {
                     if (item.key === 'screen-builder') {
                       setIsEditingScreen(false);
-                      if (selectedActivity && selectedActivity.id) {
-                        loadActivityDetail(selectedActivity.id, false);
+                      let activeAct = selectedActivity;
+                      if ((!activeAct || !activeAct.id) && activities && activities.length > 0) {
+                        activeAct = activities[0];
+                      }
+                      if (activeAct && activeAct.id) {
+                        loadActivityDetail(activeAct.id, false);
                       }
                     }
                     setView(item.key);
@@ -5281,7 +5290,9 @@ const formatDifficulty = (val) => {
                                 <div key={act.id || idx} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.85rem' }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                                     <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1e293b' }}>{act.title}</span>
-                                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{act.estimated_duration || 5} mins | {act.screens?.length || 0} screens</span>
+                                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                      {act.estimated_duration || 5} mins | {act.screen_count ?? act.screens?.length ?? 0} {((act.screen_count ?? act.screens?.length ?? 0) === 1) ? 'screen' : 'screens'}
+                                    </span>
                                   </div>
                                   {act.description && <p style={{ fontSize: '0.8rem', color: '#475569', margin: '0 0 6px 0' }}>{act.description}</p>}
                                   {act.skills && act.skills.length > 0 && (
@@ -9881,6 +9892,43 @@ const formatDifficulty = (val) => {
             const activeScreen = activeActivity?.screens?.[previewScreenIndex];
             const totalScreens = activeActivity?.screens?.length || 1;
 
+             const getNextScreenTarget = () => {
+               const activities = previewPayload?.activities;
+               if (!activities || activities.length === 0) return null;
+               const currentAct = activities[previewActivityIndex];
+               if (currentAct && currentAct.screens && previewScreenIndex < currentAct.screens.length - 1) {
+                 return { activityIndex: previewActivityIndex, screenIndex: previewScreenIndex + 1 };
+               }
+               for (let a = previewActivityIndex + 1; a < activities.length; a++) {
+                 const nextAct = activities[a];
+                 if (nextAct && nextAct.screens && nextAct.screens.length > 0) {
+                   return { activityIndex: a, screenIndex: 0 };
+                 }
+               }
+               return null;
+             };
+
+             const getPrevScreenTarget = () => {
+               const activities = previewPayload?.activities;
+               if (!activities || activities.length === 0) return null;
+               if (previewScreenIndex > 0) {
+                 const currentAct = activities[previewActivityIndex];
+                 if (currentAct && currentAct.screens && previewScreenIndex <= currentAct.screens.length) {
+                   return { activityIndex: previewActivityIndex, screenIndex: previewScreenIndex - 1 };
+                 }
+               }
+               for (let a = previewActivityIndex - 1; a >= 0; a--) {
+                 const prevAct = activities[a];
+                 if (prevAct && prevAct.screens && prevAct.screens.length > 0) {
+                   return { activityIndex: a, screenIndex: prevAct.screens.length - 1 };
+                 }
+               }
+               return null;
+             };
+
+             const nextTarget = getNextScreenTarget();
+             const prevTarget = getPrevScreenTarget();
+
             return (
               <>
                 {/* Top Header Toolbar */}
@@ -10136,19 +10184,15 @@ const formatDifficulty = (val) => {
                     }}>
                       <button
                         className="cs-btn-outline"
-                        disabled={previewActivityIndex === 0 && previewScreenIndex === 0}
+                        disabled={!prevTarget}
                         onClick={() => {
-                          if (previewScreenIndex > 0) {
-                            setPreviewScreenIndex(prev => prev - 1);
-                          } else if (previewActivityIndex > 0) {
-                            const prevActIdx = previewActivityIndex - 1;
-                            const prevActScreens = previewPayload?.activities?.[prevActIdx]?.screens || [];
-                            setPreviewActivityIndex(prevActIdx);
-                            setPreviewScreenIndex(prevActScreens.length > 0 ? prevActScreens.length - 1 : 0);
+                          if (prevTarget) {
+                            setPreviewActivityIndex(prevTarget.activityIndex);
+                            setPreviewScreenIndex(prevTarget.screenIndex);
                           }
                           setPreviewAnswerIndex(null);
                         }}
-                        style={{ padding: '0.45rem 1.1rem', fontSize: '0.78rem', background: '#ffffff', cursor: (previewActivityIndex === 0 && previewScreenIndex === 0) ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 600, color: '#334155' }}
+                        style={{ padding: '0.45rem 1.1rem', fontSize: '0.78rem', background: '#ffffff', cursor: !prevTarget ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 600, color: '#334155' }}
                       >
                         ← Previous Screen
                       </button>
@@ -10157,17 +10201,15 @@ const formatDifficulty = (val) => {
                       </span>
                       <button
                         className="cs-btn-outline"
-                        disabled={previewActivityIndex >= (previewPayload?.activities?.length || 1) - 1 && previewScreenIndex >= totalScreens - 1}
+                        disabled={!nextTarget}
                         onClick={() => {
-                          if (previewScreenIndex < totalScreens - 1) {
-                            setPreviewScreenIndex(prev => prev + 1);
-                          } else if (previewActivityIndex < (previewPayload?.activities?.length || 1) - 1) {
-                            setPreviewActivityIndex(prev => prev + 1);
-                            setPreviewScreenIndex(0);
+                          if (nextTarget) {
+                            setPreviewActivityIndex(nextTarget.activityIndex);
+                            setPreviewScreenIndex(nextTarget.screenIndex);
                           }
                           setPreviewAnswerIndex(null);
                         }}
-                        style={{ padding: '0.45rem 1.1rem', fontSize: '0.78rem', background: '#ffffff', cursor: (previewActivityIndex >= (previewPayload?.activities?.length || 1) - 1 && previewScreenIndex >= totalScreens - 1) ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 600, color: '#334155' }}
+                        style={{ padding: '0.45rem 1.1rem', fontSize: '0.78rem', background: '#ffffff', cursor: !nextTarget ? 'not-allowed' : 'pointer', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 600, color: '#334155' }}
                       >
                         Next Screen →
                       </button>

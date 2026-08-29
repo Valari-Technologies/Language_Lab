@@ -6,7 +6,7 @@ import {
   FiChevronDown, FiBell,
   FiCheckCircle, FiFileText,
   FiActivity, FiTrendingUp, FiAward, FiLock, FiChevronLeft, FiChevronRight,
-  FiEye, FiEyeOff, FiAlertTriangle, FiInfo, FiUpload, FiRefreshCw, FiMoreVertical, FiClock
+  FiEye, FiEyeOff, FiAlertTriangle, FiInfo, FiUpload, FiDownload, FiRefreshCw, FiMoreVertical, FiClock
 } from 'react-icons/fi';
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
@@ -1299,6 +1299,58 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     return filterList(list);
   };
 
+  const handleExportStudents = () => {
+    const list = getFilteredStudents();
+    if (list.length === 0) {
+      showFeedback('No students to export', 'warning');
+      return;
+    }
+    
+    // Headers
+    const headers = ['Full Name', 'Roll No', 'LMS Login Code', 'Class', 'Section', 'Academic Year', 'Status'];
+    
+    // Helper to escape CSV values
+    const escapeCSV = (val) => {
+      if (val === null || val === undefined) return '';
+      const str = String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    
+    const rows = list.map(s => {
+      const fullName = s.full_name || s.username || 'N/A';
+      const rollNo = s.roll_no || 'N/A';
+      const loginCode = s.username || 'N/A';
+      const className = s.grade ? (String(s.grade).startsWith('Class') || String(s.grade).startsWith('Grade') ? String(s.grade).replace('Grade', 'Class') : `Class ${s.grade}`) : 'N/A';
+      const section = s.section ? (String(s.section).startsWith('Section') ? s.section : `Section ${s.section}`) : 'N/A';
+      const academicYear = s.academic_year || '2025 - 2026';
+      const status = s.is_active ? 'Active' : 'Inactive';
+      
+      return [
+        escapeCSV(fullName),
+        escapeCSV(rollNo),
+        escapeCSV(loginCode),
+        escapeCSV(className),
+        escapeCSV(section),
+        escapeCSV(academicYear),
+        escapeCSV(status)
+      ];
+    });
+    
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `students_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const getFilteredClasses = () => {
     return classes.filter(c => {
       if (schClassFilter) {
@@ -2430,6 +2482,9 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     )}
                     <button className="sd-btn-outline" onClick={() => { setImportActive(!importActive); setUploadSummary(null); }}>
                       Excel Import
+                    </button>
+                    <button className="sd-btn-outline" onClick={handleExportStudents} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <FiDownload /> Export
                     </button>
                     <button className="sd-btn-primary" onClick={handleOpenAdd}><FiPlus/>Add Student</button>
                   </div>
