@@ -855,7 +855,7 @@ class ContentStudioAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], "FAILED")
         self.assertGreater(response.data["errors"], 0)
-        self.assertEqual(response.data["passed"], 2)  # has title, has grade
+        self.assertEqual(response.data["passed"], 3)  # has title, has grade, has valid description limit
 
         # Verify detailed report url returns same structure
         url_detail = reverse("validation-get-detailed-report", args=[self.experience1.id])
