@@ -762,23 +762,29 @@ const formatDifficulty = (val) => {
 
   const getCanvasHeight = (elements) => {
     if (!elements || elements.length === 0) return 600;
-    let maxBottom = 600;
-    elements.forEach(block => {
+    let lastBottom = 0;
+    elements.forEach((block, idx) => {
       const top = parseInt(block.styles?.top) || 0;
-      let height = parseInt(block.styles?.minHeight);
+      let height = parseInt(block.styles?.minHeight || block.styles?.height);
       if (isNaN(height)) {
-        if (block.type === 'video') height = 240;
-        else if (block.type === 'dialogue') height = 300;
-        else if (block.type === 'quiz' || block.type === 'quiz_listening') height = 280;
+        if (block.type === 'video' || block.type === 'image' || block.type === 'hotspot_explorer') height = 240;
+        else if (block.type === 'dialogue' || block.type === 'roleplay_simulation') {
+          const stepsCount = (block.content?.steps || block.content?.dialogue || []).length || 2;
+          height = Math.max(160, stepsCount * 70);
+        }
+        else if (block.type === 'quiz' || block.type === 'quiz_listening') height = 200;
         else if (block.type === 'match' || block.type === 'drag_drop') height = 260;
         else if (block.type === 'reading_passage') height = 320;
-        else height = 150;
+        else height = 120;
       }
-      if (top + height > maxBottom) {
-        maxBottom = top + height;
+
+      let computedTop = top;
+      if (idx > 0 && computedTop < lastBottom + 16) {
+        computedTop = lastBottom + 16;
       }
+      lastBottom = computedTop + height;
     });
-    return maxBottom + 120;
+    return Math.max(600, lastBottom + 60);
   };
 
 
@@ -1770,6 +1776,19 @@ const formatDifficulty = (val) => {
       }
       if (selectedSkillNames.length === 0) {
         showFeedback('Please select a Module for this activity first.', 'error');
+        setActionLoading(false);
+        return;
+      }
+
+      const expDuration = selectedExperience?.estimated_duration || parseInt(experienceForm.duration) || 0;
+      const actDuration = parseInt(activityForm.duration) || 5;
+      const existingDuration = activities
+        .filter(a => selectedActivity ? a.id !== selectedActivity.id : true)
+        .reduce((sum, a) => sum + (a.estimated_duration || 0), 0);
+      const projectedTotal = existingDuration + actDuration;
+
+      if (expDuration > 0 && projectedTotal > expDuration) {
+        showFeedback(`Cannot save activity: Combined total duration (${projectedTotal} min) exceeds lesson duration limit (${expDuration} min).`, 'error');
         setActionLoading(false);
         return;
       }
@@ -5740,6 +5759,7 @@ const formatDifficulty = (val) => {
                           setExperienceForm({ ...experienceForm, duration: val === '' ? '' : Math.max(0, parseInt(val) || 0) });
                         }}
                       />
+                      <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '4px' }}>Maximum total duration allowed for all activities in this lesson.</div>
                     </div>
                     <div className="cs-form-group">
                       <label className="cs-form-label">Mastery Threshold (%)</label>
@@ -5890,9 +5910,26 @@ const formatDifficulty = (val) => {
                       <div>
                         <h3 className="cs-card-title" style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0 }}>Activities</h3>
                         {selectedExperience?.experience_type !== 'ASSESSMENT' && (
-                          <div className="cs-card-sub" style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>
-                            Sequence of activities (1 to 6 allowed. Current: {activities.length}/6)
-                          </div>
+                          <>
+                            <div className="cs-card-sub" style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>
+                              Sequence of activities (1 to 6 allowed. Current: {activities.length}/6)
+                            </div>
+                            {(() => {
+                              const totalDur = activities.reduce((sum, a) => sum + (a.estimated_duration || 0), 0);
+                              const limitDur = selectedExperience?.estimated_duration || parseInt(experienceForm.duration) || 0;
+                              const isOver = limitDur > 0 && totalDur > limitDur;
+                              return (
+                                <div style={{ fontSize: '0.72rem', fontWeight: 600, color: isOver ? '#dc2626' : '#475569', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span>Total Duration: <strong>{totalDur}</strong> / <strong>{limitDur || '—'}</strong> min</span>
+                                  {isOver && (
+                                    <span style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', padding: '1px 5px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700 }}>
+                                      ⚠️ Exceeds Lesson Limit
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </>
                         )}
                       </div>
                       {selectedExperience?.experience_type !== 'ASSESSMENT' && (
@@ -6079,6 +6116,27 @@ const formatDifficulty = (val) => {
                               setActivityForm({ ...activityForm, duration: val === '' ? '' : Math.max(0, parseInt(val) || 0) });
                             }}
                           />
+                          {(() => {
+                            const expDuration = selectedExperience?.estimated_duration || parseInt(experienceForm.duration) || 0;
+                            const currentActDur = parseInt(activityForm.duration) || 0;
+                            const otherActivitiesDuration = activities
+                              .filter(a => selectedActivity ? a.id !== selectedActivity.id : true)
+                              .reduce((sum, a) => sum + (a.estimated_duration || 0), 0);
+                            const projectedTotal = otherActivitiesDuration + currentActDur;
+                            const isOver = expDuration > 0 && projectedTotal > expDuration;
+                            return (
+                              <div style={{ marginTop: '4px' }}>
+                                <div style={{ fontSize: '0.68rem', color: isOver ? '#dc2626' : '#64748b' }}>
+                                  Projected total: {projectedTotal} / {expDuration || '—'} min
+                                </div>
+                                {isOver && (
+                                  <div style={{ fontSize: '0.72rem', color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', padding: '4px 8px', borderRadius: '6px', marginTop: '4px', fontWeight: 600 }}>
+                                    ⚠️ Exceeds lesson estimated duration ({expDuration} min). Please reduce duration.
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
 
@@ -9213,19 +9271,21 @@ const formatDifficulty = (val) => {
 
                                   {['image', 'video', 'audio', 'media', 'hotspot_explorer', 'functional_reading', 'roleplay_simulation', 'audio_mystery', 'true_false', 'quiz', 'voice_recorder', 'drag_drop', 'writing_prompt', 'dictation'].includes(selectedBlock.type) && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
-                                      <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Crop / Fit Mode</label>
-                                        <select
-                                          className="cs-form-input"
-                                          style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
-                                          value={selectedBlock.styles?.objectFit || 'cover'}
-                                          onChange={e => handleUpdateBlockStyles('objectFit', e.target.value)}
-                                        >
-                                          <option value="cover">Crop to Fit (Cover)</option>
-                                          <option value="contain">Show Entire Element (Contain)</option>
-                                          <option value="fill">Stretch to Fill (Fill)</option>
-                                        </select>
-                                      </div>
+                                      {['image', 'media', 'hotspot_explorer', 'functional_reading'].includes(selectedBlock.type) && (
+                                        <div className="cs-form-group">
+                                          <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Crop / Fit Mode</label>
+                                          <select
+                                            className="cs-form-input"
+                                            style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
+                                            value={selectedBlock.styles?.objectFit || 'cover'}
+                                            onChange={e => handleUpdateBlockStyles('objectFit', e.target.value)}
+                                          >
+                                            <option value="cover">Crop to Fit (Cover)</option>
+                                            <option value="contain">Show Entire Element (Contain)</option>
+                                            <option value="fill">Stretch to Fill (Fill)</option>
+                                          </select>
+                                        </div>
+                                      )}
 
                                       <div className="cs-form-group">
                                         <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Element Height</label>
@@ -9465,11 +9525,32 @@ const formatDifficulty = (val) => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minHeight: 'calc(100vh - 120px)' }}>
                 {/* Breadcrumbs and Top Header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                      <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Lessons Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Lesson Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('activity-builder')}>{selectedActivity?.title || 'Activity Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Screen Builder Overview</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <button
+                      className="cs-icon-btn"
+                      onClick={() => setView('activity-builder')}
+                      title="Back to Activity Builder"
+                      style={{
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '8px',
+                        padding: '6px 8px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#475569',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      }}
+                    >
+                      <FiArrowLeft style={{ fontSize: '1.1rem' }} />
+                    </button>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                        <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Lessons Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Lesson Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('activity-builder')}>{selectedActivity?.title || 'Activity Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Screen Builder Overview</span>
+                      </div>
+                      <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '6px 0 0 0', color: '#0f172a', letterSpacing: '-0.02em' }}>Screen Library</h1>
                     </div>
-                    <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '6px 0 0 0', color: '#0f172a', letterSpacing: '-0.02em' }}>Screen Library</h1>
                   </div>
                 </div>
 

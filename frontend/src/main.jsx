@@ -11,6 +11,15 @@ import ContentStudio from './ContentStudio.jsx'
 export const App = () => {
   const [user, setUser] = useState(null);
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const [sessionExpiredMsg, setSessionExpiredMsg] = useState(null);
+
+  useEffect(() => {
+    const handleSessionExpired = (e) => {
+      setSessionExpiredMsg(e.detail?.message || 'Your session has expired due to inactivity. Please log in again to continue.');
+    };
+    window.addEventListener('session-expired', handleSessionExpired);
+    return () => window.removeEventListener('session-expired', handleSessionExpired);
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
@@ -207,6 +216,73 @@ export const App = () => {
         </>
       ) : (
         <Login onLoginSuccess={handleLoginSuccess} />
+      )}
+
+      {sessionExpiredMsg && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.75)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem'
+        }}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '16px',
+            maxWidth: '440px',
+            width: '100%',
+            padding: '1.75rem',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            border: '1px solid #fee2e2',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              backgroundColor: '#fef2f2',
+              color: '#ef4444',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.75rem',
+              margin: '0 auto 1rem auto'
+            }}>
+              ⚠️
+            </div>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.5rem 0' }}>
+              Session Expired
+            </h3>
+            <p style={{ fontSize: '0.88rem', color: '#475569', lineHeight: 1.5, margin: '0 0 1.5rem 0' }}>
+              {sessionExpiredMsg}
+            </p>
+            <button
+              onClick={() => {
+                setSessionExpiredMsg(null);
+                handleLogout();
+              }}
+              style={{
+                width: '100%',
+                backgroundColor: '#ef4444',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '0.75rem 1.25rem',
+                fontSize: '0.9rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 4px 6px -1px rgba(239, 68, 68, 0.2)',
+                transition: 'background-color 0.2s'
+              }}
+            >
+              Log In Again
+            </button>
+          </div>
+        </div>
       )}
     </>
   );

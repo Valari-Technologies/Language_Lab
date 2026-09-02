@@ -492,6 +492,20 @@ class ContentStudioAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("experience", response.data)
 
+    def test_activity_duration_exceeds_experience_limit(self):
+        """Verify activity creation fails if total duration exceeds experience estimated_duration."""
+        self.client.force_authenticate(user=self.content_creator)
+        # experience1 estimated_duration = 15
+        payload = {
+            "experience": self.experience1.id,
+            "title": "Overlong Activity",
+            "estimated_duration": 20,
+            "mastery_threshold": 80
+        }
+        response = self.client.post(reverse("activity-list"), payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("estimated_duration", response.data)
+
     def test_activity_reorder_and_integrity(self):
         """Verify atomic activities reordering within same experience, and same-parent constraint."""
         self.client.force_authenticate(user=self.content_creator)

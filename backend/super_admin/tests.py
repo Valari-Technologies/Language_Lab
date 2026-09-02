@@ -52,6 +52,34 @@ class LicensingSystemTests(APITestCase):
         self.assertEqual(license_obj.concurrentUsersPerServer, 50)
         self.assertEqual(license_obj.status, License.Status.ACTIVE)
 
+    def test_delete_school_and_reuse_email(self):
+        """Verify that after a school is deleted, its email address can be reused to create a new school."""
+        self.client.force_authenticate(user=self.super_admin)
+        url = reverse("school-list")
+        payload = {
+            "school_name": "First School",
+            "contactEmail": "reuse@testschool.com",
+            "admin_name": "First Admin",
+            "admin_email": "reuse@testschool.com",
+            "admin_password": "securePass123!",
+        }
+
+        res1 = self.client.post(url, payload, format="json")
+        self.assertEqual(res1.status_code, status.HTTP_201_CREATED)
+        school_id = res1.data["data"]["school_id"]
+
+        # Delete the school
+        del_url = reverse("school-detail", args=[school_id])
+        del_res = self.client.delete(del_url)
+        self.assertEqual(del_res.status_code, status.HTTP_200_OK)
+
+        # Re-create a school with the exact same email
+        payload["school_name"] = "Second School"
+        payload["admin_username"] = "second_admin"
+        res2 = self.client.post(url, payload, format="json")
+        self.assertEqual(res2.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res2.data["data"]["school_name"], "Second School")
+
     def test_server_activation_flow(self):
         # Setup school and license manually
         school = School.objects.create(

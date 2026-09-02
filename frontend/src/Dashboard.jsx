@@ -1217,9 +1217,16 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     if (tab === 'schools') {
       setSchoolForm(entity ? {
         school_name: entity.school_name || '', school_code: entity.school_code || '', address: entity.address || '',
-        phone: entity.phone || '', email: entity.email || '', logo: entity.logo || '',
-        is_active: entity.is_active !== undefined ? entity.is_active : true
-      } : { school_name: '', school_code: '', address: '', phone: '', email: '', logo: '', is_active: true });
+        phone: entity.phone || '', email: entity.email || entity.contactEmail || '', logo: entity.logo || '',
+        is_active: entity.is_active !== undefined ? entity.is_active : true,
+        maxLmsServers: entity.license?.maxLmsServers ?? entity.maxLmsServers ?? 2,
+        concurrentUsersPerServer: entity.license?.concurrentUsersPerServer ?? entity.concurrentUsersPerServer ?? 40,
+        licenseDuration: entity.licenseDuration || '1 Year',
+        expiryDate: entity.license?.expiryDate || entity.expiryDate || ''
+      } : {
+        school_name: '', school_code: '', address: '', phone: '', email: '', logo: '', is_active: true,
+        maxLmsServers: 2, concurrentUsersPerServer: 40, licenseDuration: '1 Year', expiryDate: ''
+      });
     } else if (tab === 'publish-contents' || tab === 'reports') {
       setPublishForm(entity ? {
         release_name: entity.release_name || '', grade: entity.grade || '',
@@ -3658,6 +3665,62 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       <input type="checkbox" checked={schoolForm.is_active} onChange={e => setSchoolForm({ ...schoolForm, is_active: e.target.checked })} />
                       Active / Enable Tenant Scoping
                     </label>
+
+                    {/* License Configuration */}
+                    <div style={{ marginTop: '1.5rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem' }}>
+                      <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '1rem' }}>License Configuration</h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
+                        <div className="sd-form-group" style={{ marginBottom: 0 }}>
+                          <label className="sd-form-label">Max LMS Servers *</label>
+                          <input
+                            className="sd-form-input"
+                            type="number"
+                            min="1"
+                            required
+                            value={schoolForm.maxLmsServers ?? 2}
+                            onChange={e => setSchoolForm({ ...schoolForm, maxLmsServers: e.target.value })}
+                          />
+                        </div>
+                        <div className="sd-form-group" style={{ marginBottom: 0 }}>
+                          <label className="sd-form-label">Concurrent Users Per Server *</label>
+                          <input
+                            className="sd-form-input"
+                            type="number"
+                            min="1"
+                            required
+                            value={schoolForm.concurrentUsersPerServer ?? 40}
+                            onChange={e => setSchoolForm({ ...schoolForm, concurrentUsersPerServer: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                        <div className="sd-form-group" style={{ marginBottom: 0 }}>
+                          <label className="sd-form-label">License Duration *</label>
+                          <select
+                            className="sd-form-input"
+                            required
+                            value={schoolForm.licenseDuration || '1 Year'}
+                            onChange={e => setSchoolForm({ ...schoolForm, licenseDuration: e.target.value })}
+                          >
+                            <option value="1 Year">1 Year</option>
+                            <option value="2 Years">2 Years</option>
+                            <option value="Custom">Custom Expiry Date</option>
+                          </select>
+                        </div>
+                        {schoolForm.licenseDuration === 'Custom' && (
+                          <div className="sd-form-group" style={{ marginBottom: 0 }}>
+                            <label className="sd-form-label">Custom Expiry Date *</label>
+                            <input
+                              className="sd-form-input"
+                              type="date"
+                              required
+                              value={schoolForm.expiryDate || ''}
+                              onChange={e => setSchoolForm({ ...schoolForm, expiryDate: e.target.value })}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </>)}
 
                   {/* School Admins Form */}

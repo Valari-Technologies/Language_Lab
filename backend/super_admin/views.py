@@ -95,6 +95,21 @@ class GradeViewSet(CMSBaseViewSet):
         return GradeSerializer
 
 
+def cleanup_stale_school_users(email):
+    if not email:
+        return
+    for user in User.objects.filter(email=email):
+        has_admin_profile = SchoolAdminProfile.objects.filter(user=user).exists()
+        has_school_admin_link = School.objects.filter(schoolAdminId=user).exists()
+        try:
+            from school_admin.models import Teacher
+            has_teacher = Teacher.objects.filter(user=user).exists()
+        except Exception:
+            has_teacher = False
+        if not (has_admin_profile or has_school_admin_link or has_teacher):
+            user.delete()
+
+
 class SchoolViewSet(CMSBaseViewSet):
     permission_classes = [IsAuthenticated, IsSuperAdminOrReadOnlyStaff]
     queryset = School.objects.all()
@@ -106,11 +121,33 @@ class SchoolViewSet(CMSBaseViewSet):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        admin_user = instance.schoolAdminId
+        school_emails = {e for e in [instance.email, instance.contactEmail] if e}
+        users_to_delete = set()
+        if instance.schoolAdminId:
+            users_to_delete.add(instance.schoolAdminId)
+
+        for profile in SchoolAdminProfile.objects.filter(school=instance).select_related("user"):
+            if profile.user:
+                users_to_delete.add(profile.user)
+
+        try:
+            from school_admin.models import Teacher
+            for teacher in Teacher.objects.filter(school=instance).select_related("user"):
+                if teacher.user:
+                    users_to_delete.add(teacher.user)
+        except Exception:
+            pass
+
+        for email in school_emails:
+            for u in User.objects.filter(email=email):
+                users_to_delete.add(u)
+
         with transaction.atomic():
             instance.delete()
-            if admin_user:
-                admin_user.delete()
+            for user in users_to_delete:
+                if User.objects.filter(pk=user.pk).exists():
+                    user.delete()
+
         return Response(
             {"message": "School and associated admin deleted successfully"},
             status=status.HTTP_200_OK
@@ -138,6 +175,12 @@ class SchoolViewSet(CMSBaseViewSet):
         admin_name = data.get("admin_name") or data.get("admin_full_name") or "School Admin"
         admin_username = data.get("admin_username")
         admin_email = data.get("admin_email") or contact_email
+
+        if contact_email:
+            cleanup_stale_school_users(contact_email)
+        if admin_email:
+            cleanup_stale_school_users(admin_email)
+
         admin_password = data.get("admin_password")
         
         max_servers = int(data.get("maxLmsServers", 2))
@@ -276,6 +319,46 @@ Language Lab Team
                 if instance.schoolAdminId:
                     instance.schoolAdminId.email = new_email
                     instance.schoolAdminId.save(update_fields=["email"])
+
+            max_servers = request.data.get("maxLmsServers") or request.data.get("max_lms_servers")
+            concurrent_users = request.data.get("concurrentUsersPerServer") or request.data.get("concurrent_users_per_server")
+            duration = request.data.get("licenseDuration")
+            expiry_str = request.data.get("expiryDate") or request.data.get("expiry_date")
+
+            license_obj = getattr(instance, "school_license", None) or License.objects.filter(school=instance).first()
+            if license_obj:
+                update_fields = []
+                if max_servers is not None:
+                    try:
+                        license_obj.maxLmsServers = int(max_servers)
+                        update_fields.append("maxLmsServers")
+                    except (ValueError, TypeError):
+                        pass
+                if concurrent_users is not None:
+                    try:
+                        license_obj.concurrentUsersPerServer = int(concurrent_users)
+                        update_fields.append("concurrentUsersPerServer")
+                    except (ValueError, TypeError):
+                        pass
+
+                if duration or expiry_str:
+                    issue_date = license_obj.issueDate or timezone.now().date()
+                    if duration == "1 Year":
+                        license_obj.expiryDate = issue_date + timedelta(days=365)
+                        update_fields.append("expiryDate")
+                    elif duration == "2 Years":
+                        license_obj.expiryDate = issue_date + timedelta(days=730)
+                        update_fields.append("expiryDate")
+                    elif expiry_str:
+                        try:
+                            license_obj.expiryDate = timezone.datetime.strptime(expiry_str, "%Y-%m-%d").date()
+                            update_fields.append("expiryDate")
+                        except Exception:
+                            pass
+
+                if update_fields:
+                    license_obj.save(update_fields=update_fields)
+
             serializer = self.get_serializer(instance)
             return Response({"message": "School updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
         return response

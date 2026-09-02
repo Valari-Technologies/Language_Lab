@@ -1180,6 +1180,46 @@ export default function PreviewCanvasRenderer({
     }
   };
 
+  const getProcessedElements = (items) => {
+    if (!items || items.length === 0) return [];
+
+    let lastBottom = 0;
+
+    return items.map((block, idx) => {
+      const topVal = parseInt(block.styles?.top) || 0;
+      let blockH = 120;
+      if (block.styles?.height && block.styles.height !== 'auto') {
+        blockH = parseInt(block.styles.height) || 120;
+      } else if (block.styles?.minHeight && block.styles.minHeight !== 'auto') {
+        blockH = parseInt(block.styles.minHeight) || 120;
+      } else if (block.type === 'video' || block.type === 'image' || block.type === 'hotspot_explorer') {
+        blockH = 240;
+      } else if (block.type === 'dialogue' || block.type === 'roleplay_simulation') {
+        const stepsCount = (block.content?.steps || block.content?.dialogue || []).length || 2;
+        blockH = Math.max(160, stepsCount * 70);
+      } else if (block.type === 'quiz' || block.type === 'true_false' || block.type === 'writing_prompt' || block.type === 'quiz_listening') {
+        blockH = 200;
+      } else if (block.type === 'heading' || block.type === 'text') {
+        blockH = 60;
+      }
+
+      let computedTop = topVal;
+      if (idx > 0 && computedTop < lastBottom + 16) {
+        computedTop = lastBottom + 16;
+      }
+
+      lastBottom = computedTop + blockH;
+
+      return {
+        ...block,
+        computedStyleTop: `${computedTop}px`,
+        computedStyleHeight: (block.styles?.height && block.styles.height !== 'auto') ? block.styles.height : `${blockH}px`
+      };
+    });
+  };
+
+  const processedElements = getProcessedElements(elements);
+
   return (
     <>
       <style>{`
@@ -1194,14 +1234,14 @@ export default function PreviewCanvasRenderer({
         }
       `}</style>
 
-      {elements.map((block) => (
+      {processedElements.map((block) => (
         <div
           key={block.id}
           className={block.styles?.customClass || ''}
           style={{
             position: 'absolute',
             left: block.styles?.left || '0px',
-            top: block.styles?.top || '0px',
+            top: block.computedStyleTop,
             padding: '0.85rem',
             borderRadius: '12px',
             border: '1.5px solid #e2e8f0',
@@ -1216,7 +1256,8 @@ export default function PreviewCanvasRenderer({
             overflowWrap: 'anywhere',
             overflow: 'hidden',
             ...(block.styles?.blockWidth ? { width: block.styles.blockWidth } : { width: '100%' }),
-            ...(block.styles?.height || block.styles?.minHeight ? { minHeight: block.styles.height || block.styles.minHeight, height: block.styles.height || block.styles.minHeight } : { minHeight: '80px' }),
+            minHeight: block.computedStyleHeight,
+            height: block.computedStyleHeight,
             fontFamily: block.styles?.fontFamily || 'inherit',
             fontSize: block.styles?.fontSize || 'inherit',
             fontWeight: block.styles?.fontWeight === 'Bold' ? 700 : block.styles?.fontWeight === 'SemiBold' ? 600 : block.styles?.fontWeight === 'Normal' ? 400 : 'inherit',

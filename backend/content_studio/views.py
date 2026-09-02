@@ -660,19 +660,71 @@ class DashboardRecentActivityAPIView(APIView):
                     })
             
         elif role == "TEACHER":
-            from school_admin.models import Teacher
+            from school_admin.models import Teacher, Class
             from teacher.models import Student
+            from django.db.models import Q
+            import re
             
             teacher = Teacher.objects.filter(user=user).first()
             if teacher:
-                recent_students = Student.objects.filter(school=teacher.school).order_by("-created_at")[:15]
-                for st in recent_students:
-                    activities.append({
-                        "id": f"student-{st.student_id}",
-                        "activity_type": "student_enrolled",
-                        "message": f"Student '{st.user.full_name or st.user.username}' was enrolled in school.",
-                        "timestamp": st.created_at
-                    })
+                teacher_classes = Class.objects.filter(teacherclass__teacher=teacher).select_related("grade")
+                if teacher_classes.exists():
+                    def extract_class_section(class_name):
+                        if not class_name:
+                            return ""
+                        name = class_name.strip().upper()
+                        if '-' in name:
+                            part = name.split('-')[-1].strip()
+                            if part and part.isalpha() and len(part) == 1:
+                                return part
+                        if name and name[-1].isalpha():
+                            return name[-1]
+                        return ""
+
+                    def normalize_grade(grade_str):
+                        if not grade_str:
+                            return ""
+                        match = re.search(r"\d+", str(grade_str))
+                        if match:
+                            return match.group(0)
+                        return str(grade_str).strip().upper()
+
+                    q_filter = Q()
+                    for cls in teacher_classes:
+                        grade_norm = normalize_grade(cls.grade.grade_name if cls.grade else "")
+                        section_norm = extract_class_section(cls.class_name).strip().upper()
+                        ay_norm = (cls.academic_year or "").replace(" ", "").upper()
+
+                        class_q = Q()
+                        if grade_norm:
+                            class_q &= (
+                                Q(grade__icontains=grade_norm) |
+                                Q(grade__icontains=f"Grade {grade_norm}") |
+                                Q(grade__icontains=f"Class {grade_norm}")
+                            )
+                        if section_norm:
+                            class_q &= (
+                                Q(section__iexact=section_norm) |
+                                Q(section__icontains=f"Section {section_norm}")
+                            )
+                        if ay_norm:
+                            ay_with_spaces = f"{ay_norm[:4]} - {ay_norm[5:]}" if len(ay_norm) == 9 and ay_norm[4] == '-' else ay_norm
+                            class_q &= (
+                                Q(academic_year__iexact=ay_norm) |
+                                Q(academic_year__iexact=ay_with_spaces) |
+                                Q(academic_year__isnull=True) |
+                                Q(academic_year="")
+                            )
+                        q_filter |= class_q
+
+                    recent_students = Student.objects.filter(school=teacher.school).filter(q_filter).select_related("user").order_by("-created_at")[:15]
+                    for st in recent_students:
+                        activities.append({
+                            "id": f"student-{st.student_id}",
+                            "activity_type": "student_enrolled",
+                            "message": f"Student '{st.user.full_name or st.user.username}' was enrolled.",
+                            "timestamp": st.created_at
+                        })
 
         activities.sort(key=lambda x: x["timestamp"], reverse=True)
         recent_activities = activities[:50]

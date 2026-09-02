@@ -128,7 +128,7 @@ def check_experience_duration_sanity(experience, activities):
     if experience.estimated_duration < sum_durations:
         results.append({
             "rule": "experience_duration_sanity",
-            "severity": "WARNING",
+            "severity": "ERROR",
             "message": f"Experience duration ({experience.estimated_duration}m) is less than the sum of its activities ({sum_durations}m).",
             "item": f"experience-{experience.id}"
         })
