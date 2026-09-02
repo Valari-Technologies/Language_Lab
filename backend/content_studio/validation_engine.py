@@ -94,6 +94,22 @@ def check_experience_metadata(experience):
             "item": f"experience-{experience.id}"
         })
         
+    # Description length rule
+    if experience.description and len(experience.description) > 200:
+        results.append({
+            "rule": "experience_description_limit",
+            "severity": "ERROR",
+            "message": f"Experience description exceeds 200 characters limit ({len(experience.description)}/200).",
+            "item": f"experience-{experience.id}"
+        })
+    else:
+        results.append({
+            "rule": "experience_description_limit",
+            "severity": "PASSED",
+            "message": "Experience description is within 200 characters limit.",
+            "item": f"experience-{experience.id}"
+        })
+        
     return results
 
 def check_experience_has_activities(experience, activities):

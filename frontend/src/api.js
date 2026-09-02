@@ -80,9 +80,8 @@ export async function apiFetch(endpoint, options = {}) {
     if (refreshed) {
       response = await executeRequest();
     } else {
-      await logoutSession();
       window.dispatchEvent(new CustomEvent('session-expired', {
-        detail: { message: 'Your session has expired due to inactivity. Please log in again.' }
+        detail: { message: 'Your session has expired due to inactivity. Please log in again to perform actions.' }
       }));
       throw new Error('Session expired. Please log in again.');
     }

@@ -1532,6 +1532,11 @@ const formatDifficulty = (val) => {
   };
 
   const handleSaveExperience = async () => {
+    if ((experienceForm.description || '').length > 200) {
+      showFeedback('Description cannot exceed 200 characters limit.', 'error');
+      setActionLoading(false);
+      return null;
+    }
     setActionLoading(true);
     try {
       let diff = (experienceForm.difficulty || 'Intermediate').toUpperCase();
@@ -5784,9 +5789,25 @@ const formatDifficulty = (val) => {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', paddingTop: '1rem' }}>
                     <div className="cs-form-group">
                       <label className="cs-form-label">Description <span style={{ color: '#ef4444' }}>*</span></label>
-                      <textarea className="cs-form-input" style={{ minHeight: '90px', resize: 'vertical' }} value={experienceForm.description}
-                        onChange={e => setExperienceForm({ ...experienceForm, description: e.target.value })} />
-                      <div style={{ textAlign: 'right', fontSize: '0.68rem', color: '#94a3b8', marginTop: 4 }}>{experienceForm.description?.length || 0} / 200</div>
+                      <textarea
+                        className="cs-form-input"
+                        style={{
+                          minHeight: '90px',
+                          resize: 'vertical',
+                          borderColor: (experienceForm.description?.length || 0) > 200 ? '#ef4444' : undefined,
+                          boxShadow: (experienceForm.description?.length || 0) > 200 ? '0 0 0 1px #ef4444' : undefined
+                        }}
+                        value={experienceForm.description}
+                        onChange={e => setExperienceForm({ ...experienceForm, description: e.target.value })}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                        {(experienceForm.description?.length || 0) > 200 ? (
+                          <span style={{ fontSize: '0.68rem', color: '#ef4444', fontWeight: 600 }}>Description cannot exceed 200 characters.</span>
+                        ) : <span />}
+                        <span style={{ fontSize: '0.68rem', color: (experienceForm.description?.length || 0) > 200 ? '#ef4444' : '#94a3b8', fontWeight: (experienceForm.description?.length || 0) > 200 ? 700 : 400 }}>
+                          {experienceForm.description?.length || 0} / 200
+                        </span>
+                      </div>
                     </div>
 
                     <div className="cs-form-group">

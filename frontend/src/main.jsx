@@ -221,65 +221,77 @@ export const App = () => {
       {sessionExpiredMsg && (
         <div style={{
           position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(15, 23, 42, 0.75)',
-          backdropFilter: 'blur(4px)',
+          top: '20px',
+          right: '24px',
           zIndex: 99999,
+          maxWidth: '460px',
+          width: 'calc(100% - 48px)',
+          backgroundColor: '#fff1f2',
+          border: '1px solid #fecdd3',
+          borderRadius: '12px',
+          padding: '0.85rem 1.1rem',
+          boxShadow: '0 10px 25px -5px rgba(225, 29, 72, 0.15)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          padding: '1rem'
+          justifyContent: 'space-between',
+          gap: '0.85rem'
         }}>
-          <div style={{
-            backgroundColor: '#ffffff',
-            borderRadius: '16px',
-            maxWidth: '440px',
-            width: '100%',
-            padding: '1.75rem',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-            border: '1px solid #fee2e2',
-            textAlign: 'center'
-          }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
             <div style={{
-              width: '56px',
-              height: '56px',
+              width: '34px',
+              height: '34px',
               borderRadius: '50%',
-              backgroundColor: '#fef2f2',
-              color: '#ef4444',
+              backgroundColor: '#ffe4e6',
+              color: '#e11d48',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '1.75rem',
-              margin: '0 auto 1rem auto'
+              fontSize: '1.1rem',
+              flexShrink: 0,
+              fontWeight: 700
             }}>
               ⚠️
             </div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.5rem 0' }}>
-              Session Expired
-            </h3>
-            <p style={{ fontSize: '0.88rem', color: '#475569', lineHeight: 1.5, margin: '0 0 1.5rem 0' }}>
-              {sessionExpiredMsg}
-            </p>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#9f1239' }}>Session Notice</div>
+              <div style={{ fontSize: '0.78rem', color: '#be123c', lineHeight: 1.35, whiteSpace: 'normal' }}>
+                {sessionExpiredMsg}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
             <button
               onClick={() => {
                 setSessionExpiredMsg(null);
                 handleLogout();
               }}
               style={{
-                width: '100%',
-                backgroundColor: '#ef4444',
+                backgroundColor: '#e11d48',
                 color: '#ffffff',
                 border: 'none',
-                borderRadius: '10px',
-                padding: '0.75rem 1.25rem',
-                fontSize: '0.9rem',
+                borderRadius: '6px',
+                padding: '0.35rem 0.65rem',
+                fontSize: '0.74rem',
                 fontWeight: 700,
-                cursor: 'pointer',
-                boxShadow: '0 4px 6px -1px rgba(239, 68, 68, 0.2)',
-                transition: 'background-color 0.2s'
+                cursor: 'pointer'
               }}
             >
-              Log In Again
+              Re-login
+            </button>
+            <button
+              onClick={() => setSessionExpiredMsg(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#9f1239',
+                fontSize: '1rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                padding: '2px 6px'
+              }}
+              title="Dismiss warning"
+            >
+              ✕
             </button>
           </div>
         </div>

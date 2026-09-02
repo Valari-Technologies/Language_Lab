@@ -256,6 +256,11 @@ class ExperienceSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["created_by", "is_deleted"]
 
+    def validate_description(self, value):
+        if value and len(value) > 200:
+            raise serializers.ValidationError("Description cannot exceed 200 characters.")
+        return value
+
     def validate(self, attrs):
         return validate_strict_fields(self, attrs)
 
@@ -296,6 +301,11 @@ class ExperienceDetailSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["created_by", "is_deleted"]
+
+    def validate_description(self, value):
+        if value and len(value) > 200:
+            raise serializers.ValidationError("Description cannot exceed 200 characters.")
+        return value
 
     def validate(self, attrs):
         return validate_strict_fields(self, attrs)
