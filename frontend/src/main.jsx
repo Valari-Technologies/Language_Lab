@@ -221,77 +221,85 @@ export const App = () => {
       {sessionExpiredMsg && (
         <div style={{
           position: 'fixed',
-          top: '20px',
-          right: '24px',
-          zIndex: 99999,
-          maxWidth: '460px',
-          width: 'calc(100% - 48px)',
-          backgroundColor: '#fff1f2',
-          border: '1px solid #fecdd3',
-          borderRadius: '12px',
-          padding: '0.85rem 1.1rem',
-          boxShadow: '0 10px 25px -5px rgba(225, 29, 72, 0.15)',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 999999,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '0.85rem'
+          justifyContent: 'center',
+          padding: '1.5rem'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '20px',
+            maxWidth: '440px',
+            width: '100%',
+            padding: '2.25rem 2rem',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.3)',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            border: '1px solid #f1f5f9'
+          }}>
             <div style={{
-              width: '34px',
-              height: '34px',
+              width: '64px',
+              height: '64px',
               borderRadius: '50%',
-              backgroundColor: '#ffe4e6',
+              backgroundColor: '#fff1f2',
               color: '#e11d48',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '1.1rem',
-              flexShrink: 0,
+              fontSize: '1.8rem',
+              marginBottom: '1.25rem',
+              boxShadow: '0 4px 14px rgba(225, 29, 72, 0.15)',
               fontWeight: 700
             }}>
-              ⚠️
+              🔒
             </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#9f1239' }}>Session Notice</div>
-              <div style={{ fontSize: '0.78rem', color: '#be123c', lineHeight: 1.35, whiteSpace: 'normal' }}>
-                {sessionExpiredMsg}
-              </div>
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+            <h3 style={{
+              fontSize: '1.3rem',
+              fontWeight: 800,
+              color: '#0f172a',
+              margin: '0 0 0.5rem 0',
+              letterSpacing: '-0.02em'
+            }}>
+              Session Expired
+            </h3>
+            <p style={{
+              fontSize: '0.88rem',
+              color: '#64748b',
+              lineHeight: 1.55,
+              margin: '0 0 1.75rem 0'
+            }}>
+              {sessionExpiredMsg}
+            </p>
             <button
               onClick={() => {
                 setSessionExpiredMsg(null);
                 handleLogout();
               }}
               style={{
+                width: '100%',
                 backgroundColor: '#e11d48',
                 color: '#ffffff',
                 border: 'none',
-                borderRadius: '6px',
-                padding: '0.35rem 0.65rem',
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
-            >
-              Re-login
-            </button>
-            <button
-              onClick={() => setSessionExpiredMsg(null)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#9f1239',
-                fontSize: '1rem',
+                borderRadius: '12px',
+                padding: '0.85rem 1.5rem',
+                fontSize: '0.92rem',
                 fontWeight: 700,
                 cursor: 'pointer',
-                padding: '2px 6px'
+                boxShadow: '0 4px 14px rgba(225, 29, 72, 0.3)',
+                transition: 'all 0.2s ease'
               }}
-              title="Dismiss warning"
             >
-              ✕
+              Re-login Now
             </button>
           </div>
         </div>

@@ -474,17 +474,17 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       };
       addOrUpdateBlock('quiz', newProps);
     }
-    else if (type === 'dialogue') {
+    else if (type === 'roleplay_simulation') {
       const newProps = {
-        steps: (aiPreviewData.dialogue_steps || []).map((step, idx) => ({
-          step: idx + 1,
-          name: step.speaker || 'A',
-          text: step.text || '',
-          avatarColor: '#3b82f6',
-          side: 'left'
-        }))
+        scenario: aiPreviewData.scenario || 'Practice conversation with NPC',
+        objectives: aiPreviewData.objectives || ['Introduce yourself', 'Ask a question'],
+        npcCharacter: aiPreviewData.npcCharacter || 'Alex',
+        conversation: aiPreviewData.conversation || [
+          { turn: 1, speaker: 'npc', text: 'Hello! Welcome.', audio: '', expectedStudentResponses: [] },
+          { turn: 2, speaker: 'student', recordingRequired: true, prompt: 'Greet the NPC back.' }
+        ]
       };
-      addOrUpdateBlock('dialogue', newProps);
+      addOrUpdateBlock('roleplay_simulation', newProps);
     }
     else if (type === 'fill_in_blanks' || type === 'fill_blank') {
       const newProps = {
@@ -506,13 +506,14 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       };
       addOrUpdateBlock('sequence', newProps);
     }
-    else if (type === 'roleplay') {
+    else if (type === 'functional_reading') {
       const newProps = {
-        title: aiPreviewData.title || '',
-        prompt: aiPreviewData.prompt || '',
-        script: aiPreviewData.script || []
+        docTitle: aiPreviewData.docTitle || aiPreviewData.title || 'Functional Reading Document',
+        docCategory: aiPreviewData.docCategory || 'Notice / Document',
+        passage: aiPreviewData.passage || aiPreviewData.text || '',
+        question: aiPreviewData.question || 'What is the main purpose of this document?'
       };
-      addOrUpdateBlock('role_play', newProps);
+      addOrUpdateBlock('functional_reading', newProps);
     }
     else if (type === 'pronunciation') {
       const newProps = {
@@ -2031,12 +2032,7 @@ const formatDifficulty = (val) => {
       newBlock.content = { url: '', title: 'Audio Clip' };
     } else if (type.toLowerCase() === 'video') {
       newBlock.content = { url: '' };
-    } else if (type.toLowerCase() === 'dialogue') {
-      newBlock.content = {
-        steps: [
-          { step: 1, name: 'Ben', text: 'Hello!', avatarColor: '#3b82f6', side: 'left' }
-        ]
-      };
+
     } else if (type.toLowerCase() === 'quiz' || type.toLowerCase() === 'mcq') {
       newBlock.type = 'quiz';
       newBlock.content = {
@@ -2115,9 +2111,7 @@ const formatDifficulty = (val) => {
         question: 'Practice pronouncing words correctly',
         items: [{ id: 'item-1', word: 'Hello', phonetic: '/həˈloʊ/' }]
       };
-    } else if (type.toLowerCase() === 'role_play' || type.toLowerCase() === 'role play') {
-      newBlock.type = 'role_play';
-      newBlock.content = { title: 'Introduction', prompt: 'Introduce yourself.', script: [{ speaker: 'A', text: 'Hi! How are you?' }, { speaker: 'B', text: 'Im good, thanks!' }] };
+
     } else if (type.toLowerCase() === 'input') {
       newBlock.type = 'input';
       newBlock.content = { placeholder: 'Type your answer here...' };
@@ -2556,39 +2550,6 @@ const formatDifficulty = (val) => {
           </div>
         )}
 
-        {block.type === 'dialogue' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', flex: 1, height: '100%' }}>
-            {(block.content?.steps || []).map((stepObj, sIdx) => {
-              const isLeft = stepObj.side === 'left';
-              return (
-                <div key={sIdx} style={{ display: 'flex', gap: '0.5rem', justifyContent: isLeft ? 'flex-start' : 'flex-end', alignItems: 'flex-start' }}>
-                  {isLeft && (
-                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: stepObj.avatarColor || '#3b82f6', color: '#fff', fontSize: '0.55rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      {stepObj.name ? stepObj.name.slice(0, 2).toUpperCase() : 'CC'}
-                    </div>
-                  )}
-                  <div style={{
-                    maxWidth: '80%',
-                    background: isLeft ? '#f1f5f9' : '#0b57d0',
-                    color: isLeft ? '#1e293b' : '#ffffff',
-                    borderRadius: '10px',
-                    padding: '0.4rem 0.65rem',
-                    fontSize: '0.72rem',
-                    lineHeight: 1.3
-                  }}>
-                    {stepObj.text}
-                  </div>
-                  {!isLeft && (
-                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: stepObj.avatarColor || '#ea580c', color: '#fff', fontSize: '0.55rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      {stepObj.name ? stepObj.name.slice(0, 2).toUpperCase() : 'ST'}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
         {block.type === 'quiz' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', flex: 1, height: '100%' }}>
             <div style={{ border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.78rem', fontWeight: 600, color: '#c2410c' }}>
@@ -2916,27 +2877,6 @@ const formatDifficulty = (val) => {
                   </div>
                 ));
               })()}
-            </div>
-          </div>
-        )}
-
-        {block.type === 'role_play' && (
-          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fdf2f8', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#9d174d', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiActivity /> Role Play: {block.content?.title || 'Introduction'}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#475569', fontStyle: 'italic' }}>
-              Scenario: {block.content?.prompt || 'Introduce yourself.'}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {(block.content?.script || []).map((line, lIdx) => (
-                <div key={lIdx} style={{ fontSize: '0.72rem', color: '#1e293b' }}>
-                  <strong>{line.speaker || 'Speaker'}:</strong> {line.text || '(No text)'}
-                </div>
-              ))}
-              {(block.content?.script || []).length === 0 && (
-                <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontStyle: 'italic' }}>No turns added yet. Click + Add Turn in sidebar.</span>
-              )}
             </div>
           </div>
         )}
@@ -6753,9 +6693,7 @@ const formatDifficulty = (val) => {
                                       { type: 'Image', desc: 'Display pictures and illustrations', icon: <FiImage style={{ color: '#16a34a' }} />, bg: '#dcfce7' },
                                       { type: 'Audio', desc: 'Voice instructions or speech files', icon: <FiVolume2 style={{ color: '#0ea5e9' }} />, bg: '#e0f9ff' },
                                       { type: 'Video', desc: 'Play embedded video presentations', icon: <FiMonitor style={{ color: '#7c3aed' }} />, bg: '#f3e8ff' },
-                                      { type: 'Dialogue', desc: 'Interactive character chat bubbles', icon: <FiActivity style={{ color: '#db2777' }} />, bg: '#fce7f3' },
-                                      { type: 'Reading_Passage', desc: 'Read a text passage and mark complete', icon: <FiFileText style={{ color: '#6366f1' }} />, bg: '#e0e7ff' },
-                                      { type: 'Role_Play', desc: 'Interactive role play scripts', icon: <FiActivity style={{ color: '#db2777' }} />, bg: '#fce7f3' }
+                                      { type: 'Reading_Passage', desc: 'Read a text passage and mark complete', icon: <FiFileText style={{ color: '#6366f1' }} />, bg: '#e0e7ff' }
                                     ]
                                   },
                                   {
@@ -6815,13 +6753,13 @@ const formatDifficulty = (val) => {
 
                                   const MODULE_ELEMENTS = {
                                     listening: [
-                                      'heading', 'text', 'image', 'audio', 'video', 'dialogue', 
+                                      'heading', 'text', 'image', 'audio', 'video', 
                                       'audio_mystery', 'quiz', 'true_false', 'fill_blank', 
                                       'match_items', 'sequence', 'dictation', 'hotspot_explorer', 
                                       'roleplay_simulation'
                                     ],
                                     speaking: [
-                                      'heading', 'text', 'image', 'audio', 'video', 'dialogue', 
+                                      'heading', 'text', 'image', 'audio', 'video', 
                                       'voice_recorder', 'you_ask', 'hotspot_explorer', 
                                       'roleplay_simulation', 'pronunciation', 'quiz', 'input'
                                     ],
@@ -6837,13 +6775,13 @@ const formatDifficulty = (val) => {
                                       'sequence', 'drag_drop'
                                     ],
                                     grammar: [
-                                      'heading', 'text', 'image', 'audio', 'video', 'dialogue', 
+                                      'heading', 'text', 'image', 'audio', 'video', 
                                       'grammar_correction', 'quiz', 'fill_blank', 'true_false', 
                                       'match_items', 'sequence', 'drag_drop', 'sentence_builder', 
                                       'input', 'dictation'
                                     ],
                                     phonetics: [
-                                      'heading', 'text', 'image', 'audio', 'video', 'dialogue', 
+                                      'heading', 'text', 'image', 'audio', 'video', 
                                       'pronunciation', 'voice_recorder', 'listen_repeat', 'minimal_pair', 
                                       'identify_sound', 'quiz', 'dictation', 'match_items'
                                     ]
@@ -6857,7 +6795,7 @@ const formatDifficulty = (val) => {
                                     const mapped = tmplType.toLowerCase();
                                     if (mapped === 'quiz') return allowedTypes.includes('quiz') || allowedTypes.includes('mcq');
                                     if (mapped === 'match_items') return allowedTypes.includes('match') || allowedTypes.includes('match_items');
-                                    if (mapped === 'roleplay_simulation' || mapped === 'role_play') return allowedTypes.includes('roleplay_simulation') || allowedTypes.includes('role_play');
+                                    if (mapped === 'roleplay_simulation') return allowedTypes.includes('roleplay_simulation');
                                     return allowedTypes.includes(mapped);
                                   };
 
@@ -7515,165 +7453,6 @@ const formatDifficulty = (val) => {
                                     </>
                                   )}
 
-                                  {/* BLOCK TYPE 4: DIALOGUE */}
-                                  {selectedBlock.type === 'dialogue' && (() => {
-                                    const steps = selectedBlock.content?.steps || [];
-                                    const uniqueSpeakers = [];
-                                    steps.forEach(s => {
-                                      if (s.name && !uniqueSpeakers.some(us => us.name.toLowerCase() === s.name.toLowerCase() && us.side === s.side)) {
-                                        uniqueSpeakers.push({
-                                          name: s.name,
-                                          side: s.side || 'left',
-                                          avatarColor: s.avatarColor || '#3b82f6'
-                                        });
-                                      }
-                                    });
-
-                                    return (
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Dialogue Steps</span>
-                                            <button
-                                              className="cs-btn-outline"
-                                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
-                                              onClick={() => {
-                                                const currentSteps = [...(selectedBlock.content?.steps || [])];
-                                                currentSteps.push({
-                                                  step: currentSteps.length + 1,
-                                                  name: 'Ben',
-                                                  text: 'Dialogue text...',
-                                                  avatarColor: '#3b82f6',
-                                                  side: 'left'
-                                                });
-                                                handleUpdateBlockContent('steps', currentSteps);
-                                              }}
-                                            >
-                                              + Add Speech
-                                            </button>
-                                          </div>
-                                          {uniqueSpeakers.length > 0 && (
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.25rem' }}>
-                                              {uniqueSpeakers.map((spk, spkIdx) => (
-                                                <button
-                                                  key={spkIdx}
-                                                  className="cs-btn-outline"
-                                                  style={{
-                                                    padding: '0.15rem 0.4rem',
-                                                    fontSize: '0.62rem',
-                                                    border: '1px solid #16a34a',
-                                                    color: '#16a34a',
-                                                    background: '#f0fdf4',
-                                                    borderRadius: '4px',
-                                                    fontWeight: 600,
-                                                    cursor: 'pointer'
-                                                  }}
-                                                  onClick={() => {
-                                                    const currentSteps = [...(selectedBlock.content?.steps || [])];
-                                                    currentSteps.push({
-                                                      step: currentSteps.length + 1,
-                                                      name: spk.name,
-                                                      text: 'Dialogue text...',
-                                                      avatarColor: spk.avatarColor,
-                                                      side: spk.side
-                                                    });
-                                                    handleUpdateBlockContent('steps', currentSteps);
-                                                  }}
-                                                >
-                                                  + Text for {spk.name} ({spk.side === 'left' ? 'Left' : 'Right'})
-                                                </button>
-                                              ))}
-                                            </div>
-                                          )}
-                                        </div>
-
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', maxHeight: '280px', overflowY: 'auto', paddingRight: '2px' }}>
-                                        {(selectedBlock.content?.steps || []).map((step, sIdx) => (
-                                          <div key={sIdx} style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px' }}>
-                                              <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#475569' }}>Speech Bubble #{sIdx + 1}</span>
-                                              <button
-                                                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex' }}
-                                                onClick={() => {
-                                                  const updated = (selectedBlock.content.steps || []).filter((_, i) => i !== sIdx).map((s, idx) => ({ ...s, step: idx + 1 }));
-                                                  handleUpdateBlockContent('steps', updated);
-                                                }}
-                                              >
-                                                <FiTrash2 style={{ fontSize: '0.72rem' }} />
-                                              </button>
-                                            </div>
-
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
-                                              <div className="cs-form-group">
-                                                <label style={{ fontSize: '0.62rem', fontWeight: 600, color: '#64748b' }}>Speaker</label>
-                                                <input
-                                                  className="cs-form-input"
-                                                  style={{ height: '22px', fontSize: '0.72rem', padding: '0 4px' }}
-                                                  type="text"
-                                                  value={step.name}
-                                                  onChange={e => {
-                                                    const steps = [...selectedBlock.content.steps];
-                                                    steps[sIdx].name = e.target.value;
-                                                    handleUpdateBlockContent('steps', steps);
-                                                  }}
-                                                />
-                                              </div>
-                                              <div className="cs-form-group">
-                                                <label style={{ fontSize: '0.62rem', fontWeight: 600, color: '#64748b' }}>Bubble Side</label>
-                                                <select
-                                                  className="cs-form-input"
-                                                  style={{ height: '22px', fontSize: '0.72rem', padding: '0' }}
-                                                  value={step.side || 'left'}
-                                                  onChange={e => {
-                                                    const steps = [...selectedBlock.content.steps];
-                                                    steps[sIdx].side = e.target.value;
-                                                    handleUpdateBlockContent('steps', steps);
-                                                  }}
-                                                >
-                                                  <option value="left">Left Speaker</option>
-                                                  <option value="right">Right Speaker</option>
-                                                </select>
-                                              </div>
-                                            </div>
-
-                                            <div className="cs-form-group">
-                                              <label style={{ fontSize: '0.62rem', fontWeight: 600, color: '#64748b' }}>Avatar Color</label>
-                                              <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
-                                                {['#3b82f6', '#ea580c', '#16a34a', '#8b5cf6', '#ec4899', '#14b8a6'].map(col => (
-                                                  <button
-                                                    key={col}
-                                                    onClick={() => {
-                                                      const steps = [...selectedBlock.content.steps];
-                                                      steps[sIdx].avatarColor = col;
-                                                      handleUpdateBlockContent('steps', steps);
-                                                    }}
-                                                    style={{ width: '16px', height: '16px', borderRadius: '50%', background: col, border: step.avatarColor === col ? '1.5px solid #1e293b' : '1px solid transparent', cursor: 'pointer', padding: 0 }}
-                                                  />
-                                                ))}
-                                              </div>
-                                            </div>
-
-                                            <div className="cs-form-group">
-                                              <label style={{ fontSize: '0.62rem', fontWeight: 600, color: '#64748b' }}>Speech Text</label>
-                                              <textarea
-                                                className="cs-form-input"
-                                                data-testid={`dialogue-step-text-${sIdx}`}
-                                                style={{ minHeight: '36px', fontSize: '0.72rem', padding: '4px', lineHeight: 1.3 }}
-                                                value={step.text}
-                                                onChange={e => {
-                                                  const steps = [...selectedBlock.content.steps];
-                                                  steps[sIdx].text = e.target.value;
-                                                  handleUpdateBlockContent('steps', steps);
-                                                }}
-                                              />
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  );
-                                  })()}
-
                                   {/* BLOCK TYPE 5: QUIZ */}
                                   {selectedBlock.type === 'quiz' && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -8266,84 +8045,6 @@ const formatDifficulty = (val) => {
                                     </div>
                                   )}
 
-                                  {/* BLOCK TYPE: ROLE PLAY */}
-                                  {selectedBlock.type === 'role_play' && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Role Play Settings</span>
-                                      <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Scenario Title</label>
-                                        <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.title || ''}
-                                          onChange={e => handleUpdateBlockContent('title', e.target.value)} placeholder="e.g. At the Restaurant" />
-                                      </div>
-                                      <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Instructions / Scenario</label>
-                                        <textarea className="cs-form-input" style={{ minHeight: '54px', fontSize: '0.75rem' }} value={selectedBlock.content?.prompt || ''}
-                                          onChange={e => handleUpdateBlockContent('prompt', e.target.value)} placeholder="e.g. Practice ordering food." />
-                                      </div>
-                                      
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
-                                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Role Play Turns / Dialogue</span>
-                                        <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
-                                          onClick={() => {
-                                            const script = [...(selectedBlock.content?.script || [])];
-                                            script.push({ speaker: 'Speaker A', text: 'Enter dialogue line...' });
-                                            handleUpdateBlockContent('script', script);
-                                          }}>
-                                          + Add Turn
-                                        </button>
-                                      </div>
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', maxHeight: '200px', overflowY: 'auto' }}>
-                                        {(selectedBlock.content?.script || []).map((line, lIdx) => (
-                                          <div key={lIdx} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: '#f8fafc', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
-                                            <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                                              <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b' }}>Turn {lIdx + 1}:</span>
-                                              <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem', width: '90px' }} type="text" value={line.speaker}
-                                                onChange={e => {
-                                                  const script = [...selectedBlock.content.script];
-                                                  script[lIdx].speaker = e.target.value;
-                                                  handleUpdateBlockContent('script', script);
-                                                }} placeholder="Speaker" />
-                                              
-                                              <button type="button" disabled={lIdx === 0} style={{ background: 'none', border: 'none', color: lIdx === 0 ? '#cbd5e1' : '#0b57d0', cursor: lIdx === 0 ? 'default' : 'pointer', fontSize: '0.7rem' }}
-                                                onClick={() => {
-                                                  const script = [...selectedBlock.content.script];
-                                                  const temp = script[lIdx];
-                                                  script[lIdx] = script[lIdx - 1];
-                                                  script[lIdx - 1] = temp;
-                                                  handleUpdateBlockContent('script', script);
-                                                }}>
-                                                ▲
-                                              </button>
-                                              <button type="button" disabled={lIdx === (selectedBlock.content?.script || []).length - 1} style={{ background: 'none', border: 'none', color: lIdx === (selectedBlock.content?.script || []).length - 1 ? '#cbd5e1' : '#0b57d0', cursor: lIdx === (selectedBlock.content?.script || []).length - 1 ? 'default' : 'pointer', fontSize: '0.7rem' }}
-                                                onClick={() => {
-                                                  const script = [...selectedBlock.content.script];
-                                                  const temp = script[lIdx];
-                                                  script[lIdx] = script[lIdx + 1];
-                                                  script[lIdx + 1] = temp;
-                                                  handleUpdateBlockContent('script', script);
-                                                }}>
-                                                ▼
-                                              </button>
-                                              <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', marginLeft: 'auto' }}
-                                                onClick={() => {
-                                                  const script = (selectedBlock.content.script || []).filter((_, i) => i !== lIdx);
-                                                  handleUpdateBlockContent('script', script);
-                                                }}>
-                                                <FiTrash2 style={{ fontSize: '0.72rem' }} />
-                                              </button>
-                                            </div>
-                                            <textarea className="cs-form-input" style={{ minHeight: '32px', fontSize: '0.72rem', padding: '4px', lineHeight: 1.3 }} value={line.text}
-                                              onChange={e => {
-                                                const script = [...selectedBlock.content.script];
-                                                script[lIdx].text = e.target.value;
-                                                handleUpdateBlockContent('script', script);
-                                              }} placeholder="Enter dialogue details..." />
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-
                                   {/* BLOCK TYPE: INPUT */}
                                   {selectedBlock.type === 'input' && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -8864,121 +8565,9 @@ const formatDifficulty = (val) => {
                                     </div>
                                   )}
 
-                                  {selectedBlock.type === 'roleplay_simulation' && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Roleplay Simulation Settings</span>
-                                      <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Scenario</label>
-                                        <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.scenario || ''}
-                                          onChange={e => handleUpdateBlockContent('scenario', e.target.value)} />
-                                      </div>
-                                      <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Objectives (comma separated)</label>
-                                        <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={(selectedBlock.content?.objectives || []).join(', ')}
-                                          onChange={e => handleUpdateBlockContent('objectives', e.target.value.split(',').map(s => s.trim()))} />
-                                      </div>
-                                      <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>NPC Character Name</label>
-                                        <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.npcCharacter || ''}
-                                          onChange={e => handleUpdateBlockContent('npcCharacter', e.target.value)} />
-                                      </div>
-                                      <MediaUploadField
-                                        label="NPC Avatar Image"
-                                        value={selectedBlock.content?.npcImage || ''}
-                                        mediaType="image"
-                                        onChange={url => handleUpdateBlockContent('npcImage', url)}
-                                        actionLoading={actionLoading}
-                                        setActionLoading={setActionLoading}
-                                        showFeedback={showFeedback}
-                                      />
-
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
-                                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Conversation Turns</span>
-                                        <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
-                                          onClick={() => {
-                                            const conversation = [...(selectedBlock.content?.conversation || [])];
-                                            const speaker = conversation.length % 2 === 0 ? 'npc' : 'student';
-                                            if (speaker === 'npc') {
-                                              conversation.push({ turn: conversation.length + 1, speaker: 'npc', text: '', audio: '', expectedStudentResponses: [] });
-                                            } else {
-                                              conversation.push({ turn: conversation.length + 1, speaker: 'student', recordingRequired: true, prompt: '' });
-                                            }
-                                            handleUpdateBlockContent('conversation', conversation);
-                                          }}>
-                                          + Add Turn
-                                        </button>
-                                      </div>
-
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '200px', overflowY: 'auto' }}>
-                                        {(selectedBlock.content?.conversation || []).map((t, tIdx) => (
-                                          <div key={tIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                              <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b' }}>Turn #{t.turn} ({t.speaker.toUpperCase()})</span>
-                                              <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
-                                                onClick={() => {
-                                                  const conversation = (selectedBlock.content.conversation || []).filter((_, i) => i !== tIdx).map((item, idx) => ({ ...item, turn: idx + 1 }));
-                                                  handleUpdateBlockContent('conversation', conversation);
-                                                }}>
-                                                <FiTrash2 style={{ fontSize: '0.72rem' }} />
-                                              </button>
-                                            </div>
-                                            
-                                            {t.speaker === 'npc' ? (
-                                              <>
-                                                <div className="cs-form-group">
-                                                  <label style={{ fontSize: '0.6rem' }}>Dialogue Text</label>
-                                                  <input className="cs-form-input" style={{ height: '22px', fontSize: '0.72rem' }} type="text" value={t.text || ''}
-                                                    onChange={e => { const conv = [...selectedBlock.content.conversation]; conv[tIdx].text = e.target.value; handleUpdateBlockContent('conversation', conv); }} />
-                                                </div>
-                                                <MediaUploadField
-                                                  label="Dialogue Audio File"
-                                                  value={t.audio || ''}
-                                                  mediaType="audio"
-                                                  onChange={url => {
-                                                    const conv = [...selectedBlock.content.conversation];
-                                                    conv[tIdx].audio = url;
-                                                    handleUpdateBlockContent('conversation', conv);
-                                                  }}
-                                                  actionLoading={actionLoading}
-                                                  setActionLoading={setActionLoading}
-                                                  showFeedback={showFeedback}
-                                                />
-                                                <div className="cs-form-group">
-                                                  <label style={{ fontSize: '0.6rem' }}>Expected Responses (Text:Hint, Text:Hint)</label>
-                                                  <input className="cs-form-input" style={{ height: '22px', fontSize: '0.72rem' }} type="text" value={(t.expectedStudentResponses || []).map(r => `${r.text}:${r.hint}`).join(', ')}
-                                                    onChange={e => {
-                                                      const conv = [...selectedBlock.content.conversation];
-                                                      conv[tIdx].expectedStudentResponses = e.target.value.split(',').map(pair => {
-                                                        const parts = pair.split(':');
-                                                        return { text: (parts[0] || '').trim(), hint: (parts[1] || '').trim() };
-                                                      });
-                                                      handleUpdateBlockContent('conversation', conv);
-                                                    }} />
-                                                </div>
-                                              </>
-                                            ) : (
-                                              <>
-                                                <div className="cs-form-group">
-                                                  <label style={{ fontSize: '0.6rem' }}>Prompt Instruction</label>
-                                                  <input className="cs-form-input" style={{ height: '22px', fontSize: '0.72rem' }} type="text" value={t.prompt || ''}
-                                                    onChange={e => { const conv = [...selectedBlock.content.conversation]; conv[tIdx].prompt = e.target.value; handleUpdateBlockContent('conversation', conv); }} />
-                                                </div>
-                                                <div className="cs-form-group" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                  <input type="checkbox" checked={!!t.recordingRequired}
-                                                    onChange={e => { const conv = [...selectedBlock.content.conversation]; conv[tIdx].recordingRequired = e.target.checked; handleUpdateBlockContent('conversation', conv); }} />
-                                                  <label style={{ fontSize: '0.65rem' }}>Recording Required</label>
-                                                </div>
-                                              </>
-                                            )}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-
 
                                   {/* Dedicated Collapsible Section for Remedial/Foundation Question */}
-                                  {['quiz', 'fill_blank', 'dialogue', 'match', 'drag_drop', 'dictation', 'sentence_builder', 'sequence'].includes(selectedBlock.type) && (
+                                  {['quiz', 'fill_blank', 'match', 'drag_drop', 'dictation', 'sentence_builder', 'sequence'].includes(selectedBlock.type) && (
                                     <div style={{
                                       borderTop: '1.5px solid #e2e8f0',
                                       marginTop: '1rem',
@@ -9100,18 +8689,6 @@ const formatDifficulty = (val) => {
                                                     </div>
                                                   )}
 
-                                                  {selectedBlock.type === 'dialogue' && (
-                                                    <div className="cs-form-group">
-                                                      <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Foundation Dialogue Steps / Prompt</label>
-                                                      <textarea
-                                                        className="cs-form-input"
-                                                        style={{ minHeight: '45px', fontSize: '0.75rem' }}
-                                                        value={selectedBlock.remedialConfig?.foundationOptions?.[0] || ''}
-                                                        placeholder="Enter lines or speaker turns..."
-                                                        onChange={e => handleUpdateBlockRemedial('foundationOptions', [e.target.value])}
-                                                      />
-                                                    </div>
-                                                  )}
 
                                                   {(selectedBlock.type === 'match' || selectedBlock.type === 'drag_drop') && (
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
@@ -10498,7 +10075,7 @@ const formatDifficulty = (val) => {
                               const isLatest = overallIdx === 0;
                               return (
                                 <tr key={pkg.id}>
-                                  <td style={{ fontWeight: 700, color: '#475569' }}>{publishHistory.length - overallIdx}</td>
+                                  <td style={{ fontWeight: 700, color: '#475569' }}>{overallIdx + 1}</td>
                                   <td 
                                     style={{ fontWeight: 700, color: '#0f172a', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                                     title={lessonTitle}
@@ -11181,33 +10758,19 @@ const formatDifficulty = (val) => {
                         onChange={e => setAiForm({ ...aiForm, content_type: e.target.value })}
                         style={{ height: '36px' }}
                       >
-                        <optgroup label="Listening Module">
-                          <option value="dictation">Dictation / Type What You Hear</option>
-                          <option value="sequence_audio">Audio Sequence / Ordering</option>
-                          <option value="quiz_listening">Listening Quiz</option>
-                        </optgroup>
-                        <optgroup label="Speaking Module">
-                          <option value="dialogue">Dialogue / Conversation Practice</option>
-                          <option value="roleplay">Role Play Prompt</option>
-                          <option value="pronunciation">Pronunciation Practice</option>
-                        </optgroup>
-                        <optgroup label="Reading Module">
-                          <option value="reading_passage">Reading Passage & Questions</option>
-                          <option value="match">Match the Following / Pairs</option>
-                          <option value="flashcards">Flashcard Deck</option>
-                          <option value="wordsearch">Word Search Puzzle</option>
-                        </optgroup>
-                        <optgroup label="Writing Module">
-                          <option value="fill_blank">Fill in the Blanks</option>
-                          <option value="writing_prompt">Writing Prompt & Essay</option>
-                          <option value="sentence_builder">Sentence Builder / Unscramble</option>
-                        </optgroup>
-                        <optgroup label="Grammar Module">
-                          <option value="grammar_correction">Grammar Correction</option>
-                          <option value="true_false">True / False Challenge</option>
-                          <option value="drag_drop">Drag & Drop Classification</option>
-                        </optgroup>
-                        <option value="full_screen">Full Screen Template</option>
+                        <option value="quiz_listening">Quiz</option>
+                        <option value="sequence_audio">Sequence / Order</option>
+                        <option value="pronunciation">Pronunciation Practice</option>
+                        <option value="reading_passage">Reading Passage & Questions</option>
+                        <option value="match">Match the Following / Pairs</option>
+                        <option value="flashcards">Flashcard Deck</option>
+                        <option value="wordsearch">Word Search Puzzle</option>
+                        <option value="fill_blank">Fill in the Blanks</option>
+                        <option value="writing_prompt">Writing Prompt & Essay</option>
+                        <option value="sentence_builder">Sentence Builder / Unscramble</option>
+                        <option value="grammar_correction">Grammar Correction</option>
+                        <option value="true_false">True / False Challenge</option>
+                        <option value="drag_drop">Drag & Drop Classification</option>
                       </select>
                     </div>
 

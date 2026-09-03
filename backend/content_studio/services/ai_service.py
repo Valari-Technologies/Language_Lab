@@ -31,23 +31,42 @@ def generate_ai_content(topic: str, target_level: str, content_type: str) -> dic
             },
             "required": ["title", "question", "options", "correct_option_index", "explanation"]
         },
-        "dialogue": {
+        "roleplay_simulation": {
             "type": "object",
             "properties": {
                 "title": {"type": "string"},
-                "dialogue_steps": {
+                "scenario": {"type": "string"},
+                "objectives": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                },
+                "npcCharacter": {"type": "string"},
+                "conversation": {
                     "type": "array",
                     "items": {
                         "type": "object",
                         "properties": {
+                            "turn": {"type": "integer"},
                             "speaker": {"type": "string"},
-                            "text": {"type": "string"}
-                        },
-                        "required": ["speaker", "text"]
+                            "text": {"type": "string"},
+                            "prompt": {"type": "string"},
+                            "recordingRequired": {"type": "boolean"}
+                        }
                     }
                 }
             },
-            "required": ["title", "dialogue_steps"]
+            "required": ["title", "scenario", "objectives", "npcCharacter", "conversation"]
+        },
+        "functional_reading": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "docTitle": {"type": "string"},
+                "docCategory": {"type": "string"},
+                "passage": {"type": "string"},
+                "question": {"type": "string"}
+            },
+            "required": ["title", "docTitle", "passage", "question"]
         },
         "fill_in_blanks": {
             "type": "object",

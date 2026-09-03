@@ -125,56 +125,6 @@ export default function PreviewCanvasRenderer({
           </div>
         );
 
-      case 'dialogue':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', padding: '0.5rem 0' }}>
-            {(block.content?.steps || []).map((st, i) => {
-              const isLeft = st.side !== 'right';
-              return (
-                <div
-                  key={i}
-                  style={{
-                    display: 'flex',
-                    justifyContent: isLeft ? 'flex-start' : 'flex-end',
-                    alignItems: 'flex-start',
-                    gap: '0.65rem',
-                    flexDirection: isLeft ? 'row' : 'row-reverse'
-                  }}
-                >
-                  <div style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    background: st.avatarColor || '#0ea5e9',
-                    color: '#ffffff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 700,
-                    fontSize: '0.8rem',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                    flexShrink: 0
-                  }}>{st.name ? st.name.charAt(0).toUpperCase() : '?'}</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: isLeft ? 'flex-start' : 'flex-end' }}>
-                    <span style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600, marginBottom: '2px', padding: '0 4px' }}>{st.name}</span>
-                    <div style={{
-                      background: isLeft ? '#f1f5f9' : '#0b57d0',
-                      color: isLeft ? '#1e293b' : '#ffffff',
-                      padding: '0.65rem 0.95rem',
-                      borderRadius: isLeft ? '0 12px 12px 12px' : '12px 0 12px 12px',
-                      fontSize: '0.82rem',
-                      lineHeight: 1.45,
-                      maxWidth: '340px',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                      border: isLeft ? '1px solid #e2e8f0' : 'none'
-                    }}>{st.text}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-
       case 'quiz':
         const blockAnswerKey = `${activeScreenId}_${block.id}`;
         const selectedAnsIndex = previewAnswers[blockAnswerKey];
@@ -1194,7 +1144,7 @@ export default function PreviewCanvasRenderer({
         blockH = parseInt(block.styles.minHeight) || 120;
       } else if (block.type === 'video' || block.type === 'image' || block.type === 'hotspot_explorer') {
         blockH = 240;
-      } else if (block.type === 'dialogue' || block.type === 'roleplay_simulation') {
+      } else if (block.type === 'roleplay_simulation') {
         const stepsCount = (block.content?.steps || block.content?.dialogue || []).length || 2;
         blockH = Math.max(160, stepsCount * 70);
       } else if (block.type === 'quiz' || block.type === 'true_false' || block.type === 'writing_prompt' || block.type === 'quiz_listening') {
