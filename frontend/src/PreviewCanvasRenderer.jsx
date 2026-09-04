@@ -612,68 +612,82 @@ export default function PreviewCanvasRenderer({
         );
 
       case 'sentence_builder':
-        const sentenceQuestion = block.content?.question || 'Reorder the words to make a correct sentence.';
-        const sentenceWords = block.content?.words || [];
-        const selection = dragDropSelections[block.id] || [];
+        const rawSentencesList = block.content?.sentences;
+        const sentencesList = rawSentencesList && rawSentencesList.length > 0
+          ? rawSentencesList
+          : [{ question: block.content?.question || '', sentence: block.content?.sentence || '', words: block.content?.words || [] }];
 
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#ecfeff', padding: '1rem', borderRadius: '12px', border: '1px solid #a5f3fc', marginTop: '0.5rem' }}>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0891b2' }}>
-              🧩 {sentenceQuestion}
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', background: '#ecfeff', padding: '0.85rem', borderRadius: '12px', border: '1px solid #a5f3fc', flex: 1, overflowY: 'auto' }}>
+            {sentencesList.map((item, sIdx) => {
+              const sentenceQuestion = item.question || 'Reorder the words to make a correct sentence.';
+              const sentenceWords = item.words && item.words.length > 0
+                ? item.words
+                : (item.sentence?.trim() ? item.sentence.trim().split(' ').filter(Boolean) : []);
+              const selectionKey = `${block.id}_${sIdx}`;
+              const selection = dragDropSelections[selectionKey] || [];
 
-            <div style={{ minHeight: '38px', padding: '0.5rem', background: '#ffffff', borderRadius: '8px', border: '1.5px dashed #06b6d4', display: 'flex', flexWrap: 'wrap', gap: '0.25rem', alignItems: 'center' }}>
-              {selection.length === 0 ? (
-                <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Click words below...</span>
-              ) : (
-                selection.map((word, wIdx) => (
-                  <button
-                    key={wIdx}
-                    type="button"
-                    onClick={() => {
-                      setDragDropSelections(prev => ({
-                        ...prev,
-                        [block.id]: (prev[block.id] || []).filter((_, idx) => idx !== wIdx)
-                      }));
-                    }}
-                    style={{ background: '#06b6d4', color: '#ffffff', border: 'none', borderRadius: '6px', padding: '2px 8px', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    {word} ×
-                  </button>
-                ))
-              )}
-            </div>
+              return (
+                <div key={sIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', borderBottom: sIdx < sentencesList.length - 1 ? '1px dashed #a5f3fc' : 'none', paddingBottom: sIdx < sentencesList.length - 1 ? '0.75rem' : 0 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0891b2' }}>
+                    🧩 {sentenceQuestion}
+                  </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-              {sentenceWords.map((word, wIdx) => {
-                const isUsed = selection.includes(word);
-                return (
-                  <button
-                    key={wIdx}
-                    type="button"
-                    disabled={isUsed}
-                    onClick={() => {
-                      setDragDropSelections(prev => ({
-                        ...prev,
-                        [block.id]: [...(prev[block.id] || []), word]
-                      }));
-                    }}
-                    style={{
-                      background: isUsed ? '#e2e8f0' : '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '6px',
-                      padding: '3px 8px',
-                      fontSize: '0.7rem',
-                      fontWeight: 600,
-                      color: isUsed ? '#94a3b8' : '#0891b2',
-                      cursor: isUsed ? 'default' : 'pointer'
-                    }}
-                  >
-                    {word}
-                  </button>
-                );
-              })}
-            </div>
+                  <div style={{ minHeight: '38px', padding: '0.4rem 0.6rem', background: '#ffffff', borderRadius: '8px', border: '1.5px dashed #06b6d4', display: 'flex', flexWrap: 'wrap', gap: '0.25rem', alignItems: 'center' }}>
+                    {selection.length === 0 ? (
+                      <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Click words below...</span>
+                    ) : (
+                      selection.map((word, wIdx) => (
+                        <button
+                          key={wIdx}
+                          type="button"
+                          onClick={() => {
+                            setDragDropSelections(prev => ({
+                              ...prev,
+                              [selectionKey]: (prev[selectionKey] || []).filter((_, idx) => idx !== wIdx)
+                            }));
+                          }}
+                          style={{ background: '#06b6d4', color: '#ffffff', border: 'none', borderRadius: '6px', padding: '2px 8px', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}
+                        >
+                          {word} ×
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                    {sentenceWords.map((word, wIdx) => {
+                      const isUsed = selection.includes(word);
+                      return (
+                        <button
+                          key={wIdx}
+                          type="button"
+                          disabled={isUsed}
+                          onClick={() => {
+                            setDragDropSelections(prev => ({
+                              ...prev,
+                              [selectionKey]: [...(prev[selectionKey] || []), word]
+                            }));
+                          }}
+                          style={{
+                            background: isUsed ? '#e2e8f0' : '#ffffff',
+                            color: isUsed ? '#94a3b8' : '#0891b2',
+                            border: `1px solid ${isUsed ? '#cbd5e1' : '#67e8f9'}`,
+                            borderRadius: '6px',
+                            padding: '3px 9px',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            cursor: isUsed ? 'not-allowed' : 'pointer'
+                          }}
+                        >
+                          {word}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         );
 
@@ -1128,28 +1142,44 @@ export default function PreviewCanvasRenderer({
                 <FiGrid /> Hotspot Explorer
               </div>
               {block.content?.imageUrl ? (
-                <div style={{ position: 'relative', width: '100%', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block' }}>
-                  <img src={resolvedImg} alt="Hotspot explorer source" style={{ width: '100%', display: 'block' }} />
+                <div style={{ position: 'relative', width: '100%', height: block.styles?.height || 'auto', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block' }}>
+                  <img
+                    src={resolvedImg}
+                    alt="Hotspot explorer source"
+                    style={{
+                      width: '100%',
+                      height: block.styles?.height && block.styles?.height !== 'auto' ? block.styles.height : 'auto',
+                      maxHeight: '450px',
+                      objectFit: block.styles?.objectFit || 'cover',
+                      display: 'block'
+                    }}
+                  />
                   {(block.content.hotspots || []).map((h, hidx) => (
                     <div
                       key={h.id || hidx}
+                      title={h.name || `Target ${hidx + 1}`}
                       style={{
                         position: 'absolute',
                         left: `${(h.x / 400) * 100}%`,
                         top: `${(h.y / 250) * 100}%`,
-                        width: `${(h.width / 400) * 100}%`,
-                        height: `${(h.height / 250) * 100}%`,
-                        border: '2px solid #ef4444',
-                        background: 'rgba(239, 68, 68, 0.25)',
-                        color: '#fff',
-                        fontSize: '9px',
-                        padding: '1px',
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        background: 'radial-gradient(circle, #ef4444 0%, #dc2626 100%)',
+                        border: '2px solid #ffffff',
+                        boxShadow: '0 0 10px rgba(239, 68, 68, 0.7), 0 2px 4px rgba(0,0,0,0.3)',
+                        color: '#ffffff',
+                        fontSize: '10px',
+                        fontWeight: 'bold',
+                        transform: 'translate(-50%, -50%)',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        zIndex: 5
                       }}
                     >
-                      {h.name || `H${hidx + 1}`}
+                      {hidx + 1}
                     </div>
                   ))}
                 </div>
@@ -1214,7 +1244,7 @@ export default function PreviewCanvasRenderer({
                         {qIdx + 1}. {q.question || 'Question prompt...'}
                       </div>
 
-                      {(q.type === 'mcq' || Array.isArray(q.options)) && q.options && q.options.length > 0 && (
+                      {(q.type === 'mcq' || q.type === 'multiple_choice') && q.options && q.options.length > 0 && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                           {q.options.map((opt, oIdx) => {
                             const optText = typeof opt === 'object' ? opt.text : opt;
@@ -1318,7 +1348,7 @@ export default function PreviewCanvasRenderer({
                         </div>
                       )}
 
-                      {q.type === 'text' && (
+                      {(q.type === 'text' || q.type === 'open_text' || q.type === 'open_text_response' || !q.type) && (
                         <input
                           className="cs-form-input"
                           style={{ height: '30px', fontSize: '0.75rem' }}
@@ -1359,62 +1389,43 @@ export default function PreviewCanvasRenderer({
     }
   };
 
-  const getProcessedElements = (items) => {
-    if (!items || items.length === 0) return [];
+  // Compute vertical dynamic flow positions to prevent overlap when content height exceeds saved editor top coordinates
+  let currentBottom = 0;
+  const processedElements = (elements || []).map((block) => {
+    const rawTop = parseInt(block.styles?.top || 0, 10);
+    const parsedTop = isNaN(rawTop) ? 0 : rawTop;
+    const computedTop = currentBottom > 0 ? Math.max(parsedTop, currentBottom + 16) : parsedTop;
 
-    let currentOffsetY = 0;
+    // Estimate realistic rendered block height
+    let estimatedHeight = 100;
+    const isFB = block.type === 'fill_blank' || block.type === 'fill_blanks' || block.type === 'fill_in_blanks';
+    
+    if (isFB) {
+      const bCount = (block.content?.blanks || []).length || 1;
+      estimatedHeight = 140 + bCount * 45;
+    } else if (block.type === 'image') {
+      const hasQ = block.content?.hasQuestion;
+      const opts = block.content?.questionOptions?.length || 0;
+      estimatedHeight = hasQ ? 280 + opts * 40 : 220;
+    } else if (block.type === 'word_search') {
+      estimatedHeight = 360;
+    } else if (block.type === 'matching') {
+      const pairCount = (block.content?.pairs || []).length || 2;
+      estimatedHeight = 100 + pairCount * 45;
+    } else if (block.type === 'quiz') {
+      const qCount = (block.content?.questions || []).length || 1;
+      estimatedHeight = 120 + qCount * 180;
+    } else if (block.styles?.height || block.styles?.minHeight) {
+      const explicitH = parseInt(block.styles?.height || block.styles?.minHeight, 10);
+      if (!isNaN(explicitH) && explicitH > 0) estimatedHeight = explicitH;
+    }
 
-    return items.map((block, idx) => {
-      const explicitTop = (block.styles?.top !== undefined && block.styles?.top !== 'auto' && block.styles?.top !== null) ? parseInt(block.styles.top) : null;
-      
-      let blockH = 160;
-      if (block.styles?.height && block.styles.height !== 'auto') {
-        blockH = parseInt(block.styles.height) || 160;
-      } else if (block.styles?.minHeight && block.styles.minHeight !== 'auto') {
-        blockH = parseInt(block.styles.minHeight) || 160;
-      } else if (block.type === 'video' || block.type === 'image' || block.type === 'hotspot_explorer') {
-        blockH = 280;
-      } else if (block.type === 'functional_reading') {
-        const qCount = (block.content?.questions || []).length || 1;
-        blockH = 360 + qCount * 140;
-      } else if (block.type === 'match' || block.type === 'matching') {
-        const pairsCount = (block.content?.leftItems || block.content?.pairs || block.content?.items || []).length || 3;
-        blockH = 100 + pairsCount * 70;
-      } else if (block.type === 'word_search') {
-        const gridRows = parseInt(block.content?.gridSize) || (block.content?.grid || []).length || 8;
-        blockH = 340 + gridRows * 12;
-      } else if (block.type === 'grammar_correction') {
-        const sCount = (block.content?.sentences || []).length || 2;
-        blockH = 110 + sCount * 75;
-      } else if (block.type === 'fill_in_blanks' || block.type === 'categorization') {
-        const itemsCount = (block.content?.items || block.content?.blanks || []).length || 3;
-        blockH = 100 + itemsCount * 60;
-      } else if (block.type === 'roleplay_simulation') {
-        const stepsCount = (block.content?.steps || block.content?.dialogue || []).length || 2;
-        blockH = Math.max(200, stepsCount * 90);
-      } else if (block.type === 'quiz' || block.type === 'true_false' || block.type === 'writing_prompt' || block.type === 'quiz_listening') {
-        const optsCount = (block.content?.options || []).length || 4;
-        blockH = 140 + optsCount * 40;
-      } else if (block.type === 'heading' || block.type === 'text') {
-        blockH = 60;
-      }
-
-      let computedTop = currentOffsetY;
-      if (explicitTop !== null && explicitTop > currentOffsetY) {
-        computedTop = explicitTop;
-      }
-
-      currentOffsetY = computedTop + blockH + 24;
-
-      return {
-        ...block,
-        computedStyleTop: `${computedTop}px`,
-        computedStyleMinHeight: `${blockH}px`
-      };
-    });
-  };
-
-  const processedElements = getProcessedElements(elements);
+    currentBottom = computedTop + estimatedHeight;
+    return {
+      ...block,
+      _computedTop: computedTop
+    };
+  });
 
   return (
     <>
@@ -1437,7 +1448,7 @@ export default function PreviewCanvasRenderer({
           style={{
             position: 'absolute',
             left: block.styles?.left || '0px',
-            top: block.computedStyleTop,
+            top: `${block._computedTop}px`,
             padding: '0.85rem',
             borderRadius: '12px',
             border: '1.5px solid #e2e8f0',
@@ -1446,14 +1457,11 @@ export default function PreviewCanvasRenderer({
             display: 'flex',
             flexDirection: 'column',
             boxSizing: 'border-box',
-            transition: 'all 0.15s',
+            overflow: 'hidden',
             zIndex: block.styles?.zIndex || 1,
             wordBreak: 'break-word',
             overflowWrap: 'anywhere',
-            overflow: 'visible',
             ...(block.styles?.blockWidth ? { width: block.styles.blockWidth } : { width: '100%' }),
-            minHeight: block.computedStyleMinHeight,
-            height: 'auto',
             fontFamily: block.styles?.fontFamily || 'inherit',
             fontSize: block.styles?.fontSize || 'inherit',
             fontWeight: block.styles?.fontWeight === 'Bold' ? 700 : block.styles?.fontWeight === 'SemiBold' ? 600 : block.styles?.fontWeight === 'Normal' ? 400 : 'inherit',
