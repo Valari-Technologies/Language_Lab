@@ -112,6 +112,8 @@ const resolveMediaUrl = (url) => {
 
 const getThumbnailUrl = (thumbnail) => {
   if (!thumbnail || thumbnail === 'None' || thumbnail === 'null') return null;
+  const clean = thumbnail.trim().toLowerCase();
+  if (clean.endsWith('.pdf') || clean.endsWith('.doc') || clean.endsWith('.docx') || clean.endsWith('.txt')) return null;
   return resolveMediaUrl(thumbnail);
 };
 
@@ -765,27 +767,43 @@ const formatDifficulty = (val) => {
     if (!elements || elements.length === 0) return 600;
     let lastBottom = 0;
     elements.forEach((block, idx) => {
-      const top = parseInt(block.styles?.top) || 0;
+      const top = (block.styles?.top !== undefined && block.styles?.top !== 'auto' && block.styles?.top !== null) ? parseInt(block.styles.top) : 0;
       let height = parseInt(block.styles?.minHeight || block.styles?.height);
       if (isNaN(height)) {
-        if (block.type === 'video' || block.type === 'image' || block.type === 'hotspot_explorer') height = 240;
-        else if (block.type === 'dialogue' || block.type === 'roleplay_simulation') {
+        if (block.type === 'video' || block.type === 'image' || block.type === 'hotspot_explorer') height = 280;
+        else if (block.type === 'functional_reading') {
+          const qCount = (block.content?.questions || []).length || 1;
+          height = 360 + qCount * 140;
+        } else if (block.type === 'match' || block.type === 'matching') {
+          const pairsCount = (block.content?.leftItems || block.content?.pairs || block.content?.items || []).length || 3;
+          height = 100 + pairsCount * 70;
+        } else if (block.type === 'word_search') {
+          const gridRows = parseInt(block.content?.gridSize) || (block.content?.grid || []).length || 8;
+          height = 340 + gridRows * 12;
+        } else if (block.type === 'grammar_correction') {
+          const sCount = (block.content?.sentences || []).length || 2;
+          height = 110 + sCount * 75;
+        } else if (block.type === 'fill_in_blanks' || block.type === 'categorization') {
+          const itemsCount = (block.content?.items || block.content?.blanks || []).length || 3;
+          height = 100 + itemsCount * 60;
+        } else if (block.type === 'dialogue' || block.type === 'roleplay_simulation') {
           const stepsCount = (block.content?.steps || block.content?.dialogue || []).length || 2;
-          height = Math.max(160, stepsCount * 70);
-        }
-        else if (block.type === 'quiz' || block.type === 'quiz_listening') height = 200;
-        else if (block.type === 'match' || block.type === 'drag_drop') height = 260;
-        else if (block.type === 'reading_passage') height = 320;
-        else height = 120;
+          height = Math.max(200, stepsCount * 90);
+        } else if (block.type === 'quiz' || block.type === 'true_false' || block.type === 'writing_prompt' || block.type === 'quiz_listening') {
+          const optsCount = (block.content?.options || []).length || 4;
+          height = 140 + optsCount * 40;
+        } else if (block.type === 'reading_passage') height = 320;
+        else if (block.type === 'heading' || block.type === 'text') height = 60;
+        else height = 160;
       }
 
       let computedTop = top;
-      if (idx > 0 && computedTop < lastBottom + 16) {
-        computedTop = lastBottom + 16;
+      if (idx > 0 && computedTop < lastBottom + 24) {
+        computedTop = lastBottom + 24;
       }
       lastBottom = computedTop + height;
     });
-    return Math.max(600, lastBottom + 60);
+    return Math.max(600, lastBottom + 80);
   };
 
 
@@ -1091,12 +1109,8 @@ const formatDifficulty = (val) => {
                   const actData = await actRes.json();
                   setSelectedActivity(actData);
 
-                  if (actData.experience && (!selectedExperience || selectedExperience.id !== actData.experience)) {
-                    const expRes = await apiFetch(`/api/v1/content/experiences/${actData.experience}/`);
-                    if (expRes.ok) {
-                      const expData = await expRes.json();
-                      setSelectedExperience(expData);
-                    }
+                  if (actData.experience) {
+                    await loadExperienceDetail(actData.experience, false);
                   }
                 }
               }
@@ -1110,21 +1124,42 @@ const formatDifficulty = (val) => {
         fetchScreenData();
       }
     } else if (currentPath === '/content-studio' && view === 'screen-builder' && isEditingScreen) {
-      // If user navigated away via URL to content studio root, clear screen editing state
+      // If user navigated away via URL/browser back to content studio root, clear screen editing state and preserve active builder view
       setIsEditingScreen(false);
-      setView('dashboard');
+      if (selectedActivity) {
+        setView('activity-builder');
+      } else if (selectedExperience) {
+        setView('experience-builder');
+      } else {
+        setView('dashboard');
+      }
     }
   }, [currentPath]);
 
-  /* ── Clear editor path from URL when navigating away ── */
+  /* ── Clear editor path from URL when navigating away & sync history ── */
   useEffect(() => {
     if (view !== 'screen-builder') {
       if (window.location.pathname.startsWith('/content-studio/editor/')) {
-        window.history.pushState({}, '', '/content-studio');
+        window.history.replaceState({ csView: view }, '', '/content-studio');
         setCurrentPath('/content-studio');
       }
     }
   }, [view]);
+
+  /* ── Listen for browser Back/Forward navigation ── */
+  useEffect(() => {
+    const handlePopState = (e) => {
+      const stateView = e.state?.csView;
+      if (stateView) {
+        setView(stateView);
+        if (stateView !== 'screen-builder') {
+          setIsEditingScreen(false);
+        }
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // ── Full Screen Studio States ──
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(true);
@@ -1517,9 +1552,11 @@ const formatDifficulty = (val) => {
             if (defaultActivity) {
               await loadActivityDetail(defaultActivity.id, 'screen-builder');
             } else {
+              window.history.pushState({ csView: 'experience-builder' }, '', '/content-studio');
               setView('experience-builder');
             }
           } else {
+            window.history.pushState({ csView: 'experience-builder' }, '', '/content-studio');
             setView('experience-builder');
           }
         }
@@ -1534,7 +1571,7 @@ const formatDifficulty = (val) => {
 
   const handleSaveExperience = async () => {
     if ((experienceForm.description || '').length > 200) {
-      showFeedback('Description cannot exceed 200 characters limit.', 'error');
+      showFeedback('Description must not exceed 200 characters.', 'error');
       setActionLoading(false);
       return null;
     }
@@ -2244,6 +2281,7 @@ const formatDifficulty = (val) => {
     }));
     pushHistory(updatedElements);
     setSelectedBlockId(newBlock.id);
+    setRightPanelCollapsed(false);
     showFeedback(`Added ${newBlock.type.replace('_', ' ')} block`);
   };
 
@@ -2380,6 +2418,7 @@ const formatDifficulty = (val) => {
           e.stopPropagation();
           setSelectedBlockId(block.id);
           setPendingBlock(null);
+          setRightPanelCollapsed(false);
         }}
         style={{
           position: 'absolute',
@@ -2506,7 +2545,7 @@ const formatDifficulty = (val) => {
             {block.content?.hasQuestion && (
               <div style={{ width: '100%', marginTop: '0.35rem', padding: '0.4rem 0.5rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', textAlign: 'left' }}>
                 <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                  ❓ {block.content.questionText || 'Answer the question:'}
+                  {block.content.questionText || 'Answer the question:'}
                 </div>
                 {block.content.questionOptions && block.content.questionOptions.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
@@ -3863,8 +3902,16 @@ const formatDifficulty = (val) => {
   const handleThumbnailUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    const ext = file.name ? file.name.split('.').pop().toLowerCase() : '';
+    const validImageExts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'];
+    if (!file.type.startsWith('image/') || !validImageExts.includes(ext)) {
+      showFeedback("Invalid file type. Thumbnails must be image files (JPG, PNG, WEBP). PDF and document files are not supported.", "error");
+      e.target.value = null;
+      return;
+    }
     if (file.size > 10 * 1024 * 1024) {
-      showFeedback("Image is too large. Upload less than 10MB.", "error");
+      showFeedback("Image is too large. Maximum thumbnail size allowed is 10MB.", "error");
       e.target.value = null;
       return;
     }
@@ -5661,7 +5708,7 @@ const formatDifficulty = (val) => {
                         type="file"
                         id="thumb-file-input"
                         style={{ display: 'none' }}
-                        accept="image/*"
+                        accept="image/png, image/jpeg, image/webp, image/gif, image/svg+xml"
                         onChange={handleThumbnailUpload}
                       />
                       <div
@@ -5674,7 +5721,7 @@ const formatDifficulty = (val) => {
                           <>
                             <div style={{ width: 44, height: 34, background: '#f1f5f9', borderRadius: 4, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🌅</div>
                             <span style={{ fontSize: '0.78rem', color: '#0284c7', fontWeight: 600 }}>Upload Thumbnail</span>
-                            <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '2px' }}>JPG, PNG (Max 2MB)</div>
+                            <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '2px' }}>JPG, PNG (Max 10MB)</div>
                           </>
                         )}
                       </div>
@@ -5742,7 +5789,7 @@ const formatDifficulty = (val) => {
                       />
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
                         {(experienceForm.description?.length || 0) > 200 ? (
-                          <span style={{ fontSize: '0.68rem', color: '#ef4444', fontWeight: 600 }}>Description cannot exceed 200 characters.</span>
+                          <span style={{ fontSize: '0.68rem', color: '#ef4444', fontWeight: 600 }}>Description must not exceed 200 characters.</span>
                         ) : <span />}
                         <span style={{ fontSize: '0.68rem', color: (experienceForm.description?.length || 0) > 200 ? '#ef4444' : '#94a3b8', fontWeight: (experienceForm.description?.length || 0) > 200 ? 700 : 400 }}>
                           {experienceForm.description?.length || 0} / 200
@@ -5770,7 +5817,12 @@ const formatDifficulty = (val) => {
                   {/* Save button at the bottom (No top border line) */}
                   <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '1.25rem', marginTop: '0.5rem' }}>
                     <button
+                      disabled={actionLoading || (experienceForm.description?.length || 0) > 200}
                       onClick={async () => {
+                        if ((experienceForm.description?.length || 0) > 200) {
+                          showFeedback('Description must not exceed 200 characters.', 'error');
+                          return;
+                        }
                         const savedExp = await handleSaveExperience();
                         if (savedExp) {
                           const expType = savedExp.experience_type || 'LESSON';
@@ -5818,10 +5870,12 @@ const formatDifficulty = (val) => {
                       }}
                       style={{
                         display: 'flex', alignItems: 'center', gap: '6px',
-                        background: 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
+                        background: (experienceForm.description?.length || 0) > 200 ? '#94a3b8' : 'linear-gradient(135deg, #0b57d0, #1d4ed8)',
                         color: '#ffffff', border: 'none', borderRadius: '10px',
                         padding: '0.6rem 1.75rem', fontWeight: 700, fontSize: '0.86rem',
-                        cursor: 'pointer', boxShadow: '0 2px 8px rgba(11,87,208,0.25)'
+                        cursor: (experienceForm.description?.length || 0) > 200 ? 'not-allowed' : 'pointer',
+                        opacity: (experienceForm.description?.length || 0) > 200 ? 0.65 : 1,
+                        boxShadow: (experienceForm.description?.length || 0) > 200 ? 'none' : '0 2px 8px rgba(11,87,208,0.25)'
                       }}
                     >
                       Save &amp; Continue to Activities &nbsp;<span style={{ fontSize: '1.1rem' }}>→</span>
@@ -6931,7 +6985,17 @@ const formatDifficulty = (val) => {
 
                         {/* Tab Selector */}
                         <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.2rem', gap: '0.75rem', marginTop: '0.6rem' }}>
-                          {['content', 'style', 'details'].map(t => (
+                          {['content', 'style', 'details'].filter(t => {
+                            if (t === 'style') {
+                              const selectedBlock = (screenForm.elements || []).find(el => el.id === selectedBlockId);
+                              if (selectedBlock) {
+                                const isTextElem = ['heading', 'text'].includes(selectedBlock.type);
+                                const isMediaElem = ['image', 'video', 'audio', 'media', 'hotspot_explorer', 'functional_reading'].includes(selectedBlock.type);
+                                if (!isTextElem && !isMediaElem) return false;
+                              }
+                            }
+                            return true;
+                          }).map(t => (
                             <button
                               key={t}
                               onClick={() => setPropertiesTab(t)}
@@ -6998,7 +7062,7 @@ const formatDifficulty = (val) => {
                           }
 
                           return (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', paddingTop: '0.75rem' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>
                                   {selectedBlock.type.replace('_', ' ')} Settings
@@ -7412,9 +7476,11 @@ const formatDifficulty = (val) => {
                                                   className="cs-form-input"
                                                   style={{ height: '26px', fontSize: '0.75rem' }}
                                                   type="text"
-                                                  value={selectedBlock.content?.questionOptions?.join(', ') || ''}
+                                                  value={selectedBlock.content?.questionOptionsText ?? (selectedBlock.content?.questionOptions?.join(', ') || '')}
                                                   onChange={e => {
-                                                    const opts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                                                    const rawVal = e.target.value;
+                                                    const opts = rawVal.split(',').map(s => s.trim()).filter(Boolean);
+                                                    handleUpdateBlockContent('questionOptionsText', rawVal);
                                                     handleUpdateBlockContent('questionOptions', opts);
                                                   }}
                                                   placeholder="e.g. Lion, Tiger, Elephant"
@@ -8373,7 +8439,7 @@ const formatDifficulty = (val) => {
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                       <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Functional Reading Settings</span>
                                       <MediaUploadField
-                                        label="Document File (Image/PDF)"
+                                        label="Document File (Image)"
                                         value={selectedBlock.content?.documentUrl || ''}
                                         mediaType="image"
                                         onChange={url => handleUpdateBlockContent('documentUrl', url)}
@@ -8789,121 +8855,138 @@ const formatDifficulty = (val) => {
                                 </>
                               )}
 
-                              {propertiesTab === 'style' && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                                  <div className="cs-form-group">
-                                    <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Font Family</label>
-                                    <select
-                                      className="cs-form-input"
-                                      style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
-                                      value={selectedBlock.styles?.fontFamily || 'Poppins'}
-                                      onChange={e => handleUpdateBlockStyles('fontFamily', e.target.value)}
-                                    >
-                                      <option value="Poppins">Poppins</option>
-                                      <option value="Inter">Inter</option>
-                                      <option value="Roboto">Roboto</option>
-                                      <option value="Georgia">Georgia</option>
-                                    </select>
-                                  </div>
+                              {propertiesTab === 'style' && (() => {
+                                const isTextElem = ['heading', 'text'].includes(selectedBlock.type);
+                                const isMediaElem = ['image', 'video', 'audio', 'media', 'hotspot_explorer', 'functional_reading'].includes(selectedBlock.type);
 
-                                  <div className="cs-form-group">
-                                    <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Font Size</label>
-                                    <input
-                                      className="cs-form-input"
-                                      style={{ height: '28px', fontSize: '0.75rem' }}
-                                      type="text"
-                                      value={selectedBlock.styles?.fontSize || ''}
-                                      onChange={e => handleUpdateBlockStyles('fontSize', e.target.value)}
-                                      placeholder="e.g. 16px, 1.25rem"
-                                    />
-                                  </div>
-
-                                  <div className="cs-form-group">
-                                    <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Font Weight</label>
-                                    <select
-                                      className="cs-form-input"
-                                      style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
-                                      value={selectedBlock.styles?.fontWeight || 'Normal'}
-                                      onChange={e => handleUpdateBlockStyles('fontWeight', e.target.value)}
-                                    >
-                                      <option value="Normal">Normal</option>
-                                      <option value="SemiBold">SemiBold</option>
-                                      <option value="Bold">Bold</option>
-                                    </select>
-                                  </div>
-
-                                  <div className="cs-form-group">
-                                    <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Text Color</label>
-                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                      <input
-                                        type="color"
-                                        value={selectedBlock.styles?.color && selectedBlock.styles.color.startsWith('#') ? selectedBlock.styles.color : '#1e293b'}
-                                        onChange={e => handleUpdateBlockStyles('color', e.target.value)}
-                                        style={{ border: 'none', width: '32px', height: '32px', padding: 0, cursor: 'pointer', borderRadius: '4px' }}
-                                      />
-                                      <input
-                                        className="cs-form-input"
-                                        style={{ height: '28px', fontSize: '0.75rem', flex: 1 }}
-                                        type="text"
-                                        value={selectedBlock.styles?.color || ''}
-                                        onChange={e => handleUpdateBlockStyles('color', e.target.value)}
-                                        placeholder="Hex color code"
-                                      />
+                                if (!isTextElem && !isMediaElem) {
+                                  return (
+                                    <div style={{ padding: '2rem 0.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.75rem' }}>
+                                      No customizable style options for this element card.
                                     </div>
-                                  </div>
+                                  );
+                                }
 
-                                  <div className="cs-form-group">
-                                    <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Alignment</label>
-                                    <select
-                                      className="cs-form-input"
-                                      style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
-                                      value={selectedBlock.styles?.alignment || 'Left'}
-                                      onChange={e => handleUpdateBlockStyles('alignment', e.target.value)}
-                                    >
-                                      <option value="Left">Left</option>
-                                      <option value="Center">Center</option>
-                                      <option value="Right">Right</option>
-                                      <option value="Justify">Justify</option>
-                                    </select>
-                                  </div>
-
-                                  {['image', 'video', 'audio', 'media', 'hotspot_explorer', 'functional_reading', 'roleplay_simulation', 'audio_mystery', 'true_false', 'quiz', 'voice_recorder', 'drag_drop', 'writing_prompt', 'dictation'].includes(selectedBlock.type) && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
-                                      {['image', 'media', 'hotspot_explorer', 'functional_reading'].includes(selectedBlock.type) && (
+                                return (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                    {isTextElem && (
+                                      <>
                                         <div className="cs-form-group">
-                                          <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Crop / Fit Mode</label>
+                                          <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Font Family</label>
                                           <select
                                             className="cs-form-input"
                                             style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
-                                            value={selectedBlock.styles?.objectFit || 'cover'}
-                                            onChange={e => handleUpdateBlockStyles('objectFit', e.target.value)}
+                                            value={selectedBlock.styles?.fontFamily || 'Poppins'}
+                                            onChange={e => handleUpdateBlockStyles('fontFamily', e.target.value)}
                                           >
-                                            <option value="cover">Crop to Fit (Cover)</option>
-                                            <option value="contain">Show Entire Element (Contain)</option>
-                                            <option value="fill">Stretch to Fill (Fill)</option>
+                                            <option value="Poppins">Poppins</option>
+                                            <option value="Inter">Inter</option>
+                                            <option value="Roboto">Roboto</option>
+                                            <option value="Georgia">Georgia</option>
                                           </select>
                                         </div>
-                                      )}
 
-                                      <div className="cs-form-group">
-                                        <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Element Height</label>
-                                        <select
-                                          className="cs-form-input"
-                                          style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
-                                          value={selectedBlock.styles?.height || '220px'}
-                                          onChange={e => handleUpdateBlockStyles('height', e.target.value)}
-                                        >
-                                          <option value="120px">Small (120px)</option>
-                                          <option value="220px">Medium (220px)</option>
-                                          <option value="320px">Large (320px)</option>
-                                          <option value="420px">X-Large (420px)</option>
-                                          <option value="auto">Auto Height</option>
-                                        </select>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
+                                        <div className="cs-form-group">
+                                          <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Font Size</label>
+                                          <input
+                                            className="cs-form-input"
+                                            style={{ height: '28px', fontSize: '0.75rem' }}
+                                            type="text"
+                                            value={selectedBlock.styles?.fontSize || ''}
+                                            onChange={e => handleUpdateBlockStyles('fontSize', e.target.value)}
+                                            placeholder="e.g. 16px, 1.25rem"
+                                          />
+                                        </div>
+
+                                        <div className="cs-form-group">
+                                          <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Font Weight</label>
+                                          <select
+                                            className="cs-form-input"
+                                            style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
+                                            value={selectedBlock.styles?.fontWeight || 'Normal'}
+                                            onChange={e => handleUpdateBlockStyles('fontWeight', e.target.value)}
+                                          >
+                                            <option value="Normal">Normal</option>
+                                            <option value="SemiBold">SemiBold</option>
+                                            <option value="Bold">Bold</option>
+                                          </select>
+                                        </div>
+
+                                        <div className="cs-form-group">
+                                          <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Text Color</label>
+                                          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                            <input
+                                              type="color"
+                                              value={selectedBlock.styles?.color && selectedBlock.styles.color.startsWith('#') ? selectedBlock.styles.color : '#1e293b'}
+                                              onChange={e => handleUpdateBlockStyles('color', e.target.value)}
+                                              style={{ border: 'none', width: '32px', height: '32px', padding: 0, cursor: 'pointer', borderRadius: '4px' }}
+                                            />
+                                            <input
+                                              className="cs-form-input"
+                                              style={{ height: '28px', fontSize: '0.75rem', flex: 1 }}
+                                              type="text"
+                                              value={selectedBlock.styles?.color || ''}
+                                              onChange={e => handleUpdateBlockStyles('color', e.target.value)}
+                                              placeholder="Hex color code"
+                                            />
+                                          </div>
+                                        </div>
+
+                                        <div className="cs-form-group">
+                                          <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Alignment</label>
+                                          <select
+                                            className="cs-form-input"
+                                            style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
+                                            value={selectedBlock.styles?.alignment || 'Left'}
+                                            onChange={e => handleUpdateBlockStyles('alignment', e.target.value)}
+                                          >
+                                            <option value="Left">Left</option>
+                                            <option value="Center">Center</option>
+                                            <option value="Right">Right</option>
+                                            <option value="Justify">Justify</option>
+                                          </select>
+                                        </div>
+                                      </>
+                                    )}
+
+                                    {isMediaElem && (
+                                      <>
+                                        {['image', 'media', 'hotspot_explorer', 'functional_reading'].includes(selectedBlock.type) && (
+                                          <div className="cs-form-group">
+                                            <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Crop / Fit Mode</label>
+                                            <select
+                                              className="cs-form-input"
+                                              style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
+                                              value={selectedBlock.styles?.objectFit || 'cover'}
+                                              onChange={e => handleUpdateBlockStyles('objectFit', e.target.value)}
+                                            >
+                                              <option value="cover">Crop to Fit (Cover)</option>
+                                              <option value="contain">Show Entire Element (Contain)</option>
+                                              <option value="fill">Stretch to Fill (Fill)</option>
+                                            </select>
+                                          </div>
+                                        )}
+
+                                        <div className="cs-form-group">
+                                          <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Element Height</label>
+                                          <select
+                                            className="cs-form-input"
+                                            style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
+                                            value={selectedBlock.styles?.height || '220px'}
+                                            onChange={e => handleUpdateBlockStyles('height', e.target.value)}
+                                          >
+                                            <option value="120px">Small (120px)</option>
+                                            <option value="220px">Medium (220px)</option>
+                                            <option value="320px">Large (320px)</option>
+                                            <option value="420px">X-Large (420px)</option>
+                                            <option value="auto">Auto Height</option>
+                                          </select>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                );
+                              })()}
 
                               {propertiesTab === 'details' && (() => {
                                 const getElementDetails = (type) => {
@@ -9820,7 +9903,8 @@ const formatDifficulty = (val) => {
                                   transformOrigin: 'top left',
                                   background: '#ffffff',
                                   fontFamily: activeScreen?.content?.font || 'Poppins',
-                                  boxSizing: 'border-box'
+                                  boxSizing: 'border-box',
+                                  overflow: 'visible'
                                 }}
                               >
                                 <PreviewCanvasRenderer

@@ -71,6 +71,10 @@ export default function PreviewCanvasRenderer({
         );
 
       case 'image':
+        const imgBlockAnswerKey = `${activeScreenId}_${block.id}`;
+        const selectedImgAns = previewAnswers[imgBlockAnswerKey];
+        const hasImgSelected = selectedImgAns !== undefined;
+
         return (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', flex: 1, height: block.styles?.height || '100%', width: '100%' }}>
             {block.content?.url ? (
@@ -89,6 +93,69 @@ export default function PreviewCanvasRenderer({
             )}
             {block.content?.caption && (
               <span style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic' }}>{block.content.caption}</span>
+            )}
+            {block.content?.hasQuestion && (
+              <div style={{ width: '100%', marginTop: '0.5rem', padding: '0.75rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', textAlign: 'left', boxSizing: 'border-box' }}>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', marginBottom: '0.5rem' }}>
+                  {block.content.questionText || 'Answer the question:'}
+                </div>
+                {block.content.questionOptions && block.content.questionOptions.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    {block.content.questionOptions.map((opt, oIdx) => {
+                      const isCorrect = (block.content.correctAnswer || '').trim().toLowerCase() === opt.trim().toLowerCase();
+                      const isSelected = selectedImgAns === opt || selectedImgAns === oIdx;
+
+                      let borderCol = '#cbd5e1';
+                      let bgCol = '#ffffff';
+                      let textCol = '#1e293b';
+
+                      if (hasImgSelected) {
+                        if (isCorrect) {
+                          borderCol = '#16a34a';
+                          bgCol = '#ecfdf5';
+                          textCol = '#15803d';
+                        } else if (isSelected) {
+                          borderCol = '#ef4444';
+                          bgCol = '#fef2f2';
+                          textCol = '#b91c1c';
+                        }
+                      }
+
+                      return (
+                        <div
+                          key={oIdx}
+                          onClick={() => {
+                            if (!hasImgSelected) {
+                              setPreviewAnswers(prev => ({
+                                ...prev,
+                                [imgBlockAnswerKey]: opt
+                              }));
+                            }
+                          }}
+                          style={{
+                            padding: '0.45rem 0.75rem',
+                            borderRadius: '6px',
+                            border: `1.5px solid ${borderCol}`,
+                            background: bgCol,
+                            color: textCol,
+                            fontSize: '0.78rem',
+                            fontWeight: isSelected ? 700 : 500,
+                            cursor: hasImgSelected ? 'default' : 'pointer',
+                            transition: 'all 0.15s ease',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                          }}
+                        >
+                          <span>{opt}</span>
+                          {hasImgSelected && isCorrect && <span style={{ fontSize: '0.72rem', fontWeight: 700 }}>✓ Correct</span>}
+                          {hasImgSelected && isSelected && !isCorrect && <span style={{ fontSize: '0.72rem', fontWeight: 700 }}>✗ Incorrect</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         );
@@ -1096,17 +1163,179 @@ export default function PreviewCanvasRenderer({
         }
 
       case 'functional_reading':
+        const docUrl = block.content?.documentUrl || block.content?.url || '';
+        const questionsList = block.content?.questions || [];
+
         return (
-          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #818cf8', background: '#eef2ff', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#3730a3', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiFileText /> Functional Reading
+          <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.75rem', border: '1px solid #818cf8', background: '#ffffff', borderRadius: '12px', padding: '1rem', boxShadow: '0 2px 8px rgba(99,102,241,0.06)' }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#3730a3', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e0e7ff', paddingBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiFileText /> Functional Reading
+              </div>
+              <span style={{ fontSize: '0.68rem', padding: '2px 8px', background: '#e0e7ff', color: '#4338ca', borderRadius: '12px', textTransform: 'uppercase', fontWeight: 700 }}>
+                {block.content?.documentType || 'Poster'}
+              </span>
             </div>
-            <div style={{ fontSize: '0.7rem', color: '#475569' }}>
-              <strong>Document Type:</strong> <span style={{ textTransform: 'uppercase', fontWeight: 700 }}>{block.content?.documentType || 'form'}</span>
-            </div>
-            <div style={{ fontSize: '0.68rem', color: '#64748b' }}>
-              Questions configured: {(block.content?.questions || []).length}
-            </div>
+
+            {block.content?.scenario && (
+              <div style={{ fontSize: '0.78rem', color: '#475569', background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px', borderLeft: '3px solid #6366f1' }}>
+                {block.content.scenario}
+              </div>
+            )}
+
+            {docUrl ? (
+              <div style={{ width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.25rem' }}>
+                <img
+                  src={resolveUrl(docUrl)}
+                  alt="Functional Reading Document"
+                  style={{ width: '100%', maxHeight: '320px', objectFit: block.styles?.objectFit || 'contain', borderRadius: '6px' }}
+                />
+              </div>
+            ) : (
+              <div style={{ width: '100%', height: '160px', border: '1.5px dashed #cbd5e1', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+                <FiImage style={{ fontSize: '2rem', marginBottom: '4px', opacity: 0.6 }} />
+                <span style={{ fontSize: '0.72rem' }}>No document image configured.</span>
+              </div>
+            )}
+
+            {questionsList.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.25rem' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1e293b' }}>
+                  Questions ({questionsList.length}):
+                </div>
+                {questionsList.map((q, qIdx) => {
+                  const qKey = `${activeScreenId}_${block.id}_q${qIdx}`;
+                  const userAns = previewAnswers[qKey];
+                  const hasAns = userAns !== undefined;
+
+                  return (
+                    <div key={q.id || qIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.75rem' }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e293b', marginBottom: '0.5rem' }}>
+                        {qIdx + 1}. {q.question || 'Question prompt...'}
+                      </div>
+
+                      {(q.type === 'mcq' || Array.isArray(q.options)) && q.options && q.options.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                          {q.options.map((opt, oIdx) => {
+                            const optText = typeof opt === 'object' ? opt.text : opt;
+                            const isCorrect = q.correctAnswer === oIdx || String(q.correctAnswer).toLowerCase() === String(optText).toLowerCase();
+                            const isSelected = userAns === oIdx || userAns === optText;
+
+                            let borderCol = '#cbd5e1';
+                            let bgCol = '#ffffff';
+                            let textCol = '#1e293b';
+
+                            if (hasAns) {
+                              if (isCorrect) {
+                                borderCol = '#16a34a';
+                                bgCol = '#ecfdf5';
+                                textCol = '#15803d';
+                              } else if (isSelected) {
+                                borderCol = '#ef4444';
+                                bgCol = '#fef2f2';
+                                textCol = '#b91c1c';
+                              }
+                            }
+
+                            return (
+                              <div
+                                key={oIdx}
+                                onClick={() => {
+                                  if (!hasAns) {
+                                    setPreviewAnswers(prev => ({ ...prev, [qKey]: oIdx }));
+                                  }
+                                }}
+                                style={{
+                                  padding: '0.4rem 0.65rem',
+                                  borderRadius: '6px',
+                                  border: `1.5px solid ${borderCol}`,
+                                  background: bgCol,
+                                  color: textCol,
+                                  fontSize: '0.75rem',
+                                  fontWeight: isSelected ? 700 : 500,
+                                  cursor: hasAns ? 'default' : 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justify: 'space-between'
+                                }}
+                              >
+                                <span>{optText}</span>
+                                {hasAns && isCorrect && <span style={{ fontSize: '0.7rem', fontWeight: 700 }}>✓ Correct</span>}
+                                {hasAns && isSelected && !isCorrect && <span style={{ fontSize: '0.7rem', fontWeight: 700 }}>✗ Incorrect</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {q.type === 'true_false' && (
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          {[true, false].map((tfVal) => {
+                            const isCorrect = q.correctAnswer === tfVal;
+                            const isSelected = userAns === tfVal;
+
+                            let borderCol = '#cbd5e1';
+                            let bgCol = '#ffffff';
+                            let textCol = '#1e293b';
+
+                            if (hasAns) {
+                              if (isCorrect) {
+                                borderCol = '#16a34a';
+                                bgCol = '#ecfdf5';
+                                textCol = '#15803d';
+                              } else if (isSelected) {
+                                borderCol = '#ef4444';
+                                bgCol = '#fef2f2';
+                                textCol = '#b91c1c';
+                              }
+                            }
+
+                            return (
+                              <button
+                                key={String(tfVal)}
+                                type="button"
+                                onClick={() => {
+                                  if (!hasAns) {
+                                    setPreviewAnswers(prev => ({ ...prev, [qKey]: tfVal }));
+                                  }
+                                }}
+                                style={{
+                                  flex: 1,
+                                  padding: '0.4rem 0.65rem',
+                                  borderRadius: '6px',
+                                  border: `1.5px solid ${borderCol}`,
+                                  background: bgCol,
+                                  color: textCol,
+                                  fontSize: '0.75rem',
+                                  fontWeight: isSelected ? 700 : 600,
+                                  cursor: hasAns ? 'default' : 'pointer'
+                                }}
+                              >
+                                {tfVal ? 'True' : 'False'}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {q.type === 'text' && (
+                        <input
+                          className="cs-form-input"
+                          style={{ height: '30px', fontSize: '0.75rem' }}
+                          type="text"
+                          placeholder="Type your answer..."
+                          value={userAns || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setPreviewAnswers(prev => ({ ...prev, [qKey]: val }));
+                          }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
 
@@ -1133,37 +1362,54 @@ export default function PreviewCanvasRenderer({
   const getProcessedElements = (items) => {
     if (!items || items.length === 0) return [];
 
-    let lastBottom = 0;
+    let currentOffsetY = 0;
 
     return items.map((block, idx) => {
-      const topVal = parseInt(block.styles?.top) || 0;
-      let blockH = 120;
+      const explicitTop = (block.styles?.top !== undefined && block.styles?.top !== 'auto' && block.styles?.top !== null) ? parseInt(block.styles.top) : null;
+      
+      let blockH = 160;
       if (block.styles?.height && block.styles.height !== 'auto') {
-        blockH = parseInt(block.styles.height) || 120;
+        blockH = parseInt(block.styles.height) || 160;
       } else if (block.styles?.minHeight && block.styles.minHeight !== 'auto') {
-        blockH = parseInt(block.styles.minHeight) || 120;
+        blockH = parseInt(block.styles.minHeight) || 160;
       } else if (block.type === 'video' || block.type === 'image' || block.type === 'hotspot_explorer') {
-        blockH = 240;
+        blockH = 280;
+      } else if (block.type === 'functional_reading') {
+        const qCount = (block.content?.questions || []).length || 1;
+        blockH = 360 + qCount * 140;
+      } else if (block.type === 'match' || block.type === 'matching') {
+        const pairsCount = (block.content?.leftItems || block.content?.pairs || block.content?.items || []).length || 3;
+        blockH = 100 + pairsCount * 70;
+      } else if (block.type === 'word_search') {
+        const gridRows = parseInt(block.content?.gridSize) || (block.content?.grid || []).length || 8;
+        blockH = 340 + gridRows * 12;
+      } else if (block.type === 'grammar_correction') {
+        const sCount = (block.content?.sentences || []).length || 2;
+        blockH = 110 + sCount * 75;
+      } else if (block.type === 'fill_in_blanks' || block.type === 'categorization') {
+        const itemsCount = (block.content?.items || block.content?.blanks || []).length || 3;
+        blockH = 100 + itemsCount * 60;
       } else if (block.type === 'roleplay_simulation') {
         const stepsCount = (block.content?.steps || block.content?.dialogue || []).length || 2;
-        blockH = Math.max(160, stepsCount * 70);
+        blockH = Math.max(200, stepsCount * 90);
       } else if (block.type === 'quiz' || block.type === 'true_false' || block.type === 'writing_prompt' || block.type === 'quiz_listening') {
-        blockH = 200;
+        const optsCount = (block.content?.options || []).length || 4;
+        blockH = 140 + optsCount * 40;
       } else if (block.type === 'heading' || block.type === 'text') {
         blockH = 60;
       }
 
-      let computedTop = topVal;
-      if (idx > 0 && computedTop < lastBottom + 16) {
-        computedTop = lastBottom + 16;
+      let computedTop = currentOffsetY;
+      if (explicitTop !== null && explicitTop > currentOffsetY) {
+        computedTop = explicitTop;
       }
 
-      lastBottom = computedTop + blockH;
+      currentOffsetY = computedTop + blockH + 24;
 
       return {
         ...block,
         computedStyleTop: `${computedTop}px`,
-        computedStyleHeight: (block.styles?.height && block.styles.height !== 'auto') ? block.styles.height : `${blockH}px`
+        computedStyleMinHeight: `${blockH}px`
       };
     });
   };
@@ -1204,10 +1450,10 @@ export default function PreviewCanvasRenderer({
             zIndex: block.styles?.zIndex || 1,
             wordBreak: 'break-word',
             overflowWrap: 'anywhere',
-            overflow: 'hidden',
+            overflow: 'visible',
             ...(block.styles?.blockWidth ? { width: block.styles.blockWidth } : { width: '100%' }),
-            minHeight: block.computedStyleHeight,
-            height: block.computedStyleHeight,
+            minHeight: block.computedStyleMinHeight,
+            height: 'auto',
             fontFamily: block.styles?.fontFamily || 'inherit',
             fontSize: block.styles?.fontSize || 'inherit',
             fontWeight: block.styles?.fontWeight === 'Bold' ? 700 : block.styles?.fontWeight === 'SemiBold' ? 600 : block.styles?.fontWeight === 'Normal' ? 400 : 'inherit',
