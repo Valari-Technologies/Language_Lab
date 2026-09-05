@@ -35,9 +35,9 @@ export default function PreviewCanvasRenderer({
         return (
           <div style={{ textAlign: (block.styles?.alignment || 'Center').toLowerCase(), marginBottom: '0.5rem', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <span style={{
-              fontFamily: block.styles?.fontFamily || 'Poppins',
+              fontFamily: block.styles?.fontFamily === 'Georgia' ? 'Georgia, serif' : block.styles?.fontFamily === 'Inter' ? "'Inter', sans-serif" : block.styles?.fontFamily === 'Roboto' ? "'Roboto', sans-serif" : block.styles?.fontFamily ? `'${block.styles.fontFamily}', sans-serif` : "'Poppins', sans-serif",
               fontSize: `${(parseInt(block.styles?.fontSize) || 36) * 0.72}px`,
-              fontWeight: block.styles?.fontWeight === 'Bold' ? 800 : block.styles?.fontWeight === 'SemiBold' ? 600 : 400,
+              fontWeight: (block.styles?.fontWeight || '').toLowerCase() === 'bold' || block.styles?.fontWeight === '700' ? 700 : (block.styles?.fontWeight || '').toLowerCase() === 'semibold' || block.styles?.fontWeight === '600' ? 600 : 400,
               color: block.styles?.color || '#1e293b',
               lineHeight: 1.25,
               display: 'inline-block',
@@ -53,9 +53,9 @@ export default function PreviewCanvasRenderer({
         return (
           <div style={{
             textAlign: (block.styles?.alignment || 'Left').toLowerCase(),
-            fontFamily: block.styles?.fontFamily || 'Poppins',
+            fontFamily: block.styles?.fontFamily === 'Georgia' ? 'Georgia, serif' : block.styles?.fontFamily === 'Inter' ? "'Inter', sans-serif" : block.styles?.fontFamily === 'Roboto' ? "'Roboto', sans-serif" : block.styles?.fontFamily ? `'${block.styles.fontFamily}', sans-serif` : "'Poppins', sans-serif",
             fontSize: block.styles?.fontSize || '15px',
-            fontWeight: block.styles?.fontWeight === 'Bold' ? 700 : block.styles?.fontWeight === 'SemiBold' ? 600 : 400,
+            fontWeight: (block.styles?.fontWeight || '').toLowerCase() === 'bold' || block.styles?.fontWeight === '700' ? 700 : (block.styles?.fontWeight || '').toLowerCase() === 'semibold' || block.styles?.fontWeight === '600' ? 600 : 400,
             color: block.styles?.color || '#334155',
             lineHeight: 1.5,
             whiteSpace: 'pre-wrap',
@@ -193,112 +193,117 @@ export default function PreviewCanvasRenderer({
         );
 
       case 'quiz':
-        const blockAnswerKey = `${activeScreenId}_${block.id}`;
-        const selectedAnsIndex = previewAnswers[blockAnswerKey];
-        const hasSelected = selectedAnsIndex !== undefined;
+        {
+          const rawQuestions = block.content?.questions;
+          const questionsList = rawQuestions && rawQuestions.length > 0
+            ? rawQuestions
+            : [{
+                question: block.content?.question || 'Quiz question text label...',
+                options: block.content?.options || ['', '', '', ''],
+                correctAnswerIndex: block.content?.correctAnswerIndex ?? 0
+              }];
 
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', height: '100%', padding: '2px 0' }}>
-            <div style={{ border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.78rem', fontWeight: 600, color: '#c2410c', boxShadow: '0 2px 4px rgba(249,115,22,0.04)' }}>
-              ❓ {block.content?.question || 'Quiz question text label...'}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', height: '100%', justifyContent: 'space-between' }}>
-              {(block.content?.options || ['', '', '', '']).map((opt, oIdx) => {
-                const isCorrectAnswer = parseInt(block.content?.correctAnswerIndex) === oIdx;
-                const isSelected = selectedAnsIndex === oIdx;
-
-                let borderCol = '#cbd5e1';
-                let bgCol = '#ffffff';
-                let textCol = '#1e293b';
-
-                if (hasSelected) {
-                  if (isCorrectAnswer) {
-                    borderCol = '#16a34a';
-                    bgCol = '#ecfdf5';
-                    textCol = '#15803d';
-                  } else if (isSelected) {
-                    borderCol = '#ef4444';
-                    bgCol = '#fef2f2';
-                    textCol = '#b91c1c';
-                  }
-                }
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', height: '100%', padding: '2px 0' }}>
+              {questionsList.map((qObj, qIdx) => {
+                const blockAnswerKey = `${activeScreenId}_${block.id}_q${qIdx}`;
+                const selectedAnsIndex = previewAnswers[blockAnswerKey];
+                const hasSelected = selectedAnsIndex !== undefined;
+                const qText = qObj.question || `Question #${qIdx + 1}`;
+                const options = qObj.options || ['', '', '', ''];
+                const correctIdx = parseInt(qObj.correctAnswerIndex ?? qObj.correctAnswer) || 0;
 
                 return (
-                  <div
-                    key={oIdx}
-                    onClick={() => {
-                      if (!hasSelected) {
-                        setPreviewAnswers(prev => ({
-                          ...prev,
-                          [blockAnswerKey]: oIdx
-                        }));
-                      }
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      background: bgCol,
-                      border: `1.5px solid ${borderCol}`,
-                      borderRadius: '6px',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.72rem',
-                      cursor: hasSelected ? 'default' : 'pointer',
-                      transition: 'all 0.15s',
-                      boxSizing: 'border-box',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
-                    }}
-                  >
-                    <span style={{
-                      width: '14px',
-                      height: '14px',
-                      borderRadius: '50%',
-                      border: '1px solid #cbd5e1',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '0.55rem',
-                      fontWeight: 'bold',
-                      background: isSelected || (hasSelected && isCorrectAnswer) ? borderCol : 'none',
-                      color: isSelected || (hasSelected && isCorrectAnswer) ? '#ffffff' : '#64748b',
-                      borderColor: borderCol
-                    }}>
-                      {String.fromCharCode(65 + oIdx)}
-                    </span>
-                    <span style={{ fontWeight: 600, color: textCol }}>{(typeof opt === 'object' ? opt?.text : opt) || `Quiz Option ${oIdx + 1}`}</span>
+                  <div key={qIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                    <div style={{ border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.78rem', fontWeight: 600, color: '#c2410c', boxShadow: '0 2px 4px rgba(249,115,22,0.04)' }}>
+                      ❓ {questionsList.length > 1 ? `#${qIdx + 1}: ` : ''}{qText}
+                    </div>
 
-                    {hasSelected && isCorrectAnswer && (
-                      <span style={{ marginLeft: 'auto', color: '#16a34a', fontSize: '0.58rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                        ✓ Correct Choice
-                      </span>
-                    )}
-                    {hasSelected && isSelected && !isCorrectAnswer && (
-                      <span style={{ marginLeft: 'auto', color: '#ef4444', fontSize: '0.58rem', fontWeight: 'bold' }}>
-                        ✗ Incorrect Choice
-                      </span>
-                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      {options.map((opt, oIdx) => {
+                        const isCorrectAnswer = correctIdx === oIdx;
+                        const isSelected = selectedAnsIndex === oIdx;
+
+                        let borderCol = '#cbd5e1';
+                        let bgCol = '#ffffff';
+                        let textCol = '#1e293b';
+
+                        if (hasSelected) {
+                          if (isCorrectAnswer) {
+                            borderCol = '#16a34a';
+                            bgCol = '#ecfdf5';
+                            textCol = '#15803d';
+                          } else if (isSelected) {
+                            borderCol = '#ef4444';
+                            bgCol = '#fef2f2';
+                            textCol = '#b91c1c';
+                          }
+                        }
+
+                        const optionText = typeof opt === 'object' ? opt?.text : opt;
+
+                        return (
+                          <div
+                            key={oIdx}
+                            onClick={() => {
+                              if (!hasSelected) {
+                                setPreviewAnswers(prev => ({
+                                  ...prev,
+                                  [blockAnswerKey]: oIdx
+                                }));
+                              }
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.5rem',
+                              background: bgCol,
+                              border: `1.5px solid ${borderCol}`,
+                              borderRadius: '6px',
+                              padding: '0.45rem 0.65rem',
+                              fontSize: '0.72rem',
+                              cursor: hasSelected ? 'default' : 'pointer',
+                              transition: 'all 0.15s',
+                              boxSizing: 'border-box',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+                            }}
+                          >
+                            <span style={{
+                              width: '14px',
+                              height: '14px',
+                              borderRadius: '50%',
+                              border: `1px solid ${borderCol}`,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.55rem',
+                              fontWeight: 'bold',
+                              background: hasSelected && isCorrectAnswer ? '#16a34a' : 'none',
+                              color: hasSelected && isCorrectAnswer ? '#ffffff' : textCol
+                            }}>{String.fromCharCode(65 + oIdx)}</span>
+                            <span style={{ color: textCol, fontWeight: isSelected || (hasSelected && isCorrectAnswer) ? 600 : 400 }}>
+                              {optionText || `Option ${oIdx + 1}`}
+                            </span>
+                            {hasSelected && isCorrectAnswer && (
+                              <span style={{ marginLeft: 'auto', color: '#16a34a', fontSize: '0.58rem', fontWeight: 'bold' }}>
+                                ✓ Correct
+                              </span>
+                            )}
+                            {hasSelected && isSelected && !isCorrectAnswer && (
+                              <span style={{ marginLeft: 'auto', color: '#ef4444', fontSize: '0.58rem', fontWeight: 'bold' }}>
+                                ✗ Incorrect
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
             </div>
-
-            {hasSelected && (
-              <button
-                onClick={() => {
-                  setPreviewAnswers(prev => {
-                    const updated = { ...prev };
-                    delete updated[blockAnswerKey];
-                    return updated;
-                  });
-                }}
-                style={{ alignSelf: 'flex-end', border: 'none', background: 'none', color: '#0b57d0', fontSize: '0.65rem', fontWeight: 600, cursor: 'pointer', marginTop: '2px' }}
-              >
-                ↺ Reset Answer Choice
-              </button>
-            )}
-          </div>
-        );
+          );
+        }
 
       case 'voice_recorder':
         const blockRecordKey = `${activeScreenId}_${block.id}`;
@@ -1005,95 +1010,74 @@ export default function PreviewCanvasRenderer({
           );
         }
 
-      case 'memory':
-        {
-          const memoryCards = block.content?.cards || ['Card 1', 'Match 1', 'Card 2', 'Match 2'];
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #e0e7ff', background: '#f5f3ff', borderRadius: '8px', padding: '0.75rem', marginTop: '0.5rem' }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#4f46e5', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FiGrid /> Memory matching game
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.35rem' }}>
-                {memoryCards.map((card, idx) => {
-                  const isFlipped = flippedCards[`${block.id}-${idx}`];
-                  return (
-                    <div 
-                      key={idx} 
-                      onClick={() => {
-                        setFlippedCards(prev => ({ ...prev, [`${block.id}-${idx}`]: !prev[`${block.id}-${idx}`] }));
-                      }}
-                      style={{ 
-                        height: '50px', 
-                        background: isFlipped ? '#e0e7ff' : '#fff', 
-                        borderRadius: '6px', 
-                        border: '1px solid #cbd5e1', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        fontSize: '0.7rem', 
-                        fontWeight: 700, 
-                        color: '#4f46e5',
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                        padding: '2px'
-                      }}
-                    >
-                      {isFlipped ? card : '?'}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        }
 
       case 'true_false':
         {
-          const tfQuestion = block.content?.question || 'Is this statement true?';
-          const tfSelection = previewAnswers[block.id];
+          const rawStatements = block.content?.statements;
+          const statements = rawStatements && rawStatements.length > 0
+            ? rawStatements
+            : [{ question: block.content?.question || 'Is this statement true?', correctAnswer: block.content?.correctAnswer !== undefined ? block.content.correctAnswer : true }];
+          const userAnswers = previewAnswers[block.id] || {};
+
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '8px', padding: '0.75rem', marginTop: '0.5rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '8px', padding: '0.75rem', marginTop: '0.5rem' }}>
               <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#c2410c', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FiCheckCircle /> True / False question
+                <FiCheckCircle /> True / False Challenge ({statements.length} Statement{statements.length > 1 ? 's' : ''})
               </div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>
-                {tfQuestion}
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button 
-                  type="button"
-                  onClick={() => setPreviewAnswers(prev => ({ ...prev, [block.id]: 'true' }))}
-                  style={{ 
-                    flex: 1, 
-                    padding: '6px', 
-                    borderRadius: '6px', 
-                    border: tfSelection === 'true' ? '1.5px solid #16a34a' : '1px solid #cbd5e1', 
-                    background: tfSelection === 'true' ? '#dcfce7' : '#fff', 
-                    color: tfSelection === 'true' ? '#16a34a' : '#64748b', 
-                    fontSize: '0.68rem', 
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  True
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setPreviewAnswers(prev => ({ ...prev, [block.id]: 'false' }))}
-                  style={{ 
-                    flex: 1, 
-                    padding: '6px', 
-                    borderRadius: '6px', 
-                    border: tfSelection === 'false' ? '1.5px solid #16a34a' : '1px solid #cbd5e1', 
-                    background: tfSelection === 'false' ? '#dcfce7' : '#fff', 
-                    color: tfSelection === 'false' ? '#16a34a' : '#64748b', 
-                    fontSize: '0.68rem', 
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  False
-                </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                {statements.map((stmt, sIdx) => {
+                  const currentSel = userAnswers[sIdx];
+                  return (
+                    <div key={sIdx} style={{ background: '#ffffff', border: '1px solid #ffedd5', borderRadius: '6px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#334155' }}>
+                        <span style={{ fontWeight: 700, color: '#ea580c', marginRight: '4px' }}>#{sIdx + 1}:</span>
+                        {stmt.question || 'Is this statement true?'}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewAnswers(prev => ({
+                            ...prev,
+                            [block.id]: { ...(prev[block.id] || {}), [sIdx]: true }
+                          }))}
+                          style={{
+                            flex: 1,
+                            padding: '6px',
+                            borderRadius: '6px',
+                            border: currentSel === true ? '1.5px solid #16a34a' : '1px solid #cbd5e1',
+                            background: currentSel === true ? '#dcfce7' : '#fff',
+                            color: currentSel === true ? '#16a34a' : '#64748b',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          True
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewAnswers(prev => ({
+                            ...prev,
+                            [block.id]: { ...(prev[block.id] || {}), [sIdx]: false }
+                          }))}
+                          style={{
+                            flex: 1,
+                            padding: '6px',
+                            borderRadius: '6px',
+                            border: currentSel === false ? '1.5px solid #16a34a' : '1px solid #cbd5e1',
+                            background: currentSel === false ? '#dcfce7' : '#fff',
+                            color: currentSel === false ? '#16a34a' : '#64748b',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          False
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
@@ -1116,22 +1100,117 @@ export default function PreviewCanvasRenderer({
         );
 
       case 'roleplay_simulation':
-        return (
-          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #c084fc', background: '#faf5ff', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#6b21a8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiUsers /> Roleplay Simulation
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-              <strong>Scenario:</strong> {block.content?.scenario || 'Scenario details...'}
-            </div>
-            <div style={{ fontSize: '0.7rem', border: '1px dashed #d8b4fe', padding: '6px', borderRadius: '6px', background: '#fff' }}>
-              <strong>NPC speaker:</strong> {block.content?.npcCharacter || 'NPC'}
-              <div style={{ fontSize: '0.66rem', color: '#475569', marginTop: '2px' }}>
-                Conversation contains {(block.content?.conversation || []).length} turns.
+        {
+          const npcName = block.content?.npcCharacter || 'NPC';
+          const userRole = block.content?.userRole || 'Student';
+          const npcAvatarUrl = resolveUrl ? resolveUrl(block.content?.npcImage || block.content?.npcAvatarUrl) : defaultResolveUrl(block.content?.npcImage || block.content?.npcAvatarUrl);
+          const studentAvatarUrl = resolveUrl ? resolveUrl(block.content?.userAvatarUrl) : defaultResolveUrl(block.content?.userAvatarUrl);
+          const turns = block.content?.conversation || [];
+
+          return (
+            <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.65rem', border: '1px solid #c084fc', background: '#faf5ff', borderRadius: '8px', padding: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#6b21a8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <FiUsers /> Roleplay Simulation
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {npcAvatarUrl && (
+                    <img
+                      src={npcAvatarUrl}
+                      alt={npcName}
+                      title={`NPC: ${npcName}`}
+                      style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #a855f7' }}
+                    />
+                  )}
+                  {studentAvatarUrl && (
+                    <img
+                      src={studentAvatarUrl}
+                      alt={userRole}
+                      title={`Student: ${userRole}`}
+                      style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #3b82f6' }}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {block.content?.scenario && (
+                <div style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic' }}>
+                  <strong>Scenario:</strong> {block.content.scenario}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
+                {turns.length > 0 ? (
+                  turns.map((t, tIdx) => {
+                    const isNpc = t.speaker === 'npc' || t.speaker === 'NPC Speaker' || !t.speaker;
+                    const speakerName = isNpc ? npcName : userRole;
+                    const text = t.text || t.prompt || '(No dialogue provided)';
+                    const currentAvatar = isNpc ? npcAvatarUrl : studentAvatarUrl;
+
+                    return (
+                      <div
+                        key={tIdx}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          justifyContent: isNpc ? 'flex-start' : 'flex-end',
+                          gap: '0.5rem',
+                          alignSelf: isNpc ? 'flex-start' : 'flex-end',
+                          maxWidth: '85%'
+                        }}
+                      >
+                        {isNpc && (
+                          currentAvatar ? (
+                            <img
+                              src={currentAvatar}
+                              alt={speakerName}
+                              style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, marginTop: '2px' }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: '0.6rem', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', background: '#e9d5ff', color: '#6b21a8', flexShrink: 0 }}>
+                              {speakerName}
+                            </span>
+                          )
+                        )}
+
+                        <div style={{
+                          background: isNpc ? '#ffffff' : '#3b82f6',
+                          color: isNpc ? '#1e293b' : '#ffffff',
+                          border: isNpc ? '1px solid #e9d5ff' : 'none',
+                          borderRadius: isNpc ? '10px 10px 10px 2px' : '10px 10px 2px 10px',
+                          padding: '0.45rem 0.65rem',
+                          textAlign: isNpc ? 'left' : 'right',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                        }}>
+                          <div style={{ fontSize: '0.6rem', fontWeight: 700, color: isNpc ? '#6b21a8' : '#e0f2fe', marginBottom: '2px' }}>{speakerName}</div>
+                          <div style={{ fontSize: '0.72rem', lineHeight: 1.3 }}>{text}</div>
+                        </div>
+
+                        {!isNpc && (
+                          currentAvatar ? (
+                            <img
+                              src={currentAvatar}
+                              alt={speakerName}
+                              style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, marginTop: '2px' }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: '0.6rem', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', background: '#3b82f6', color: '#ffffff', flexShrink: 0 }}>
+                              {speakerName}
+                            </span>
+                          )
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontStyle: 'italic', textAlign: 'center', padding: '0.5rem' }}>
+                    No dialogue turns added yet.
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        );
+          );
+        }
 
       case 'hotspot_explorer':
         {
