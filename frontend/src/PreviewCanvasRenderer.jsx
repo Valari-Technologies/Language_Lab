@@ -162,16 +162,18 @@ export default function PreviewCanvasRenderer({
 
       case 'audio':
         return (
-          <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, height: '100%', boxSizing: 'border-box', width: '100%' }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#0ea5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.9rem', flexShrink: 0 }}>
-              <FiVolume2 />
+          <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.6rem', flex: 1, height: '100%', boxSizing: 'border-box', width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#0ea5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1rem', flexShrink: 0 }}>
+                <FiVolume2 />
+              </div>
+              <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0369a1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{block.content?.title || 'Voice Instruction'}</div>
+                <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 1 }}>{(block.content?.url || block.content?.audio) ? 'Audio track ready' : 'No track attached'}</div>
+              </div>
             </div>
-            <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0369a1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{block.content?.title || 'Voice Instruction'}</div>
-              <div style={{ fontSize: '0.62rem', color: '#64748b', marginTop: 1 }}>{block.content?.url ? 'Audio track attached' : 'No track attached'}</div>
-            </div>
-            {block.content?.url && (
-              <audio src={resolveUrl(block.content.url)} controls style={{ width: '180px', height: '32px', flexShrink: 0 }} />
+            {(block.content?.url || block.content?.audio) && (
+              <audio src={resolveUrl(block.content?.url || block.content?.audio)} controls style={{ width: '100%', height: '34px' }} />
             )}
           </div>
         );
@@ -906,20 +908,40 @@ export default function PreviewCanvasRenderer({
         }
 
       case 'dictation':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiVolume2 /> Dictation (Listening Module)
+        {
+          const dictKey = `${activeScreenId}_${block.id}`;
+          const userVal = previewAnswers[dictKey] || '';
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.85rem', flex: 1, height: '100%', boxSizing: 'border-box' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiVolume2 style={{ fontSize: '1rem' }} /> Dictation Exercise
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#1e293b', background: '#ffffff', padding: '0.45rem 0.65rem', borderRadius: '6px', border: '1px solid #93c5fd' }}>
+                <strong>Instruction:</strong> {block.content?.question || 'Listen carefully to the audio and type exactly what you hear.'}
+              </div>
+
+              {/* Playable Audio Track */}
+              {(block.content?.url || block.content?.audio) ? (
+                <div style={{ width: '100%', background: '#ffffff', padding: '0.5rem', borderRadius: '6px', border: '1px solid #60a5fa' }}>
+                  <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#1d4ed8', marginBottom: '3px' }}>🎵 Listen to Dictation Audio:</div>
+                  <audio src={resolveUrl(block.content?.url || block.content?.audio)} controls style={{ width: '100%', height: '34px' }} />
+                </div>
+              ) : (
+                <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontStyle: 'italic' }}>No audio file configured for dictation.</div>
+              )}
+
+              <input
+                type="text"
+                className="cs-form-input"
+                placeholder="Type the dictation here..."
+                value={userVal}
+                onChange={e => setPreviewAnswers(prev => ({ ...prev, [dictKey]: e.target.value }))}
+                style={{ width: '100%', height: '34px', borderRadius: '6px', border: '1px solid #94a3b8', padding: '0 10px', fontSize: '0.78rem', background: '#ffffff' }}
+              />
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#475569' }}>
-              <strong>Prompt/Question:</strong> {block.content?.question || 'Listen and type what you hear.'}
-            </div>
-            <div style={{ fontSize: '0.68rem', color: '#64748b', fontStyle: 'italic', wordBreak: 'break-all' }}>
-              Audio Source: {block.content?.url || '(No audio file selected)'}
-            </div>
-            <input type="text" disabled placeholder="User types response here..." style={{ width: '100%', height: '30px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 8px', fontSize: '0.72rem', background: '#f8fafc' }} />
-          </div>
-        );
+          );
+        }
 
       case 'grammar_correction':
         return (
@@ -1449,19 +1471,105 @@ export default function PreviewCanvasRenderer({
         );
 
       case 'audio_mystery':
-        return (
-          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #67e8f9', background: '#ecfeff', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0891b2', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiVolume2 /> Audio Mystery
+        {
+          const mysteryKey = `${activeScreenId}_${block.id}`;
+          const selectedAns = previewAnswers[mysteryKey];
+          const hasSelected = selectedAns !== undefined;
+          const options = block.content?.options || [];
+          const correctIdx = parseInt(block.content?.correctAnswerIndex ?? block.content?.correctAnswer) || 0;
+
+          return (
+            <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.75rem', border: '1px solid #67e8f9', background: '#ecfeff', borderRadius: '10px', padding: '0.85rem', width: '100%', boxSizing: 'border-box', overflowY: 'auto' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0891b2', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FiVolume2 style={{ fontSize: '1.1rem' }} /> Audio Mystery Challenge
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#1e293b', background: '#ffffff', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #bae6fd', fontWeight: 600 }}>
+                <strong>Question:</strong> {block.content?.question || 'Listen to the audio clues and guess the mystery item!'}
+              </div>
+
+              {/* Main Audio File if configured */}
+              {(block.content?.url || block.content?.audio) && (
+                <div style={{ background: '#ffffff', padding: '0.5rem', borderRadius: '8px', border: '1px solid #7dd3fc' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#0369a1', marginBottom: '4px' }}>🎵 Main Mystery Audio:</div>
+                  <audio src={resolveUrl(block.content?.url || block.content?.audio)} controls style={{ width: '100%', height: '32px' }} />
+                </div>
+              )}
+
+              {/* Clues Section with Audio Players */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0e7490' }}>
+                  🔍 Audio Clues:
+                </div>
+                {(block.content?.clues || []).map((c, cIdx) => (
+                  <div key={cIdx} style={{ background: '#ffffff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '0.5rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#0369a1' }}>
+                      Clue #{cIdx + 1}: {c.description || `Audio clue track (${c.duration || 5}s)`}
+                    </div>
+                    {c.audio ? (
+                      <audio src={resolveUrl(c.audio)} controls style={{ width: '100%', height: '30px' }} />
+                    ) : (
+                      <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontStyle: 'italic' }}>No audio file attached for Clue #{cIdx + 1}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Answer options if provided */}
+              {options && options.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0e7490' }}>Select your answer:</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    {options.map((opt, oIdx) => {
+                      const isCorrect = correctIdx === oIdx;
+                      const isSelected = selectedAns === oIdx;
+                      const optText = typeof opt === 'object' ? opt?.text : opt;
+
+                      let bg = '#ffffff';
+                      let border = '#cbd5e1';
+                      let textCol = '#334155';
+
+                      if (hasSelected) {
+                        if (isCorrect) {
+                          bg = '#dcfce7';
+                          border = '#16a34a';
+                          textCol = '#15803d';
+                        } else if (isSelected) {
+                          bg = '#fee2e2';
+                          border = '#ef4444';
+                          textCol = '#b91c1c';
+                        }
+                      }
+
+                      return (
+                        <button
+                          key={oIdx}
+                          type="button"
+                          onClick={() => {
+                            if (!hasSelected) {
+                              setPreviewAnswers(prev => ({ ...prev, [mysteryKey]: oIdx }));
+                            }
+                          }}
+                          style={{
+                            padding: '0.4rem 0.75rem',
+                            borderRadius: '6px',
+                            border: `1.5px solid ${border}`,
+                            background: bg,
+                            color: textCol,
+                            fontSize: '0.75rem',
+                            fontWeight: isSelected ? 700 : 500,
+                            cursor: hasSelected ? 'default' : 'pointer'
+                          }}
+                        >
+                          {optText}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#475569' }}>
-              <strong>Question:</strong> {block.content?.question || 'Mystery description question...'}
-            </div>
-            <div style={{ fontSize: '0.68rem', color: '#64748b' }}>
-              Clues configuration: {(block.content?.clues || []).length} progressive clues.
-            </div>
-          </div>
-        );
+          );
+        }
 
       default:
         return null;

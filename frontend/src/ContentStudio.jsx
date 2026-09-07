@@ -2591,16 +2591,24 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'audio' && (
-          <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, height: '100%', boxSizing: 'border-box' }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#0ea5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.9rem', flexShrink: 0 }}>
-              <FiVolume2 />
+          <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, height: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#0ea5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.95rem', flexShrink: 0 }}>
+                <FiVolume2 />
+              </div>
+              <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0369a1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{block.content?.title || 'Voice Instruction'}</div>
+                <div style={{ fontSize: '0.64rem', color: '#64748b', marginTop: 1 }}>{(block.content?.url || block.content?.audio) ? 'Audio track ready' : 'No track attached'}</div>
+              </div>
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0369a1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{block.content?.title || 'Voice Instruction'}</div>
-              <div style={{ fontSize: '0.62rem', color: '#64748b', marginTop: 1 }}>{block.content?.url ? 'Audio track attached' : 'Click to select track'}</div>
-            </div>
-            {block.content?.url && (
-              <audio src={resolveMediaUrl(block.content.url)} controls style={{ width: '100px', height: '24px', flexShrink: 0 }} />
+            {(block.content?.url || block.content?.audio) ? (
+              <div onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} style={{ width: '100%' }}>
+                <audio src={resolveMediaUrl(block.content?.url || block.content?.audio)} controls style={{ width: '100%', height: '32px' }} />
+              </div>
+            ) : (
+              <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontStyle: 'italic', background: '#ffffff', padding: '0.35rem 0.5rem', borderRadius: '4px', border: '1px dashed #cbd5e1' }}>
+                Select track in right properties panel to play audio
+              </div>
             )}
           </div>
         )}
@@ -2687,17 +2695,27 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         })()}
 
         {block.type === 'dictation' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%', boxSizing: 'border-box' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiVolume2 /> Dictation (Listening Module)
             </div>
             <div style={{ fontSize: '0.72rem', color: '#475569' }}>
               <strong>Prompt/Question:</strong> {block.content?.question || 'Listen and type what you hear.'}
             </div>
-            <div style={{ fontSize: '0.68rem', color: '#64748b', fontStyle: 'italic', wordBreak: 'break-all' }}>
-              Audio Source: {block.content?.url || '(No audio file selected)'}
-            </div>
-            <input type="text" disabled placeholder="User types response here..." style={{ width: '100%', height: '30px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 8px', fontSize: '0.72rem', background: '#f8fafc' }} />
+
+            {/* Interactive Audio Player */}
+            {(block.content?.url || block.content?.audio) ? (
+              <div onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} style={{ width: '100%', background: '#ffffff', padding: '0.4rem', borderRadius: '6px', border: '1px solid #93c5fd' }}>
+                <div style={{ fontSize: '0.64rem', fontWeight: 700, color: '#1d4ed8', marginBottom: '2px' }}>🎵 Listening Track:</div>
+                <audio src={resolveMediaUrl(block.content?.url || block.content?.audio)} controls style={{ width: '100%', height: '32px' }} />
+              </div>
+            ) : (
+              <div style={{ fontSize: '0.64rem', color: '#94a3b8', fontStyle: 'italic', background: '#ffffff', padding: '0.35rem 0.5rem', borderRadius: '4px', border: '1px dashed #cbd5e1' }}>
+                Attach dictation audio file in right properties panel
+              </div>
+            )}
+
+            <input type="text" disabled placeholder="User types response here..." style={{ width: '100%', height: '30px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 8px', fontSize: '0.72rem', background: '#ffffff' }} />
           </div>
         )}
 
@@ -3277,15 +3295,44 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         })()}
 
         {block.type === 'audio_mystery' && (
-          <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #67e8f9', background: '#ecfeff', borderRadius: '8px', padding: '0.75rem' }}>
+          <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #67e8f9', background: '#ecfeff', borderRadius: '8px', padding: '0.75rem', overflowY: 'auto' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0891b2', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiVolume2 /> Audio Mystery
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#475569' }}>
-              <strong>Question:</strong> {block.content?.question || 'Mystery description question...'}
+            <div style={{ fontSize: '0.72rem', color: '#334155', background: '#ffffff', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #bae6fd' }}>
+              <strong>Question:</strong> {block.content?.question || 'What is being described in the audio?'}
             </div>
-            <div style={{ fontSize: '0.68rem', color: '#64748b' }}>
-              Clues configuration: {(block.content?.clues || []).length} progressive clues.
+
+            {/* Main Audio file if present */}
+            {(block.content?.url || block.content?.audio) && (
+              <div onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} style={{ background: '#ffffff', padding: '0.4rem', borderRadius: '6px', border: '1px solid #7dd3fc' }}>
+                <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#0369a1', marginBottom: '2px' }}>Main Audio Track:</div>
+                <audio src={resolveMediaUrl(block.content?.url || block.content?.audio)} controls style={{ width: '100%', height: '30px' }} />
+              </div>
+            )}
+
+            {/* Progressive Clues */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#0e7490' }}>
+                Progressive Audio Clues ({(block.content?.clues || []).length}):
+              </div>
+              {(block.content?.clues && block.content.clues.length > 0 ? block.content.clues : [
+                { audio: '', duration: 5, description: 'Clue 1: Introductory Sound' },
+                { audio: '', duration: 10, description: 'Clue 2: Distinct Pattern' }
+              ]).map((c, cIdx) => (
+                <div key={cIdx} style={{ background: '#ffffff', border: '1px solid #bae6fd', borderRadius: '6px', padding: '0.4rem 0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem', fontWeight: 600, color: '#0369a1' }}>
+                    <span>🔍 Clue #{cIdx + 1}: {c.description || `Clue track (${c.duration || 5}s)`}</span>
+                  </div>
+                  {c.audio ? (
+                    <div onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+                      <audio src={resolveMediaUrl(c.audio)} controls style={{ width: '100%', height: '28px' }} />
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontStyle: 'italic' }}>No audio file uploaded for Clue #{cIdx + 1}</span>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -7264,7 +7311,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
                             {/* Tab Selector */}
                             <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', gap: '0.75rem', marginTop: '0.6rem' }}>
-                              {[{ id: 'content', label: 'Content & Style' }, { id: 'details', label: 'Details' }].map(t => (
+                              {[{ id: 'content', label: 'Design' }, { id: 'details', label: 'Details' }].map(t => (
                                 <button
                                   key={t.id}
                                   onClick={() => setPropertiesTab(t.id)}
@@ -7336,7 +7383,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                   <option value="Poppins">Poppins</option>
                                                   <option value="Inter">Inter</option>
                                                   <option value="Roboto">Roboto</option>
+                                                  <option value="Outfit">Outfit</option>
+                                                  <option value="Open Sans">Open Sans</option>
+                                                  <option value="Lato">Lato</option>
+                                                  <option value="Montserrat">Montserrat</option>
                                                   <option value="Georgia">Georgia</option>
+                                                  <option value="Lora">Lora</option>
+                                                  <option value="Merriweather">Merriweather</option>
+                                                  <option value="Playfair Display">Playfair Display</option>
+                                                  <option value="Courier New">Courier New</option>
                                                 </select>
                                               </div>
 
@@ -7438,7 +7493,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                   <option value="Poppins">Poppins</option>
                                                   <option value="Inter">Inter</option>
                                                   <option value="Roboto">Roboto</option>
+                                                  <option value="Outfit">Outfit</option>
+                                                  <option value="Open Sans">Open Sans</option>
+                                                  <option value="Lato">Lato</option>
+                                                  <option value="Montserrat">Montserrat</option>
                                                   <option value="Georgia">Georgia</option>
+                                                  <option value="Lora">Lora</option>
+                                                  <option value="Merriweather">Merriweather</option>
+                                                  <option value="Playfair Display">Playfair Display</option>
+                                                  <option value="Courier New">Courier New</option>
                                                 </select>
                                               </div>
 
