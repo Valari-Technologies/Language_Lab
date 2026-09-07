@@ -4364,6 +4364,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                   <video
                                     src={getPreviewMediaUrl(activePreviewScreen, 'video')}
                                     controls
+                                    controlsList="nodownload noplaybackrate noremoteplayback"
+                                    disablePictureInPicture
+                                    onContextMenu={e => e.preventDefault()}
                                     style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                                   />
                                 </div>
@@ -4393,6 +4396,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                   <audio
                                     src={getPreviewMediaUrl(activePreviewScreen, 'audio')}
                                     controls
+                                    controlsList="nodownload noplaybackrate noremoteplayback"
+                                    disablePictureInPicture
+                                    onContextMenu={e => e.preventDefault()}
                                     style={{ width: '100%' }}
                                   />
                                 </div>

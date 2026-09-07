@@ -9,7 +9,7 @@ import {
   FiChevronDown, FiChevronUp, FiChevronLeft, FiChevronRight, FiBell, FiEye, FiEyeOff,
   FiAlertTriangle, FiImage, FiPlusCircle,
   FiArrowLeft, FiInfo, FiUpload,
-  FiPlay, FiCheck,
+  FiPlay, FiPause, FiCheck,
   FiUser, FiUsers, FiClock, FiMoreVertical, FiVolume2, FiMic, FiCopy,
   FiMove, FiEdit, FiGitCommit, FiList, FiLayers, FiType, FiLock, FiRefreshCw,
   FiCornerUpLeft, FiCornerUpRight, FiMaximize, FiMinimize
@@ -21,6 +21,140 @@ import logoIcon from './assets/icon.png';
 import roundLogo from './assets/favicon.png';
 import AvatarCropperModal from './AvatarCropperModal';
 import HelpSupportModal from './HelpSupportModal';
+
+const getScrambledWords = (wordsList) => {
+  if (!wordsList || wordsList.length <= 1) return wordsList || [];
+  const shuffled = [...wordsList];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = (i * 3 + 1) % (i + 1);
+    const temp = shuffled[i];
+    shuffled[i] = shuffled[j];
+    shuffled[j] = temp;
+  }
+  if (shuffled.length > 1 && shuffled.every((w, idx) => w === wordsList[idx])) {
+    const temp = shuffled[0];
+    shuffled[0] = shuffled[shuffled.length - 1];
+    shuffled[shuffled.length - 1] = temp;
+  }
+  return shuffled;
+};
+
+const CustomAudioPlayer = ({ src, style = {} }) => {
+  const audioRef = React.useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  const togglePlay = (e) => {
+    e.stopPropagation();
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime || 0);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration || 0);
+    }
+  };
+
+  const handleSeek = (e) => {
+    e.stopPropagation();
+    const newTime = parseFloat(e.target.value);
+    setCurrentTime(newTime);
+    if (audioRef.current) {
+      audioRef.current.currentTime = newTime;
+    }
+  };
+
+  const formatTime = (secs) => {
+    if (isNaN(secs) || secs < 0) return '0:00';
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  return (
+    <div
+      onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        background: '#ffffff',
+        border: '1px solid #cbd5e1',
+        borderRadius: '8px',
+        padding: '0.4rem 0.6rem',
+        width: '100%',
+        boxSizing: 'border-box',
+        ...style
+      }}
+    >
+      <audio
+        ref={audioRef}
+        src={src}
+        onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={handleLoadedMetadata}
+        onEnded={() => setIsPlaying(false)}
+      />
+
+      <button
+        type="button"
+        onClick={togglePlay}
+        style={{
+          width: '28px',
+          height: '28px',
+          borderRadius: '50%',
+          background: '#0ea5e9',
+          color: '#ffffff',
+          border: 'none',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '0.85rem',
+          flexShrink: 0
+        }}
+      >
+        {isPlaying ? <FiPause /> : <FiPlay style={{ marginLeft: '2px' }} />}
+      </button>
+
+      <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#475569', minWidth: '60px', flexShrink: 0 }}>
+        {formatTime(currentTime)} / {formatTime(duration)}
+      </span>
+
+      <input
+        type="range"
+        min="0"
+        max={duration || 100}
+        step="0.1"
+        value={currentTime}
+        onChange={handleSeek}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          flex: 1,
+          height: '5px',
+          accentColor: '#0ea5e9',
+          cursor: 'pointer'
+        }}
+      />
+    </div>
+  );
+};
 
 const getUserInitials = (u, defaultVal = 'U') => {
   if (!u) return defaultVal;
@@ -2602,9 +2736,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               </div>
             </div>
             {(block.content?.url || block.content?.audio) ? (
-              <div onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} style={{ width: '100%' }}>
-                <audio src={resolveMediaUrl(block.content?.url || block.content?.audio)} controls style={{ width: '100%', height: '32px' }} />
-              </div>
+              <CustomAudioPlayer src={resolveMediaUrl(block.content?.url || block.content?.audio)} />
             ) : (
               <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontStyle: 'italic', background: '#ffffff', padding: '0.35rem 0.5rem', borderRadius: '4px', border: '1px dashed #cbd5e1' }}>
                 Select track in right properties panel to play audio
@@ -2616,7 +2748,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         {block.type === 'video' && (
           <div style={{ background: '#f3e8ff', border: '1px solid #d8b4fe', borderRadius: '8px', overflow: 'hidden', flex: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
             {block.content?.url ? (
-              <video src={resolveMediaUrl(block.content.url)} controls style={{ width: '100%', height: '100%', flex: 1, display: 'block', objectFit: block.styles?.objectFit || 'contain' }} />
+              <video src={resolveMediaUrl(block.content.url)} controls controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture onContextMenu={e => e.preventDefault()} onMouseDown={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()} style={{ width: '100%', height: '100%', flex: 1, display: 'block', objectFit: block.styles?.objectFit || 'contain' }} />
             ) : (
               <div style={{ padding: '2rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', gap: '0.35rem', flex: 1 }}>
                 <FiMonitor style={{ fontSize: '1.75rem' }} />
@@ -2705,9 +2837,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
             {/* Interactive Audio Player */}
             {(block.content?.url || block.content?.audio) ? (
-              <div onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} style={{ width: '100%', background: '#ffffff', padding: '0.4rem', borderRadius: '6px', border: '1px solid #93c5fd' }}>
+              <div style={{ width: '100%', background: '#ffffff', padding: '0.4rem', borderRadius: '6px', border: '1px solid #93c5fd' }}>
                 <div style={{ fontSize: '0.64rem', fontWeight: 700, color: '#1d4ed8', marginBottom: '2px' }}>🎵 Listening Track:</div>
-                <audio src={resolveMediaUrl(block.content?.url || block.content?.audio)} controls style={{ width: '100%', height: '32px' }} />
+                <CustomAudioPlayer src={resolveMediaUrl(block.content?.url || block.content?.audio)} />
               </div>
             ) : (
               <div style={{ fontSize: '0.64rem', color: '#94a3b8', fontStyle: 'italic', background: '#ffffff', padding: '0.35rem 0.5rem', borderRadius: '4px', border: '1px dashed #cbd5e1' }}>
@@ -2733,22 +2865,41 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           </div>
         )}
 
-        {block.type === 'reading_passage' && (
-          <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f1f5f9', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiFileText /> Reading Passage: {block.content?.title || 'Passage Title'}
+        {block.type === 'reading_passage' && (() => {
+          const rawPassages = block.content?.passages;
+          const passages = rawPassages && rawPassages.length > 0
+            ? rawPassages
+            : [{
+                title: block.content?.title || '',
+                passage: block.content?.passage || '',
+                question: block.content?.question || ''
+              }];
+
+          return (
+            <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f1f5f9', borderRadius: '8px', padding: '0.75rem', overflowY: 'auto' }}>
+              {passages.map((p, pIdx) => {
+                const titleText = p.title || (passages.length > 1 ? `Passage #${pIdx + 1}` : 'Passage Title');
+                const passageText = p.passage || 'Read this text carefully...';
+                return (
+                  <div key={pIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderBottom: pIdx < passages.length - 1 ? '1px dashed #cbd5e1' : 'none', paddingBottom: pIdx < passages.length - 1 ? '0.5rem' : 0 }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FiFileText /> Reading Passage: {titleText}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#334155', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', whiteSpace: 'pre-wrap', maxHeight: '120px', overflowY: 'auto' }}>
+                      {passageText}
+                    </div>
+                    {p.question && (
+                      <div style={{ fontSize: '0.7rem', color: '#475569', fontStyle: 'italic', background: '#e2e8f0', padding: '4px 8px', borderRadius: '4px' }}>
+                        Question: {p.question}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <button disabled style={{ width: 'fit-content', padding: '4px 12px', borderRadius: '20px', background: '#10b981', color: '#fff', border: 'none', fontSize: '0.68rem', fontWeight: 600, marginTop: '4px' }}>Mark as Read</button>
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#334155', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', whiteSpace: 'pre-wrap', maxHeight: '100px', overflowY: 'auto' }}>
-              {block.content?.passage || 'Read this text carefully...'}
-            </div>
-            {block.content?.question && (
-              <div style={{ fontSize: '0.7rem', color: '#475569', fontStyle: 'italic' }}>
-                Question: {block.content?.question}
-              </div>
-            )}
-            <button disabled style={{ width: 'fit-content', padding: '4px 12px', borderRadius: '20px', background: '#10b981', color: '#fff', border: 'none', fontSize: '0.68rem', fontWeight: 600 }}>Mark as Read</button>
-          </div>
-        )}
+          );
+        })()}
 
         {block.type === 'writing_prompt' && (
           <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fdf2f8', borderRadius: '8px', padding: '0.75rem' }}>
@@ -2925,9 +3076,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               {sentences.map((item, sIdx) => {
                 const questionText = item.question || 'Order the scattered words';
                 const sentenceText = item.sentence || 'No sentence typed';
-                const wordsList = item.words && item.words.length > 0
+                const originalWords = item.words && item.words.length > 0
                   ? item.words
                   : (item.sentence?.trim() ? item.sentence.trim().split(' ').filter(Boolean) : []);
+                const wordsList = getScrambledWords(originalWords);
 
                 return (
                   <div key={sIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderBottom: sIdx < sentences.length - 1 ? '1px dashed #93c5fd' : 'none', paddingBottom: sIdx < sentences.length - 1 ? '0.5rem' : 0 }}>
@@ -3072,10 +3224,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'roleplay_simulation' && (() => {
-          const npcName = block.content?.npcCharacter || 'NPC';
-          const userRole = block.content?.userRole || 'Student';
-          const npcAvatarUrl = resolveMediaUrl(block.content?.npcImage || block.content?.npcAvatarUrl);
-          const studentAvatarUrl = resolveMediaUrl(block.content?.userAvatarUrl);
+          const npcName = block.content?.npcCharacter !== undefined ? block.content.npcCharacter : 'NPC';
+          const userRole = block.content?.userRole !== undefined ? block.content.userRole : 'Student';
+          const npcAvatarUrl = resolveMediaUrl(block.content?.npcImage || block.content?.npcAvatarUrl || block.content?.speakerAAvatarUrl);
+          const studentAvatarUrl = resolveMediaUrl(block.content?.userAvatarUrl || block.content?.speakerBAvatarUrl);
           const turns = block.content?.conversation || [];
 
           return (
@@ -3189,48 +3341,103 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               <FiGrid /> Hotspot Explorer
             </div>
             {block.content?.imageUrl ? (
-              <div style={{ position: 'relative', width: '100%', height: block.styles?.height || 'auto', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block' }}>
-                <img
-                  src={resolveMediaUrl(block.content.imageUrl)}
-                  alt="Hotspot explorer source"
-                  draggable={false}
-                  style={{
-                    width: '100%',
-                    height: block.styles?.height && block.styles?.height !== 'auto' ? block.styles.height : 'auto',
-                    maxHeight: '450px',
-                    objectFit: block.styles?.objectFit || 'cover',
-                    display: 'block',
-                    pointerEvents: 'none'
-                  }}
-                />
-                {(block.content.hotspots || []).map((h, hidx) => (
-                  <div
-                    key={h.id || hidx}
-                    title={h.name || `Target ${hidx + 1}`}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                <div style={{ position: 'relative', width: '100%', height: block.styles?.height || 'auto', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block' }}>
+                  <img
+                    src={resolveMediaUrl(block.content.imageUrl)}
+                    alt="Hotspot explorer source"
+                    draggable={false}
                     style={{
-                      position: 'absolute',
-                      left: `${(h.x / 400) * 100}%`,
-                      top: `${(h.y / 250) * 100}%`,
-                      width: '24px',
-                      height: '24px',
-                      borderRadius: '50%',
-                      background: 'radial-gradient(circle, #ef4444 0%, #dc2626 100%)',
-                      border: '2px solid #ffffff',
-                      boxShadow: '0 0 10px rgba(239, 68, 68, 0.7), 0 2px 4px rgba(0,0,0,0.3)',
-                      color: '#ffffff',
-                      fontSize: '10px',
-                      fontWeight: 'bold',
-                      transform: 'translate(-50%, -50%)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      zIndex: 5
+                      width: '100%',
+                      height: block.styles?.height && block.styles?.height !== 'auto' ? block.styles.height : 'auto',
+                      maxHeight: '450px',
+                      objectFit: block.styles?.objectFit || 'cover',
+                      display: 'block',
+                      pointerEvents: 'none'
                     }}
-                  >
-                    {hidx + 1}
-                  </div>
-                ))}
+                  />
+                  {(block.content.hotspots || []).map((h, hidx) => {
+                    const isActive = hidx === (activeHotspotIndex < (block.content.hotspots || []).length ? activeHotspotIndex : 0);
+                    return (
+                      <div
+                        key={h.id || hidx}
+                        title={h.name || `Target ${hidx + 1}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveHotspotIndex(hidx);
+                        }}
+                        style={{
+                          position: 'absolute',
+                          left: `${(h.x / 400) * 100}%`,
+                          top: `${(h.y / 250) * 100}%`,
+                          width: '26px',
+                          height: '26px',
+                          borderRadius: '50%',
+                          background: isActive
+                            ? 'radial-gradient(circle, #2563eb 0%, #1d4ed8 100%)'
+                            : 'radial-gradient(circle, #ef4444 0%, #dc2626 100%)',
+                          border: isActive ? '3px solid #60a5fa' : '2px solid #ffffff',
+                          boxShadow: isActive
+                            ? '0 0 12px rgba(37, 99, 235, 0.9), 0 2px 6px rgba(0,0,0,0.4)'
+                            : '0 0 10px rgba(239, 68, 68, 0.7), 0 2px 4px rgba(0,0,0,0.3)',
+                          color: '#ffffff',
+                          fontSize: '11px',
+                          fontWeight: 'bold',
+                          transform: 'translate(-50%, -50%)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          zIndex: 5,
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        {hidx + 1}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Info Text & Hint Block for Active Hotspot */}
+                {block.content?.hotspots && block.content.hotspots.length > 0 && (() => {
+                  const currentIdx = activeHotspotIndex < block.content.hotspots.length ? activeHotspotIndex : 0;
+                  const activeHs = block.content.hotspots[currentIdx] || block.content.hotspots[0];
+                  return (
+                    <div style={{
+                      padding: '0.75rem',
+                      background: '#ffffff',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.35rem' }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          🎯 {activeHs.name || `Hotspot #${currentIdx + 1}`}
+                        </span>
+                        <span style={{ fontSize: '0.65rem', color: '#3b82f6', background: '#eff6ff', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
+                          Hotspot {currentIdx + 1} of {block.content.hotspots.length}
+                        </span>
+                      </div>
+
+                      {/* Info Text Box */}
+                      <div style={{ fontSize: '0.75rem', color: '#334155', lineHeight: '1.4', background: '#f8fafc', padding: '0.5rem 0.65rem', borderRadius: '5px', borderLeft: '3px solid #3b82f6' }}>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '2px' }}>Info Text</div>
+                        {activeHs.info ? activeHs.info : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No info text provided for this hotspot</span>}
+                      </div>
+
+                      {/* Hint Box */}
+                      <div style={{ fontSize: '0.73rem', color: '#854d0e', background: '#fefce8', padding: '0.45rem 0.65rem', borderRadius: '5px', border: '1px solid #fef08a', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#a16207', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          💡 Hint
+                        </div>
+                        {activeHs.hint ? activeHs.hint : <span style={{ color: '#ca8a04', fontStyle: 'italic' }}>No hint provided for this hotspot</span>}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', border: '1px dashed #cbd5e1', borderRadius: '6px', color: '#94a3b8', fontSize: '0.7rem' }}>
@@ -3305,9 +3512,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
             {/* Main Audio file if present */}
             {(block.content?.url || block.content?.audio) && (
-              <div onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} style={{ background: '#ffffff', padding: '0.4rem', borderRadius: '6px', border: '1px solid #7dd3fc' }}>
+              <div style={{ background: '#ffffff', padding: '0.4rem', borderRadius: '6px', border: '1px solid #7dd3fc' }}>
                 <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#0369a1', marginBottom: '2px' }}>Main Audio Track:</div>
-                <audio src={resolveMediaUrl(block.content?.url || block.content?.audio)} controls style={{ width: '100%', height: '30px' }} />
+                <CustomAudioPlayer src={resolveMediaUrl(block.content?.url || block.content?.audio)} />
               </div>
             )}
 
@@ -3325,8 +3532,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <span>🔍 Clue #{cIdx + 1}: {c.description || `Clue track (${c.duration || 5}s)`}</span>
                   </div>
                   {c.audio ? (
-                    <div onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-                      <audio src={resolveMediaUrl(c.audio)} controls style={{ width: '100%', height: '28px' }} />
+                    <div>
+                      <CustomAudioPlayer src={resolveMediaUrl(c.audio)} />
                     </div>
                   ) : (
                     <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontStyle: 'italic' }}>No audio file uploaded for Clue #{cIdx + 1}</span>
@@ -8473,8 +8680,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                     <div style={{ background: '#ffffff', padding: '4px 6px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
                                                       <span style={{ fontSize: '0.6rem', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '2px' }}>Scrambled Preview:</span>
                                                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.2rem' }}>
-                                                        {item.words.map((w, wIdx) => (
-                                                          <span key={wIdx} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '3px', padding: '1px 5px', fontSize: '0.62rem', fontWeight: 600, color: '#334155' }}>{w}</span>
+                                                        {getScrambledWords(item.words).map((w, wIdx) => (
+                                                          <span key={wIdx} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '3px', padding: '1px 5px', fontSize: '0.62rem', fontWeight: 600, color: '#0284c7' }}>{w}</span>
                                                         ))}
                                                       </div>
                                                     </div>
@@ -8661,23 +8868,23 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
                                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem' }}>
                                             <div className="cs-form-group">
-                                              <label className="cs-form-label" style={{ fontSize: '0.65rem' }}>Speaker 1 Name</label>
+                                              <label className="cs-form-label" style={{ fontSize: '0.65rem' }}>Speaker A Name</label>
                                               <input
                                                 className="cs-form-input"
                                                 style={{ height: '28px', fontSize: '0.75rem' }}
                                                 type="text"
-                                                value={selectedBlock.content?.npcCharacter || ''}
+                                                value={selectedBlock.content?.npcCharacter !== undefined ? selectedBlock.content.npcCharacter : ''}
                                                 onChange={e => handleUpdateBlockContent('npcCharacter', e.target.value)}
                                                 placeholder="e.g. Waiter / Receptionist"
                                               />
                                             </div>
                                             <div className="cs-form-group">
-                                              <label className="cs-form-label" style={{ fontSize: '0.65rem' }}>Speaker 2 Name</label>
+                                              <label className="cs-form-label" style={{ fontSize: '0.65rem' }}>Speaker B Name</label>
                                               <input
                                                 className="cs-form-input"
                                                 style={{ height: '28px', fontSize: '0.75rem' }}
                                                 type="text"
-                                                value={selectedBlock.content?.userRole || 'Student'}
+                                                value={selectedBlock.content?.userRole !== undefined ? selectedBlock.content.userRole : ''}
                                                 onChange={e => handleUpdateBlockContent('userRole', e.target.value)}
                                                 placeholder="e.g. Customer / Student"
                                               />
@@ -8685,10 +8892,20 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                           </div>
 
                                           <MediaUploadField
-                                            label="NPC Character Avatar (Optional)"
-                                            value={selectedBlock.content?.npcAvatarUrl || ''}
+                                            label="Speaker A Avatar (Optional)"
+                                            value={selectedBlock.content?.npcAvatarUrl || selectedBlock.content?.speakerAAvatarUrl || ''}
                                             mediaType="image"
-                                            onChange={url => handleUpdateBlockContent('npcAvatarUrl', url)}
+                                            onChange={url => handleUpdateBlockMultipleContent({ npcAvatarUrl: url, speakerAAvatarUrl: url })}
+                                            actionLoading={actionLoading}
+                                            setActionLoading={setActionLoading}
+                                            showFeedback={showFeedback}
+                                          />
+
+                                          <MediaUploadField
+                                            label="Speaker B Avatar (Optional)"
+                                            value={selectedBlock.content?.userAvatarUrl || selectedBlock.content?.speakerBAvatarUrl || ''}
+                                            mediaType="image"
+                                            onChange={url => handleUpdateBlockMultipleContent({ userAvatarUrl: url, speakerBAvatarUrl: url })}
                                             actionLoading={actionLoading}
                                             setActionLoading={setActionLoading}
                                             showFeedback={showFeedback}
@@ -8759,8 +8976,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                             handleUpdateBlockMultipleContent({ conversation: updated });
                                                           }}
                                                         >
-                                                          <option value="npc">NPC Speaker</option>
-                                                          <option value="user">User / Student</option>
+                                                          <option value="npc">Speaker A ({selectedBlock.content?.npcCharacter || 'Speaker 1'})</option>
+                                                          <option value="user">Speaker B ({selectedBlock.content?.userRole || 'Speaker 2'})</option>
                                                         </select>
                                                       </div>
                                                       <div className="cs-form-group" style={{ marginBottom: 0 }}>
@@ -8774,7 +8991,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                             const updated = conversation.map((t, i) => i === tIdx ? { ...t, prompt: e.target.value } : t);
                                                             handleUpdateBlockMultipleContent({ conversation: updated });
                                                           }}
-                                                          placeholder={turn.speaker === 'npc' ? 'What NPC says...' : 'User response prompt...'}
+                                                          placeholder={turn.speaker === 'npc' ? 'What Speaker A says...' : 'Speaker B response prompt...'}
                                                         />
                                                       </div>
                                                     </div>
@@ -9249,31 +9466,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                           onChange={e => handleUpdateBlockRemedial('hintText', e.target.value)}
                                                           placeholder="Provide a simple hint or concept explanation..."
                                                         />
-                                                      </div>
-
-
-                                                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem' }}>
-                                                        <MediaUploadField
-                                                          label="Speaker 1 Avatar"
-                                                          value={selectedBlock.content?.npcImage || selectedBlock.content?.npcAvatarUrl || ''}
-                                                          mediaType="image"
-                                                          onChange={url => handleUpdateBlockMultipleContent({ npcImage: url, npcAvatarUrl: url })}
-                                                          actionLoading={actionLoading}
-                                                          setActionLoading={setActionLoading}
-                                                          showFeedback={showFeedback}
-                                                        />
-                                                        <MediaUploadField
-                                                          label="Speaker 2 Avatar"
-                                                          value={selectedBlock.content?.userAvatarUrl || ''}
-                                                          mediaType="image"
-                                                          onChange={url => handleUpdateBlockContent('userAvatarUrl', url)}
-                                                          actionLoading={actionLoading}
-                                                          setActionLoading={setActionLoading}
-                                                          showFeedback={showFeedback}
-                                                        />
-                                                      </div>
-
-                                                      <div className="cs-form-group">
+                                                      </div>                                                      <div className="cs-form-group">
                                                         <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Foundation Question Text</label>
                                                         <input
                                                           className="cs-form-input"
@@ -9908,7 +10101,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             // If no experience payload is loaded, show the selector grid view
             if (!previewPayload || !selectedExperience) {
               return (
-                <div style={{ padding: '0.5rem 1rem', background: 'transparent' }}>
+                <div style={{ padding: '0.5rem 1rem', background: 'transparent', width: '100%', boxSizing: 'border-box' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', paddingBottom: '0.25rem', borderBottom: '1.5px solid #cbd5e1' }}>
                     <div style={{ display: 'flex', gap: '1.5rem' }}>
                       <button
@@ -10155,6 +10348,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <button
                       className="cs-btn-outline"
                       onClick={() => {
+                        if (document.fullscreenElement && document.exitFullscreen) {
+                          document.exitFullscreen().catch(() => {});
+                        }
                         setPreviewPayload(null);
                       }}
                       style={{

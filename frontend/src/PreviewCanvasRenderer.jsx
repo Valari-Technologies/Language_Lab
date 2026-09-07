@@ -1,10 +1,144 @@
 import React from 'react';
 import { 
   FiVolume2, FiImage, FiMonitor, FiFileText, FiEdit2, FiMic, 
-  FiCheckCircle,
+  FiCheckCircle, FiPlay, FiPause,
   FiActivity, FiType, FiGrid, FiHelpCircle, FiUsers
 } from 'react-icons/fi';
 import { API_BASE_URL } from './config';
+
+const getScrambledWords = (wordsList) => {
+  if (!wordsList || wordsList.length <= 1) return wordsList || [];
+  const shuffled = [...wordsList];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = (i * 3 + 1) % (i + 1);
+    const temp = shuffled[i];
+    shuffled[i] = shuffled[j];
+    shuffled[j] = temp;
+  }
+  if (shuffled.length > 1 && shuffled.every((w, idx) => w === wordsList[idx])) {
+    const temp = shuffled[0];
+    shuffled[0] = shuffled[shuffled.length - 1];
+    shuffled[shuffled.length - 1] = temp;
+  }
+  return shuffled;
+};
+
+const CustomAudioPlayer = ({ src, style = {} }) => {
+  const audioRef = React.useRef(null);
+  const [isPlaying, setIsPlaying] = React.useState(false);
+  const [currentTime, setCurrentTime] = React.useState(0);
+  const [duration, setDuration] = React.useState(0);
+
+  const togglePlay = (e) => {
+    e.stopPropagation();
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime || 0);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration || 0);
+    }
+  };
+
+  const handleSeek = (e) => {
+    e.stopPropagation();
+    const newTime = parseFloat(e.target.value);
+    setCurrentTime(newTime);
+    if (audioRef.current) {
+      audioRef.current.currentTime = newTime;
+    }
+  };
+
+  const formatTime = (secs) => {
+    if (isNaN(secs) || secs < 0) return '0:00';
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  return (
+    <div
+      onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        background: '#ffffff',
+        border: '1px solid #cbd5e1',
+        borderRadius: '8px',
+        padding: '0.4rem 0.6rem',
+        width: '100%',
+        boxSizing: 'border-box',
+        ...style
+      }}
+    >
+      <audio
+        ref={audioRef}
+        src={src}
+        onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={handleLoadedMetadata}
+        onEnded={() => setIsPlaying(false)}
+      />
+
+      <button
+        type="button"
+        onClick={togglePlay}
+        style={{
+          width: '28px',
+          height: '28px',
+          borderRadius: '50%',
+          background: '#0ea5e9',
+          color: '#ffffff',
+          border: 'none',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '0.85rem',
+          flexShrink: 0
+        }}
+      >
+        {isPlaying ? <FiPause /> : <FiPlay style={{ marginLeft: '2px' }} />}
+      </button>
+
+      <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#475569', minWidth: '60px', flexShrink: 0 }}>
+        {formatTime(currentTime)} / {formatTime(duration)}
+      </span>
+
+      <input
+        type="range"
+        min="0"
+        max={duration || 100}
+        step="0.1"
+        value={currentTime}
+        onChange={handleSeek}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          flex: 1,
+          height: '5px',
+          accentColor: '#0ea5e9',
+          cursor: 'pointer'
+        }}
+      />
+    </div>
+  );
+};
 
 const defaultResolveUrl = (url) => {
   if (!url) return '';
@@ -12,6 +146,116 @@ const defaultResolveUrl = (url) => {
   const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
   const path = url.startsWith('/') ? url : '/' + url;
   return `${base}${path}`;
+};
+
+const HotspotExplorerPreviewBlock = ({ block, resolveUrl }) => {
+  const [activeIdx, setActiveIdx] = React.useState(0);
+  const resolvedImg = resolveUrl ? resolveUrl(block.content?.imageUrl) : defaultResolveUrl(block.content?.imageUrl);
+  const hotspots = block.content?.hotspots || [];
+  const currentIdx = activeIdx < hotspots.length ? activeIdx : 0;
+  const activeHs = hotspots[currentIdx];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f8fafc', borderRadius: '8px', padding: '0.75rem', position: 'relative', overflow: 'hidden', flex: 1, height: '100%', minHeight: 0 }}>
+      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <FiGrid /> Hotspot Explorer
+      </div>
+      {block.content?.imageUrl ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          <div style={{ position: 'relative', width: '100%', height: block.styles?.height || 'auto', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block' }}>
+            <img
+              src={resolvedImg}
+              alt="Hotspot explorer source"
+              style={{
+                width: '100%',
+                height: block.styles?.height && block.styles?.height !== 'auto' ? block.styles.height : 'auto',
+                maxHeight: '450px',
+                objectFit: block.styles?.objectFit || 'cover',
+                display: 'block'
+              }}
+            />
+            {hotspots.map((h, hidx) => {
+              const isActive = hidx === currentIdx;
+              return (
+                <div
+                  key={h.id || hidx}
+                  title={h.name || `Target ${hidx + 1}`}
+                  onClick={() => setActiveIdx(hidx)}
+                  style={{
+                    position: 'absolute',
+                    left: `${(h.x / 400) * 100}%`,
+                    top: `${(h.y / 250) * 100}%`,
+                    width: '26px',
+                    height: '26px',
+                    borderRadius: '50%',
+                    background: isActive
+                      ? 'radial-gradient(circle, #2563eb 0%, #1d4ed8 100%)'
+                      : 'radial-gradient(circle, #ef4444 0%, #dc2626 100%)',
+                    border: isActive ? '3px solid #60a5fa' : '2px solid #ffffff',
+                    boxShadow: isActive
+                      ? '0 0 12px rgba(37, 99, 235, 0.9), 0 2px 6px rgba(0,0,0,0.4)'
+                      : '0 0 10px rgba(239, 68, 68, 0.7), 0 2px 4px rgba(0,0,0,0.3)',
+                    color: '#ffffff',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    transform: 'translate(-50%, -50%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    zIndex: 5,
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {hidx + 1}
+                </div>
+              );
+            })}
+          </div>
+
+          {hotspots.length > 0 && activeHs && (
+            <div style={{
+              padding: '0.75rem',
+              background: '#ffffff',
+              borderRadius: '6px',
+              border: '1px solid #cbd5e1',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.5rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.35rem' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  🎯 {activeHs.name || `Hotspot #${currentIdx + 1}`}
+                </span>
+                <span style={{ fontSize: '0.65rem', color: '#3b82f6', background: '#eff6ff', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
+                  Hotspot {currentIdx + 1} of {hotspots.length}
+                </span>
+              </div>
+
+              {/* Info Text Box */}
+              <div style={{ fontSize: '0.75rem', color: '#334155', lineHeight: '1.4', background: '#f8fafc', padding: '0.5rem 0.65rem', borderRadius: '5px', borderLeft: '3px solid #3b82f6' }}>
+                <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '2px' }}>Info Text</div>
+                {activeHs.info ? activeHs.info : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No info text provided for this hotspot</span>}
+              </div>
+
+              {/* Hint Box */}
+              <div style={{ fontSize: '0.73rem', color: '#854d0e', background: '#fefce8', padding: '0.45rem 0.65rem', borderRadius: '5px', border: '1px solid #fef08a', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#a16207', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  💡 Hint
+                </div>
+                {activeHs.hint ? activeHs.hint : <span style={{ color: '#ca8a04', fontStyle: 'italic' }}>No hint provided for this hotspot</span>}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', border: '1px dashed #cbd5e1', borderRadius: '6px', color: '#94a3b8', fontSize: '0.7rem' }}>
+          No target explorer image selected
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default function PreviewCanvasRenderer({
@@ -173,7 +417,7 @@ export default function PreviewCanvasRenderer({
               </div>
             </div>
             {(block.content?.url || block.content?.audio) && (
-              <audio src={resolveUrl(block.content?.url || block.content?.audio)} controls style={{ width: '100%', height: '34px' }} />
+              <CustomAudioPlayer src={resolveUrl(block.content?.url || block.content?.audio)} />
             )}
           </div>
         );
@@ -183,7 +427,7 @@ export default function PreviewCanvasRenderer({
           <div className="video-element-wrapper" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, width: '100%', height: block.styles?.height || '100%' }}>
             {block.content?.url ? (
               <div style={{ width: '100%', height: '100%', flex: 1, borderRadius: '12px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <video src={resolveUrl(block.content.url)} controls style={{ width: '100%', height: '100%', display: 'block', objectFit: block.styles?.objectFit || 'contain' }} />
+                <video src={resolveUrl(block.content.url)} controls controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture onContextMenu={e => e.preventDefault()} style={{ width: '100%', height: '100%', display: 'block', objectFit: block.styles?.objectFit || 'contain' }} />
               </div>
             ) : (
               <div style={{ width: '100%', height: block.styles?.height || '220px', flex: 1, border: '1.5px dashed #cbd5e1', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
@@ -628,9 +872,10 @@ export default function PreviewCanvasRenderer({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', background: '#ecfeff', padding: '0.85rem', borderRadius: '12px', border: '1px solid #a5f3fc', flex: 1, overflowY: 'auto' }}>
             {sentencesList.map((item, sIdx) => {
               const sentenceQuestion = item.question || 'Reorder the words to make a correct sentence.';
-              const sentenceWords = item.words && item.words.length > 0
+              const originalWords = item.words && item.words.length > 0
                 ? item.words
                 : (item.sentence?.trim() ? item.sentence.trim().split(' ').filter(Boolean) : []);
+              const sentenceWords = getScrambledWords(originalWords);
               const selectionKey = `${block.id}_${sIdx}`;
               const selection = dragDropSelections[selectionKey] || [];
 
@@ -925,7 +1170,7 @@ export default function PreviewCanvasRenderer({
               {(block.content?.url || block.content?.audio) ? (
                 <div style={{ width: '100%', background: '#ffffff', padding: '0.5rem', borderRadius: '6px', border: '1px solid #60a5fa' }}>
                   <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#1d4ed8', marginBottom: '3px' }}>🎵 Listen to Dictation Audio:</div>
-                  <audio src={resolveUrl(block.content?.url || block.content?.audio)} controls style={{ width: '100%', height: '34px' }} />
+                  <CustomAudioPlayer src={resolveUrl(block.content?.url || block.content?.audio)} />
                 </div>
               ) : (
                 <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontStyle: 'italic' }}>No audio file configured for dictation.</div>
@@ -1125,8 +1370,10 @@ export default function PreviewCanvasRenderer({
         {
           const npcName = block.content?.npcCharacter || 'NPC';
           const userRole = block.content?.userRole || 'Student';
-          const npcAvatarUrl = resolveUrl ? resolveUrl(block.content?.npcImage || block.content?.npcAvatarUrl) : defaultResolveUrl(block.content?.npcImage || block.content?.npcAvatarUrl);
-          const studentAvatarUrl = resolveUrl ? resolveUrl(block.content?.userAvatarUrl) : defaultResolveUrl(block.content?.userAvatarUrl);
+          const npcAvatarRaw = block.content?.npcImage || block.content?.npcAvatarUrl || block.content?.speakerAAvatarUrl;
+          const studentAvatarRaw = block.content?.userAvatarUrl || block.content?.speakerBAvatarUrl;
+          const npcAvatarUrl = resolveUrl ? resolveUrl(npcAvatarRaw) : defaultResolveUrl(npcAvatarRaw);
+          const studentAvatarUrl = resolveUrl ? resolveUrl(studentAvatarRaw) : defaultResolveUrl(studentAvatarRaw);
           const turns = block.content?.conversation || [];
 
           return (
@@ -1235,63 +1482,7 @@ export default function PreviewCanvasRenderer({
         }
 
       case 'hotspot_explorer':
-        {
-          const resolvedImg = resolveUrl ? resolveUrl(block.content?.imageUrl) : defaultResolveUrl(block.content?.imageUrl);
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f8fafc', borderRadius: '8px', padding: '0.75rem', position: 'relative', overflow: 'hidden', flex: 1, height: '100%', minHeight: 0 }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FiGrid /> Hotspot Explorer
-              </div>
-              {block.content?.imageUrl ? (
-                <div style={{ position: 'relative', width: '100%', height: block.styles?.height || 'auto', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block' }}>
-                  <img
-                    src={resolvedImg}
-                    alt="Hotspot explorer source"
-                    style={{
-                      width: '100%',
-                      height: block.styles?.height && block.styles?.height !== 'auto' ? block.styles.height : 'auto',
-                      maxHeight: '450px',
-                      objectFit: block.styles?.objectFit || 'cover',
-                      display: 'block'
-                    }}
-                  />
-                  {(block.content.hotspots || []).map((h, hidx) => (
-                    <div
-                      key={h.id || hidx}
-                      title={h.name || `Target ${hidx + 1}`}
-                      style={{
-                        position: 'absolute',
-                        left: `${(h.x / 400) * 100}%`,
-                        top: `${(h.y / 250) * 100}%`,
-                        width: '24px',
-                        height: '24px',
-                        borderRadius: '50%',
-                        background: 'radial-gradient(circle, #ef4444 0%, #dc2626 100%)',
-                        border: '2px solid #ffffff',
-                        boxShadow: '0 0 10px rgba(239, 68, 68, 0.7), 0 2px 4px rgba(0,0,0,0.3)',
-                        color: '#ffffff',
-                        fontSize: '10px',
-                        fontWeight: 'bold',
-                        transform: 'translate(-50%, -50%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        zIndex: 5
-                      }}
-                    >
-                      {hidx + 1}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', border: '1px dashed #cbd5e1', borderRadius: '6px', color: '#94a3b8', fontSize: '0.7rem' }}>
-                  No target explorer image selected
-                </div>
-              )}
-            </div>
-          );
-        }
+        return <HotspotExplorerPreviewBlock block={block} resolveUrl={resolveUrl} />;
 
       case 'functional_reading':
         const docUrl = block.content?.documentUrl || block.content?.url || '';
@@ -1491,7 +1682,7 @@ export default function PreviewCanvasRenderer({
               {(block.content?.url || block.content?.audio) && (
                 <div style={{ background: '#ffffff', padding: '0.5rem', borderRadius: '8px', border: '1px solid #7dd3fc' }}>
                   <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#0369a1', marginBottom: '4px' }}>🎵 Main Mystery Audio:</div>
-                  <audio src={resolveUrl(block.content?.url || block.content?.audio)} controls style={{ width: '100%', height: '32px' }} />
+                  <CustomAudioPlayer src={resolveUrl(block.content?.url || block.content?.audio)} />
                 </div>
               )}
 
@@ -1506,7 +1697,7 @@ export default function PreviewCanvasRenderer({
                       Clue #{cIdx + 1}: {c.description || `Audio clue track (${c.duration || 5}s)`}
                     </div>
                     {c.audio ? (
-                      <audio src={resolveUrl(c.audio)} controls style={{ width: '100%', height: '30px' }} />
+                      <CustomAudioPlayer src={resolveUrl(c.audio)} />
                     ) : (
                       <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontStyle: 'italic' }}>No audio file attached for Clue #{cIdx + 1}</div>
                     )}
