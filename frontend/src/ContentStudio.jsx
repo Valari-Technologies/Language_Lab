@@ -8912,7 +8912,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                             </button>
                                           </div>
 
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '180px', overflowY: 'auto' }}>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
                                             {(selectedBlock.content?.hotspots || []).map((h, hIdx) => {
                                               const isActiveHotspot = hIdx === activeHotspotIndex;
                                               return (
@@ -9025,7 +9025,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                             </button>
                                           </div>
 
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '200px', overflowY: 'auto' }}>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
                                             {(selectedBlock.content?.questions || []).map((q, qIdx) => (
                                               <div key={q.id || qIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -9121,7 +9121,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                             </button>
                                           </div>
 
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '180px', overflowY: 'auto' }}>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
                                             {(selectedBlock.content?.clues || []).map((c, cIdx) => (
                                               <div key={cIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
