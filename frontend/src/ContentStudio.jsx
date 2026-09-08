@@ -262,30 +262,7 @@ const getThumbnailUrl = (thumbnail) => {
   return resolveMediaUrl(thumbnail);
 };
 
-const HintLadderForm = ({ block, onChange }) => {
-  const hints = block.content?.hints || {};
-  return (
-    <div style={{ border: '1px solid #e2e8f0', padding: '0.6rem', borderRadius: '6px', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem', background: '#f8fafc' }}>
-      <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>4-Stage Hint Ladder Config</span>
-      <div className="cs-form-group">
-        <label className="cs-form-label" style={{ fontSize: '0.62rem', margin: '2px 0' }}>Stage 1 Hint (Replay/Audio)</label>
-        <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" value={hints.replay || ''} onChange={e => onChange('hints', { ...hints, replay: e.target.value })} placeholder="e.g. Listen again carefully" />
-      </div>
-      <div className="cs-form-group">
-        <label className="cs-form-label" style={{ fontSize: '0.62rem', margin: '2px 0' }}>Stage 2 Hint (Visual Clue)</label>
-        <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" value={hints.visualClue || ''} onChange={e => onChange('hints', { ...hints, visualClue: e.target.value })} placeholder="e.g. Look at the visual clue" />
-      </div>
-      <div className="cs-form-group">
-        <label className="cs-form-label" style={{ fontSize: '0.62rem', margin: '2px 0' }}>Stage 3 Hint (Sentence Starter)</label>
-        <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" value={hints.sentenceStarter || ''} onChange={e => onChange('hints', { ...hints, sentenceStarter: e.target.value })} placeholder="e.g. The answer starts with..." />
-      </div>
-      <div className="cs-form-group">
-        <label className="cs-form-label" style={{ fontSize: '0.62rem', margin: '2px 0' }}>Stage 4 Hint (Model Answer)</label>
-        <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" value={hints.modelAnswer || ''} onChange={e => onChange('hints', { ...hints, modelAnswer: e.target.value })} placeholder="e.g. The correct answer is..." />
-      </div>
-    </div>
-  );
-};
+
 
 const MediaUploadField = ({ label, value, mediaType, onChange, actionLoading, setActionLoading, showFeedback }) => {
   const uploadId = `upload-${Math.random().toString(36).substr(2, 9)}`;
@@ -2104,13 +2081,30 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     setSelectedScreen(sc);
     const content = sc.content || {};
 
-    // Compile modular blocks list with backward compatibility
     let activeElements = [];
     if (content.elements && Array.isArray(content.elements)) {
-      activeElements = JSON.parse(JSON.stringify(content.elements)).map(el => ({
-        ...el,
-        slot: el.slot || (['image', 'video', 'audio'].includes(el.type) ? 'right' : 'left')
-      }));
+      activeElements = JSON.parse(JSON.stringify(content.elements)).map(el => {
+        const rawType = (el.type || '').toLowerCase();
+        let normalizedType = rawType;
+        if (['roleplay_simulation', 'roleplay simulation', 'roleplay', 'role_play', 'dialogue'].includes(rawType)) {
+          normalizedType = 'roleplay_simulation';
+        } else if (['sentence_builder', 'sentence builder'].includes(rawType)) {
+          normalizedType = 'sentence_builder';
+        } else if (['fill_blank', 'fill_blanks', 'fill_in_blanks'].includes(rawType)) {
+          normalizedType = 'fill_blank';
+        } else if (['audio_mystery', 'audio mystery'].includes(rawType)) {
+          normalizedType = 'audio_mystery';
+        } else if (['hotspot_explorer', 'hotspot explorer'].includes(rawType)) {
+          normalizedType = 'hotspot_explorer';
+        } else if (['functional_reading', 'functional reading'].includes(rawType)) {
+          normalizedType = 'functional_reading';
+        }
+        return {
+          ...el,
+          type: normalizedType,
+          slot: el.slot || (['image', 'video', 'audio'].includes(normalizedType) ? 'right' : 'left')
+        };
+      });
     }
 
     if (activeElements.length === 0) {
@@ -3156,17 +3150,31 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               {(() => {
                 const items = block.content?.items || (block.content?.word ? [{ id: 'migrated', word: block.content.word, phonetic: block.content.phonetic }] : []);
                 return items.map((item, itemIdx) => (
-                  <div key={item.id || itemIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '6px', padding: '0.4rem 0.6rem' }}>
+                  <div key={item.id || itemIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '6px', padding: '0.45rem 0.65rem' }}>
                     <div style={{
                       fontFamily: block.styles?.fontFamily || 'inherit',
                       fontSize: block.styles?.fontSize || '0.82rem',
                       fontWeight: block.styles?.fontWeight === 'Bold' ? 700 : block.styles?.fontWeight === 'SemiBold' ? 600 : block.styles?.fontWeight === 'Normal' ? 400 : 700,
-                      color: block.styles?.color || '#1e293b'
+                      color: block.styles?.color || '#1e293b',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem'
                     }}>
-                      Word: {item.word || 'Hello'}
+                      <span style={{ color: '#b45309', fontWeight: 800 }}>{itemIdx + 1}.</span>
+                      <span>{item.word || `Word ${itemIdx + 1}`}</span>
                     </div>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic' }}>
-                      Phonetic: {item.phonetic || '/həˈloʊ/'}
+                    <div style={{
+                      width: '26px',
+                      height: '26px',
+                      borderRadius: '50%',
+                      background: '#f59e0b',
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.85rem'
+                    }} title="Record Audio">
+                      <FiMic />
                     </div>
                   </div>
                 ));
@@ -3467,8 +3475,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'functional_reading' && (() => {
+          const docType = (block.content?.documentType || 'poster').toLowerCase();
+          const isTextDoc = docType === 'text';
           const docUrl = block.content?.documentUrl || block.content?.url || '';
           const resolvedDocImg = docUrl ? resolveMediaUrl(docUrl) : '';
+          const docText = block.content?.documentText || '';
           const questionsList = block.content?.questions || [];
 
           return (
@@ -3478,7 +3489,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   <FiFileText /> Functional Reading
                 </div>
                 <span style={{ fontSize: '0.65rem', padding: '1px 6px', background: '#c7d2fe', color: '#312e81', borderRadius: '8px', textTransform: 'uppercase', fontWeight: 700 }}>
-                  {block.content?.documentType || 'POSTER'}
+                  {isTextDoc ? 'TEXT' : 'POSTER'}
                 </span>
               </div>
 
@@ -3488,30 +3499,46 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 </div>
               )}
 
-              {resolvedDocImg ? (
-                <div style={{ width: '100%', borderRadius: '6px', overflow: 'hidden', border: '1px solid #c7d2fe', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}>
-                  <img
-                    src={resolvedDocImg}
-                    alt="Functional Reading Document"
-                    style={{ width: '100%', maxHeight: '160px', objectFit: block.styles?.objectFit || 'contain', borderRadius: '4px' }}
-                  />
-                </div>
+              {isTextDoc ? (
+                docText ? (
+                  <div style={{ width: '100%', borderRadius: '6px', border: '1px solid #c7d2fe', background: '#ffffff', padding: '0.6rem', fontSize: '0.72rem', color: '#1e293b', whiteSpace: 'pre-wrap', maxHeight: '160px', overflowY: 'auto' }}>
+                    {docText}
+                  </div>
+                ) : (
+                  <div style={{ width: '100%', height: '70px', border: '1px dashed #a5b4fc', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1', fontSize: '0.68rem', background: '#ffffff' }}>
+                    No document text provided
+                  </div>
+                )
               ) : (
-                <div style={{ width: '100%', height: '70px', border: '1px dashed #a5b4fc', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1', fontSize: '0.68rem', background: '#ffffff' }}>
-                  No document file selected
-                </div>
+                resolvedDocImg ? (
+                  <div style={{ width: '100%', borderRadius: '6px', overflow: 'hidden', border: '1px solid #c7d2fe', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}>
+                    <img
+                      src={resolvedDocImg}
+                      alt="Functional Reading Document"
+                      style={{ width: '100%', maxHeight: '160px', objectFit: block.styles?.objectFit || 'contain', borderRadius: '4px' }}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ width: '100%', height: '70px', border: '1px dashed #a5b4fc', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1', fontSize: '0.68rem', background: '#ffffff' }}>
+                    No document file selected
+                  </div>
+                )
               )}
 
-              <div style={{ fontSize: '0.68rem', color: '#64748b' }}>
-                Questions configured: {questionsList.length}
-              </div>
-
               {questionsList.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderTop: '1px dashed #bfdbfe', paddingTop: '4px' }}>
-                  <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#3730a3' }}>Questions:</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderTop: '1px dashed #c7d2fe', paddingTop: '0.4rem', marginTop: '0.2rem' }}>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#3730a3' }}>Questions ({questionsList.length}):</span>
                   {questionsList.map((q, qIdx) => (
-                    <div key={q.id || qIdx} style={{ fontSize: '0.65rem', color: '#334155', paddingLeft: '4px' }}>
-                      {qIdx + 1}. {q.question || '(Empty Question)'}
+                    <div key={q.id || qIdx} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: '#ffffff', padding: '6px', borderRadius: '6px', border: '1px solid #c7d2fe' }}>
+                      <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#1e293b' }}>
+                        {qIdx + 1}. {q.question || 'Question prompt...'}
+                      </div>
+                      <input
+                        type="text"
+                        disabled
+                        placeholder="Write answer here..."
+                        style={{ height: '24px', fontSize: '0.65rem', borderRadius: '4px', border: '1px solid #cbd5e1', padding: '0 6px', background: '#f8fafc' }}
+                      />
                     </div>
                   ))}
                 </div>
@@ -4072,8 +4099,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     setActionLoading(true);
     try {
       // Build backward-compatible single element fallbacks from the blocks list
-      let fallbackText = screenForm.content;
-      let fallbackSteps = screenForm.steps || [];
+      let fallbackText = screenForm.content || '';
+      let fallbackSteps = [];
       let fallbackMediaUrl = screenForm.media_url || '';
       let fallbackMediaId = screenForm.media_id || '';
       let fallbackMediaType = screenForm.media_type || '';
@@ -4082,9 +4109,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       let fallbackQuizCorrectIndex = screenForm.quiz_correct_index !== undefined ? screenForm.quiz_correct_index : 0;
 
       const blocks = screenForm.elements || [];
-      const dialogueBlock = blocks.find(b => b.type === 'dialogue');
+      const dialogueBlock = blocks.find(b => ['dialogue', 'roleplay_simulation', 'roleplay', 'role_play'].includes((b.type || '').toLowerCase()));
       if (dialogueBlock) {
-        fallbackSteps = dialogueBlock.content?.steps || [];
+        fallbackSteps = dialogueBlock.content?.steps || dialogueBlock.content?.conversation || [];
       }
       const imageBlock = blocks.find(b => b.type === 'image');
       if (imageBlock) {
@@ -4162,8 +4189,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         showFeedback(extractErrorMessage(errData, 'Failed to save screen'), 'error');
       }
     } catch (err) {
-      console.error(err);
-      showFeedback('Network error occurred while saving screen', 'error');
+      console.error('Error saving screen:', err);
+      showFeedback(err?.message || 'Network error occurred while saving screen', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -4656,6 +4683,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
 
   const handleStartPreview = async (targetExpId = null, targetActId = null, targetScrId = null) => {
+    if (selectedScreen && selectedScreen.id && isEditingScreen) {
+      try {
+        await handleSaveScreen(false);
+      } catch (err) {
+        console.warn('Auto-save before preview error:', err);
+      }
+    }
     const expId = targetExpId || selectedExperience?.id;
     if (!expId) {
       setPreviewPayload(null);
@@ -8675,7 +8709,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                 handleUpdateBlockContent('items', items);
                                               }}
                                             >
-                                              + Add Sentence
+                                               + Add Sentence
                                             </button>
                                           </div>
 
@@ -9408,124 +9442,114 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         </div>
                                       )}
 
-                                      {selectedBlock.type === 'functional_reading' && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Functional Reading Settings</span>
-                                          <MediaUploadField
-                                            label="Document File (Image)"
-                                            value={selectedBlock.content?.documentUrl || ''}
-                                            mediaType="image"
-                                            onChange={url => handleUpdateBlockContent('documentUrl', url)}
-                                            actionLoading={actionLoading}
-                                            setActionLoading={setActionLoading}
-                                            showFeedback={showFeedback}
-                                          />
-                                          <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Document Type</label>
-                                            <select className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} value={selectedBlock.content?.documentType || 'form'}
-                                              onChange={e => handleUpdateBlockContent('documentType', e.target.value)}>
-                                              <option value="form">Form</option>
-                                              <option value="receipt">Receipt</option>
-                                              <option value="contract">Contract</option>
-                                              <option value="article">Article</option>
-                                              <option value="poster">Poster</option>
-                                            </select>
-                                          </div>
-                                          <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Scenario</label>
-                                            <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.scenario || ''}
-                                              onChange={e => handleUpdateBlockContent('scenario', e.target.value)} />
-                                          </div>
+                                      {selectedBlock.type === 'functional_reading' && (() => {
+                                        const docType = (selectedBlock.content?.documentType || 'poster').toLowerCase();
+                                        const isTextDoc = docType === 'text';
 
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
-                                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Questions List</span>
-                                            <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
-                                              onClick={() => {
-                                                const questions = [...(selectedBlock.content?.questions || [])];
-                                                questions.push({ id: `q_${Date.now()}`, type: 'mcq', question: 'New Question?', options: ['Option A', 'Option B'], correctAnswer: 0 });
-                                                handleUpdateBlockContent('questions', questions);
-                                              }}>
-                                              + Add Question
-                                            </button>
-                                          </div>
+                                        return (
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Functional Reading Settings</span>
 
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
-                                            {(selectedBlock.content?.questions || []).map((q, qIdx) => (
-                                              <div key={q.id || qIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                  <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b' }}>Question #{qIdx + 1}</span>
-                                                  <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
-                                                    onClick={() => {
-                                                      const questions = (selectedBlock.content.questions || []).filter((_, i) => i !== qIdx);
-                                                      handleUpdateBlockContent('questions', questions);
-                                                    }}>
-                                                    <FiTrash2 style={{ fontSize: '0.72rem' }} />
-                                                  </button>
-                                                </div>
-                                                <div className="cs-form-group">
-                                                  <label style={{ fontSize: '0.6rem' }}>Type</label>
-                                                  <select className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem', padding: '0' }} value={q.type}
-                                                    onChange={e => {
-                                                      const qs = [...selectedBlock.content.questions];
-                                                      qs[qIdx].type = e.target.value;
-                                                      if (e.target.value === 'true_false') {
-                                                        qs[qIdx].correctAnswer = true;
-                                                        delete qs[qIdx].options;
-                                                      } else if (e.target.value === 'text') {
-                                                        qs[qIdx].correctAnswer = '';
-                                                        delete qs[qIdx].options;
-                                                      } else {
-                                                        qs[qIdx].options = ['Option A', 'Option B'];
-                                                        qs[qIdx].correctAnswer = 0;
-                                                      }
-                                                      handleUpdateBlockContent('questions', qs);
-                                                    }}>
-                                                    <option value="mcq">Multiple Choice</option>
-                                                    <option value="text">Open Text Response</option>
-                                                    <option value="true_false">True / False</option>
-                                                  </select>
-                                                </div>
-                                                <div className="cs-form-group">
-                                                  <label style={{ fontSize: '0.6rem' }}>Question</label>
-                                                  <input className="cs-form-input" style={{ height: '22px', fontSize: '0.72rem' }} type="text" value={q.question || ''}
-                                                    onChange={e => { const qs = [...selectedBlock.content.questions]; qs[qIdx].question = e.target.value; handleUpdateBlockContent('questions', qs); }} />
-                                                </div>
+                                            <div className="cs-form-group">
+                                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Document Type</label>
+                                              <select
+                                                className="cs-form-input"
+                                                style={{ height: '32px', fontSize: '0.75rem' }}
+                                                value={docType === 'text' ? 'text' : 'poster'}
+                                                onChange={e => handleUpdateBlockContent('documentType', e.target.value)}
+                                              >
+                                                <option value="poster">Poster</option>
+                                                <option value="text">Text</option>
+                                              </select>
+                                            </div>
 
-                                                {q.type === 'mcq' && (
-                                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                    <label style={{ fontSize: '0.6rem' }}>Options (separated by comma)</label>
-                                                    <input className="cs-form-input" style={{ height: '22px', fontSize: '0.72rem' }} type="text" value={(q.options || []).join(', ')}
+                                            {isTextDoc ? (
+                                              <div className="cs-form-group">
+                                                <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Document Text</label>
+                                                <textarea
+                                                  className="cs-form-input"
+                                                  style={{ minHeight: '80px', fontSize: '0.75rem' }}
+                                                  value={selectedBlock.content?.documentText || ''}
+                                                  onChange={e => handleUpdateBlockContent('documentText', e.target.value)}
+                                                  placeholder="Type or paste document text here..."
+                                                />
+                                              </div>
+                                            ) : (
+                                              <MediaUploadField
+                                                label="Document File (Image)"
+                                                value={selectedBlock.content?.documentUrl || ''}
+                                                mediaType="image"
+                                                onChange={url => handleUpdateBlockContent('documentUrl', url)}
+                                                actionLoading={actionLoading}
+                                                setActionLoading={setActionLoading}
+                                                showFeedback={showFeedback}
+                                              />
+                                            )}
+
+                                            <div className="cs-form-group">
+                                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Scenario</label>
+                                              <textarea
+                                                className="cs-form-input"
+                                                style={{ minHeight: '44px', fontSize: '0.75rem' }}
+                                                value={selectedBlock.content?.scenario || ''}
+                                                onChange={e => handleUpdateBlockContent('scenario', e.target.value)}
+                                                placeholder="e.g. Read the document and answer the questions"
+                                              />
+                                            </div>
+
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                                              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Questions List</span>
+                                              <button
+                                                type="button"
+                                                className="cs-btn-outline"
+                                                style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
+                                                onClick={() => {
+                                                  const questions = [...(selectedBlock.content?.questions || [])];
+                                                  questions.push({ id: `q_${Date.now()}`, type: 'text', question: 'New Question?' });
+                                                  handleUpdateBlockContent('questions', questions);
+                                                }}
+                                              >
+                                                + Add Question
+                                              </button>
+                                            </div>
+
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                                              {(selectedBlock.content?.questions || []).map((q, qIdx) => (
+                                                <div key={q.id || qIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b' }}>Question #{qIdx + 1}</span>
+                                                    <button
+                                                      type="button"
+                                                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                                                      onClick={() => {
+                                                        const questions = (selectedBlock.content.questions || []).filter((_, i) => i !== qIdx);
+                                                        handleUpdateBlockContent('questions', questions);
+                                                      }}
+                                                    >
+                                                      <FiTrash2 style={{ fontSize: '0.72rem' }} />
+                                                    </button>
+                                                  </div>
+                                                  <div className="cs-form-group">
+                                                    <label style={{ fontSize: '0.6rem' }}>Question Prompt</label>
+                                                    <input
+                                                      className="cs-form-input"
+                                                      style={{ height: '26px', fontSize: '0.72rem' }}
+                                                      type="text"
+                                                      value={q.question || ''}
                                                       onChange={e => {
                                                         const qs = [...selectedBlock.content.questions];
-                                                        qs[qIdx].options = e.target.value.split(',').map(s => s.trim());
+                                                        qs[qIdx] = { ...qs[qIdx], type: 'text', question: e.target.value };
                                                         handleUpdateBlockContent('questions', qs);
-                                                      }} />
-                                                    <label style={{ fontSize: '0.6rem' }}>Correct Option Index</label>
-                                                    <input className="cs-form-input" style={{ height: '22px', fontSize: '0.72rem' }} type="number" value={q.correctAnswer || 0}
-                                                      onChange={e => { const qs = [...selectedBlock.content.questions]; qs[qIdx].correctAnswer = parseInt(e.target.value) || 0; handleUpdateBlockContent('questions', qs); }} />
+                                                      }}
+                                                      placeholder="Enter question..."
+                                                    />
                                                   </div>
-                                                )}
-
-                                                {q.type === 'true_false' && (
-                                                  <div className="cs-form-group" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    <input type="checkbox" checked={!!q.correctAnswer}
-                                                      onChange={e => { const qs = [...selectedBlock.content.questions]; qs[qIdx].correctAnswer = e.target.checked; handleUpdateBlockContent('questions', qs); }} />
-                                                    <label style={{ fontSize: '0.65rem' }}>Correct Answer is True</label>
-                                                  </div>
-                                                )}
-
-                                                {q.type === 'text' && (
-                                                  <div className="cs-form-group">
-                                                    <label style={{ fontSize: '0.6rem' }}>Expected Answer String</label>
-                                                    <input className="cs-form-input" style={{ height: '22px', fontSize: '0.72rem' }} type="text" value={q.correctAnswer || ''}
-                                                      onChange={e => { const qs = [...selectedBlock.content.questions]; qs[qIdx].correctAnswer = e.target.value; handleUpdateBlockContent('questions', qs); }} />
-                                                  </div>
-                                                )}
-                                              </div>
-                                            ))}
+                                                </div>
+                                              ))}
+                                            </div>
                                           </div>
-                                        </div>
-                                      )}
+                                        );
+                                      })()}
 
                                       {selectedBlock.type === 'audio_mystery' && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -10547,6 +10571,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             const activeActivity = previewPayload?.activities?.[previewActivityIndex];
             const activeScreen = activeActivity?.screens?.[previewScreenIndex];
             const totalScreens = activeActivity?.screens?.length || 1;
+            const activeScreenElements = (selectedScreen && activeScreen && (selectedScreen.id === activeScreen.id || selectedScreen.title === activeScreen.title) && screenForm?.elements)
+              ? screenForm.elements
+              : (activeScreen?.elements || []);
 
             const getNextScreenTarget = () => {
               const activities = previewPayload?.activities;
@@ -10788,7 +10815,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       >
                         {/* Content Preview Canvas body */}
                         {(() => {
-                          const baseCanvasHeight = getCanvasHeight(activeScreen?.elements);
+                          const baseCanvasHeight = getCanvasHeight(activeScreenElements);
                           const scaledHeight = baseCanvasHeight * previewScaleFactor;
                           return (
                             <div style={{
@@ -10815,7 +10842,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                 }}
                               >
                                 <PreviewCanvasRenderer
-                                  elements={activeScreen?.elements || []}
+                                  elements={activeScreenElements}
                                   activeScreenId={activeScreen?.id || ''}
                                   previewAnswers={previewAnswers}
                                   setPreviewAnswers={setPreviewAnswers}

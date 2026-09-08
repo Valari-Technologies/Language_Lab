@@ -137,6 +137,20 @@ def build_runtime_payload(experience, request=None):
             import copy
             elements = copy.deepcopy(elements)
             for el in elements:
+                raw_type = (el.get("type") or "").lower()
+                if raw_type in ["roleplay_simulation", "roleplay simulation", "roleplay", "role_play", "dialogue"]:
+                    el["type"] = "roleplay_simulation"
+                elif raw_type in ["sentence_builder", "sentence builder"]:
+                    el["type"] = "sentence_builder"
+                elif raw_type in ["fill_blank", "fill_blanks", "fill_in_blanks"]:
+                    el["type"] = "fill_blank"
+                elif raw_type in ["audio_mystery", "audio mystery"]:
+                    el["type"] = "audio_mystery"
+                elif raw_type in ["hotspot_explorer", "hotspot explorer"]:
+                    el["type"] = "hotspot_explorer"
+                elif raw_type in ["functional_reading", "functional reading"]:
+                    el["type"] = "functional_reading"
+
                 el_type = el.get("type", "")
                 el_content = el.get("content", {})
                 if el_type in ["image", "video", "audio"] and el_content:

@@ -295,7 +295,22 @@ export default function PreviewCanvasRenderer({
   resolveUrl = defaultResolveUrl
 }) {
   const renderSingleBlock = (block) => {
-    switch (block.type) {
+    const rawType = (block.type || '').toLowerCase();
+    let normType = rawType;
+    if (['roleplay_simulation', 'roleplay simulation', 'roleplay', 'role_play', 'dialogue'].includes(rawType)) {
+      normType = 'roleplay_simulation';
+    } else if (['sentence_builder', 'sentence builder'].includes(rawType)) {
+      normType = 'sentence_builder';
+    } else if (['fill_blank', 'fill_blanks', 'fill_in_blanks'].includes(rawType)) {
+      normType = 'fill_blank';
+    } else if (['audio_mystery', 'audio mystery'].includes(rawType)) {
+      normType = 'audio_mystery';
+    } else if (['hotspot_explorer', 'hotspot explorer'].includes(rawType)) {
+      normType = 'hotspot_explorer';
+    } else if (['functional_reading', 'functional reading'].includes(rawType)) {
+      normType = 'functional_reading';
+    }
+    switch (normType) {
       case 'heading':
         return (
           <div style={{ textAlign: (block.styles?.alignment || 'Center').toLowerCase(), marginBottom: '0.5rem', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -1255,16 +1270,30 @@ export default function PreviewCanvasRenderer({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {pronItems.map((item, itemIdx) => (
-                  <div key={item.id || itemIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '6px', padding: '0.4rem 0.6rem' }}>
-                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b' }}>
-                      Word: {item.word || 'Hello'}
+                  <div key={item.id || itemIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '6px', padding: '0.45rem 0.65rem' }}>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ color: '#b45309', fontWeight: 800 }}>{itemIdx + 1}.</span>
+                      <span>{item.word || `Word ${itemIdx + 1}`}</span>
                     </div>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span>Phonetic: {item.phonetic || '/həˈloʊ/'}</span>
-                      <button type="button" style={{ background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', padding: '2px 6px', fontSize: '0.65rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                        <FiMic size={10} /> Speak
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        background: '#f59e0b',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '16px',
+                        padding: '4px 10px',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        boxShadow: '0 1px 3px rgba(245, 158, 11, 0.3)'
+                      }}
+                    >
+                      <FiMic style={{ fontSize: '0.8rem' }} /> Record
+                    </button>
                   </div>
                 ))}
               </div>
@@ -1526,7 +1555,10 @@ export default function PreviewCanvasRenderer({
         return <HotspotExplorerPreviewBlock block={block} resolveUrl={resolveUrl} />;
 
       case 'functional_reading':
+        const docType = (block.content?.documentType || 'poster').toLowerCase();
+        const isTextDoc = docType === 'text';
         const docUrl = block.content?.documentUrl || block.content?.url || '';
+        const docText = block.content?.documentText || '';
         const questionsList = block.content?.questions || [];
 
         return (
@@ -1536,7 +1568,7 @@ export default function PreviewCanvasRenderer({
                 <FiFileText /> Functional Reading
               </div>
               <span style={{ fontSize: '0.68rem', padding: '2px 8px', background: '#e0e7ff', color: '#4338ca', borderRadius: '12px', textTransform: 'uppercase', fontWeight: 700 }}>
-                {block.content?.documentType || 'Poster'}
+                {isTextDoc ? 'TEXT' : 'POSTER'}
               </span>
             </div>
 
@@ -1546,19 +1578,31 @@ export default function PreviewCanvasRenderer({
               </div>
             )}
 
-            {docUrl ? (
-              <div style={{ width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.25rem' }}>
-                <img
-                  src={resolveUrl(docUrl)}
-                  alt="Functional Reading Document"
-                  style={{ width: '100%', maxHeight: '320px', objectFit: block.styles?.objectFit || 'contain', borderRadius: '6px' }}
-                />
-              </div>
+            {isTextDoc ? (
+              docText ? (
+                <div style={{ width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '0.85rem', fontSize: '0.78rem', color: '#1e293b', whiteSpace: 'pre-wrap', maxHeight: '280px', overflowY: 'auto' }}>
+                  {docText}
+                </div>
+              ) : (
+                <div style={{ width: '100%', height: '100px', border: '1.5px dashed #cbd5e1', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.72rem' }}>
+                  No document text provided
+                </div>
+              )
             ) : (
-              <div style={{ width: '100%', height: '160px', border: '1.5px dashed #cbd5e1', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
-                <FiImage style={{ fontSize: '2rem', marginBottom: '4px', opacity: 0.6 }} />
-                <span style={{ fontSize: '0.72rem' }}>No document image configured.</span>
-              </div>
+              docUrl ? (
+                <div style={{ width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.25rem' }}>
+                  <img
+                    src={resolveUrl(docUrl)}
+                    alt="Functional Reading Document"
+                    style={{ width: '100%', maxHeight: '320px', objectFit: block.styles?.objectFit || 'contain', borderRadius: '6px' }}
+                  />
+                </div>
+              ) : (
+                <div style={{ width: '100%', height: '160px', border: '1.5px dashed #cbd5e1', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+                  <FiImage style={{ fontSize: '2rem', marginBottom: '4px', opacity: 0.6 }} />
+                  <span style={{ fontSize: '0.72rem' }}>No document image configured.</span>
+                </div>
+              )
             )}
 
             {questionsList.length > 0 && (
@@ -1569,131 +1613,23 @@ export default function PreviewCanvasRenderer({
                 {questionsList.map((q, qIdx) => {
                   const qKey = `${activeScreenId}_${block.id}_q${qIdx}`;
                   const userAns = previewAnswers[qKey];
-                  const hasAns = userAns !== undefined;
 
                   return (
-                    <div key={q.id || qIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.75rem' }}>
-                      <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e293b', marginBottom: '0.5rem' }}>
+                    <div key={q.id || qIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e293b' }}>
                         {qIdx + 1}. {q.question || 'Question prompt...'}
                       </div>
-
-                      {(q.type === 'mcq' || q.type === 'multiple_choice') && q.options && q.options.length > 0 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                          {q.options.map((opt, oIdx) => {
-                            const optText = typeof opt === 'object' ? opt.text : opt;
-                            const isCorrect = q.correctAnswer === oIdx || String(q.correctAnswer).toLowerCase() === String(optText).toLowerCase();
-                            const isSelected = userAns === oIdx || userAns === optText;
-
-                            let borderCol = '#cbd5e1';
-                            let bgCol = '#ffffff';
-                            let textCol = '#1e293b';
-
-                            if (hasAns) {
-                              if (isCorrect) {
-                                borderCol = '#16a34a';
-                                bgCol = '#ecfdf5';
-                                textCol = '#15803d';
-                              } else if (isSelected) {
-                                borderCol = '#ef4444';
-                                bgCol = '#fef2f2';
-                                textCol = '#b91c1c';
-                              }
-                            }
-
-                            return (
-                              <div
-                                key={oIdx}
-                                onClick={() => {
-                                  if (!hasAns) {
-                                    setPreviewAnswers(prev => ({ ...prev, [qKey]: oIdx }));
-                                  }
-                                }}
-                                style={{
-                                  padding: '0.4rem 0.65rem',
-                                  borderRadius: '6px',
-                                  border: `1.5px solid ${borderCol}`,
-                                  background: bgCol,
-                                  color: textCol,
-                                  fontSize: '0.75rem',
-                                  fontWeight: isSelected ? 700 : 500,
-                                  cursor: hasAns ? 'default' : 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justify: 'space-between'
-                                }}
-                              >
-                                <span>{optText}</span>
-                                {hasAns && isCorrect && <span style={{ fontSize: '0.7rem', fontWeight: 700 }}>✓ Correct</span>}
-                                {hasAns && isSelected && !isCorrect && <span style={{ fontSize: '0.7rem', fontWeight: 700 }}>✗ Incorrect</span>}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {q.type === 'true_false' && (
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          {[true, false].map((tfVal) => {
-                            const isCorrect = q.correctAnswer === tfVal;
-                            const isSelected = userAns === tfVal;
-
-                            let borderCol = '#cbd5e1';
-                            let bgCol = '#ffffff';
-                            let textCol = '#1e293b';
-
-                            if (hasAns) {
-                              if (isCorrect) {
-                                borderCol = '#16a34a';
-                                bgCol = '#ecfdf5';
-                                textCol = '#15803d';
-                              } else if (isSelected) {
-                                borderCol = '#ef4444';
-                                bgCol = '#fef2f2';
-                                textCol = '#b91c1c';
-                              }
-                            }
-
-                            return (
-                              <button
-                                key={String(tfVal)}
-                                type="button"
-                                onClick={() => {
-                                  if (!hasAns) {
-                                    setPreviewAnswers(prev => ({ ...prev, [qKey]: tfVal }));
-                                  }
-                                }}
-                                style={{
-                                  flex: 1,
-                                  padding: '0.4rem 0.65rem',
-                                  borderRadius: '6px',
-                                  border: `1.5px solid ${borderCol}`,
-                                  background: bgCol,
-                                  color: textCol,
-                                  fontSize: '0.75rem',
-                                  fontWeight: isSelected ? 700 : 600,
-                                  cursor: hasAns ? 'default' : 'pointer'
-                                }}
-                              >
-                                {tfVal ? 'True' : 'False'}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {(q.type === 'text' || q.type === 'open_text' || q.type === 'open_text_response' || !q.type) && (
-                        <input
-                          className="cs-form-input"
-                          style={{ height: '30px', fontSize: '0.75rem' }}
-                          type="text"
-                          placeholder="Type your answer..."
-                          value={userAns || ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setPreviewAnswers(prev => ({ ...prev, [qKey]: val }));
-                          }}
-                        />
-                      )}
+                      <input
+                        className="cs-form-input"
+                        style={{ height: '32px', fontSize: '0.75rem', borderRadius: '6px', border: '1px solid #94a3b8', padding: '0 8px', background: '#ffffff' }}
+                        type="text"
+                        placeholder="Type your answer here..."
+                        value={userAns || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setPreviewAnswers(prev => ({ ...prev, [qKey]: val }));
+                        }}
+                      />
                     </div>
                   );
                 })}
@@ -1812,33 +1748,45 @@ export default function PreviewCanvasRenderer({
 
   // Compute vertical dynamic flow positions to prevent overlap when content height exceeds saved editor top coordinates
   let currentBottom = 0;
-  const processedElements = (elements || []).map((block) => {
+  const sortedElements = [...(elements || [])].sort((a, b) => {
+    const topA = parseInt(a.styles?.top || 0, 10) || 0;
+    const topB = parseInt(b.styles?.top || 0, 10) || 0;
+    return topA - topB;
+  });
+
+  const processedElements = sortedElements.map((block) => {
     const rawTop = parseInt(block.styles?.top || 0, 10);
     const parsedTop = isNaN(rawTop) ? 0 : rawTop;
     const computedTop = currentBottom > 0 ? Math.max(parsedTop, currentBottom + 16) : parsedTop;
 
     // Estimate realistic rendered block height
     let estimatedHeight = 100;
-    const isFB = block.type === 'fill_blank' || block.type === 'fill_blanks' || block.type === 'fill_in_blanks';
+    const normType = (block.type || '').toLowerCase();
+    const isFB = normType === 'fill_blank' || normType === 'fill_blanks' || normType === 'fill_in_blanks';
     
     if (isFB) {
       const bCount = (block.content?.blanks || []).length || 1;
       estimatedHeight = 140 + bCount * 45;
-    } else if (block.type === 'image') {
+    } else if (normType === 'image') {
       const hasQ = block.content?.hasQuestion;
       const opts = block.content?.questionOptions?.length || 0;
       estimatedHeight = hasQ ? 280 + opts * 40 : 220;
-    } else if (block.type === 'word_search') {
+    } else if (normType === 'word_search') {
       estimatedHeight = 360;
-    } else if (block.type === 'matching') {
-      const pairCount = (block.content?.pairs || []).length || 2;
+    } else if (normType === 'matching' || normType === 'match') {
+      const pairCount = (block.content?.pairs || block.content?.leftItems || []).length || 2;
       estimatedHeight = 100 + pairCount * 45;
-    } else if (block.type === 'quiz') {
+    } else if (normType === 'quiz') {
       const qCount = (block.content?.questions || []).length || 1;
       estimatedHeight = 120 + qCount * 180;
-    } else if (block.styles?.height || block.styles?.minHeight) {
+    } else if (normType === 'roleplay_simulation' || normType === 'roleplay') {
+      const turnCount = (block.content?.conversation || []).length || 2;
+      estimatedHeight = 140 + turnCount * 65;
+    }
+
+    if (block.styles?.height || block.styles?.minHeight) {
       const explicitH = parseInt(block.styles?.height || block.styles?.minHeight, 10);
-      if (!isNaN(explicitH) && explicitH > 0) estimatedHeight = explicitH;
+      if (!isNaN(explicitH) && explicitH > 0) estimatedHeight = Math.max(estimatedHeight, explicitH);
     }
 
     currentBottom = computedTop + estimatedHeight;
