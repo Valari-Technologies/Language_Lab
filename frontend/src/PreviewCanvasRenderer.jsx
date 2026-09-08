@@ -8,9 +8,20 @@ import { API_BASE_URL } from './config';
 
 const getScrambledWords = (wordsList) => {
   if (!wordsList || wordsList.length <= 1) return wordsList || [];
+  const str = wordsList.join('|');
+  let hash = 0;
+  for (let k = 0; k < str.length; k++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(k);
+    hash |= 0;
+  }
+  const seededRandom = (seed) => {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+  };
   const shuffled = [...wordsList];
+  let currentSeed = Math.abs(hash) + 1;
   for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = (i * 3 + 1) % (i + 1);
+    const j = Math.floor(seededRandom(currentSeed++) * (i + 1));
     const temp = shuffled[i];
     shuffled[i] = shuffled[j];
     shuffled[j] = temp;
@@ -213,39 +224,49 @@ const HotspotExplorerPreviewBlock = ({ block, resolveUrl }) => {
             })}
           </div>
 
-          {hotspots.length > 0 && activeHs && (
-            <div style={{
-              padding: '0.75rem',
-              background: '#ffffff',
-              borderRadius: '6px',
-              border: '1px solid #cbd5e1',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.5rem'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.35rem' }}>
-                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  🎯 {activeHs.name || `Hotspot #${currentIdx + 1}`}
-                </span>
-                <span style={{ fontSize: '0.65rem', color: '#3b82f6', background: '#eff6ff', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
-                  Hotspot {currentIdx + 1} of {hotspots.length}
-                </span>
-              </div>
-
-              {/* Info Text Box */}
-              <div style={{ fontSize: '0.75rem', color: '#334155', lineHeight: '1.4', background: '#f8fafc', padding: '0.5rem 0.65rem', borderRadius: '5px', borderLeft: '3px solid #3b82f6' }}>
-                <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '2px' }}>Info Text</div>
-                {activeHs.info ? activeHs.info : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No info text provided for this hotspot</span>}
-              </div>
-
-              {/* Hint Box */}
-              <div style={{ fontSize: '0.73rem', color: '#854d0e', background: '#fefce8', padding: '0.45rem 0.65rem', borderRadius: '5px', border: '1px solid #fef08a', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#a16207', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  💡 Hint
-                </div>
-                {activeHs.hint ? activeHs.hint : <span style={{ color: '#ca8a04', fontStyle: 'italic' }}>No hint provided for this hotspot</span>}
-              </div>
+          {/* Compact Column-Wise Target Name Chips below Image */}
+          {hotspots.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
+              {hotspots.map((hs, idx) => {
+                const isActive = idx === currentIdx;
+                return (
+                  <div
+                    key={hs.id || idx}
+                    onClick={() => setActiveIdx(idx)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      padding: '0.35rem 0.75rem',
+                      background: isActive ? '#eff6ff' : '#ffffff',
+                      border: isActive ? '1.5px solid #3b82f6' : '1px solid #cbd5e1',
+                      borderRadius: '20px',
+                      boxShadow: isActive ? '0 2px 6px rgba(59, 130, 246, 0.2)' : '0 1px 2px rgba(0,0,0,0.05)',
+                      cursor: 'pointer',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      color: isActive ? '#1d4ed8' : '#334155',
+                      transition: 'all 0.18s ease'
+                    }}
+                  >
+                    <span style={{
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '50%',
+                      background: isActive ? '#2563eb' : '#ef4444',
+                      color: '#ffffff',
+                      fontSize: '0.65rem',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      {idx + 1}
+                    </span>
+                    <span>{hs.name || `Target ${idx + 1}`}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -871,7 +892,7 @@ export default function PreviewCanvasRenderer({
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', background: '#ecfeff', padding: '0.85rem', borderRadius: '12px', border: '1px solid #a5f3fc', flex: 1, overflowY: 'auto' }}>
             {sentencesList.map((item, sIdx) => {
-              const sentenceQuestion = item.question || 'Reorder the words to make a correct sentence.';
+              const sentenceQuestion = item.question?.trim();
               const originalWords = item.words && item.words.length > 0
                 ? item.words
                 : (item.sentence?.trim() ? item.sentence.trim().split(' ').filter(Boolean) : []);
@@ -881,9 +902,11 @@ export default function PreviewCanvasRenderer({
 
               return (
                 <div key={sIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', borderBottom: sIdx < sentencesList.length - 1 ? '1px dashed #a5f3fc' : 'none', paddingBottom: sIdx < sentencesList.length - 1 ? '0.75rem' : 0 }}>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0891b2' }}>
-                    🧩 {sentenceQuestion}
-                  </div>
+                  {sentenceQuestion && (
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0891b2' }}>
+                      🧩 {sentenceQuestion}
+                    </div>
+                  )}
 
                   <div style={{ minHeight: '38px', padding: '0.4rem 0.6rem', background: '#ffffff', borderRadius: '8px', border: '1.5px dashed #06b6d4', display: 'flex', flexWrap: 'wrap', gap: '0.25rem', alignItems: 'center' }}>
                     {selection.length === 0 ? (
@@ -1066,19 +1089,36 @@ export default function PreviewCanvasRenderer({
         {
           const blockReadKey = `${activeScreenId}_${block.id}_read`;
           const isRead = !!previewAnswers[blockReadKey];
+          const rawPassages = block.content?.passages;
+          const passages = rawPassages && rawPassages.length > 0
+            ? rawPassages
+            : [{
+                title: block.content?.title || '',
+                passage: block.content?.passage || '',
+                question: block.content?.question || ''
+              }];
+
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f1f5f9', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%' }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FiFileText /> Reading Passage: {block.content?.title || 'Passage Title'}
-              </div>
-              <div style={{ fontSize: '0.72rem', color: '#334155', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', whiteSpace: 'pre-wrap', flex: 1, overflowY: 'auto' }}>
-                {block.content?.passage || 'Read this text carefully...'}
-              </div>
-              {block.content?.question && (
-                <div style={{ fontSize: '0.7rem', color: '#475569', fontStyle: 'italic' }}>
-                  Question: {block.content?.question}
-                </div>
-              )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f1f5f9', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%', overflowY: 'auto' }}>
+              {passages.map((p, pIdx) => {
+                const titleText = p.title || (passages.length > 1 ? `Passage #${pIdx + 1}` : 'Passage Title');
+                const passageText = p.passage || 'Read this text carefully...';
+                return (
+                  <div key={pIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderBottom: pIdx < passages.length - 1 ? '1px dashed #cbd5e1' : 'none', paddingBottom: pIdx < passages.length - 1 ? '0.5rem' : 0 }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FiFileText /> Reading Passage: {titleText}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#334155', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', whiteSpace: 'pre-wrap', maxHeight: '140px', overflowY: 'auto' }}>
+                      {passageText}
+                    </div>
+                    {p.question && (
+                      <div style={{ fontSize: '0.7rem', color: '#475569', fontStyle: 'italic', background: '#e2e8f0', padding: '4px 8px', borderRadius: '4px' }}>
+                        Question: {p.question}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               <button 
                 type="button" 
                 onClick={() => {
@@ -1099,7 +1139,8 @@ export default function PreviewCanvasRenderer({
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px'
+                  gap: '4px',
+                  marginTop: '4px'
                 }}
               >
                 {isRead ? '✓ Read' : 'Mark as Read'}
@@ -1674,9 +1715,6 @@ export default function PreviewCanvasRenderer({
               <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0891b2', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FiVolume2 style={{ fontSize: '1.1rem' }} /> Audio Mystery Challenge
               </div>
-              <div style={{ fontSize: '0.78rem', color: '#1e293b', background: '#ffffff', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #bae6fd', fontWeight: 600 }}>
-                <strong>Question:</strong> {block.content?.question || 'Listen to the audio clues and guess the mystery item!'}
-              </div>
 
               {/* Main Audio File if configured */}
               {(block.content?.url || block.content?.audio) && (
@@ -1686,23 +1724,28 @@ export default function PreviewCanvasRenderer({
                 </div>
               )}
 
-              {/* Clues Section with Audio Players */}
+              {/* Audios Section with Audio Players */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0e7490' }}>
-                  🔍 Audio Clues:
+                  🔊 Progressive Audios:
                 </div>
                 {(block.content?.clues || []).map((c, cIdx) => (
                   <div key={cIdx} style={{ background: '#ffffff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '0.5rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                     <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#0369a1' }}>
-                      Clue #{cIdx + 1}: {c.description || `Audio clue track (${c.duration || 5}s)`}
+                      Audio #{cIdx + 1}: {c.description || `Audio track (${c.duration || 5}s)`}
                     </div>
                     {c.audio ? (
                       <CustomAudioPlayer src={resolveUrl(c.audio)} />
                     ) : (
-                      <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontStyle: 'italic' }}>No audio file attached for Clue #{cIdx + 1}</div>
+                      <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontStyle: 'italic' }}>No audio file attached for Audio #{cIdx + 1}</div>
                     )}
                   </div>
                 ))}
+              </div>
+
+              {/* Question displayed directly above Options */}
+              <div style={{ fontSize: '0.78rem', color: '#1e293b', background: '#ffffff', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #bae6fd', fontWeight: 600 }}>
+                <strong>Question:</strong> {block.content?.question || 'Listen to the audio clues and guess the mystery item!'}
               </div>
 
               {/* Answer options if provided */}
