@@ -654,9 +654,15 @@ export default function PreviewCanvasRenderer({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {list.map((pair, pIdx) => {
                 const selected = dragDropSelections[`${block.id}_${pair.id || pIdx}`] || '';
+                const pairImg = resolveUrl ? resolveUrl(pair.sourceImage || pair.source_image) : defaultResolveUrl(pair.sourceImage || pair.source_image);
                 return (
                   <div key={pair.id || pIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.72rem' }}>
-                    <span style={{ fontWeight: 600, color: '#1e293b' }}>{pair.source || pair.left}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {pairImg && (
+                        <img src={pairImg} alt="" style={{ width: '20px', height: '20px', borderRadius: '4px', objectFit: 'cover' }} />
+                      )}
+                      <span style={{ fontWeight: 600, color: '#1e293b' }}>{pair.source || pair.left}</span>
+                    </div>
                     <select
                       value={selected}
                       onChange={(e) => {
@@ -858,6 +864,7 @@ export default function PreviewCanvasRenderer({
             <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '0.5rem', width: '100%' }}>
               {cards.map((card, cIdx) => {
                 const isFlipped = flippedCards[`${block.id}-${cIdx}`];
+                const cardImg = resolveUrl ? resolveUrl(card.imageUrl || card.image) : defaultResolveUrl(card.imageUrl || card.image);
                 return (
                   <div
                     key={card.id || cIdx}
@@ -870,7 +877,7 @@ export default function PreviewCanvasRenderer({
                     style={{
                       flexShrink: 0,
                       width: '130px',
-                      height: '90px',
+                      height: '95px',
                       background: isFlipped ? '#fdf2f8' : '#ffffff',
                       border: isFlipped ? '2px solid #ec4899' : '1px solid #cbd5e1',
                       borderRadius: '12px',
@@ -882,9 +889,13 @@ export default function PreviewCanvasRenderer({
                       padding: '0.5rem',
                       textAlign: 'center',
                       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                      transition: 'all 0.2s'
+                      transition: 'all 0.2s',
+                      gap: '4px'
                     }}
                   >
+                    {!isFlipped && cardImg && (
+                      <img src={cardImg} alt="" style={{ width: '28px', height: '24px', borderRadius: '4px', objectFit: 'cover' }} />
+                    )}
                     <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isFlipped ? '#be185d' : '#1e293b' }}>
                       {isFlipped ? card.back : card.front}
                     </span>
@@ -1053,31 +1064,44 @@ export default function PreviewCanvasRenderer({
           }
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#faf5ff', padding: '1rem', borderRadius: '12px', border: '1px solid #f3e8ff', marginTop: '0.5rem' }}>
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#6b21a8' }}>
-                🔍 {wordQuestion}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: 'linear-gradient(135deg, #faf5ff 0%, #eff6ff 100%)', padding: '1rem', borderRadius: '12px', border: '1.5px solid #c7d2fe', marginTop: '0.5rem', boxShadow: '0 4px 12px rgba(99, 102, 241, 0.06)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e0e7ff', paddingBottom: '0.4rem' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#3730a3', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>🔍</span> {wordQuestion}
+                </div>
+                <span style={{ background: '#4f46e5', color: '#ffffff', fontSize: '0.62rem', fontWeight: 700, padding: '2px 8px', borderRadius: '12px' }}>
+                  {words.length} Words to Find
+                </span>
               </div>
-              <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gridSize}, 1fr)`, gap: '4px', width: '220px', maxWidth: '100%', background: '#f3e8ff', padding: '4px', borderRadius: '8px', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'center', marginTop: '0.2rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gridSize}, 1fr)`, gap: '4px', width: gridSize > 8 ? '230px' : '190px', maxWidth: '100%', background: '#ffffff', padding: '6px', borderRadius: '10px', border: '1.5px solid #c7d2fe', boxShadow: '0 2px 6px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
                   {grid.flatMap((row, rIdx) => row.map((char, cIdx) => (
                     <div
                       key={`${rIdx}-${cIdx}`}
                       style={{
                         aspectRatio: '1',
-                        background: '#ffffff',
+                        background: '#f5f3ff',
                         borderRadius: '4px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: gridSize > 8 ? '0.55rem' : '0.68rem',
+                        fontSize: gridSize > 8 ? '0.58rem' : '0.68rem',
                         fontWeight: 800,
-                        color: '#6b21a8',
-                        border: '1px solid #cbd5e1',
-                        cursor: 'pointer'
+                        color: '#3730a3',
+                        border: '1px solid #e0e7ff',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        transition: 'all 0.15s ease'
                       }}
                       onClick={(e) => {
                         const currBg = e.currentTarget.style.backgroundColor;
-                        e.currentTarget.style.backgroundColor = currBg === 'rgb(216, 180, 254)' ? '#ffffff' : '#d8b4fe';
+                        if (currBg === 'rgb(129, 140, 248)' || currBg === '#818cf8') {
+                          e.currentTarget.style.backgroundColor = '#f5f3ff';
+                          e.currentTarget.style.color = '#3730a3';
+                        } else {
+                          e.currentTarget.style.backgroundColor = '#818cf8';
+                          e.currentTarget.style.color = '#ffffff';
+                        }
                       }}
                     >
                       {char}
@@ -1085,11 +1109,12 @@ export default function PreviewCanvasRenderer({
                   )))}
                 </div>
                 
-                <div style={{ flex: '1', minWidth: '120px' }}>
-                  <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#6b21a8', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Hidden Words</span>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                <div style={{ flex: '1', minWidth: '120px', background: '#ffffff', border: '1px solid #e0e7ff', borderRadius: '10px', padding: '0.65rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <span style={{ fontSize: '0.64rem', fontWeight: 800, color: '#4338ca', textTransform: 'uppercase', letterSpacing: '0.04em' }}>📋 Hidden Words</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
                     {words.map((w, wIdx) => (
-                      <span key={wIdx} style={{ background: '#f3e8ff', border: '1px solid #d8b4fe', borderRadius: '4px', padding: '2px 6px', fontSize: '0.62rem', fontWeight: 600, color: '#6b21a8' }}>
+                      <span key={wIdx} style={{ background: '#f5f3ff', border: '1px solid #c7d2fe', borderRadius: '16px', padding: '2px 8px', fontSize: '0.65rem', fontWeight: 700, color: '#4338ca', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#6366f1' }}></span>
                         {w}
                       </span>
                     ))}
@@ -1210,11 +1235,13 @@ export default function PreviewCanvasRenderer({
 
       case 'dictation':
         {
-          const dictKey = `${activeScreenId}_${block.id}`;
-          const userVal = previewAnswers[dictKey] || '';
+          const rawItems = block.content?.items;
+          const items = Array.isArray(rawItems) && rawItems.length > 0
+            ? rawItems
+            : [{ id: 'dict-1', audioUrl: block.content?.url || block.content?.audioUrl || '', text: block.content?.text || block.content?.targetText || '' }];
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.85rem', flex: 1, height: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.85rem', flex: 1, height: '100%', boxSizing: 'border-box', overflowY: 'auto' }}>
               <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <FiVolume2 style={{ fontSize: '1rem' }} /> Dictation Exercise
               </div>
@@ -1222,24 +1249,32 @@ export default function PreviewCanvasRenderer({
                 <strong>Instruction:</strong> {block.content?.question || 'Listen carefully to the audio and type exactly what you hear.'}
               </div>
 
-              {/* Playable Audio Track */}
-              {(block.content?.url || block.content?.audio) ? (
-                <div style={{ width: '100%', background: '#ffffff', padding: '0.5rem', borderRadius: '6px', border: '1px solid #60a5fa' }}>
-                  <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#1d4ed8', marginBottom: '3px' }}>🎵 Listen to Dictation Audio:</div>
-                  <CustomAudioPlayer src={resolveUrl(block.content?.url || block.content?.audio)} />
-                </div>
-              ) : (
-                <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontStyle: 'italic' }}>No audio file configured for dictation.</div>
-              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {items.map((item, idx) => {
+                  const dictKey = `${activeScreenId}_${block.id}_${item.id || idx}`;
+                  const userVal = previewAnswers[dictKey] !== undefined ? previewAnswers[dictKey] : (idx === 0 && items.length === 1 ? (previewAnswers[`${activeScreenId}_${block.id}`] || '') : '');
+                  const audioSrc = item.audioUrl || item.url;
 
-              <input
-                type="text"
-                className="cs-form-input"
-                placeholder="Type the dictation here..."
-                value={userVal}
-                onChange={e => setPreviewAnswers(prev => ({ ...prev, [dictKey]: e.target.value }))}
-                style={{ width: '100%', height: '34px', borderRadius: '6px', border: '1px solid #94a3b8', padding: '0 10px', fontSize: '0.78rem', background: '#ffffff' }}
-              />
+                  return (
+                    <div key={item.id || idx} style={{ background: '#ffffff', padding: '0.6rem', borderRadius: '8px', border: '1px solid #93c5fd', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#1d4ed8' }}>🎵 Dictation Track #{idx + 1}</div>
+                      {audioSrc ? (
+                        <CustomAudioPlayer src={resolveUrl(audioSrc)} />
+                      ) : (
+                        <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontStyle: 'italic' }}>No audio file configured for track #{idx + 1}.</div>
+                      )}
+                      <input
+                        type="text"
+                        className="cs-form-input"
+                        placeholder="Type the dictation here..."
+                        value={userVal}
+                        onChange={e => setPreviewAnswers(prev => ({ ...prev, [dictKey]: e.target.value }))}
+                        style={{ width: '100%', height: '34px', borderRadius: '6px', border: '1px solid #94a3b8', padding: '0 10px', fontSize: '0.78rem', background: '#ffffff' }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           );
         }
@@ -1327,22 +1362,102 @@ export default function PreviewCanvasRenderer({
 
       case 'input':
         {
-          const inputPlaceholder = block.content?.placeholder || 'Type your answer here...';
+          const inputPlaceholder = block.content?.placeholder || 'Type your response here...';
+          const isTextArea = block.content?.inputType === 'textarea';
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem', marginTop: '0.5rem' }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FiType /> Text Input Area
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.85rem',
+              border: '1.5px solid #60a5fa',
+              background: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)',
+              borderRadius: '12px',
+              padding: '1.1rem',
+              marginTop: '0.5rem',
+              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.08)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '26px',
+                    height: '26px',
+                    borderRadius: '7px',
+                    background: '#2563eb',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.85rem'
+                  }}>
+                    <FiType />
+                  </div>
+                  <span>{block.content?.label || block.content?.question || 'Text Input Field'}</span>
+                </div>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#3b82f6', background: '#dbeafe', padding: '2px 8px', borderRadius: '12px' }}>
+                  {isTextArea ? 'Multi-line Text' : 'Single Line Input'}
+                </span>
               </div>
-              <input 
-                type="text" 
-                placeholder={inputPlaceholder} 
-                value={previewAnswers[block.id] || ''}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setPreviewAnswers(prev => ({ ...prev, [block.id]: val }));
-                }}
-                style={{ width: '100%', height: '36px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 8px', fontSize: '0.75rem', background: '#ffffff' }} 
-              />
+
+              {block.content?.prompt && (
+                <div style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.45, fontWeight: 500 }}>
+                  {block.content.prompt}
+                </div>
+              )}
+
+              <div style={{ position: 'relative', width: '100%' }}>
+                {isTextArea ? (
+                  <textarea
+                    placeholder={inputPlaceholder}
+                    rows={block.content?.rows || 3}
+                    value={previewAnswers[block.id] || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPreviewAnswers(prev => ({ ...prev, [block.id]: val }));
+                    }}
+                    style={{
+                      width: '100%',
+                      borderRadius: '8px',
+                      border: '1.5px solid #cbd5e1',
+                      padding: '10px 12px',
+                      fontSize: '0.78rem',
+                      background: '#ffffff',
+                      color: '#0f172a',
+                      outline: 'none',
+                      resize: 'none',
+                      fontFamily: 'inherit',
+                      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.04)'
+                    }}
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    placeholder={inputPlaceholder}
+                    value={previewAnswers[block.id] || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPreviewAnswers(prev => ({ ...prev, [block.id]: val }));
+                    }}
+                    style={{
+                      width: '100%',
+                      height: '38px',
+                      borderRadius: '8px',
+                      border: '1.5px solid #cbd5e1',
+                      padding: '0 12px',
+                      fontSize: '0.78rem',
+                      background: '#ffffff',
+                      color: '#0f172a',
+                      outline: 'none',
+                      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.04)'
+                    }}
+                  />
+                )}
+              </div>
+
+              {block.content?.maxLength && (
+                <div style={{ textAlign: 'right', fontSize: '0.7rem', color: '#64748b' }}>
+                  Max characters: <strong>{block.content.maxLength}</strong>
+                </div>
+              )}
             </div>
           );
         }
@@ -1431,7 +1546,7 @@ export default function PreviewCanvasRenderer({
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.68rem', color: '#64748b' }}>
               <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: block.content?.recordingRequired ? '#10b981' : '#ef4444' }}></span>
-              Recording Required | Max Duration: {block.content?.maxDuration || 60}s
+              Recording Required | Max Duration: {block.content?.maxDuration || 10}s
             </div>
           </div>
         );
@@ -1519,10 +1634,36 @@ export default function PreviewCanvasRenderer({
                           borderRadius: isNpc ? '10px 10px 10px 2px' : '10px 10px 2px 10px',
                           padding: '0.45rem 0.65rem',
                           textAlign: isNpc ? 'left' : 'right',
-                          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px'
                         }}>
-                          <div style={{ fontSize: '0.6rem', fontWeight: 700, color: isNpc ? '#6b21a8' : '#e0f2fe', marginBottom: '2px' }}>{speakerName}</div>
+                          <div style={{ fontSize: '0.6rem', fontWeight: 700, color: isNpc ? '#6b21a8' : '#e0f2fe' }}>{speakerName}</div>
                           <div style={{ fontSize: '0.72rem', lineHeight: 1.3 }}>{text}</div>
+
+                          {!isNpc && (block.content?.allowAudioRecord !== false) && (t.allowAudioRecord !== false) && (
+                            <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                              <button
+                                type="button"
+                                style={{
+                                  background: 'rgba(255,255,255,0.25)',
+                                  border: 'none',
+                                  borderRadius: '12px',
+                                  padding: '2px 8px',
+                                  color: '#ffffff',
+                                  fontSize: '0.62rem',
+                                  fontWeight: 700,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <FiMic style={{ fontSize: '0.7rem' }} /> Record Answer
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         {!isNpc && (

@@ -7,7 +7,8 @@ import {
   FiCheckCircle, FiFileText,
   FiAward, FiLock,
   FiChevronLeft, FiChevronRight, FiEye, FiEyeOff,
-  FiCornerDownRight, FiXCircle, FiMoreVertical, FiAlertTriangle, FiInfo, FiRefreshCw, FiUpload, FiClock, FiActivity
+  FiCornerDownRight, FiXCircle, FiMoreVertical, FiAlertTriangle, FiInfo, FiRefreshCw, FiUpload, FiClock, FiActivity,
+  FiHome, FiUserCheck, FiLayers
 } from 'react-icons/fi';
 import PreviewCanvasRenderer from './PreviewCanvasRenderer';
 import './Dashboard.css';
@@ -2127,20 +2128,46 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>No recent activity.</div>
                     ) : (
                       recentActivitiesList.slice(0, 6).map((act, idx) => {
-                        const isEdit = act.activity_type === 'experience_edited';
+                        let icon = <FiHome />;
+                        let bg = '#e0f2fe';
+                        let fg = '#0284c7';
+                        let badgeLabel = 'School';
+
+                        if (act.activity_type.startsWith('school_admin')) {
+                          icon = <FiUserCheck />;
+                          bg = '#f0fdf4';
+                          fg = '#16a34a';
+                          badgeLabel = 'School Admin';
+                        } else if (act.activity_type.startsWith('grade')) {
+                          icon = <FiLayers />;
+                          bg = '#fef3c7';
+                          fg = '#d97706';
+                          badgeLabel = 'Grade';
+                        } else if (act.activity_type === 'experience_edited') {
+                          icon = <FiEdit2 />;
+                          bg = '#e0f2fe';
+                          fg = '#0284c7';
+                          badgeLabel = 'Experience';
+                        } else if (act.activity_type === 'media_uploaded') {
+                          icon = <FiUpload />;
+                          bg = '#ffedd5';
+                          fg = '#ea580c';
+                          badgeLabel = 'Media';
+                        }
+
                         return (
                           <div className="sd-activity-item" key={act.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 0', borderBottom: '1px solid #f1f5f9' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: 0 }}>
-                              <div className="sd-activity-icon-container" style={{ width: 36, height: 36, borderRadius: '50%', background: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0284c7' : '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                {isEdit ? <FiEdit2 /> : <FiUpload />}
+                              <div className="sd-activity-icon-container" style={{ width: 36, height: 36, borderRadius: '50%', background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                {icon}
                               </div>
                               <div style={{ minWidth: 0, flex: 1 }}>
                                 <div className="sd-activity-desc" style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{act.message}</div>
                                 <div className="sd-activity-meta" style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '2px' }}>{new Date(act.timestamp).toLocaleDateString()}</div>
                               </div>
                             </div>
-                            <span className="sd-activity-badge" style={{ fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: '12px', background: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0369a1' : '#ea580c', flexShrink: 0 }}>
-                              {isEdit ? 'Experience' : 'Media'}
+                            <span className="sd-activity-badge" style={{ fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: '12px', background: bg, color: fg, flexShrink: 0 }}>
+                              {badgeLabel}
                             </span>
                           </div>
                         );
@@ -5057,21 +5084,47 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
                   {recentActivitiesList.map((act, i) => {
-                    const isEdit = act.activity_type === 'experience_edited';
+                    let icon = <FiHome />;
+                    let bg = '#e0f2fe';
+                    let fg = '#0284c7';
+                    let badgeLabel = 'School';
+
+                    if (act.activity_type.startsWith('school_admin')) {
+                      icon = <FiUserCheck />;
+                      bg = '#f0fdf4';
+                      fg = '#16a34a';
+                      badgeLabel = 'School Admin';
+                    } else if (act.activity_type.startsWith('grade')) {
+                      icon = <FiLayers />;
+                      bg = '#fef3c7';
+                      fg = '#d97706';
+                      badgeLabel = 'Grade';
+                    } else if (act.activity_type === 'experience_edited') {
+                      icon = <FiEdit2 />;
+                      bg = '#e0f2fe';
+                      fg = '#0284c7';
+                      badgeLabel = 'Experience';
+                    } else if (act.activity_type === 'media_uploaded') {
+                      icon = <FiUpload />;
+                      bg = '#ffedd5';
+                      fg = '#ea580c';
+                      badgeLabel = 'Media';
+                    }
+
                     const actDate = new Date(act.timestamp);
                     return (
                       <div key={act.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: i === recentActivitiesList.length - 1 ? 'none' : '1px solid #e2e8f0' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                          <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0284c7' : '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {isEdit ? <FiEdit2 /> : <FiUpload />}
+                          <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {icon}
                           </div>
                           <div>
                             <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>{act.message}</div>
                             <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>{actDate.toLocaleDateString()} at {actDate.toLocaleTimeString()}</div>
                           </div>
                         </div>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '4px 10px', borderRadius: '12px', backgroundColor: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0369a1' : '#ea580c' }}>
-                          {isEdit ? 'Experience' : 'Media'}
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '4px 10px', borderRadius: '12px', backgroundColor: bg, color: fg }}>
+                          {badgeLabel}
                         </span>
                       </div>
                     );

@@ -604,7 +604,43 @@ class DashboardRecentActivityAPIView(APIView):
         role = getattr(user, "role", "STUDENT")
         activities = []
 
-        if role in ["SUPER_ADMIN", "CONTENT_CREATOR"]:
+        if role == "SUPER_ADMIN":
+            from super_admin.models import School, Grade
+            from accounts.models import User
+
+            recent_schools = School.objects.all().order_by("-updated_at")[:15]
+            for sch in recent_schools:
+                act_type = "school_created" if sch.created_at == sch.updated_at else "school_updated"
+                action_text = "was created" if act_type == "school_created" else "was updated"
+                activities.append({
+                    "id": f"school-{sch.school_id}",
+                    "activity_type": act_type,
+                    "message": f"School '{sch.school_name}' {action_text}.",
+                    "timestamp": sch.updated_at
+                })
+
+            recent_admins = User.objects.filter(role="SCHOOL_ADMIN").order_by("-date_joined")[:10]
+            for adm in recent_admins:
+                name = adm.full_name or adm.username
+                activities.append({
+                    "id": f"school-admin-{adm.id}",
+                    "activity_type": "school_admin_added",
+                    "message": f"School Admin '{name}' was created.",
+                    "timestamp": adm.date_joined
+                })
+
+            recent_grades = Grade.objects.all().order_by("-updated_at")[:10]
+            for g in recent_grades:
+                act_type = "grade_created" if g.created_at == g.updated_at else "grade_updated"
+                action_text = "was created" if act_type == "grade_created" else "was updated"
+                activities.append({
+                    "id": f"grade-{g.id}",
+                    "activity_type": act_type,
+                    "message": f"Grade '{g.grade_name}' {action_text}.",
+                    "timestamp": g.updated_at
+                })
+
+        elif role == "CONTENT_CREATOR":
             recent_experiences = Experience.objects.filter(is_deleted=False).order_by("-updated_at")[:15]
             for s in recent_experiences:
                 activities.append({

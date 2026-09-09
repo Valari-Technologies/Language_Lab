@@ -2298,7 +2298,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       };
     } else if (type.toLowerCase() === 'dictation') {
       newBlock.type = 'dictation';
-      newBlock.content = { url: '', question: '' };
+      newBlock.content = {
+        question: 'Listen and type what you hear.',
+        items: [{ id: 'dict-1', audioUrl: '', text: '' }]
+      };
     } else if (type.toLowerCase() === 'grammar_correction') {
       newBlock.type = 'grammar_correction';
       newBlock.content = { incorrectSentence: '', correctedSentence: '' };
@@ -2310,7 +2313,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       newBlock.content = { prompt: '', placeholder: 'Start writing here...', minWords: 10 };
     } else if (type.toLowerCase() === 'voice_recorder' || type.toLowerCase() === 'voice recorder') {
       newBlock.type = 'voice_recorder';
-      newBlock.content = { prompt: '' };
+      newBlock.content = { prompt: '', maxDuration: 10 };
     } else if (type.toLowerCase() === 'drag_drop' || type.toLowerCase() === 'drag and drop' || type.toLowerCase() === 'drag_and_drop') {
       newBlock.type = 'drag_drop';
       newBlock.content = {
@@ -2380,7 +2383,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       newBlock.content = {
         prompt: 'Ask a question about the topic',
         recordingRequired: true,
-        maxDuration: 60
+        maxDuration: 10
       };
     } else if (type.toLowerCase() === 'roleplay_simulation' || type.toLowerCase() === 'roleplay simulation') {
       newBlock.type = 'roleplay_simulation';
@@ -2884,30 +2887,42 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           );
         })()}
 
-        {block.type === 'dictation' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%', boxSizing: 'border-box' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiVolume2 /> Dictation (Listening Module)
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#475569' }}>
-              <strong>Prompt/Question:</strong> {block.content?.question || 'Listen and type what you hear.'}
-            </div>
+        {block.type === 'dictation' && (() => {
+          const rawItems = block.content?.items;
+          const items = Array.isArray(rawItems) && rawItems.length > 0 
+            ? rawItems 
+            : [{ id: 'dict-1', audioUrl: block.content?.url || block.content?.audioUrl || '', text: block.content?.text || block.content?.targetText || '' }];
 
-            {/* Interactive Audio Player */}
-            {(block.content?.url || block.content?.audio) ? (
-              <div style={{ width: '100%', background: '#ffffff', padding: '0.4rem', borderRadius: '6px', border: '1px solid #93c5fd' }}>
-                <div style={{ fontSize: '0.64rem', fontWeight: 700, color: '#1d4ed8', marginBottom: '2px' }}>🎵 Listening Track:</div>
-                <CustomAudioPlayer src={resolveMediaUrl(block.content?.url || block.content?.audio)} />
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%', boxSizing: 'border-box', overflowY: 'auto' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiVolume2 /> Dictation (Listening Module)
               </div>
-            ) : (
-              <div style={{ fontSize: '0.64rem', color: '#94a3b8', fontStyle: 'italic', background: '#ffffff', padding: '0.35rem 0.5rem', borderRadius: '4px', border: '1px dashed #cbd5e1' }}>
-                Attach dictation audio file in right properties panel
+              <div style={{ fontSize: '0.72rem', color: '#475569' }}>
+                <strong>Prompt/Question:</strong> {block.content?.question || 'Listen and type what you hear.'}
               </div>
-            )}
 
-            <input type="text" disabled placeholder="User types response here..." style={{ width: '100%', height: '30px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 8px', fontSize: '0.72rem', background: '#ffffff' }} />
-          </div>
-        )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                {items.map((item, idx) => {
+                  const audioSrc = item.audioUrl || item.url;
+                  return (
+                    <div key={item.id || idx} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#0284c7' }}>Track #{idx + 1}</div>
+                      {audioSrc ? (
+                        <CustomAudioPlayer src={resolveMediaUrl(audioSrc)} />
+                      ) : (
+                        <div style={{ fontSize: '0.64rem', color: '#94a3b8', fontStyle: 'italic', padding: '0.2rem 0' }}>
+                          Attach dictation audio file in right properties panel
+                        </div>
+                      )}
+                      <input type="text" disabled placeholder="User types response here..." style={{ width: '100%', height: '28px', borderRadius: '4px', border: '1px solid #cbd5e1', padding: '0 8px', fontSize: '0.7rem', background: '#f8fafc' }} />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {block.type === 'grammar_correction' && (
           <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #a7f3d0', background: '#ecfdf5', borderRadius: '8px', padding: '0.75rem' }}>
@@ -2994,6 +3009,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               <span style={{ fontSize: '0.65rem', fontWeight: 600, color: '#475569' }}>Sources (Draggable):</span>
               {(block.content?.pairs || []).map((p, pIdx) => (
                 <span key={pIdx} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '20px', padding: '2px 8px', fontSize: '0.68rem', fontWeight: 600, color: '#1e293b', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  {(p.sourceImage || p.source_image) && (
+                    <img src={resolveMediaUrl(p.sourceImage || p.source_image)} alt="" style={{ width: '16px', height: '16px', borderRadius: '3px', objectFit: 'cover' }} />
+                  )}
                   <FiMove style={{ fontSize: '0.65rem', color: '#94a3b8' }} /> {p.source || `Item ${pIdx + 1}`}
                 </span>
               ))}
@@ -3109,16 +3127,22 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               Flashcard Cards Deck
             </div>
             <div style={{ display: 'flex', gap: '0.65rem', overflowX: 'auto', paddingBottom: '0.25rem', marginTop: '0.25rem' }}>
-              {(block.content?.cards || []).map((card, cIdx) => (
-                <div key={cIdx} style={{ flexShrink: 0, width: '120px', height: '80px', background: '#ffffff', border: '1px solid #fbcfe8', borderRadius: '10px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 2px 4px rgba(157, 23, 77, 0.05)' }}>
-                  <div style={{ flex: 1, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid #fce7f3', textAlign: 'center' }}>
-                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9d174d' }}>{card.front || 'Front'}</span>
+              {(block.content?.cards || []).map((card, cIdx) => {
+                const cardImg = resolveMediaUrl(card.imageUrl || card.image);
+                return (
+                  <div key={cIdx} style={{ flexShrink: 0, width: '130px', height: '95px', background: '#ffffff', border: '1px solid #fbcfe8', borderRadius: '10px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 2px 4px rgba(157, 23, 77, 0.05)' }}>
+                    <div style={{ flex: 1, padding: '4px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid #fce7f3', textAlign: 'center', gap: '2px' }}>
+                      {cardImg && (
+                        <img src={cardImg} alt="" style={{ width: '28px', height: '24px', borderRadius: '4px', objectFit: 'cover' }} />
+                      )}
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9d174d' }}>{card.front || 'Front'}</span>
+                    </div>
+                    <div style={{ background: '#fdf2f8', padding: '4px 6px', fontSize: '0.58rem', color: '#64748b', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={card.back}>
+                      {card.back || 'Back description'}
+                    </div>
                   </div>
-                  <div style={{ background: '#fdf2f8', padding: '4px 6px', fontSize: '0.58rem', color: '#64748b', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={card.back}>
-                    {card.back || 'Back description'}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -3166,32 +3190,165 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           );
         })()}
 
-        {block.type === 'word_search' && (
-          <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #c7d2fe', background: '#e0e7ff', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#3730a3' }}>
-              Word Search Puzzle: {block.content?.question || 'Find all hidden words'}
-            </div>
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '0.25rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 18px)', gap: '2px', background: '#ffffff', padding: '4px', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
-                {['A', 'B', 'C', 'D', 'E', 'S', 'F', 'G', 'H', 'I', 'T', 'J', 'K', 'L', 'M', 'O'].map((char, charIdx) => (
-                  <div key={charIdx} style={{ width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 700, color: '#4f46e5', background: '#f5f3ff', borderRadius: '2px' }}>
-                    {char}
-                  </div>
-                ))}
+        {block.type === 'word_search' && (() => {
+          const wordQuestion = block.content?.question || 'Word Search Puzzle: Find the hidden words in the grid.';
+          const gridSize = block.content?.gridSize || 8;
+          const rawWords = block.content?.words || ['ROBOT', 'AI', 'CODE', 'FUTURE'];
+          const words = Array.isArray(rawWords) && rawWords.length > 0 ? rawWords : ['ROBOT', 'AI', 'CODE', 'FUTURE'];
+
+          // Generate a realistic grid preview
+          const seedString = words.join(',') + '_' + gridSize;
+          let h = 1779033703 ^ seedString.length;
+          for (let i = 0; i < seedString.length; i++) {
+            h = Math.imul(h ^ seedString.charCodeAt(i), 3432918353);
+            h = (h << 13) | (h >>> 19);
+          }
+          const seededRandom = () => {
+            h = Math.imul(h ^ (h >>> 16), 2246822507);
+            h = Math.imul(h ^ (h >>> 13), 3266489909);
+            return ((h ^= h >>> 16) >>> 0) / 4294967296;
+          };
+
+          const grid = Array(gridSize).fill(null).map(() => Array(gridSize).fill(''));
+          const directions = [[1, 0], [0, 1]];
+
+          words.forEach(wStr => {
+            const cleanWord = (wStr || '').toUpperCase().replace(/[^A-Z]/g, '');
+            if (!cleanWord) return;
+            let placed = false;
+            let attempts = 0;
+            while (!placed && attempts < 80) {
+              attempts++;
+              const dir = directions[Math.floor(seededRandom() * directions.length)];
+              const dx = dir[0];
+              const dy = dir[1];
+              const startX = Math.floor(seededRandom() * (gridSize - (dx === 1 ? cleanWord.length : 0)));
+              const startY = Math.floor(seededRandom() * (gridSize - (dy === 1 ? cleanWord.length : 0)));
+              let canPlace = true;
+              for (let i = 0; i < cleanWord.length; i++) {
+                const x = startX + i * dx;
+                const y = startY + i * dy;
+                if (grid[y][x] !== '' && grid[y][x] !== cleanWord[i]) {
+                  canPlace = false;
+                  break;
+                }
+              }
+              if (canPlace) {
+                for (let i = 0; i < cleanWord.length; i++) {
+                  const x = startX + i * dx;
+                  const y = startY + i * dy;
+                  grid[y][x] = cleanWord[i];
+                }
+                placed = true;
+              }
+            }
+          });
+
+          const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+          for (let r = 0; r < gridSize; r++) {
+            for (let c = 0; c < gridSize; c++) {
+              if (grid[r][c] === '') {
+                grid[r][c] = alphabet[Math.floor(seededRandom() * alphabet.length)];
+              }
+            }
+          }
+
+          return (
+            <div style={{
+              flex: 1,
+              height: '100%',
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.65rem',
+              border: '1.5px solid #c7d2fe',
+              background: 'linear-gradient(135deg, #f5f3ff 0%, #eff6ff 100%)',
+              borderRadius: '12px',
+              padding: '0.85rem',
+              boxShadow: '0 4px 12px rgba(79, 70, 229, 0.06)',
+              overflowY: 'auto'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e0e7ff', paddingBottom: '0.4rem' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#3730a3', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '0.95rem' }}>🔍</span> Word Search Puzzle
+                </div>
+                <span style={{ background: '#4f46e5', color: '#ffffff', fontSize: '0.62rem', fontWeight: 700, padding: '2px 8px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(79,70,229,0.2)' }}>
+                  {words.length} {words.length === 1 ? 'Word' : 'Words'}
+                </span>
               </div>
-              <div style={{ flex: 1 }}>
-                <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#4f46e5', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>Hidden Words</span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
-                  {(block.content?.words || []).map((w, wIdx) => (
-                    <span key={wIdx} style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '4px', padding: '1px 4px', fontSize: '0.62rem', fontWeight: 600, color: '#4f46e5' }}>
-                      {w}
-                    </span>
-                  ))}
+
+              <div style={{ fontSize: '0.74rem', color: '#4338ca', fontWeight: 600, background: '#ffffff', padding: '0.4rem 0.65rem', borderRadius: '8px', border: '1px solid #e0e7ff' }}>
+                {wordQuestion}
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start', marginTop: '0.2rem' }}>
+                {/* Letter Grid */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${gridSize}, 1fr)`,
+                  gap: '3px',
+                  background: '#ffffff',
+                  padding: '6px',
+                  border: '1.5px solid #c7d2fe',
+                  borderRadius: '10px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                  width: gridSize > 8 ? '200px' : '170px',
+                  maxWidth: '100%'
+                }}>
+                  {grid.flatMap((row, rIdx) => row.map((char, cIdx) => (
+                    <div
+                      key={`${rIdx}-${cIdx}`}
+                      style={{
+                        aspectRatio: '1',
+                        background: '#f5f3ff',
+                        border: '1px solid #e0e7ff',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: gridSize > 8 ? '0.58rem' : '0.68rem',
+                        fontWeight: 800,
+                        color: '#3730a3',
+                        userSelect: 'none'
+                      }}
+                    >
+                      {char}
+                    </div>
+                  )))}
+                </div>
+
+                {/* Word Bank */}
+                <div style={{ flex: 1, minWidth: '120px', background: '#ffffff', border: '1px solid #e0e7ff', borderRadius: '10px', padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <span style={{ fontSize: '0.64rem', fontWeight: 800, color: '#4338ca', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    📋 Hidden Words
+                  </span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                    {words.map((w, wIdx) => (
+                      <span
+                        key={wIdx}
+                        style={{
+                          background: '#f5f3ff',
+                          border: '1px solid #c7d2fe',
+                          borderRadius: '16px',
+                          padding: '2px 8px',
+                          fontSize: '0.65rem',
+                          fontWeight: 700,
+                          color: '#4338ca',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#6366f1' }}></span>
+                        {w}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {block.type === 'pronunciation' && (
           <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem' }}>
@@ -3236,11 +3393,95 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'input' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiType /> Text Input Area
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.85rem',
+            border: '1.5px solid #60a5fa',
+            background: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)',
+            borderRadius: '12px',
+            padding: '1.1rem',
+            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.08)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{
+                  width: '26px',
+                  height: '26px',
+                  borderRadius: '7px',
+                  background: '#2563eb',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.85rem'
+                }}>
+                  <FiType />
+                </div>
+                <span>{block.content?.label || block.content?.question || 'Text Input Field'}</span>
+              </div>
+              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#3b82f6', background: '#dbeafe', padding: '2px 8px', borderRadius: '12px' }}>
+                {block.content?.inputType === 'textarea' ? 'Multi-line Text' : 'Single Line Input'}
+              </span>
             </div>
-            <input type="text" disabled placeholder={block.content?.placeholder || 'Type your answer here...'} style={{ width: '100%', height: '30px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 8px', fontSize: '0.72rem', background: '#f8fafc' }} />
+
+            {block.content?.prompt && (
+              <div style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.45, fontWeight: 500 }}>
+                {block.content.prompt}
+              </div>
+            )}
+
+            <div style={{ position: 'relative', width: '100%' }}>
+              {block.content?.inputType === 'textarea' ? (
+                <textarea
+                  disabled
+                  placeholder={block.content?.placeholder || 'Type your response here...'}
+                  rows={block.content?.rows || 3}
+                  style={{
+                    width: '100%',
+                    borderRadius: '8px',
+                    border: '1.5px solid #cbd5e1',
+                    padding: '10px 12px',
+                    fontSize: '0.78rem',
+                    background: '#ffffff',
+                    color: '#334155',
+                    outline: 'none',
+                    resize: 'none',
+                    fontFamily: 'inherit',
+                    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.04)'
+                  }}
+                />
+              ) : (
+                <input
+                  type="text"
+                  disabled
+                  placeholder={block.content?.placeholder || 'Type your response here...'}
+                  style={{
+                    width: '100%',
+                    height: '38px',
+                    borderRadius: '8px',
+                    border: '1.5px solid #cbd5e1',
+                    padding: '0 12px',
+                    fontSize: '0.78rem',
+                    background: '#ffffff',
+                    color: '#334155',
+                    outline: 'none',
+                    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.04)'
+                  }}
+                />
+              )}
+            </div>
+
+            {(block.content?.maxLength || block.content?.correctAnswer) && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b', paddingTop: '2px' }}>
+                {block.content?.correctAnswer ? (
+                  <span><strong style={{ color: '#059669' }}>Target Answer:</strong> {block.content.correctAnswer}</span>
+                ) : <span />}
+                {block.content?.maxLength ? (
+                  <span>Max characters: <strong>{block.content.maxLength}</strong></span>
+                ) : null}
+              </div>
+            )}
           </div>
         )}
 
@@ -3289,7 +3530,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.68rem', color: '#64748b' }}>
               <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: block.content?.recordingRequired ? '#10b981' : '#ef4444' }}></span>
-              Recording Required | Max Duration: {block.content?.maxDuration || 60}s
+              Recording Required | Max Duration: {block.content?.maxDuration || 10}s
             </div>
           </div>
         )}
@@ -3374,10 +3615,36 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           borderRadius: isNpc ? '10px 10px 10px 2px' : '10px 10px 2px 10px',
                           padding: '0.45rem 0.65rem',
                           textAlign: isNpc ? 'left' : 'right',
-                          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px'
                         }}>
-                          <div style={{ fontSize: '0.6rem', fontWeight: 700, color: isNpc ? '#6b21a8' : '#e0f2fe', marginBottom: '2px' }}>{speakerName}</div>
+                          <div style={{ fontSize: '0.6rem', fontWeight: 700, color: isNpc ? '#6b21a8' : '#e0f2fe' }}>{speakerName}</div>
                           <div style={{ fontSize: '0.72rem', lineHeight: 1.3 }}>{text}</div>
+
+                          {!isNpc && (block.content?.allowAudioRecord !== false) && (t.allowAudioRecord !== false) && (
+                            <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                              <button
+                                type="button"
+                                style={{
+                                  background: 'rgba(255,255,255,0.25)',
+                                  border: 'none',
+                                  borderRadius: '12px',
+                                  padding: '2px 8px',
+                                  color: '#ffffff',
+                                  fontSize: '0.62rem',
+                                  fontWeight: 700,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <FiMic style={{ fontSize: '0.7rem' }} /> Record Answer
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         {!isNpc && (
@@ -6699,146 +6966,140 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               {/* Layout grid */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.25rem', alignItems: 'start' }}>
                 {/* RIGHT COLUMN: Activities */}
-                {selectedExperience?.experience_type !== 'ASSESSMENT' ? (
-                  <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
-                      <div>
-                        <h3 className="cs-card-title" style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0 }}>Activities</h3>
-                        {selectedExperience?.experience_type !== 'ASSESSMENT' && (
-                          <>
-                            <div className="cs-card-sub" style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>
-                              Sequence of activities (1 to 6 allowed. Current: {activities.length}/6)
-                            </div>
-                            {(() => {
-                              const totalDur = activities.reduce((sum, a) => sum + (a.estimated_duration || 0), 0);
-                              const limitDur = selectedExperience?.estimated_duration || parseInt(experienceForm.duration) || 0;
-                              const isOver = limitDur > 0 && totalDur > limitDur;
-                              return (
-                                <div style={{ fontSize: '0.72rem', fontWeight: 600, color: isOver ? '#dc2626' : '#475569', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <span>Total Duration: <strong>{totalDur}</strong> / <strong>{limitDur || '—'}</strong> min</span>
-                                  {isOver && (
-                                    <span style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', padding: '1px 5px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700 }}>
-                                      ⚠️ Exceeds Lesson Limit
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })()}
-                          </>
-                        )}
+                <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
+                    <div>
+                      <h3 className="cs-card-title" style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0 }}>
+                        {selectedExperience?.experience_type === 'ASSESSMENT' ? 'Assessment Activities' : 'Activities'}
+                      </h3>
+                      <div className="cs-card-sub" style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>
+                        Sequence of activities ({selectedExperience?.experience_type === 'ASSESSMENT' ? 'Assessment Module' : `1 to 6 allowed. Current: ${activities.length}/6`})
                       </div>
-                      {selectedExperience?.experience_type !== 'ASSESSMENT' && (
-                        <button
-                          type="button"
-                          disabled={activities.length >= 6}
-                          onClick={() => {
-                            if (activities.length >= 6) return;
-                            setSelectedActivity(null);
-                            setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
-                            setScreens([]);
-                            setShowActivityModal(true);
-                          }}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: '4px',
-                            background: activities.length >= 6 ? '#e2e8f0' : '#0b57d0',
-                            color: activities.length >= 6 ? '#94a3b8' : '#ffffff',
-                            border: 'none', borderRadius: '6px',
-                            padding: '0.35rem 0.75rem', fontWeight: 700, fontSize: '0.75rem',
-                            cursor: activities.length >= 6 ? 'not-allowed' : 'pointer'
-                          }}
-                        >
-                          <FiPlus /> New
-                        </button>
-                      )}
+                      {(() => {
+                        const totalDur = activities.reduce((sum, a) => sum + (a.estimated_duration || 0), 0);
+                        const limitDur = selectedExperience?.estimated_duration || parseInt(experienceForm.duration) || 0;
+                        const isOver = limitDur > 0 && totalDur > limitDur;
+                        return (
+                          <div style={{ fontSize: '0.72rem', fontWeight: 600, color: isOver ? '#dc2626' : '#475569', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>Total Duration: <strong>{totalDur}</strong> / <strong>{limitDur || '—'}</strong> min</span>
+                            {isOver && (
+                              <span style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', padding: '1px 5px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700 }}>
+                                ⚠️ Exceeds Lesson Limit
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
+                    <button
+                      type="button"
+                      disabled={activities.length >= 6}
+                      onClick={() => {
+                        if (activities.length >= 6) return;
+                        setSelectedActivity(null);
+                        setActivityForm({ title: '', description: '', objective: '', skills: [], duration: 5, mastery: 80 });
+                        setScreens([]);
+                        setShowActivityModal(true);
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '4px',
+                        background: activities.length >= 6 ? '#e2e8f0' : '#0b57d0',
+                        color: activities.length >= 6 ? '#94a3b8' : '#ffffff',
+                        border: 'none', borderRadius: '6px',
+                        padding: '0.35rem 0.75rem', fontWeight: 700, fontSize: '0.75rem',
+                        cursor: activities.length >= 6 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      <FiPlus /> New
+                    </button>
+                  </div>
 
-                    {activities.length === 0 ? (
-                      <div style={{ fontSize: '0.78rem', color: '#64748b', textAlign: 'center', padding: '1.5rem', border: '1.5px dashed #cbd5e1', borderRadius: '8px' }}>
-                        No activities added yet. Save the current form above to add your first activity.
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        {activities.map((act, index) => {
-                          const isSelected = selectedActivity?.id === act.id;
-                          return (
-                            <div
-                              key={act.id || index}
-                              onClick={() => loadActivityDetail(act, 'screen-builder')}
-                              data-testid="activity-card"
-                              data-activity-title={act.title}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '1rem',
-                                padding: '0.75rem 1rem',
-                                borderRadius: '10px',
-                                border: isSelected ? '1.5px solid #0b57d0' : '1px solid #e2e8f0',
-                                background: isSelected ? '#f0f9ff' : '#ffffff',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s'
-                              }}
-                            >
-                              {/* Reorder Arrows */}
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }} onClick={e => e.stopPropagation()}>
-                                <button
-                                  type="button"
-                                  onClick={() => handleMoveActivity(index, -1)}
-                                  disabled={index === 0}
-                                  style={{ background: 'none', border: 'none', cursor: index === 0 ? 'not-allowed' : 'pointer', color: index === 0 ? '#cbd5e1' : '#64748b', padding: '2px', display: 'flex' }}
-                                >
-                                  <FiChevronUp />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleMoveActivity(index, 1)}
-                                  disabled={index === activities.length - 1}
-                                  style={{ background: 'none', border: 'none', cursor: index === activities.length - 1 ? 'not-allowed' : 'pointer', color: index === activities.length - 1 ? '#cbd5e1' : '#64748b', padding: '2px', display: 'flex' }}
-                                >
-                                  <FiChevronDown />
-                                </button>
-                              </div>
+                  {activities.length === 0 ? (
+                    <div style={{ fontSize: '0.78rem', color: '#64748b', textAlign: 'center', padding: '1.5rem', border: '1.5px dashed #cbd5e1', borderRadius: '8px' }}>
+                      No activities added yet. Click "+ New" above to add an activity.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {activities.map((act, index) => {
+                        const isSelected = selectedActivity?.id === act.id;
+                        return (
+                          <div
+                            key={act.id || index}
+                            onClick={() => loadActivityDetail(act, 'screen-builder')}
+                            data-testid="activity-card"
+                            data-activity-title={act.title}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '1rem',
+                              padding: '0.75rem 1rem',
+                              borderRadius: '10px',
+                              border: isSelected ? '1.5px solid #0b57d0' : '1px solid #e2e8f0',
+                              background: isSelected ? '#f0f9ff' : '#ffffff',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s'
+                            }}
+                          >
+                            {/* Reorder Arrows */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }} onClick={e => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveActivity(index, -1)}
+                                disabled={index === 0}
+                                style={{ background: 'none', border: 'none', cursor: index === 0 ? 'not-allowed' : 'pointer', color: index === 0 ? '#cbd5e1' : '#64748b', padding: '2px', display: 'flex' }}
+                              >
+                                <FiChevronUp />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveActivity(index, 1)}
+                                disabled={index === activities.length - 1}
+                                style={{ background: 'none', border: 'none', cursor: index === activities.length - 1 ? 'not-allowed' : 'pointer', color: index === activities.length - 1 ? '#cbd5e1' : '#64748b', padding: '2px', display: 'flex' }}
+                              >
+                                <FiChevronDown />
+                              </button>
+                            </div>
 
-                              {/* Index badge */}
-                              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: isSelected ? '#0b57d0' : '#f1f5f9', color: isSelected ? '#ffffff' : '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.82rem' }}>
-                                {index + 1}
-                              </div>
+                            {/* Index badge */}
+                            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: isSelected ? '#0b57d0' : '#f1f5f9', color: isSelected ? '#ffffff' : '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.82rem' }}>
+                              {index + 1}
+                            </div>
 
-                              {/* Info */}
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>{act.title}</span>
-                                  <span style={{ fontSize: '0.7rem', color: '#64748b' }}>({act.estimated_duration || 5} min)</span>
-                                </div>
-                              </div>
-
-                              {/* Actions */}
-                              <div style={{ display: 'flex', gap: '0.25rem' }} onClick={e => e.stopPropagation()}>
-                                <button
-                                  type="button"
-                                  className="cs-icon-btn"
-                                  onClick={() => loadActivityDetail(act, 'activity-builder')}
-                                  title="Edit Activity"
-                                  style={{ padding: '4px' }}
-                                >
-                                  <FiEdit2 />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="cs-icon-btn"
-                                  onClick={() => handleDeleteActivity(act.id)}
-                                  title="Delete Activity"
-                                  style={{ padding: '4px', color: '#ef4444' }}
-                                >
-                                  <FiTrash2 />
-                                </button>
+                            {/* Info */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>{act.title}</span>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>({act.estimated_duration || 5} min)</span>
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ) : null}
+
+                            {/* Actions */}
+                            <div style={{ display: 'flex', gap: '0.25rem' }} onClick={e => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                className="cs-icon-btn"
+                                onClick={() => loadActivityDetail(act, 'activity-builder')}
+                                title="Edit Activity"
+                                style={{ padding: '4px' }}
+                              >
+                                <FiEdit2 />
+                              </button>
+                              <button
+                                type="button"
+                                className="cs-icon-btn"
+                                onClick={() => handleDeleteActivity(act.id)}
+                                title="Delete Activity"
+                                style={{ padding: '4px', color: '#ef4444' }}
+                              >
+                                <FiTrash2 />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
 
                 {/* Activity Settings Modal */}
                 {showActivityModal && (
@@ -8539,25 +8800,94 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         </div>
                                       )}
                                       {/* BLOCK TYPE: DICTATION */}
-                                      {selectedBlock.type === 'dictation' && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Dictation Settings</span>
-                                          <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question / Instruction</label>
-                                            <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
-                                              onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Listen to the audio and write down what you hear." />
+                                      {selectedBlock.type === 'dictation' && (() => {
+                                        const rawItems = selectedBlock.content?.items;
+                                        const items = Array.isArray(rawItems) && rawItems.length > 0 
+                                          ? rawItems 
+                                          : [{ id: 'dict-1', audioUrl: selectedBlock.content?.url || selectedBlock.content?.audioUrl || '', text: selectedBlock.content?.text || selectedBlock.content?.targetText || '' }];
+
+                                        return (
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Dictation Settings</span>
+                                              <button
+                                                type="button"
+                                                className="cs-btn-outline"
+                                                style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
+                                                onClick={() => {
+                                                  const newItems = [...items, { id: `dict-${Date.now()}`, audioUrl: '', text: '' }];
+                                                  handleUpdateBlockContent('items', newItems);
+                                                }}
+                                              >
+                                                + Add Audio Track
+                                              </button>
+                                            </div>
+
+                                            <div className="cs-form-group">
+                                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question / Instruction</label>
+                                              <textarea
+                                                className="cs-form-input"
+                                                style={{ minHeight: '44px', fontSize: '0.75rem' }}
+                                                value={selectedBlock.content?.question || ''}
+                                                onChange={e => handleUpdateBlockContent('question', e.target.value)}
+                                                placeholder="e.g. Listen to the audio tracks and write down what you hear."
+                                              />
+                                            </div>
+
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                              {items.map((item, idx) => (
+                                                <div key={item.id || idx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#0284c7' }}>Audio Track #{idx + 1}</span>
+                                                    {items.length > 1 && (
+                                                      <button
+                                                        type="button"
+                                                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                                                        onClick={() => {
+                                                          const filtered = items.filter((_, i) => i !== idx);
+                                                          handleUpdateBlockContent('items', filtered);
+                                                        }}
+                                                      >
+                                                        <FiTrash2 style={{ fontSize: '0.72rem' }} />
+                                                      </button>
+                                                    )}
+                                                  </div>
+
+                                                  <MediaUploadField
+                                                    label="Audio File"
+                                                    value={item.audioUrl || item.url || ''}
+                                                    mediaType="audio"
+                                                    onChange={newUrl => {
+                                                      const updated = [...items];
+                                                      updated[idx] = { ...updated[idx], audioUrl: newUrl, url: newUrl };
+                                                      handleUpdateBlockContent('items', updated);
+                                                    }}
+                                                    actionLoading={actionLoading}
+                                                    setActionLoading={setActionLoading}
+                                                    showFeedback={showFeedback}
+                                                  />
+
+                                                  <div className="cs-form-group" style={{ marginBottom: 0 }}>
+                                                    <label className="cs-form-label" style={{ fontSize: '0.6rem', color: '#059669', fontWeight: 600 }}>Target Correct Text (Optional)</label>
+                                                    <input
+                                                      className="cs-form-input"
+                                                      style={{ height: '26px', fontSize: '0.72rem' }}
+                                                      type="text"
+                                                      value={item.text || item.targetText || ''}
+                                                      onChange={e => {
+                                                        const updated = [...items];
+                                                        updated[idx] = { ...updated[idx], text: e.target.value, targetText: e.target.value };
+                                                        handleUpdateBlockContent('items', updated);
+                                                      }}
+                                                      placeholder="e.g. Expected text transcription..."
+                                                    />
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
                                           </div>
-                                          <MediaUploadField
-                                            label="Audio File"
-                                            value={selectedBlock.content?.url || ''}
-                                            mediaType="audio"
-                                            onChange={newUrl => handleUpdateBlockContent('url', newUrl)}
-                                            actionLoading={actionLoading}
-                                            setActionLoading={setActionLoading}
-                                            showFeedback={showFeedback}
-                                          />
-                                        </div>
-                                      )}
+                                        );
+                                      })()}
 
                                       {/* BLOCK TYPE: GRAMMAR CORRECTION */}
                                       {selectedBlock.type === 'grammar_correction' && (
@@ -8689,20 +9019,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         </div>
                                       )}
 
-                                      {/* BLOCK TYPE 6: VOICE RECORDER */}
-                                      {selectedBlock.type === 'voice_recorder' && (
-                                        <div className="cs-form-group">
-                                          <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Voice Instruction Prompt</label>
-                                          <textarea
-                                            className="cs-form-input"
-                                            style={{ minHeight: '80px', fontSize: '0.75rem' }}
-                                            value={selectedBlock.content?.prompt || ''}
-                                            onChange={e => handleUpdateBlockContent('prompt', e.target.value)}
-                                            placeholder="e.g. Repeat after the recording: 'Good morning, class!'"
-                                          />
-                                        </div>
-                                      )}
-
                                       {/* BLOCK TYPE: DRAG DROP */}
                                       {selectedBlock.type === 'drag_drop' && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -8717,11 +9033,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
                                             <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Match Pairs</span>
                                             <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
-                                              onClick={() => { const pairs = [...(selectedBlock.content?.pairs || [])]; pairs.push({ id: `pair-${Date.now()}`, source: 'New Item', target: 'New Destination' }); handleUpdateBlockContent('pairs', pairs); }}>
+                                              onClick={() => { const pairs = [...(selectedBlock.content?.pairs || [])]; pairs.push({ id: `pair-${Date.now()}`, source: 'New Item', target: 'New Destination', sourceImage: '', targetImage: '' }); handleUpdateBlockContent('pairs', pairs); }}>
                                               + Add Pair
                                             </button>
                                           </div>
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '200px', overflowY: 'auto' }}>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '320px', overflowY: 'auto' }}>
                                             {(selectedBlock.content?.pairs || []).map((p, pIdx) => (
                                               <div key={p.id || pIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -8736,6 +9052,19 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                   <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Target (Drop)" value={p.target}
                                                     onChange={e => { const pairs = [...selectedBlock.content.pairs]; pairs[pIdx].target = e.target.value; handleUpdateBlockContent('pairs', pairs); }} />
                                                 </div>
+                                                <MediaUploadField
+                                                   label="Source Image (Optional)"
+                                                   value={p.sourceImage || p.source_image || ''}
+                                                   mediaType="image"
+                                                   onChange={url => {
+                                                     const pairs = [...selectedBlock.content.pairs];
+                                                     pairs[pIdx] = { ...pairs[pIdx], sourceImage: url, source_image: url };
+                                                     handleUpdateBlockContent('pairs', pairs);
+                                                   }}
+                                                   actionLoading={actionLoading}
+                                                   setActionLoading={setActionLoading}
+                                                   showFeedback={showFeedback}
+                                                 />
                                               </div>
                                             ))}
                                           </div>
@@ -8900,31 +9229,146 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
                                             <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Flashcards List</span>
                                             <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
-                                              onClick={() => { const cards = [...(selectedBlock.content?.cards || [])]; cards.push({ id: `card-${Date.now()}`, front: 'Front word', back: 'Back definition or context' }); handleUpdateBlockContent('cards', cards); }}>
+                                              onClick={() => { const cards = [...(selectedBlock.content?.cards || [])]; cards.push({ id: `card-${Date.now()}`, front: 'Front word', back: 'Back definition or context', imageUrl: '' }); handleUpdateBlockContent('cards', cards); }}>
                                               + Add Card
                                             </button>
                                           </div>
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '240px', overflowY: 'auto' }}>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '340px', overflowY: 'auto' }}>
                                             {(selectedBlock.content?.cards || []).map((card, cIdx) => (
                                               <div key={card.id || cIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                   <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b' }}>Card #{cIdx + 1}</span>
                                                   <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
                                                     onClick={() => { const cards = (selectedBlock.content.cards || []).filter((_, i) => i !== cIdx); handleUpdateBlockContent('cards', cards); }}>
-                                                    <FiTrash2 style={{ fontSize: '0.72rem' }} /></button>
+                                                    <FiTrash2 style={{ fontSize: '0.72rem' }} />
+                                                  </button>
                                                 </div>
-                                                <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Front Text (Question/Word)" value={card.front}
-                                                  onChange={e => { const cards = [...selectedBlock.content.cards]; cards[cIdx].front = e.target.value; handleUpdateBlockContent('cards', cards); }} />
-                                                <textarea className="cs-form-input" style={{ minHeight: '36px', fontSize: '0.72rem', lineHeight: 1.3 }} placeholder="Back Text (Answer/Meaning)" value={card.back}
-                                                  onChange={e => { const cards = [...selectedBlock.content.cards]; cards[cIdx].back = e.target.value; handleUpdateBlockContent('cards', cards); }} />
-                                              </div>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      )}
+                                                <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Front Text (Question/Word)" value={card.front || ''}
+                                                   onChange={e => { const cards = [...selectedBlock.content.cards]; cards[cIdx] = { ...cards[cIdx], front: e.target.value }; handleUpdateBlockContent('cards', cards); }} />
+                                                <textarea className="cs-form-input" style={{ minHeight: '36px', fontSize: '0.72rem', lineHeight: 1.3 }} placeholder="Back Text (Answer/Meaning)" value={card.back || ''}
+                                                   onChange={e => { const cards = [...selectedBlock.content.cards]; cards[cIdx] = { ...cards[cIdx], back: e.target.value }; handleUpdateBlockContent('cards', cards); }} />
+                                                <MediaUploadField
+                                                   label="Card Image (Optional)"
+                                                   value={card.imageUrl || card.image || ''}
+                                                   mediaType="image"
+                                                   onChange={url => {
+                                                     const cards = [...selectedBlock.content.cards];
+                                                     cards[cIdx] = { ...cards[cIdx], imageUrl: url, image: url };
+                                                     handleUpdateBlockContent('cards', cards);
+                                                   }}
+                                                   actionLoading={actionLoading}
+                                                   setActionLoading={setActionLoading}
+                                                   showFeedback={showFeedback}
+                                                 />
+                                               </div>
+                                             ))}
+                                           </div>
+                                         </div>
+                                       )}
 
-                                      {/* BLOCK TYPE: SENTENCE BUILDER */}
-                                      {selectedBlock.type === 'sentence_builder' && (
+                                       {/* BLOCK TYPE: WORD SEARCH */}
+                                       {(selectedBlock.type === 'word_search' || selectedBlock.type?.toLowerCase() === 'word_search' || selectedBlock.type === 'Word_Search') && (
+                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                             <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Word Search Settings</span>
+                                           </div>
+
+                                           <div className="cs-form-group">
+                                             <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Puzzle Title</label>
+                                             <input
+                                               className="cs-form-input"
+                                               style={{ height: '32px', fontSize: '0.75rem' }}
+                                               type="text"
+                                               value={selectedBlock.content?.title || ''}
+                                               onChange={e => handleUpdateBlockContent('title', e.target.value)}
+                                               placeholder="Word Search Puzzle"
+                                             />
+                                           </div>
+
+                                           <div className="cs-form-group">
+                                             <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Instructions / Question Prompt</label>
+                                             <textarea
+                                               className="cs-form-input"
+                                               style={{ minHeight: '44px', fontSize: '0.75rem' }}
+                                               value={selectedBlock.content?.prompt || selectedBlock.content?.instruction || ''}
+                                               onChange={e => {
+                                                 handleUpdateBlockContent('prompt', e.target.value);
+                                                 handleUpdateBlockContent('instruction', e.target.value);
+                                               }}
+                                               placeholder="Find the hidden words in the grid."
+                                             />
+                                           </div>
+
+                                           <div className="cs-form-group">
+                                             <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Grid Size (Dimensions)</label>
+                                             <select
+                                               className="cs-form-input"
+                                               style={{ height: '32px', fontSize: '0.75rem' }}
+                                               value={selectedBlock.content?.gridSize || 10}
+                                               onChange={e => handleUpdateBlockContent('gridSize', parseInt(e.target.value) || 10)}
+                                             >
+                                               <option value={8}>8 x 8 Grid</option>
+                                               <option value={10}>10 x 10 Grid</option>
+                                               <option value={12}>12 x 12 Grid</option>
+                                             </select>
+                                           </div>
+
+                                           {/* Target Words Manager */}
+                                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
+                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                               <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Target Hidden Words</span>
+                                               <button
+                                                 type="button"
+                                                 className="cs-btn-outline"
+                                                 style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
+                                                 onClick={() => {
+                                                   const current = selectedBlock.content?.words || selectedBlock.content?.targetWords || ['ROAD', 'BOAT', 'GAMING'];
+                                                   const updated = [...current, `WORD${current.length + 1}`];
+                                                   handleUpdateBlockMultipleContent({ words: updated, targetWords: updated });
+                                                 }}
+                                               >
+                                                 + Add Word
+                                               </button>
+                                             </div>
+
+                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                                               {(() => {
+                                                 const rawWords = selectedBlock.content?.words || selectedBlock.content?.targetWords || ['ROAD', 'BOAT', 'GAMING'];
+                                                 return rawWords.map((w, wIdx) => (
+                                                   <div key={wIdx} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                     <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b', minWidth: '24px' }}>#{wIdx + 1}</span>
+                                                     <input
+                                                       className="cs-form-input"
+                                                       style={{ height: '28px', fontSize: '0.72rem', textTransform: 'uppercase', flex: 1 }}
+                                                       type="text"
+                                                       value={w}
+                                                       onChange={e => {
+                                                         const updated = [...rawWords];
+                                                         updated[wIdx] = e.target.value.toUpperCase();
+                                                         handleUpdateBlockMultipleContent({ words: updated, targetWords: updated });
+                                                       }}
+                                                       placeholder="ENTER WORD"
+                                                     />
+                                                     <button
+                                                       type="button"
+                                                       style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px 4px' }}
+                                                       onClick={() => {
+                                                         const updated = rawWords.filter((_, i) => i !== wIdx);
+                                                         handleUpdateBlockMultipleContent({ words: updated, targetWords: updated });
+                                                       }}
+                                                     >
+                                                       <FiTrash2 style={{ fontSize: '0.75rem' }} />
+                                                     </button>
+                                                   </div>
+                                                 ));
+                                               })()}
+                                             </div>
+                                           </div>
+                                         </div>
+                                       )}
+
+                                       {/* BLOCK TYPE: SENTENCE BUILDER */}
+                                       {selectedBlock.type === 'sentence_builder' && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Sentence Builder Config</span>
@@ -8986,164 +9430,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         </div>
                                       )}
 
-                                      {/* BLOCK TYPE: WORD SEARCH */}
-                                      {selectedBlock.type === 'word_search' && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Word Search Configuration</span>
-                                          <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question Instruction</label>
-                                            <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
-                                              onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Find all educational terms in the puzzle" />
-                                          </div>
-                                          <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Grid Dimensions Size</label>
-                                            <select className="cs-form-input" style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
-                                              value={selectedBlock.content?.gridSize || 8}
-                                              onChange={e => handleUpdateBlockContent('gridSize', parseInt(e.target.value))}>
-                                              <option value={6}>6 x 6 grid</option>
-                                              <option value={8}>8 x 8 grid</option>
-                                              <option value={10}>10 x 10 grid</option>
-                                              <option value={12}>12 x 12 grid</option>
-                                            </select>
-                                          </div>
-                                          <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Words List (Comma Separated)</label>
-                                            <input className="cs-form-input" style={{ height: '28px', fontSize: '0.78rem' }} type="text"
-                                              value={selectedBlock.content?.wordsRawText !== undefined ? selectedBlock.content.wordsRawText : (selectedBlock.content?.words?.join(', ') || '')}
-                                              onChange={e => {
-                                                const val = e.target.value;
-                                                const list = val.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-                                                handleUpdateBlockMultipleContent({
-                                                  words: list,
-                                                  wordsRawText: val
-                                                });
-                                              }}
-                                              placeholder="e.g. DASHBOARD, STUDIO, TEACHER" />
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {/* BLOCK TYPE: PRONUNCIATION */}
-                                      {selectedBlock.type === 'pronunciation' && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Pronunciation Settings</span>
-                                          <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question Instruction</label>
-                                            <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.question || 'Practice pronouncing words correctly'}
-                                              onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Pronounce the words" />
-                                          </div>
-
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
-                                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Words List</span>
-                                            <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0', background: 'none', cursor: 'pointer' }}
-                                              onClick={() => {
-                                                const oldItems = selectedBlock.content?.items || (selectedBlock.content?.word ? [{ id: 'migrated', word: selectedBlock.content.word, phonetic: selectedBlock.content.phonetic }] : []);
-                                                const items = [...oldItems, { id: `item-${Date.now()}`, word: 'Word', phonetic: '/phonetic/' }];
-                                                handleUpdateBlockContent('items', items);
-                                              }}
-                                            >
-                                              + Add Word
-                                            </button>
-                                          </div>
-
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto', paddingRight: '4px' }}>
-                                            {(() => {
-                                              const items = selectedBlock.content?.items || (selectedBlock.content?.word ? [{ id: 'migrated', word: selectedBlock.content.word, phonetic: selectedBlock.content.phonetic }] : []);
-                                              return items.map((item, idx) => (
-                                                <div key={item.id || idx} style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', background: '#f8fafc', padding: '0.35rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                                                  <input className="cs-form-input" style={{ height: '24px', fontSize: '0.7rem', flex: 1 }} type="text" value={item.word || ''}
-                                                    onChange={e => {
-                                                      const newItems = [...items];
-                                                      newItems[idx] = { ...item, word: e.target.value };
-                                                      handleUpdateBlockContent('items', newItems);
-                                                    }} placeholder="Word" />
-                                                  <input className="cs-form-input" style={{ height: '24px', fontSize: '0.7rem', flex: 1 }} type="text" value={item.phonetic || ''}
-                                                    onChange={e => {
-                                                      const newItems = [...items];
-                                                      newItems[idx] = { ...item, phonetic: e.target.value };
-                                                      handleUpdateBlockContent('items', newItems);
-                                                    }} placeholder="Phonetic" />
-                                                  <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
-                                                    onClick={() => {
-                                                      const newItems = items.filter((_, i) => i !== idx);
-                                                      handleUpdateBlockContent('items', newItems);
-                                                    }}
-                                                  >
-                                                    🗑️
-                                                  </button>
-                                                </div>
-                                              ));
-                                            })()}
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {/* BLOCK TYPE: INPUT */}
-                                      {selectedBlock.type === 'input' && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Text Input Settings</span>
-                                          <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Input Placeholder</label>
-                                            <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.placeholder || ''}
-                                              onChange={e => handleUpdateBlockContent('placeholder', e.target.value)} placeholder="e.g. Type your response here..." />
-                                          </div>
-                                        </div>
-                                      )}
-
-
-                                      {/* BLOCK TYPE: TRUE FALSE */}
-                                      {selectedBlock.type === 'true_false' && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>True / False Settings</span>
-                                            <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
-                                              onClick={() => {
-                                                const statements = [...(selectedBlock.content?.statements || [{ question: selectedBlock.content?.question || '', correctAnswer: selectedBlock.content?.correctAnswer !== undefined ? selectedBlock.content.correctAnswer : true }])];
-                                                statements.push({ question: '', correctAnswer: true });
-                                                handleUpdateBlockMultipleContent({ statements, question: undefined, correctAnswer: undefined });
-                                              }}>
-                                              + Add Statement
-                                            </button>
-                                          </div>
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '360px', overflowY: 'auto' }}>
-                                            {(() => {
-                                              const rawStatements = selectedBlock.content?.statements;
-                                              const statements = rawStatements && rawStatements.length > 0 ? rawStatements : [{ question: selectedBlock.content?.question || '', correctAnswer: selectedBlock.content?.correctAnswer !== undefined ? selectedBlock.content.correctAnswer : true }];
-                                              return statements.map((stmt, sIdx) => (
-                                                <div key={sIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b' }}>Statement #{sIdx + 1}</span>
-                                                    {statements.length > 1 && (
-                                                      <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}
-                                                        onClick={() => {
-                                                          const updated = statements.filter((_, i) => i !== sIdx);
-                                                          handleUpdateBlockMultipleContent({ statements: updated });
-                                                        }}>
-                                                        <FiTrash2 style={{ fontSize: '0.72rem' }} />
-                                                      </button>
-                                                    )}
-                                                  </div>
-                                                  <label className="cs-form-label" style={{ fontSize: '0.65rem', margin: 0 }}>Statement Question</label>
-                                                  <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.72rem' }} value={stmt.question || ''}
-                                                    onChange={e => {
-                                                      const updated = statements.map((s, i) => i === sIdx ? { ...s, question: e.target.value } : s);
-                                                      handleUpdateBlockMultipleContent({ statements: updated });
-                                                    }} placeholder="e.g. Water boils at 100 degrees Celsius." />
-                                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                    <input type="checkbox" checked={!!stmt.correctAnswer}
-                                                      onChange={e => {
-                                                        const updated = statements.map((s, i) => i === sIdx ? { ...s, correctAnswer: e.target.checked } : s);
-                                                        handleUpdateBlockMultipleContent({ statements: updated });
-                                                      }} />
-                                                    <label style={{ fontSize: '0.72rem', fontWeight: 600 }}>Correct Answer is True</label>
-                                                  </div>
-                                                </div>
-                                              ));
-                                            })()}
-                                          </div>
-                                          <HintLadderForm block={selectedBlock} onChange={handleUpdateBlockContent} />
-                                        </div>
-                                      )}
+                                      {/* BLOCK TYPE: ROLEPLAY SIMULATION */}
                                       {(['roleplay_simulation', 'roleplay simulation', 'roleplay'].includes((selectedBlock.type || '').toLowerCase())) && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                           <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Roleplay Simulation Settings</span>
@@ -9184,6 +9471,18 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                             </div>
                                           </div>
 
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.6rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                                            <input
+                                              type="checkbox"
+                                              id={`roleplay-audio-rec-${selectedBlock.id}`}
+                                              checked={selectedBlock.content?.allowAudioRecord !== false}
+                                              onChange={e => handleUpdateBlockContent('allowAudioRecord', e.target.checked)}
+                                            />
+                                            <label htmlFor={`roleplay-audio-rec-${selectedBlock.id}`} style={{ fontSize: '0.72rem', fontWeight: 600, color: '#334155', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                              <FiMic style={{ color: '#0284c7' }} /> Enable Student Audio Record Answer
+                                            </label>
+                                          </div>
+
                                           <MediaUploadField
                                             label="Speaker A Avatar (Optional)"
                                             value={selectedBlock.content?.npcAvatarUrl || selectedBlock.content?.speakerAAvatarUrl || ''}
@@ -9213,12 +9512,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                 style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0', display: 'flex', alignItems: 'center', gap: '3px' }}
                                                 onClick={() => {
                                                   const conversation = [...(selectedBlock.content?.conversation || [
-                                                    { speaker: 'npc', prompt: 'Hello! How can I help you today?', expectedResponse: '' }
+                                                    { speaker: 'npc', prompt: 'Hello! How can I help you today?', expectedResponse: '', allowAudioRecord: true }
                                                   ])];
                                                   conversation.push({
                                                     speaker: conversation.length % 2 === 0 ? 'npc' : 'user',
                                                     prompt: '',
-                                                    expectedResponse: ''
+                                                    expectedResponse: '',
+                                                    allowAudioRecord: true
                                                   });
                                                   handleUpdateBlockMultipleContent({ conversation });
                                                 }}
@@ -9305,6 +9605,20 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                         />
                                                       </div>
                                                     )}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '2px' }}>
+                                                       <input
+                                                         type="checkbox"
+                                                         id={`turn-audio-rec-${tIdx}-${selectedBlock.id}`}
+                                                         checked={turn.allowAudioRecord !== false}
+                                                         onChange={e => {
+                                                           const updated = conversation.map((t, i) => i === tIdx ? { ...t, allowAudioRecord: e.target.checked } : t);
+                                                           handleUpdateBlockMultipleContent({ conversation: updated });
+                                                         }}
+                                                       />
+                                                       <label htmlFor={`turn-audio-rec-${tIdx}-${selectedBlock.id}`} style={{ fontSize: '0.62rem', fontWeight: 600, color: '#475569', cursor: 'pointer' }}>
+                                                         Audio Record Answer Option Enabled
+                                                       </label>
+                                                     </div>
                                                   </div>
                                                 ));
                                               })()}
@@ -9313,187 +9627,88 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         </div>
                                       )}
 
-                                      {selectedBlock.type === 'you_ask' && (
+                                      {/* BLOCK TYPE: TEXT INPUT */}
+                                      {(selectedBlock.type === 'input' || selectedBlock.type?.toLowerCase() === 'input') && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>You Ask Settings</span>
+                                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Text Input Settings</span>
+
                                           <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Prompt Instruction</label>
-                                            <textarea className="cs-form-input" style={{ minHeight: '54px', fontSize: '0.75rem' }} value={selectedBlock.content?.prompt || ''}
-                                              onChange={e => handleUpdateBlockContent('prompt', e.target.value)} placeholder="e.g. Ask a question about the topic" />
+                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Field Label / Title</label>
+                                            <input
+                                              className="cs-form-input"
+                                              style={{ height: '32px', fontSize: '0.75rem' }}
+                                              type="text"
+                                              value={selectedBlock.content?.label || selectedBlock.content?.question || ''}
+                                              onChange={e => {
+                                                handleUpdateBlockMultipleContent({ label: e.target.value, question: e.target.value });
+                                              }}
+                                              placeholder="e.g. Student Name / Answer Box"
+                                            />
                                           </div>
-                                          <MediaUploadField
-                                            label="Guide Audio File / Model Answer"
-                                            value={selectedBlock.content?.audioUrl || ''}
-                                            mediaType="audio"
-                                            onChange={url => handleUpdateBlockContent('audioUrl', url)}
-                                            actionLoading={actionLoading}
-                                            setActionLoading={setActionLoading}
-                                            showFeedback={showFeedback}
-                                          />
-                                          <div className="cs-form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <input type="checkbox" checked={!!selectedBlock.content?.recordingRequired}
-                                              onChange={e => handleUpdateBlockContent('recordingRequired', e.target.checked)} />
-                                            <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Recording Required</label>
-                                          </div>
+
                                           <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Max Duration (Seconds)</label>
-                                            <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="number" value={selectedBlock.content?.maxDuration || 60}
-                                              onChange={e => handleUpdateBlockContent('maxDuration', parseInt(e.target.value, 10) || 0)} placeholder="e.g. 60" />
+                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question / Prompt Description</label>
+                                            <textarea
+                                              className="cs-form-input"
+                                              style={{ minHeight: '44px', fontSize: '0.75rem' }}
+                                              value={selectedBlock.content?.prompt || ''}
+                                              onChange={e => handleUpdateBlockContent('prompt', e.target.value)}
+                                              placeholder="e.g. Type your response below in complete sentences."
+                                            />
+                                          </div>
+
+                                          <div className="cs-form-group">
+                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Input Mode</label>
+                                            <select
+                                              className="cs-form-input"
+                                              style={{ height: '32px', fontSize: '0.75rem' }}
+                                              value={selectedBlock.content?.inputType || 'text'}
+                                              onChange={e => handleUpdateBlockContent('inputType', e.target.value)}
+                                            >
+                                              <option value="text">Single Line Input</option>
+                                              <option value="textarea">Multi-line Text (Paragraph)</option>
+                                            </select>
+                                          </div>
+
+                                          <div className="cs-form-group">
+                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Placeholder Text</label>
+                                            <input
+                                              className="cs-form-input"
+                                              style={{ height: '32px', fontSize: '0.75rem' }}
+                                              type="text"
+                                              value={selectedBlock.content?.placeholder || ''}
+                                              onChange={e => handleUpdateBlockContent('placeholder', e.target.value)}
+                                              placeholder="e.g. Type your answer here..."
+                                            />
+                                          </div>
+
+                                          <div className="cs-form-group">
+                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Target / Correct Answer (Optional)</label>
+                                            <input
+                                              className="cs-form-input"
+                                              style={{ height: '32px', fontSize: '0.75rem' }}
+                                              type="text"
+                                              value={selectedBlock.content?.correctAnswer || ''}
+                                              onChange={e => handleUpdateBlockContent('correctAnswer', e.target.value)}
+                                              placeholder="e.g. Expected correct answer text"
+                                            />
+                                          </div>
+
+                                          <div className="cs-form-group">
+                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Max Character Limit</label>
+                                            <input
+                                              className="cs-form-input"
+                                              style={{ height: '32px', fontSize: '0.75rem' }}
+                                              type="number"
+                                              value={selectedBlock.content?.maxLength || ''}
+                                              onChange={e => handleUpdateBlockContent('maxLength', parseInt(e.target.value) || '')}
+                                              placeholder="e.g. 200"
+                                            />
                                           </div>
                                         </div>
                                       )}
 
-                                      {selectedBlock.type === 'hotspot_explorer' && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Hotspot Explorer Settings</span>
-                                          <MediaUploadField
-                                            label="Explorer Image File"
-                                            value={selectedBlock.content?.imageUrl || ''}
-                                            mediaType="image"
-                                            onChange={url => handleUpdateBlockContent('imageUrl', url)}
-                                            actionLoading={actionLoading}
-                                            setActionLoading={setActionLoading}
-                                            showFeedback={showFeedback}
-                                          />
-
-                                          {selectedBlock.content?.imageUrl && (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                              <label className="cs-form-label" style={{ fontSize: '0.68rem', margin: 0 }}>Visual Coordinate Picker (Click to place target)</label>
-                                              <div
-                                                onClick={e => {
-                                                  const rect = e.currentTarget.getBoundingClientRect();
-                                                  const px = Math.round((e.clientX - rect.left) / rect.width * 400);
-                                                  const py = Math.round((e.clientY - rect.top) / rect.height * 250);
-                                                  const hotspots = [...(selectedBlock.content.hotspots || [])];
-                                                  if (hotspots.length > 0) {
-                                                    const editIdx = activeHotspotIndex < hotspots.length ? activeHotspotIndex : 0;
-                                                    hotspots[editIdx] = { ...hotspots[editIdx], x: px, y: py };
-                                                    handleUpdateBlockContent('hotspots', hotspots);
-                                                  }
-                                                }}
-                                                style={{ position: 'relative', width: '100%', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', cursor: 'crosshair', border: '1px solid #cbd5e1' }}
-                                              >
-                                                <img src={resolveMediaUrl(selectedBlock.content.imageUrl)} alt="Picker preview" style={{ width: '100%', display: 'block', pointerEvents: 'none' }} />
-                                                {(selectedBlock.content.hotspots || []).map((h, idx) => {
-                                                  const isActive = idx === activeHotspotIndex;
-                                                  return (
-                                                    <div
-                                                      key={idx}
-                                                      style={{
-                                                        position: 'absolute',
-                                                        left: `${(h.x / 400) * 100}%`,
-                                                        top: `${(h.y / 250) * 100}%`,
-                                                        width: isActive ? '20px' : '14px',
-                                                        height: isActive ? '20px' : '14px',
-                                                        borderRadius: '50%',
-                                                        border: isActive ? '2px solid #ef4444' : '1.5px solid #f97316',
-                                                        background: isActive ? 'rgba(239, 68, 68, 0.5)' : 'rgba(249, 115, 22, 0.4)',
-                                                        transform: 'translate(-50%, -50%)',
-                                                        pointerEvents: 'none',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        color: '#fff',
-                                                        fontSize: '8px',
-                                                        fontWeight: 'bold'
-                                                      }}
-                                                    >
-                                                      {idx + 1}
-                                                    </div>
-                                                  );
-                                                })}
-                                              </div>
-                                              <span style={{ fontSize: '0.6rem', color: '#64748b' }}>
-                                                Currently editing Hotspot #{activeHotspotIndex + 1} ({selectedBlock.content?.hotspots?.[activeHotspotIndex]?.name || 'Unnamed'}). Click anywhere on image to position.
-                                              </span>
-                                            </div>
-                                          )}
-
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
-                                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Hotspots List</span>
-                                            <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
-                                              onClick={() => {
-                                                const hotspots = [...(selectedBlock.content?.hotspots || [])];
-                                                hotspots.push({ id: `hotspot_${Date.now()}`, name: `Target ${hotspots.length + 1}`, x: 50, y: 50, width: 80, height: 80, info: '', hint: '' });
-                                                handleUpdateBlockContent('hotspots', hotspots);
-                                                setActiveHotspotIndex(hotspots.length - 1);
-                                              }}>
-                                              + Add Hotspot
-                                            </button>
-                                          </div>
-
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
-                                            {(selectedBlock.content?.hotspots || []).map((h, hIdx) => {
-                                              const isActiveHotspot = hIdx === activeHotspotIndex;
-                                              return (
-                                                <div
-                                                  key={h.id || hIdx}
-                                                  onClick={() => setActiveHotspotIndex(hIdx)}
-                                                  style={{
-                                                    background: isActiveHotspot ? '#eff6ff' : '#f8fafc',
-                                                    border: isActiveHotspot ? '2px solid #3b82f6' : '1px solid #e2e8f0',
-                                                    borderRadius: '8px',
-                                                    padding: '0.5rem',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    gap: '0.35rem',
-                                                    cursor: 'pointer'
-                                                  }}
-                                                >
-                                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b' }}>Hotspot #{hIdx + 1}</span>
-                                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
-                                                      onClick={() => {
-                                                        const hotspots = (selectedBlock.content.hotspots || []).filter((_, i) => i !== hIdx);
-                                                        handleUpdateBlockContent('hotspots', hotspots);
-                                                      }}>
-                                                      <FiTrash2 style={{ fontSize: '0.72rem' }} />
-                                                    </button>
-                                                  </div>
-                                                  <div className="cs-form-group">
-                                                    <label style={{ fontSize: '0.6rem' }}>Name</label>
-                                                    <input className="cs-form-input" style={{ height: '22px', fontSize: '0.72rem' }} type="text" value={h.name || ''}
-                                                      onChange={e => { const hs = [...selectedBlock.content.hotspots]; hs[hIdx].name = e.target.value; handleUpdateBlockContent('hotspots', hs); }} />
-                                                  </div>
-                                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '4px' }}>
-                                                    <div>
-                                                      <label style={{ fontSize: '0.55rem' }}>X</label>
-                                                      <input className="cs-form-input" style={{ height: '20px', fontSize: '0.7rem', padding: '2px' }} type="number" value={h.x}
-                                                        onChange={e => { const hs = [...selectedBlock.content.hotspots]; hs[hIdx].x = parseInt(e.target.value) || 0; handleUpdateBlockContent('hotspots', hs); }} />
-                                                    </div>
-                                                    <div>
-                                                      <label style={{ fontSize: '0.55rem' }}>Y</label>
-                                                      <input className="cs-form-input" style={{ height: '20px', fontSize: '0.7rem', padding: '2px' }} type="number" value={h.y}
-                                                        onChange={e => { const hs = [...selectedBlock.content.hotspots]; hs[hIdx].y = parseInt(e.target.value) || 0; handleUpdateBlockContent('hotspots', hs); }} />
-                                                    </div>
-                                                    <div>
-                                                      <label style={{ fontSize: '0.55rem' }}>W</label>
-                                                      <input className="cs-form-input" style={{ height: '20px', fontSize: '0.7rem', padding: '2px' }} type="number" value={h.width}
-                                                        onChange={e => { const hs = [...selectedBlock.content.hotspots]; hs[hIdx].width = parseInt(e.target.value) || 0; handleUpdateBlockContent('hotspots', hs); }} />
-                                                    </div>
-                                                    <div>
-                                                      <label style={{ fontSize: '0.55rem' }}>H</label>
-                                                      <input className="cs-form-input" style={{ height: '20px', fontSize: '0.7rem', padding: '2px' }} type="number" value={h.height}
-                                                        onChange={e => { const hs = [...selectedBlock.content.hotspots]; hs[hIdx].height = parseInt(e.target.value) || 0; handleUpdateBlockContent('hotspots', hs); }} />
-                                                    </div>
-                                                  </div>
-                                                  <div className="cs-form-group">
-                                                    <label style={{ fontSize: '0.6rem' }}>Info Text</label>
-                                                    <textarea className="cs-form-input" style={{ minHeight: '32px', fontSize: '0.72rem' }} value={h.info || ''}
-                                                      onChange={e => { const hs = [...selectedBlock.content.hotspots]; hs[hIdx].info = e.target.value; handleUpdateBlockContent('hotspots', hs); }} />
-                                                  </div>
-                                                  <div className="cs-form-group">
-                                                    <label style={{ fontSize: '0.6rem' }}>Hint</label>
-                                                    <input className="cs-form-input" style={{ height: '22px', fontSize: '0.72rem' }} type="text" value={h.hint || ''}
-                                                      onChange={e => { const hs = [...selectedBlock.content.hotspots]; hs[hIdx].hint = e.target.value; handleUpdateBlockContent('hotspots', hs); }} />
-                                                  </div>
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                      )}
-
+                                      {/* BLOCK TYPE: FUNCTIONAL READING */}
                                       {selectedBlock.type === 'functional_reading' && (() => {
                                         const docType = (selectedBlock.content?.documentType || 'poster').toLowerCase();
                                         const isTextDoc = docType === 'text';
@@ -9557,7 +9772,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                 style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
                                                 onClick={() => {
                                                   const questions = [...(selectedBlock.content?.questions || [])];
-                                                  questions.push({ id: `q_${Date.now()}`, type: 'text', question: 'New Question?' });
+                                                  questions.push({ id: `q_${Date.now()}`, type: 'text', question: 'New Question?', targetAnswer: '' });
                                                   handleUpdateBlockContent('questions', questions);
                                                 }}
                                               >
@@ -9594,6 +9809,21 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                         handleUpdateBlockContent('questions', qs);
                                                       }}
                                                       placeholder="Enter question..."
+                                                    />
+                                                  </div>
+                                                  <div className="cs-form-group">
+                                                    <label style={{ fontSize: '0.6rem', color: '#059669', fontWeight: 600 }}>Target / Correct Answer (Optional)</label>
+                                                    <input
+                                                      className="cs-form-input"
+                                                      style={{ height: '26px', fontSize: '0.72rem' }}
+                                                      type="text"
+                                                      value={q.targetAnswer || q.correctAnswer || ''}
+                                                      onChange={e => {
+                                                        const qs = [...selectedBlock.content.questions];
+                                                        qs[qIdx] = { ...qs[qIdx], targetAnswer: e.target.value, correctAnswer: e.target.value };
+                                                        handleUpdateBlockContent('questions', qs);
+                                                      }}
+                                                      placeholder="e.g. Expected correct answer text..."
                                                     />
                                                   </div>
                                                 </div>
@@ -9731,225 +9961,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         </div>
                                       )}
 
-
-                                      {/* Dedicated Collapsible Section for Remedial/Foundation Question */}
-                                      {['quiz', 'mcq', 'fill_blank', 'match', 'match_items', 'drag_drop', 'dictation', 'sentence_builder', 'sequence'].includes((selectedBlock.type || '').toLowerCase()) && (
-                                        <div style={{
-                                          borderTop: '1.5px solid #e2e8f0',
-                                          marginTop: '1rem',
-                                          paddingTop: '0.75rem',
-                                          display: 'flex',
-                                          flexDirection: 'column',
-                                          gap: '0.75rem'
-                                        }}>
-                                          <div style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            cursor: 'pointer',
-                                            background: '#f8fafc',
-                                            padding: '6px 10px',
-                                            borderRadius: '6px',
-                                            border: '1px solid #e2e8f0'
-                                          }} onClick={() => setRemedialOpen(!remedialOpen)}>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#1e293b' }}>
-                                              🩹 Remedial / Foundation Setup
-                                            </span>
-                                            <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                                              {remedialOpen ? '▼' : '▶'}
-                                            </span>
-                                          </div>
-
-                                          {remedialOpen && (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: '4px' }}>
-                                              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
-                                                <input
-                                                  type="checkbox"
-                                                  checked={!!selectedBlock.enableRemedial}
-                                                  onChange={e => handleUpdateBlockRemedial('enableRemedial', e.target.checked)}
-                                                />
-                                                Enable Remedial Branching
-                                              </label>
-
-                                              {selectedBlock.enableRemedial && (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', borderLeft: '2px solid #3b82f6', paddingLeft: '0.6rem', marginTop: '0.25rem' }}>
-                                                  <div className="cs-form-group">
-                                                    <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Remedial Mode</label>
-                                                    <select
-                                                      className="cs-form-input"
-                                                      style={{ height: '28px', fontSize: '0.75rem', padding: '0 0.25rem' }}
-                                                      value={selectedBlock.remedialConfig?.mode || 'ai_runtime'}
-                                                      onChange={e => handleUpdateBlockRemedial('mode', e.target.value)}
-                                                    >
-                                                      <option value="ai_runtime">🤖 AI Auto-Generate at Runtime</option>
-                                                      <option value="manual">✍️ Manual Entry</option>
-                                                      <option value="ai_pregenerated">🪄 AI Pre-Generate in CMS</option>
-                                                    </select>
-                                                  </div>
-
-                                                  {(selectedBlock.remedialConfig?.mode === 'manual' || selectedBlock.remedialConfig?.mode === 'ai_pregenerated') && (
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                                                      <div className="cs-form-group">
-                                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Remedial Hint / Concept Explanation</label>
-                                                        <textarea
-                                                          className="cs-form-input"
-                                                          style={{ minHeight: '50px', fontSize: '0.75rem' }}
-                                                          value={selectedBlock.remedialConfig?.hintText || ''}
-                                                          onChange={e => handleUpdateBlockRemedial('hintText', e.target.value)}
-                                                          placeholder="Provide a simple hint or concept explanation..."
-                                                        />
-                                                      </div>                                                      <div className="cs-form-group">
-                                                        <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Foundation Question Text</label>
-                                                        <input
-                                                          className="cs-form-input"
-                                                          style={{ height: '28px', fontSize: '0.75rem' }}
-                                                          type="text"
-                                                          value={selectedBlock.remedialConfig?.foundationQuestion || ''}
-                                                          onChange={e => handleUpdateBlockRemedial('foundationQuestion', e.target.value)}
-                                                          placeholder="Enter simplified foundation question..."
-                                                        />
-                                                      </div>
-
-                                                      {/* Foundation options fields based on type */}
-                                                      {selectedBlock.type === 'quiz' && (
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', marginTop: '0.25rem' }}>
-                                                          <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Foundation Options (Select Correct Choice)</label>
-                                                          {[0, 1, 2, 3].map(i => (
-                                                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                              <input
-                                                                type="radio"
-                                                                name="remedial-correct-option"
-                                                                checked={selectedBlock.remedialConfig?.correctAnswerIndex === i}
-                                                                onChange={() => handleUpdateBlockRemedial('correctAnswerIndex', i)}
-                                                              />
-                                                              <input
-                                                                className="cs-form-input"
-                                                                style={{ height: '24px', fontSize: '0.75rem', flex: 1 }}
-                                                                type="text"
-                                                                value={selectedBlock.remedialConfig?.foundationOptions?.[i] || ''}
-                                                                placeholder={`Option ${i + 1}`}
-                                                                onChange={e => {
-                                                                  const newOpts = [...(selectedBlock.remedialConfig?.foundationOptions || ['', '', '', ''])];
-                                                                  newOpts[i] = e.target.value;
-                                                                  handleUpdateBlockRemedial('foundationOptions', newOpts);
-                                                                }}
-                                                              />
-                                                            </div>
-                                                          ))}
-                                                        </div>
-                                                      )}
-
-                                                      {selectedBlock.type === 'fill_blank' && (
-                                                        <div className="cs-form-group">
-                                                          <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Foundation Blank Answer</label>
-                                                          <input
-                                                            className="cs-form-input"
-                                                            style={{ height: '28px', fontSize: '0.75rem' }}
-                                                            type="text"
-                                                            value={selectedBlock.remedialConfig?.foundationOptions?.[0] || ''}
-                                                            placeholder="e.g. correct word"
-                                                            onChange={e => handleUpdateBlockRemedial('foundationOptions', [e.target.value])}
-                                                          />
-                                                        </div>
-                                                      )}
-
-
-                                                      {(selectedBlock.type === 'match' || selectedBlock.type === 'drag_drop') && (
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
-                                                          <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Foundation Match Pairs</label>
-                                                          {[0, 1, 2].map(i => {
-                                                            const pair = selectedBlock.remedialConfig?.foundationOptions?.[i] || { source: '', target: '' };
-                                                            return (
-                                                              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem' }}>
-                                                                <input
-                                                                  className="cs-form-input"
-                                                                  style={{ height: '24px', fontSize: '0.72rem' }}
-                                                                  type="text"
-                                                                  value={pair.source || ''}
-                                                                  placeholder={`Source ${i + 1}`}
-                                                                  onChange={e => {
-                                                                    const newOpts = [...(selectedBlock.remedialConfig?.foundationOptions || [])];
-                                                                    newOpts[i] = { ...pair, source: e.target.value };
-                                                                    handleUpdateBlockRemedial('foundationOptions', newOpts);
-                                                                  }}
-                                                                />
-                                                                <input
-                                                                  className="cs-form-input"
-                                                                  style={{ height: '24px', fontSize: '0.72rem' }}
-                                                                  type="text"
-                                                                  value={pair.target || ''}
-                                                                  placeholder={`Target ${i + 1}`}
-                                                                  onChange={e => {
-                                                                    const newOpts = [...(selectedBlock.remedialConfig?.foundationOptions || [])];
-                                                                    newOpts[i] = { ...pair, target: e.target.value };
-                                                                    handleUpdateBlockRemedial('foundationOptions', newOpts);
-                                                                  }}
-                                                                />
-                                                              </div>
-                                                            );
-                                                          })}
-                                                        </div>
-                                                      )}
-
-                                                      {selectedBlock.type === 'dictation' && (
-                                                        <div className="cs-form-group">
-                                                          <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Foundation Dictation Text</label>
-                                                          <input
-                                                            className="cs-form-input"
-                                                            style={{ height: '28px', fontSize: '0.75rem' }}
-                                                            type="text"
-                                                            value={selectedBlock.remedialConfig?.foundationOptions?.[0] || ''}
-                                                            placeholder="e.g. The dog barked."
-                                                            onChange={e => handleUpdateBlockRemedial('foundationOptions', [e.target.value])}
-                                                          />
-                                                        </div>
-                                                      )}
-
-                                                      {(selectedBlock.type === 'sentence_builder' || selectedBlock.type === 'sequence') && (
-                                                        <div className="cs-form-group">
-                                                          <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Foundation Word Sequence / Sentence</label>
-                                                          <input
-                                                            className="cs-form-input"
-                                                            style={{ height: '28px', fontSize: '0.75rem' }}
-                                                            type="text"
-                                                            value={selectedBlock.remedialConfig?.foundationOptions?.[0] || ''}
-                                                            placeholder="e.g. red, green, blue or The quick brown fox"
-                                                            onChange={e => handleUpdateBlockRemedial('foundationOptions', [e.target.value])}
-                                                          />
-                                                        </div>
-                                                      )}
-
-                                                      {selectedBlock.remedialConfig?.mode === 'ai_pregenerated' && (
-                                                        <button
-                                                          type="button"
-                                                          onClick={() => handleGenerateRemedialWithAI(selectedBlock)}
-                                                          style={{
-                                                            padding: '0.45rem 0.75rem',
-                                                            fontSize: '0.75rem',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            gap: '4px',
-                                                            background: '#eff6ff',
-                                                            color: '#1d4ed8',
-                                                            border: '1px solid #bfdbfe',
-                                                            borderRadius: '6px',
-                                                            cursor: 'pointer',
-                                                            fontWeight: 600,
-                                                            marginTop: '0.25rem'
-                                                          }}
-                                                        >
-                                                          {actionLoading ? '🪄 Generating...' : '🪄 Generate Remedial Question with AI'}
-                                                        </button>
-                                                      )}
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
 
                                     </>
                                   )}
