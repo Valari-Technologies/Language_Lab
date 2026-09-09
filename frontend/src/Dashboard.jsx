@@ -785,25 +785,30 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   /* ══════════════════════════════════
      DATA LOADERS (unchanged from original)
      ══════════════════════════════════ */
+  const handleLoadError = (label, err) => {
+    if (err?.message === 'Session expired. Please log in again.') return;
+    console.error(label, err);
+  };
+
   const loadSchools = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/schools/');
       if (res.ok) { const data = await res.json(); setSchools(data.results || data); }
-    } catch (e) { console.error('Failed to load schools', e); }
+    } catch (e) { handleLoadError('Failed to load schools', e); }
   };
 
   const loadPublishContents = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/publish-contents/');
       if (res.ok) { const data = await res.json(); setPublishContents(data.results || data); }
-    } catch (e) { console.error('Failed to load publish contents', e); }
+    } catch (e) { handleLoadError('Failed to load publish contents', e); }
   };
 
   const loadDashboardStats = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/dashboard-stats/');
       if (res.ok) { const data = await res.json(); setDashboardStats(data); }
-    } catch (e) { console.error('Failed to load dashboard stats', e); }
+    } catch (e) { handleLoadError('Failed to load dashboard stats', e); }
   };
 
   const loadRecentActivities = async () => {
@@ -814,7 +819,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setRecentActivitiesList(data);
       }
     } catch (e) {
-      console.error('Failed to load recent activities', e);
+      handleLoadError('Failed to load recent activities', e);
     }
   };
 
@@ -901,7 +906,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setGrades(filtered);
       }
     } catch (e) {
-      console.error('Failed to load grades', e);
+      handleLoadError('Failed to load grades', e);
     }
   };
 
@@ -909,7 +914,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     try {
       const res = await apiFetch('/api/v1/content/experiences/');
       if (res.ok) { const data = await res.json(); setExperiences(data.results || data); }
-    } catch (e) { console.error('Failed to load experiences', e); }
+    } catch (e) { handleLoadError('Failed to load experiences', e); }
   };
 
   const loadSuperAdminExperiences = async () => {
@@ -925,7 +930,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setSubmittedExperiences(data.results || data);
       }
     } catch (e) {
-      console.error('Failed to load submitted experiences', e);
+      handleLoadError('Failed to load submitted experiences', e);
     }
   };
 
@@ -984,28 +989,28 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     try {
       const res = await apiFetch('/api/v1/content/experiences/');
       if (res.ok) { const data = await res.json(); setExperienceBuilders(data.results || data); }
-    } catch (e) { console.error('Failed to load experience builders', e); }
+    } catch (e) { handleLoadError('Failed to load experience builders', e); }
   };
 
   const loadSchoolAdmins = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/school-admins/');
       if (res.ok) { const data = await res.json(); setSchoolAdmins(data.results || data); }
-    } catch (e) { console.error('Failed to load school admins', e); }
+    } catch (e) { handleLoadError('Failed to load school admins', e); }
   };
 
   const loadTeachers = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/teachers/');
       if (res.ok) { const data = await res.json(); setTeachers(data.results || data); }
-    } catch (e) { console.error('Failed to load teachers', e); }
+    } catch (e) { handleLoadError('Failed to load teachers', e); }
   };
 
   const loadStudents = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/students/');
       if (res.ok) { const data = await res.json(); setStudents(data.results || data); }
-    } catch (e) { console.error('Failed to load students', e); }
+    } catch (e) { handleLoadError('Failed to load students', e); }
   };
 
   const formatErrorMsg = (err) => {
@@ -1090,7 +1095,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setNotifications(await res.json());
       }
     } catch (e) {
-      console.error('Failed to load notifications', e);
+      handleLoadError('Failed to load notifications', e);
     }
   };
 
@@ -1101,7 +1106,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setNotifications(notifications.map(n => ({ ...n, read: true })));
       }
     } catch (e) {
-      console.error('Failed to mark notifications read', e);
+      handleLoadError('Failed to mark notifications read', e);
     }
   };
 
@@ -1112,7 +1117,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setNotifications(notifications.filter(n => n.id !== id));
       }
     } catch (e) {
-      console.error('Failed to delete notification', e);
+      handleLoadError('Failed to delete notification', e);
     }
   };
 
@@ -1123,7 +1128,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setNotifications([]);
       }
     } catch (e) {
-      console.error('Failed to clear notifications', e);
+      handleLoadError('Failed to clear notifications', e);
     }
   };
 
@@ -1144,7 +1149,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         });
       }
     } catch (e) {
-      console.error('Failed to load user profile', e);
+      handleLoadError('Failed to load user profile', e);
     }
   };
 
@@ -1160,7 +1165,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         loadNotifications()
       ]);
     } catch (e) {
-      console.error('Failed to load data from backend server.', e);
+      handleLoadError('Failed to load data from backend server.', e);
     } finally {
       setLoading(false);
     }

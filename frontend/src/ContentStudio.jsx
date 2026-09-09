@@ -167,6 +167,58 @@ const CustomAudioPlayer = ({ src, style = {} }) => {
   );
 };
 
+const HintLadderForm = ({ block, onChange }) => {
+  const hints = Array.isArray(block?.content?.hints) ? block.content.hints : [];
+  return (
+    <div style={{ marginTop: '0.75rem', borderTop: '1px solid #e2e8f0', paddingTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Hint Ladder</span>
+        <button
+          type="button"
+          className="cs-btn-outline"
+          style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
+          onClick={() => {
+            const updated = [...hints, ''];
+            onChange('hints', updated);
+          }}
+        >
+          + Add Hint
+        </button>
+      </div>
+      {hints.length === 0 ? (
+        <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontStyle: 'italic' }}>No progressive hints configured.</span>
+      ) : (
+        hints.map((hint, idx) => (
+          <div key={idx} style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+            <input
+              className="cs-form-input"
+              style={{ height: '28px', fontSize: '0.72rem', flex: 1 }}
+              type="text"
+              value={typeof hint === 'string' ? hint : (hint?.text || '')}
+              placeholder={`Hint #${idx + 1}`}
+              onChange={(e) => {
+                const updated = [...hints];
+                updated[idx] = e.target.value;
+                onChange('hints', updated);
+              }}
+            />
+            <button
+              type="button"
+              style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
+              onClick={() => {
+                const updated = hints.filter((_, i) => i !== idx);
+                onChange('hints', updated);
+              }}
+            >
+              <FiTrash2 style={{ fontSize: '0.72rem' }} />
+            </button>
+          </div>
+        ))
+      )}
+    </div>
+  );
+};
+
 const getUserInitials = (u, defaultVal = 'U') => {
   if (!u) return defaultVal;
   const name = (u.full_name || u.username || '').trim();
