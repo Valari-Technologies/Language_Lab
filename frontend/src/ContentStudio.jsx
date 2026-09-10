@@ -9959,6 +9959,373 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                             </div>
                                           </div>
                                         </div>
+                                      )}                                      {/* BLOCK TYPE: TRUE FALSE */}
+                                      {(['true_false', 'true false', 'true/false'].includes((selectedBlock.type || '').toLowerCase())) && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>True / False Statements</span>
+                                            <button
+                                              type="button"
+                                              className="cs-btn-outline"
+                                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
+                                              onClick={() => {
+                                                const stmts = [...(selectedBlock.content?.statements || [{ question: selectedBlock.content?.question || '', correctAnswer: selectedBlock.content?.correctAnswer ?? true }])];
+                                                stmts.push({ question: '', correctAnswer: true });
+                                                handleUpdateBlockContent('statements', stmts);
+                                              }}
+                                            >
+                                              + Add Statement
+                                            </button>
+                                          </div>
+
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '380px', overflowY: 'auto' }}>
+                                            {(() => {
+                                              const rawStmts = selectedBlock.content?.statements;
+                                              const stmts = rawStmts && rawStmts.length > 0
+                                                ? rawStmts
+                                                : [{ question: selectedBlock.content?.question || '', correctAnswer: selectedBlock.content?.correctAnswer ?? true }];
+
+                                              return stmts.map((stmt, sIdx) => (
+                                                <div key={sIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#475569' }}>Statement #{sIdx + 1}</span>
+                                                    {stmts.length > 1 && (
+                                                      <button
+                                                        type="button"
+                                                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}
+                                                        onClick={() => {
+                                                          const updated = stmts.filter((_, i) => i !== sIdx);
+                                                          handleUpdateBlockContent('statements', updated);
+                                                        }}
+                                                        title="Delete statement"
+                                                      >
+                                                        <FiTrash2 style={{ fontSize: '0.72rem' }} />
+                                                      </button>
+                                                    )}
+                                                  </div>
+
+                                                  <div className="cs-form-group" style={{ marginBottom: 0 }}>
+                                                    <label className="cs-form-label" style={{ fontSize: '0.65rem' }}>Question / Statement Text</label>
+                                                    <textarea
+                                                      className="cs-form-input"
+                                                      style={{ minHeight: '38px', fontSize: '0.72rem' }}
+                                                      value={stmt.question || ''}
+                                                      onChange={e => {
+                                                        const updated = stmts.map((s, i) => i === sIdx ? { ...s, question: e.target.value } : s);
+                                                        handleUpdateBlockContent('statements', updated);
+                                                      }}
+                                                      placeholder="e.g. The Earth orbits around the Sun."
+                                                    />
+                                                  </div>
+
+                                                  <div className="cs-form-group" style={{ marginBottom: 0 }}>
+                                                    <label className="cs-form-label" style={{ fontSize: '0.65rem' }}>Correct Answer</label>
+                                                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                                      <label style={{ fontSize: '0.7rem', fontWeight: 600, color: '#166534', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <input
+                                                          type="radio"
+                                                          name={`tf_correct_${selectedBlock.id}_stmt_${sIdx}`}
+                                                          checked={stmt.correctAnswer === true || stmt.correctAnswer === 'true'}
+                                                          onChange={() => {
+                                                            const updated = stmts.map((s, i) => i === sIdx ? { ...s, correctAnswer: true } : s);
+                                                            handleUpdateBlockContent('statements', updated);
+                                                          }}
+                                                        /> True
+                                                      </label>
+                                                      <label style={{ fontSize: '0.7rem', fontWeight: 600, color: '#991b1b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <input
+                                                          type="radio"
+                                                          name={`tf_correct_${selectedBlock.id}_stmt_${sIdx}`}
+                                                          checked={stmt.correctAnswer === false || stmt.correctAnswer === 'false'}
+                                                          onChange={() => {
+                                                            const updated = stmts.map((s, i) => i === sIdx ? { ...s, correctAnswer: false } : s);
+                                                            handleUpdateBlockContent('statements', updated);
+                                                          }}
+                                                        /> False
+                                                      </label>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              ));
+                                            })()}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* BLOCK TYPE: PRONUNCIATION */}
+                                      {(['pronunciation', 'pronunciation_block'].includes((selectedBlock.type || '').toLowerCase())) && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Pronunciation Words Config</span>
+                                            <button
+                                              type="button"
+                                              className="cs-btn-outline"
+                                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
+                                              onClick={() => {
+                                                const items = [...(selectedBlock.content?.items || [{ id: `item-1`, word: selectedBlock.content?.word || '', phonetic: selectedBlock.content?.phonetic || '' }])];
+                                                items.push({ id: `item-${Date.now()}`, word: '', phonetic: '' });
+                                                handleUpdateBlockContent('items', items);
+                                              }}
+                                            >
+                                              + Add Word
+                                            </button>
+                                          </div>
+
+                                          <div className="cs-form-group">
+                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question / Prompt Instruction</label>
+                                            <textarea
+                                              className="cs-form-input"
+                                              style={{ minHeight: '44px', fontSize: '0.75rem' }}
+                                              value={selectedBlock.content?.question || ''}
+                                              onChange={e => handleUpdateBlockContent('question', e.target.value)}
+                                              placeholder="e.g. Listen and practice pronouncing the target words correctly."
+                                            />
+                                          </div>
+
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '350px', overflowY: 'auto' }}>
+                                            {(() => {
+                                              const rawItems = selectedBlock.content?.items;
+                                              const items = rawItems && rawItems.length > 0
+                                                ? rawItems
+                                                : [{ id: 'item-1', word: selectedBlock.content?.word || '', phonetic: selectedBlock.content?.phonetic || '' }];
+
+                                              return items.map((item, idx) => (
+                                                <div key={item.id || idx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.55rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#0284c7' }}>Word Item #{idx + 1}</span>
+                                                    {items.length > 1 && (
+                                                      <button
+                                                        type="button"
+                                                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}
+                                                        onClick={() => {
+                                                          const updated = items.filter((_, i) => i !== idx);
+                                                          handleUpdateBlockContent('items', updated);
+                                                        }}
+                                                      >
+                                                        <FiTrash2 style={{ fontSize: '0.72rem' }} />
+                                                      </button>
+                                                    )}
+                                                  </div>
+
+                                                  <div className="cs-form-group" style={{ marginBottom: 0 }}>
+                                                    <label className="cs-form-label" style={{ fontSize: '0.62rem' }}>Target Word / Phrase</label>
+                                                    <input
+                                                      className="cs-form-input"
+                                                      style={{ height: '26px', fontSize: '0.72rem' }}
+                                                      type="text"
+                                                      value={item.word || ''}
+                                                      onChange={e => {
+                                                        const updated = [...items];
+                                                        updated[idx] = { ...updated[idx], word: e.target.value };
+                                                        handleUpdateBlockContent('items', updated);
+                                                      }}
+                                                      placeholder="e.g. Extraordinary"
+                                                    />
+                                                  </div>
+
+                                                  <div className="cs-form-group" style={{ marginBottom: 0 }}>
+                                                    <label className="cs-form-label" style={{ fontSize: '0.62rem' }}>Phonetic Guide / IPA (Optional)</label>
+                                                    <input
+                                                      className="cs-form-input"
+                                                      style={{ height: '26px', fontSize: '0.72rem' }}
+                                                      type="text"
+                                                      value={item.phonetic || ''}
+                                                      onChange={e => {
+                                                        const updated = [...items];
+                                                        updated[idx] = { ...updated[idx], phonetic: e.target.value };
+                                                        handleUpdateBlockContent('items', updated);
+                                                      }}
+                                                      placeholder="e.g. /ɪkˈstrɔːrdn-eri/"
+                                                    />
+                                                  </div>
+
+                                                  <MediaUploadField
+                                                    label="Target Audio Sample (Optional)"
+                                                    value={item.audioUrl || item.audio || ''}
+                                                    mediaType="audio"
+                                                    onChange={url => {
+                                                      const updated = [...items];
+                                                      updated[idx] = { ...updated[idx], audioUrl: url, audio: url };
+                                                      handleUpdateBlockContent('items', updated);
+                                                    }}
+                                                    actionLoading={actionLoading}
+                                                    setActionLoading={setActionLoading}
+                                                    showFeedback={showFeedback}
+                                                  />
+                                                </div>
+                                              ));
+                                            })()}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* BLOCK TYPE: VOICE RECORDER */}
+                                      {(['voice_recorder', 'voice recorder', 'voice'].includes((selectedBlock.type || '').toLowerCase())) && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Voice Recorder Settings</span>
+
+                                          <div className="cs-form-group">
+                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Prompt Instruction / Question</label>
+                                            <textarea
+                                              className="cs-form-input"
+                                              style={{ minHeight: '54px', fontSize: '0.75rem' }}
+                                              value={selectedBlock.content?.prompt || selectedBlock.content?.question || ''}
+                                              onChange={e => {
+                                                handleUpdateBlockMultipleContent({
+                                                  prompt: e.target.value,
+                                                  question: e.target.value
+                                                });
+                                              }}
+                                              placeholder="e.g. Record yourself talking about your daily routine."
+                                            />
+                                          </div>
+
+                                          <div className="cs-form-group">
+                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Max Duration Limit (Seconds)</label>
+                                            <input
+                                              className="cs-form-input"
+                                              style={{ height: '32px', fontSize: '0.75rem' }}
+                                              type="number"
+                                              value={selectedBlock.content?.maxDuration || 10}
+                                              onChange={e => handleUpdateBlockContent('maxDuration', parseInt(e.target.value) || 10)}
+                                              placeholder="e.g. 10"
+                                            />
+                                          </div>
+
+                                          <MediaUploadField
+                                            label="Sample Audio Reference (Optional)"
+                                            value={selectedBlock.content?.sampleAudioUrl || selectedBlock.content?.audioUrl || ''}
+                                            mediaType="audio"
+                                            onChange={url => handleUpdateBlockMultipleContent({ sampleAudioUrl: url, audioUrl: url })}
+                                            actionLoading={actionLoading}
+                                            setActionLoading={setActionLoading}
+                                            showFeedback={showFeedback}
+                                          />
+                                        </div>
+                                      )}
+
+                                      {/* BLOCK TYPE: HOTSPOT EXPLORER */}
+                                      {(['hotspot_explorer', 'hotspot explorer', 'hotspot'].includes((selectedBlock.type || '').toLowerCase())) && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Hotspot Explorer Settings</span>
+
+                                          <MediaUploadField
+                                            label="Base Background Image"
+                                            value={selectedBlock.content?.imageUrl || ''}
+                                            mediaType="image"
+                                            onChange={url => handleUpdateBlockContent('imageUrl', url)}
+                                            actionLoading={actionLoading}
+                                            setActionLoading={setActionLoading}
+                                            showFeedback={showFeedback}
+                                          />
+
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Interactive Hotspots List</span>
+                                            <button
+                                              type="button"
+                                              className="cs-btn-outline"
+                                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
+                                              onClick={() => {
+                                                const hotspots = [...(selectedBlock.content?.hotspots || [])];
+                                                hotspots.push({
+                                                  id: `hotspot_${Date.now()}`,
+                                                  name: `Target ${hotspots.length + 1}`,
+                                                  x: 100,
+                                                  y: 100,
+                                                  width: 80,
+                                                  height: 80,
+                                                  info: 'Exploration info description...',
+                                                  hint: 'Click to explore'
+                                                });
+                                                handleUpdateBlockContent('hotspots', hotspots);
+                                              }}
+                                            >
+                                              + Add Hotspot
+                                            </button>
+                                          </div>
+
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '350px', overflowY: 'auto' }}>
+                                            {(selectedBlock.content?.hotspots || []).map((hs, hIdx) => (
+                                              <div key={hs.id || hIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                  <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#0284c7' }}>Hotspot #{hIdx + 1} ({hs.name || 'Target'})</span>
+                                                  <button
+                                                    type="button"
+                                                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}
+                                                    onClick={() => {
+                                                      const hotspots = (selectedBlock.content.hotspots || []).filter((_, i) => i !== hIdx);
+                                                      handleUpdateBlockContent('hotspots', hotspots);
+                                                    }}
+                                                  >
+                                                    <FiTrash2 style={{ fontSize: '0.72rem' }} />
+                                                  </button>
+                                                </div>
+
+                                                <div className="cs-form-group" style={{ marginBottom: 0 }}>
+                                                  <label className="cs-form-label" style={{ fontSize: '0.6rem' }}>Label / Name</label>
+                                                  <input
+                                                    className="cs-form-input"
+                                                    style={{ height: '24px', fontSize: '0.72rem' }}
+                                                    type="text"
+                                                    value={hs.name || ''}
+                                                    onChange={e => {
+                                                      const hotspots = [...selectedBlock.content.hotspots];
+                                                      hotspots[hIdx] = { ...hotspots[hIdx], name: e.target.value };
+                                                      handleUpdateBlockContent('hotspots', hotspots);
+                                                    }}
+                                                    placeholder="Target name..."
+                                                  />
+                                                </div>
+
+                                                <div className="cs-form-group" style={{ marginBottom: 0 }}>
+                                                  <label className="cs-form-label" style={{ fontSize: '0.6rem' }}>Info Text on Click</label>
+                                                  <textarea
+                                                    className="cs-form-input"
+                                                    style={{ minHeight: '34px', fontSize: '0.72rem' }}
+                                                    value={hs.info || ''}
+                                                    onChange={e => {
+                                                      const hotspots = [...selectedBlock.content.hotspots];
+                                                      hotspots[hIdx] = { ...hotspots[hIdx], info: e.target.value };
+                                                      handleUpdateBlockContent('hotspots', hotspots);
+                                                    }}
+                                                    placeholder="Detailed info shown when clicked..."
+                                                  />
+                                                </div>
+
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
+                                                  <div className="cs-form-group" style={{ marginBottom: 0 }}>
+                                                    <label className="cs-form-label" style={{ fontSize: '0.58rem' }}>X Position (px)</label>
+                                                    <input
+                                                      className="cs-form-input"
+                                                      style={{ height: '22px', fontSize: '0.7rem' }}
+                                                      type="number"
+                                                      value={hs.x ?? 100}
+                                                      onChange={e => {
+                                                        const hotspots = [...selectedBlock.content.hotspots];
+                                                        hotspots[hIdx] = { ...hotspots[hIdx], x: parseInt(e.target.value) || 0 };
+                                                        handleUpdateBlockContent('hotspots', hotspots);
+                                                      }}
+                                                    />
+                                                  </div>
+                                                  <div className="cs-form-group" style={{ marginBottom: 0 }}>
+                                                    <label className="cs-form-label" style={{ fontSize: '0.58rem' }}>Y Position (px)</label>
+                                                    <input
+                                                      className="cs-form-input"
+                                                      style={{ height: '22px', fontSize: '0.7rem' }}
+                                                      type="number"
+                                                      value={hs.y ?? 100}
+                                                      onChange={e => {
+                                                        const hotspots = [...selectedBlock.content.hotspots];
+                                                        hotspots[hIdx] = { ...hotspots[hIdx], y: parseInt(e.target.value) || 0 };
+                                                        handleUpdateBlockContent('hotspots', hotspots);
+                                                      }}
+                                                    />
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
                                       )}
 
 
