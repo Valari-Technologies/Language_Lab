@@ -3039,30 +3039,24 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   const text = item.text || '';
                   const parts = text.split(/(\[[^\]]+\])/);
                   return (
-                    <div key={item.id || itemIdx} style={{ fontSize: '0.75rem', color: '#374151', background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '0.5rem', lineHeight: 1.6 }}>
+                    <div key={item.id || itemIdx} style={{ fontSize: '0.75rem', color: '#374151', background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '0.6rem 0.75rem', lineHeight: 1.8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px' }}>
                       {parts.map((part, pIdx) => {
                         if (part.startsWith('[') && part.endsWith(']')) {
-                          const word = part.slice(1, -1);
                           return (
-                            <input
+                            <span
                               key={pIdx}
-                              type="text"
-                              disabled
-                              placeholder={word}
                               style={{
-                                width: `${Math.max(word.length * 8 + 12, 50)}px`,
-                                height: '18px',
-                                border: 'none',
-                                borderBottom: '2px solid #059669',
+                                display: 'inline-block',
+                                minWidth: '60px',
+                                height: '22px',
+                                borderBottom: '2px dashed #059669',
                                 background: '#f0fdf4',
-                                textAlign: 'center',
-                                fontSize: '0.72rem',
-                                fontWeight: 700,
-                                color: '#059669',
+                                borderRadius: '4px',
                                 margin: '0 4px',
-                                outline: 'none',
-                                padding: 0
+                                padding: '0 6px',
+                                verticalAlign: 'middle'
                               }}
+                              title="Blank input slot"
                             />
                           );
                         }
@@ -9075,47 +9069,64 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                       {selectedBlock.type === 'fill_blank' && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                           <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Fill in Blanks Config</span>
+                                          
                                           <div className="cs-form-group">
                                             <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question Instruction</label>
-                                            <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
-                                              onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Complete the sentences with correct terms" />
+                                            <textarea
+                                              className="cs-form-input"
+                                              style={{ minHeight: '44px', fontSize: '0.75rem' }}
+                                              value={selectedBlock.content?.question || ''}
+                                              onChange={e => handleUpdateBlockContent('question', e.target.value)}
+                                              placeholder="e.g. Complete the sentence by filling in the blanks."
+                                            />
                                           </div>
 
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
                                             <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Sentences List (Use [ ] for blanks)</span>
-                                            <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0', background: 'none', cursor: 'pointer' }}
+                                            <button
+                                              type="button"
+                                              className="cs-btn-outline"
+                                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0', background: 'none', cursor: 'pointer' }}
                                               onClick={() => {
                                                 const oldItems = selectedBlock.content?.items || (selectedBlock.content?.text ? [{ id: 'migrated', text: selectedBlock.content.text }] : []);
                                                 const items = [...oldItems, { id: `item-${Date.now()}`, text: 'Sentence with [blank].' }];
                                                 handleUpdateBlockContent('items', items);
                                               }}
                                             >
-                                               + Add Sentence
+                                              + Add Sentence
                                             </button>
                                           </div>
 
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto', paddingRight: '4px' }}>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '250px', overflowY: 'auto', paddingRight: '4px' }}>
                                             {(() => {
                                               const items = selectedBlock.content?.items || (selectedBlock.content?.text ? [{ id: 'migrated', text: selectedBlock.content.text }] : []);
                                               return items.map((item, idx) => (
-                                                <div key={item.id || idx} style={{ display: 'flex', gap: '0.35rem', alignItems: 'start', background: '#f8fafc', padding: '0.35rem', borderRadius: '6px', border: '1px solid #e2e8f0', flexDirection: 'column' }}>
+                                                <div key={item.id || idx} style={{ display: 'flex', gap: '0.35rem', alignItems: 'start', background: '#f8fafc', padding: '0.4rem', borderRadius: '6px', border: '1px solid #e2e8f0', flexDirection: 'column' }}>
                                                   <div style={{ display: 'flex', width: '100%', gap: '0.35rem', alignItems: 'center' }}>
                                                     <span style={{ fontSize: '0.65rem', fontWeight: 600, color: '#64748b' }}>Sentence #{idx + 1}</span>
-                                                    <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', marginLeft: 'auto', padding: '2px' }}
+                                                    <button
+                                                      type="button"
+                                                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', marginLeft: 'auto', padding: '2px' }}
                                                       onClick={() => {
                                                         const newItems = items.filter((_, i) => i !== idx);
                                                         handleUpdateBlockContent('items', newItems);
                                                       }}
+                                                      title="Delete sentence"
                                                     >
-                                                      🗑️
+                                                      <FiTrash2 style={{ fontSize: '0.72rem' }} />
                                                     </button>
                                                   </div>
-                                                  <textarea className="cs-form-input" style={{ minHeight: '50px', fontSize: '0.72rem', width: '100%', lineHeight: 1.3 }} value={item.text || ''}
+                                                  <textarea
+                                                    className="cs-form-input"
+                                                    style={{ minHeight: '46px', fontSize: '0.72rem', width: '100%', lineHeight: 1.3 }}
+                                                    value={item.text || ''}
                                                     onChange={e => {
                                                       const newItems = [...items];
                                                       newItems[idx] = { ...item, text: e.target.value };
                                                       handleUpdateBlockContent('items', newItems);
-                                                    }} placeholder="e.g. The quick [fox] jumps." />
+                                                    }}
+                                                    placeholder="e.g. The quick [fox] jumps."
+                                                  />
                                                 </div>
                                               ));
                                             })()}
