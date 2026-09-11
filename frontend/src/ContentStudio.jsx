@@ -2974,21 +2974,30 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           );
         })()}
 
-        {block.type === 'writing_prompt' && (
-          <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fdf2f8', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#9d174d', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiEdit2 /> Writing Prompt (Word Count Gate)
+        {block.type === 'writing_prompt' && (() => {
+          const userText = block.content?.text || block.content?.value || block.content?.placeholder || '';
+          const currentWords = userText.trim() ? userText.trim().split(/\s+/).filter(Boolean).length : 0;
+          return (
+            <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fdf2f8', borderRadius: '8px', padding: '0.75rem' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#9d174d', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiEdit2 /> Writing Prompt (Word Count Gate)
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>
+                Prompt: {block.content?.prompt || 'Write about your favorite hobby.'}
+              </div>
+              <textarea
+                value={block.content?.text || block.content?.value || ''}
+                onChange={e => handleUpdateBlockContent('text', e.target.value)}
+                placeholder={block.content?.placeholder || 'Start writing here...'}
+                style={{ width: '100%', height: '50px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '6px', fontSize: '0.72rem', background: '#ffffff', resize: 'none' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#9d174d', fontWeight: 600 }}>
+                <span>Minimum word count: {block.content?.minWords || 10} words</span>
+                <span>{currentWords} words</span>
+              </div>
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>
-              Prompt: {block.content?.prompt || 'Write about your favorite hobby.'}
-            </div>
-            <textarea disabled placeholder={block.content?.placeholder || 'Start writing here...'} style={{ width: '100%', height: '50px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '6px', fontSize: '0.72rem', background: '#f8fafc', resize: 'none' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#9d174d', fontWeight: 600 }}>
-              <span>Minimum word count: {block.content?.minWords || 10} words</span>
-              <span>0 words</span>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {block.type === 'voice_recorder' && (
           <div style={{ flex: 1, height: '100%', minHeight: 0, border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
@@ -3669,12 +3678,32 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
         {block.type === 'hotspot_explorer' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f8fafc', borderRadius: '8px', padding: '0.75rem', position: 'relative', overflow: 'hidden', flex: 1, height: '100%', minHeight: 0 }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiGrid /> Hotspot Explorer
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiGrid /> Hotspot Explorer
+              </div>
+              {block.content?.hotspots && block.content.hotspots.length > 0 && (
+                <div style={{ fontSize: '0.65rem', background: '#eff6ff', border: '1px solid #93c5fd', color: '#1e40af', borderRadius: '12px', padding: '2px 8px', fontWeight: 600 }}>
+                  🎯 Click image to set target #{(activeHotspotIndex < block.content.hotspots.length ? activeHotspotIndex : 0) + 1}
+                </div>
+              )}
             </div>
             {block.content?.imageUrl ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                <div style={{ position: 'relative', width: '100%', height: block.styles?.height || 'auto', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block' }}>
+                <div
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const relX = Math.round(((e.clientX - rect.left) / rect.width) * 400);
+                    const relY = Math.round(((e.clientY - rect.top) / rect.height) * 250);
+                    const hotspots = [...(block.content.hotspots || [])];
+                    if (hotspots.length > 0) {
+                      const targetIdx = activeHotspotIndex < hotspots.length ? activeHotspotIndex : 0;
+                      hotspots[targetIdx] = { ...hotspots[targetIdx], x: relX, y: relY };
+                      handleUpdateBlockContent('hotspots', hotspots);
+                    }
+                  }}
+                  style={{ position: 'relative', width: '100%', height: block.styles?.height || 'auto', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block', cursor: 'crosshair' }}
+                >
                   <img
                     src={resolveMediaUrl(block.content.imageUrl)}
                     alt="Hotspot explorer source"
@@ -7625,10 +7654,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <div className="fss-toolbar-left">
                       <button
                         className="fss-toolbar-btn"
-                        title="Back to Activity Builder (saves first)"
+                        title={selectedExperience?.experience_type === 'ASSESSMENT' ? "Back to Lesson Builder (saves first)" : "Back to Activity Builder (saves first)"}
                         onClick={() => {
                           handleSaveScreen(false);
-                          setView('activity-builder');
+                          setView(selectedExperience?.experience_type === 'ASSESSMENT' ? 'experience-builder' : 'activity-builder');
                         }}
                       >
                         <FiArrowLeft style={{ fontSize: '1rem' }} />
@@ -8993,20 +9022,20 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
                                       {/* BLOCK TYPE: WRITING PROMPT */}
                                       {selectedBlock.type === 'writing_prompt' && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Writing Prompt Settings</span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                          <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#334155' }}>Writing Prompt Settings</span>
                                           <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Prompt Instruction</label>
-                                            <textarea className="cs-form-input" style={{ minHeight: '54px', fontSize: '0.75rem' }} value={selectedBlock.content?.prompt || ''}
+                                            <label className="cs-form-label" style={{ fontSize: '0.62rem' }}>Prompt Instruction</label>
+                                            <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.prompt || ''}
                                               onChange={e => handleUpdateBlockContent('prompt', e.target.value)} placeholder="e.g. Describe your favorite memory from childhood." />
                                           </div>
                                           <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Textarea Placeholder</label>
-                                            <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="text" value={selectedBlock.content?.placeholder || ''}
+                                            <label className="cs-form-label" style={{ fontSize: '0.62rem' }}>Placeholder Text</label>
+                                            <textarea className="cs-form-input" style={{ minHeight: '54px', fontSize: '0.75rem' }} value={selectedBlock.content?.placeholder || ''}
                                               onChange={e => handleUpdateBlockContent('placeholder', e.target.value)} placeholder="e.g. Start writing your description here..." />
                                           </div>
                                           <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Minimum Words Required</label>
+                                            <label className="cs-form-label" style={{ fontSize: '0.62rem' }}>Minimum Words Required</label>
                                             <input className="cs-form-input" style={{ height: '32px', fontSize: '0.75rem' }} type="number" value={selectedBlock.content?.minWords || 10}
                                               onChange={e => handleUpdateBlockContent('minWords', parseInt(e.target.value) || 0)} placeholder="e.g. 10" />
                                           </div>
@@ -10202,16 +10231,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                               placeholder="e.g. 10"
                                             />
                                           </div>
-
-                                          <MediaUploadField
-                                            label="Sample Audio Reference (Optional)"
-                                            value={selectedBlock.content?.sampleAudioUrl || selectedBlock.content?.audioUrl || ''}
-                                            mediaType="audio"
-                                            onChange={url => handleUpdateBlockMultipleContent({ sampleAudioUrl: url, audioUrl: url })}
-                                            actionLoading={actionLoading}
-                                            setActionLoading={setActionLoading}
-                                            showFeedback={showFeedback}
-                                          />
                                         </div>
                                       )}
 
@@ -10229,6 +10248,63 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                             setActionLoading={setActionLoading}
                                             showFeedback={showFeedback}
                                           />
+
+                                          {selectedBlock.content?.imageUrl && (selectedBlock.content?.hotspots || []).length > 0 && (
+                                            <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#0b57d0' }}>
+                                                  🎯 Click Image to Set Target #{ (activeHotspotIndex < selectedBlock.content.hotspots.length ? activeHotspotIndex : 0) + 1 } Position
+                                                </span>
+                                              </div>
+                                              <div
+                                                onClick={(e) => {
+                                                  const rect = e.currentTarget.getBoundingClientRect();
+                                                  const relX = Math.round(((e.clientX - rect.left) / rect.width) * 400);
+                                                  const relY = Math.round(((e.clientY - rect.top) / rect.height) * 250);
+                                                  const hotspots = [...selectedBlock.content.hotspots];
+                                                  const targetIdx = activeHotspotIndex < hotspots.length ? activeHotspotIndex : 0;
+                                                  hotspots[targetIdx] = { ...hotspots[targetIdx], x: relX, y: relY };
+                                                  handleUpdateBlockContent('hotspots', hotspots);
+                                                }}
+                                                style={{ position: 'relative', width: '100%', height: '140px', background: '#0f172a', borderRadius: '6px', overflow: 'hidden', cursor: 'crosshair' }}
+                                              >
+                                                <img
+                                                  src={resolveMediaUrl(selectedBlock.content.imageUrl)}
+                                                  alt="Hotspot target selector"
+                                                  draggable={false}
+                                                  style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
+                                                />
+                                                {(selectedBlock.content.hotspots || []).map((h, hidx) => {
+                                                  const isActive = hidx === (activeHotspotIndex < selectedBlock.content.hotspots.length ? activeHotspotIndex : 0);
+                                                  return (
+                                                    <div
+                                                      key={h.id || hidx}
+                                                      style={{
+                                                        position: 'absolute',
+                                                        left: `${(h.x / 400) * 100}%`,
+                                                        top: `${(h.y / 250) * 100}%`,
+                                                        width: '18px',
+                                                        height: '18px',
+                                                        borderRadius: '50%',
+                                                        background: isActive ? '#2563eb' : '#ef4444',
+                                                        border: '2px solid #ffffff',
+                                                        color: '#ffffff',
+                                                        fontSize: '9px',
+                                                        fontWeight: 'bold',
+                                                        transform: 'translate(-50%, -50%)',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        pointerEvents: 'none'
+                                                      }}
+                                                    >
+                                                      {hidx + 1}
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            </div>
+                                          )}
 
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
                                             <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Interactive Hotspots List</span>
@@ -10249,6 +10325,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                   hint: 'Click to explore'
                                                 });
                                                 handleUpdateBlockContent('hotspots', hotspots);
+                                                setActiveHotspotIndex(hotspots.length - 1);
                                               }}
                                             >
                                               + Add Hotspot
@@ -10256,85 +10333,108 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                           </div>
 
                                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '350px', overflowY: 'auto' }}>
-                                            {(selectedBlock.content?.hotspots || []).map((hs, hIdx) => (
-                                              <div key={hs.id || hIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                  <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#0284c7' }}>Hotspot #{hIdx + 1} ({hs.name || 'Target'})</span>
+                                            {(selectedBlock.content?.hotspots || []).map((hs, hIdx) => {
+                                              const isActive = hIdx === (activeHotspotIndex < (selectedBlock.content.hotspots || []).length ? activeHotspotIndex : 0);
+                                              return (
+                                                <div key={hs.id || hIdx} style={{ background: isActive ? '#eff6ff' : '#f8fafc', border: isActive ? '1.5px solid #3b82f6' : '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: isActive ? '#1d4ed8' : '#0284c7', cursor: 'pointer' }} onClick={() => setActiveHotspotIndex(hIdx)}>
+                                                      {isActive ? '🎯' : '📍'} Hotspot #{hIdx + 1} ({hs.name || 'Target'})
+                                                    </span>
+                                                    <button
+                                                      type="button"
+                                                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}
+                                                      onClick={() => {
+                                                        const hotspots = (selectedBlock.content.hotspots || []).filter((_, i) => i !== hIdx);
+                                                        handleUpdateBlockContent('hotspots', hotspots);
+                                                      }}
+                                                    >
+                                                      <FiTrash2 style={{ fontSize: '0.72rem' }} />
+                                                    </button>
+                                                  </div>
+
                                                   <button
                                                     type="button"
-                                                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}
-                                                    onClick={() => {
-                                                      const hotspots = (selectedBlock.content.hotspots || []).filter((_, i) => i !== hIdx);
-                                                      handleUpdateBlockContent('hotspots', hotspots);
+                                                    onClick={() => setActiveHotspotIndex(hIdx)}
+                                                    style={{
+                                                      background: isActive ? '#3b82f6' : '#ffffff',
+                                                      color: isActive ? '#ffffff' : '#3b82f6',
+                                                      border: '1px solid #3b82f6',
+                                                      borderRadius: '4px',
+                                                      padding: '2px 6px',
+                                                      fontSize: '0.6rem',
+                                                      fontWeight: 600,
+                                                      cursor: 'pointer',
+                                                      alignSelf: 'flex-start'
                                                     }}
                                                   >
-                                                    <FiTrash2 style={{ fontSize: '0.72rem' }} />
+                                                    {isActive ? '🎯 Selected (Click image to set position)' : 'Select to Position'}
                                                   </button>
-                                                </div>
 
-                                                <div className="cs-form-group" style={{ marginBottom: 0 }}>
-                                                  <label className="cs-form-label" style={{ fontSize: '0.6rem' }}>Label / Name</label>
-                                                  <input
-                                                    className="cs-form-input"
-                                                    style={{ height: '24px', fontSize: '0.72rem' }}
-                                                    type="text"
-                                                    value={hs.name || ''}
-                                                    onChange={e => {
-                                                      const hotspots = [...selectedBlock.content.hotspots];
-                                                      hotspots[hIdx] = { ...hotspots[hIdx], name: e.target.value };
-                                                      handleUpdateBlockContent('hotspots', hotspots);
-                                                    }}
-                                                    placeholder="Target name..."
-                                                  />
-                                                </div>
-
-                                                <div className="cs-form-group" style={{ marginBottom: 0 }}>
-                                                  <label className="cs-form-label" style={{ fontSize: '0.6rem' }}>Info Text on Click</label>
-                                                  <textarea
-                                                    className="cs-form-input"
-                                                    style={{ minHeight: '34px', fontSize: '0.72rem' }}
-                                                    value={hs.info || ''}
-                                                    onChange={e => {
-                                                      const hotspots = [...selectedBlock.content.hotspots];
-                                                      hotspots[hIdx] = { ...hotspots[hIdx], info: e.target.value };
-                                                      handleUpdateBlockContent('hotspots', hotspots);
-                                                    }}
-                                                    placeholder="Detailed info shown when clicked..."
-                                                  />
-                                                </div>
-
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
                                                   <div className="cs-form-group" style={{ marginBottom: 0 }}>
-                                                    <label className="cs-form-label" style={{ fontSize: '0.58rem' }}>X Position (px)</label>
+                                                    <label className="cs-form-label" style={{ fontSize: '0.6rem' }}>Label / Name</label>
                                                     <input
                                                       className="cs-form-input"
-                                                      style={{ height: '22px', fontSize: '0.7rem' }}
-                                                      type="number"
-                                                      value={hs.x ?? 100}
+                                                      style={{ height: '24px', fontSize: '0.72rem' }}
+                                                      type="text"
+                                                      value={hs.name || ''}
                                                       onChange={e => {
                                                         const hotspots = [...selectedBlock.content.hotspots];
-                                                        hotspots[hIdx] = { ...hotspots[hIdx], x: parseInt(e.target.value) || 0 };
+                                                        hotspots[hIdx] = { ...hotspots[hIdx], name: e.target.value };
                                                         handleUpdateBlockContent('hotspots', hotspots);
                                                       }}
+                                                      placeholder="Target name..."
                                                     />
                                                   </div>
+
                                                   <div className="cs-form-group" style={{ marginBottom: 0 }}>
-                                                    <label className="cs-form-label" style={{ fontSize: '0.58rem' }}>Y Position (px)</label>
-                                                    <input
+                                                    <label className="cs-form-label" style={{ fontSize: '0.6rem' }}>Info Text on Click</label>
+                                                    <textarea
                                                       className="cs-form-input"
-                                                      style={{ height: '22px', fontSize: '0.7rem' }}
-                                                      type="number"
-                                                      value={hs.y ?? 100}
+                                                      style={{ minHeight: '34px', fontSize: '0.72rem' }}
+                                                      value={hs.info || ''}
                                                       onChange={e => {
                                                         const hotspots = [...selectedBlock.content.hotspots];
-                                                        hotspots[hIdx] = { ...hotspots[hIdx], y: parseInt(e.target.value) || 0 };
+                                                        hotspots[hIdx] = { ...hotspots[hIdx], info: e.target.value };
                                                         handleUpdateBlockContent('hotspots', hotspots);
                                                       }}
+                                                      placeholder="Detailed info shown when clicked..."
                                                     />
+                                                  </div>
+
+                                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
+                                                    <div className="cs-form-group" style={{ marginBottom: 0 }}>
+                                                      <label className="cs-form-label" style={{ fontSize: '0.58rem' }}>X Position (px)</label>
+                                                      <input
+                                                        className="cs-form-input"
+                                                        style={{ height: '22px', fontSize: '0.7rem' }}
+                                                        type="number"
+                                                        value={hs.x ?? 100}
+                                                        onChange={e => {
+                                                          const hotspots = [...selectedBlock.content.hotspots];
+                                                          hotspots[hIdx] = { ...hotspots[hIdx], x: parseInt(e.target.value) || 0 };
+                                                          handleUpdateBlockContent('hotspots', hotspots);
+                                                        }}
+                                                      />
+                                                    </div>
+                                                    <div className="cs-form-group" style={{ marginBottom: 0 }}>
+                                                      <label className="cs-form-label" style={{ fontSize: '0.58rem' }}>Y Position (px)</label>
+                                                      <input
+                                                        className="cs-form-input"
+                                                        style={{ height: '22px', fontSize: '0.7rem' }}
+                                                        type="number"
+                                                        value={hs.y ?? 100}
+                                                        onChange={e => {
+                                                          const hotspots = [...selectedBlock.content.hotspots];
+                                                          hotspots[hIdx] = { ...hotspots[hIdx], y: parseInt(e.target.value) || 0 };
+                                                          handleUpdateBlockContent('hotspots', hotspots);
+                                                        }}
+                                                      />
+                                                    </div>
                                                   </div>
                                                 </div>
-                                              </div>
-                                            ))}
+                                              );
+                                            })}
                                           </div>
                                         </div>
                                       )}
@@ -10564,8 +10664,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <button
                       className="cs-icon-btn"
-                      onClick={() => setView('activity-builder')}
-                      title="Back to Activity Builder"
+                      onClick={() => setView(selectedExperience?.experience_type === 'ASSESSMENT' ? 'experience-builder' : 'activity-builder')}
+                      title={selectedExperience?.experience_type === 'ASSESSMENT' ? "Back to Lesson Builder" : "Back to Activity Builder"}
                       style={{
                         background: '#ffffff',
                         border: '1px solid #cbd5e1',
@@ -10583,7 +10683,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     </button>
                     <div>
                       <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                        <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Lessons Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Lesson Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('activity-builder')}>{selectedActivity?.title || 'Activity Builder'}</span> &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Screen Builder Overview</span>
+                        <span style={{ cursor: 'pointer' }} onClick={() => setView('experiences')}>Lessons Library</span> &nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('experience-builder')}>{selectedExperience?.title || 'Lesson Builder'}</span> {selectedExperience?.experience_type !== 'ASSESSMENT' && (<>&nbsp;&gt;&nbsp; <span style={{ cursor: 'pointer' }} onClick={() => setView('activity-builder')}>{selectedActivity?.title || 'Activity Builder'}</span></>)} &nbsp;&gt;&nbsp; <span style={{ fontWeight: 600 }}>Screen Builder Overview</span>
                       </div>
                       <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '6px 0 0 0', color: '#0f172a', letterSpacing: '-0.02em' }}>Screen Library</h1>
                     </div>
@@ -10598,9 +10698,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     </div>
                     <div>
                       <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1e293b', margin: '0 0 6px 0' }}>No Active Activity Selected</h3>
-                      <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '380px', margin: 0 }}>Please select or create an activity in the **Activity Builder** first to manage and design screens.</p>
+                      <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '380px', margin: 0 }}>
+                        {selectedExperience?.experience_type === 'ASSESSMENT'
+                          ? 'Please select or create an assessment in the Lesson Builder first.'
+                          : 'Please select or create an activity in the Activity Builder first to manage and design screens.'}
+                      </p>
                     </div>
-                    <button className="cs-btn-primary" onClick={() => setView('activity-builder')} style={{ padding: '0.5rem 1.25rem', fontSize: '0.82rem', background: '#0b57d0', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>Go to Activity Builder</button>
+                    <button className="cs-btn-primary" onClick={() => setView(selectedExperience?.experience_type === 'ASSESSMENT' ? 'experience-builder' : 'activity-builder')} style={{ padding: '0.5rem 1.25rem', fontSize: '0.82rem', background: '#0b57d0', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>
+                      {selectedExperience?.experience_type === 'ASSESSMENT' ? 'Go to Lesson Builder' : 'Go to Activity Builder'}
+                    </button>
                   </div>
                 ) : screens.length === 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '4rem 2rem', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', textAlign: 'center', gap: '1.25rem' }}>
