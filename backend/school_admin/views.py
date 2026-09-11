@@ -39,7 +39,7 @@ class ClassViewSet(CMSBaseViewSet):
         return filter_queryset_by_school(
             Class.objects.select_related("school", "grade").all(),
             self.request.user,
-        )
+        ).order_by("grade__sort_order", "class_name")
 
 
 class TeacherClassViewSet(CMSBaseViewSet):
@@ -606,7 +606,7 @@ class ClassViewSet(CMSBaseViewSet):
         return filter_queryset_by_school(
             Class.objects.select_related("school", "grade").all(),
             self.request.user,
-        )
+        ).order_by("grade__sort_order", "class_name")
 
 
 class TeacherClassViewSet(CMSBaseViewSet):

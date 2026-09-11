@@ -27,6 +27,54 @@ import roundLogo from './assets/favicon.png';
 import AvatarCropperModal from './AvatarCropperModal';
 import HelpSupportModal from './HelpSupportModal';
 
+const sortClasses = (classesList) => {
+  if (!Array.isArray(classesList)) return [];
+  return [...classesList].sort((a, b) => {
+    const getGradeNum = (c) => {
+      if (c?.grade?.sort_order !== undefined && c.grade?.sort_order !== null) {
+        return Number(c.grade.sort_order);
+      }
+      if (c?.grade_sort_order !== undefined && c.grade_sort_order !== null) {
+        return Number(c.grade_sort_order);
+      }
+      const gStr = c?.grade_name || c?.grade?.grade_name || c?.class_name || '';
+      const match = gStr.match(/\d+/);
+      return match ? parseInt(match[0], 10) : 999;
+    };
+
+    const getSectionStr = (c) => {
+      const sec = c?.section ? String(c.section).replace(/^Section\s+/i, '').trim() : '';
+      if (sec) return sec.toUpperCase();
+      const name = c?.class_name || '';
+      if (name.includes('-')) {
+        const parts = name.split('-');
+        const lastPart = parts[parts.length - 1].trim();
+        const match = lastPart.match(/^[A-Za-z]+/);
+        if (match) return match[0].toUpperCase();
+      }
+      const alphaMatch = name.match(/\b([A-Za-z])\b/);
+      if (alphaMatch) return alphaMatch[1].toUpperCase();
+      return name.toUpperCase();
+    };
+
+    const gradeA = getGradeNum(a);
+    const gradeB = getGradeNum(b);
+    if (gradeA !== gradeB) {
+      return gradeA - gradeB;
+    }
+
+    const secA = getSectionStr(a);
+    const secB = getSectionStr(b);
+    if (secA !== secB) {
+      return secA.localeCompare(secB, undefined, { numeric: true, sensitivity: 'base' });
+    }
+
+    const yearA = a?.academic_year || '';
+    const yearB = b?.academic_year || '';
+    return yearB.localeCompare(yearA);
+  });
+};
+
 const getUserInitials = (u, defaultVal = 'U') => {
   if (!u) return defaultVal;
   const name = (u.full_name || u.username || '').trim();
@@ -489,7 +537,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           const userUsername = (user?.username || propUser?.username || '').trim().toLowerCase();
           return (userFull && tNames.includes(userFull)) || (userUsername && tNames.includes(userUsername));
         });
-        setClasses(myClasses);
+        setClasses(sortClasses(myClasses));
       }
     } catch (e) { console.error('Failed to load classes.', e); }
   };
