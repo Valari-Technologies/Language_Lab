@@ -50,6 +50,103 @@ const getScrambledWords = (wordsList) => {
   return shuffled;
 };
 
+const COMMON_IPA_DICT = {
+  hello: '/həˈloʊ/',
+  world: '/wɜːrld/',
+  extraordinary: '/ɪkˈstrɔːrdn-eri/',
+  water: '/ˈwɔː.tər/',
+  apple: '/ˈæp.əl/',
+  cat: '/kæt/',
+  dog: '/dɔːɡ/',
+  book: '/bʊk/',
+  pronunciation: '/prəˌnʌn.siˈeɪ.ʃən/',
+  language: '/ˈlæŋ.ɡwɪdʒ/',
+  student: '/ˈstjuː.dənt/',
+  teacher: '/ˈtiː.tʃər/',
+  school: '/skuːl/',
+  computer: '/kəmˈpjuː.tər/',
+  science: '/ˈsaɪ.əns/',
+  english: '/ˈɪŋ.ɡlɪʃ/',
+  elephant: '/ˈel.ɪ.fənt/',
+  lion: '/ˈlaɪ.ən/',
+  tiger: '/ˈtaɪ.ɡər/',
+  monkey: '/ˈmʌŋ.ki/',
+  beautiful: '/ˈbjuː.tɪ.fəl/',
+  welcome: '/ˈwel.kəm/',
+  morning: '/ˈmɔːr.nɪŋ/',
+  night: '/naɪt/',
+  friend: '/frend/',
+  happy: '/ˈhæp.i/',
+  family: '/ˈfæm.əl.i/',
+  good: '/ɡʊd/',
+  bye: '/baɪ/',
+  goodbye: '/ˌɡʊdˈbaɪ/',
+  thank: '/θæŋk/',
+  you: '/juː/',
+  thanks: '/θæŋks/',
+  please: '/pliːz/',
+  sorry: '/ˈsɔːr.i/',
+  yes: '/jes/',
+  no: '/noʊ/',
+  name: '/neɪm/',
+  time: '/taɪm/',
+  day: '/deɪ/',
+  today: '/təˈdeɪ/',
+  tomorrow: '/təˈmɔːr.oʊ/',
+  yesterday: '/ˈjes.tər.deɪ/',
+  listen: '/ˈlɪs.ən/',
+  speak: '/spiːk/',
+  read: '/riːd/',
+  write: '/raɪt/',
+  practice: '/ˈpræk.tɪs/'
+};
+
+const getPhoneticGuide = (text) => {
+  if (!text || typeof text !== 'string') return '';
+  const trimmed = text.trim().toLowerCase();
+  if (!trimmed) return '';
+  
+  if (COMMON_IPA_DICT[trimmed]) {
+    return COMMON_IPA_DICT[trimmed];
+  }
+  
+  const words = trimmed.split(/\s+/);
+  const phonetics = words.map(w => {
+    if (COMMON_IPA_DICT[w]) {
+      return COMMON_IPA_DICT[w].replace(/^\/|\/$/g, '');
+    }
+    let p = w
+      .replace(/tion/g, 'ʃən')
+      .replace(/sion/g, 'ʒən')
+      .replace(/ture/g, 'tʃər')
+      .replace(/sure/g, 'ʒər')
+      .replace(/ph/g, 'f')
+      .replace(/sh/g, 'ʃ')
+      .replace(/ch/g, 'tʃ')
+      .replace(/th/g, 'θ')
+      .replace(/ck/g, 'k')
+      .replace(/ng/g, 'ŋ')
+      .replace(/igh/g, 'aɪ')
+      .replace(/ee/g, 'iː')
+      .replace(/ea/g, 'iː')
+      .replace(/oo/g, 'uː')
+      .replace(/ou/g, 'aʊ')
+      .replace(/ow/g, 'aʊ')
+      .replace(/oi/g, 'ɔɪ')
+      .replace(/oy/g, 'ɔɪ')
+      .replace(/ai/g, 'eɪ')
+      .replace(/ay/g, 'eɪ')
+      .replace(/qu/g, 'kw')
+      .replace(/x/g, 'ks')
+      .replace(/c(?=[iey])/g, 's')
+      .replace(/c/g, 'k')
+      .replace(/y$/g, 'i');
+    return p;
+  });
+  
+  return `/${phonetics.join(' ')}/`;
+};
+
 const CustomAudioPlayer = ({ src, style = {} }) => {
   const audioRef = React.useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -2313,7 +2410,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       newBlock.content = { prompt: '', placeholder: 'Start writing here...', minWords: 10 };
     } else if (type.toLowerCase() === 'voice_recorder' || type.toLowerCase() === 'voice recorder') {
       newBlock.type = 'voice_recorder';
-      newBlock.content = { prompt: '', maxDuration: 10 };
+      newBlock.content = { prompt: '', targetAnswer: '', maxDuration: 10 };
     } else if (type.toLowerCase() === 'drag_drop' || type.toLowerCase() === 'drag and drop' || type.toLowerCase() === 'drag_and_drop') {
       newBlock.type = 'drag_drop';
       newBlock.content = {
@@ -2892,6 +2989,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           const items = Array.isArray(rawItems) && rawItems.length > 0 
             ? rawItems 
             : [{ id: 'dict-1', audioUrl: block.content?.url || block.content?.audioUrl || '', text: block.content?.text || block.content?.targetText || '' }];
+          const quizOptions = block.content?.options || [];
 
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%', boxSizing: 'border-box', overflowY: 'auto' }}>
@@ -2915,7 +3013,25 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           Attach dictation audio file in right properties panel
                         </div>
                       )}
-                      <input type="text" disabled placeholder="User types response here..." style={{ width: '100%', height: '28px', borderRadius: '4px', border: '1px solid #cbd5e1', padding: '0 8px', fontSize: '0.7rem', background: '#f8fafc' }} />
+
+                      {quizOptions.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginTop: '4px' }}>
+                          <div style={{ fontSize: '0.64rem', fontWeight: 700, color: '#1e40af' }}>Quiz Options:</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.35rem' }}>
+                            {quizOptions.map((opt, oIdx) => {
+                              const isCorrect = (block.content?.correctAnswer ?? 0) === oIdx;
+                              const optText = typeof opt === 'object' ? opt?.text || '' : opt;
+                              return (
+                                <div key={oIdx} style={{ fontSize: '0.68rem', padding: '0.3rem 0.5rem', background: isCorrect ? '#dcfce7' : '#f8fafc', border: isCorrect ? '1.5px solid #22c55e' : '1px solid #cbd5e1', borderRadius: '6px', color: isCorrect ? '#15803d' : '#334155', fontWeight: isCorrect ? 700 : 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <span style={{ fontWeight: 700 }}>{String.fromCharCode(65 + oIdx)}.</span> {optText} {isCorrect && '✓'}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <input type="text" disabled placeholder="User types response here..." style={{ width: '100%', height: '28px', borderRadius: '4px', border: '1px solid #cbd5e1', padding: '0 8px', fontSize: '0.7rem', background: '#f8fafc' }} />
+                      )}
                     </div>
                   );
                 })}
@@ -7831,8 +7947,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                       { type: 'Input', desc: 'Free text typing input area', icon: <FiType style={{ color: '#0ea5e9' }} />, bg: '#e0f9ff' },
                                       { type: 'Roleplay_Simulation', desc: 'Ordered npc-student conversation roleplay', icon: <FiUsers style={{ color: '#3b82f6' }} />, bg: '#dbeafe' },
                                       { type: 'Hotspot_Explorer', desc: 'Click/explore hotspots on a target image', icon: <FiGrid style={{ color: '#ea580c' }} />, bg: '#ffedd5' },
-                                      { type: 'Functional_Reading', desc: 'Read document and answer dynamic questions', icon: <FiFileText style={{ color: '#6366f1' }} />, bg: '#e0e7ff' },
-                                      { type: 'Audio_Mystery', desc: 'Listen to progressive clues and identify sound', icon: <FiVolume2 style={{ color: '#0b57d0' }} />, bg: '#e0f2fe' }
+                                      { type: 'Functional_Reading', desc: 'Read document and answer dynamic questions', icon: <FiFileText style={{ color: '#6366f1' }} />, bg: '#e0e7ff' }
                                     ]
                                   },
                                   {
@@ -8547,65 +8662,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                 />
                                               </div>
 
-                                              <div className="cs-form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
-                                                <input
-                                                  type="checkbox"
-                                                  id={`image-has-question-${selectedBlock.id}`}
-                                                  checked={!!selectedBlock.content?.hasQuestion}
-                                                  onChange={e => handleUpdateBlockContent('hasQuestion', e.target.checked)}
-                                                  style={{ cursor: 'pointer' }}
-                                                />
-                                                <label htmlFor={`image-has-question-${selectedBlock.id}`} style={{ fontSize: '0.72rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
-                                                  Add Question for this Image
-                                                </label>
-                                              </div>
-
-                                              {selectedBlock.content?.hasQuestion && (
-                                                <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                                                  <div className="cs-form-group">
-                                                    <label className="cs-form-label" style={{ fontSize: '0.65rem', fontWeight: 600 }}>Question Prompt</label>
-                                                    <input
-                                                      className="cs-form-input"
-                                                      style={{ height: '26px', fontSize: '0.75rem' }}
-                                                      type="text"
-                                                      value={selectedBlock.content?.questionText || ''}
-                                                      onChange={e => handleUpdateBlockContent('questionText', e.target.value)}
-                                                      placeholder="e.g. What animal is shown in the image?"
-                                                    />
-                                                  </div>
-
-                                                  <div className="cs-form-group">
-                                                    <label className="cs-form-label" style={{ fontSize: '0.65rem', fontWeight: 600 }}>Options (comma-separated)</label>
-                                                    <input
-                                                      className="cs-form-input"
-                                                      style={{ height: '26px', fontSize: '0.75rem' }}
-                                                      type="text"
-                                                      value={selectedBlock.content?.questionOptionsText !== undefined ? selectedBlock.content.questionOptionsText : (selectedBlock.content?.questionOptions?.join(', ') || '')}
-                                                      onChange={e => {
-                                                        const rawVal = e.target.value;
-                                                        const opts = rawVal.split(',').map(s => s.trim());
-                                                        handleUpdateBlockMultipleContent({
-                                                          questionOptionsText: rawVal,
-                                                          questionOptions: opts
-                                                        });
-                                                      }}
-                                                      placeholder="e.g. Lion, Tiger, Elephant"
-                                                    />
-                                                  </div>
-
-                                                  <div className="cs-form-group">
-                                                    <label className="cs-form-label" style={{ fontSize: '0.65rem', fontWeight: 600 }}>Correct Answer Value</label>
-                                                    <input
-                                                      className="cs-form-input"
-                                                      style={{ height: '26px', fontSize: '0.75rem' }}
-                                                      type="text"
-                                                      value={selectedBlock.content?.correctAnswer || ''}
-                                                      onChange={e => handleUpdateBlockContent('correctAnswer', e.target.value)}
-                                                      placeholder="e.g. Lion"
-                                                    />
-                                                  </div>
-                                                </div>
-                                              )}
                                             </>
                                           )}
 
@@ -9306,6 +9362,56 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                          </div>
                                        )}
 
+                                       {/* BLOCK TYPE: VOICE RECORDER */}
+                                       {(selectedBlock.type === 'voice_recorder' || selectedBlock.type?.toLowerCase() === 'voice_recorder' || selectedBlock.type === 'audio_response') && (
+                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                           <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Voice Recorder Settings</span>
+
+                                           <div className="cs-form-group">
+                                             <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question Instruction</label>
+                                             <textarea
+                                               className="cs-form-input"
+                                               style={{ minHeight: '44px', fontSize: '0.75rem' }}
+                                               value={selectedBlock.content?.question || selectedBlock.content?.prompt || ''}
+                                               onChange={e => {
+                                                 handleUpdateBlockContent('question', e.target.value);
+                                                 handleUpdateBlockContent('prompt', e.target.value);
+                                               }}
+                                               placeholder="e.g. Record yourself speaking about..."
+                                             />
+                                           </div>
+
+                                           <div className="cs-form-group">
+                                             <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Targeted Answer</label>
+                                             <textarea
+                                               className="cs-form-input"
+                                               style={{ minHeight: '54px', fontSize: '0.75rem' }}
+                                               value={selectedBlock.content?.targetAnswer || selectedBlock.content?.targetText || selectedBlock.content?.correctAnswer || ''}
+                                               onChange={e => {
+                                                 handleUpdateBlockMultipleContent({
+                                                   targetAnswer: e.target.value,
+                                                   targetText: e.target.value,
+                                                   correctAnswer: e.target.value
+                                                 });
+                                               }}
+                                               placeholder="e.g. Enter expected target answer for evaluation..."
+                                             />
+                                           </div>
+
+                                           <div className="cs-form-group">
+                                             <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Max Duration Limit (Seconds)</label>
+                                             <input
+                                               className="cs-form-input"
+                                               style={{ height: '32px', fontSize: '0.75rem' }}
+                                               type="number"
+                                               value={selectedBlock.content?.maxDuration || 60}
+                                               onChange={e => handleUpdateBlockContent('maxDuration', parseInt(e.target.value) || 60)}
+                                               placeholder="60"
+                                             />
+                                           </div>
+                                         </div>
+                                       )}
+
                                        {/* BLOCK TYPE: WORD SEARCH */}
                                        {(selectedBlock.type === 'word_search' || selectedBlock.type?.toLowerCase() === 'word_search' || selectedBlock.type === 'Word_Search') && (
                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -9313,31 +9419,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Word Search Settings</span>
                                            </div>
 
-                                           <div className="cs-form-group">
-                                             <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Puzzle Title</label>
-                                             <input
-                                               className="cs-form-input"
-                                               style={{ height: '32px', fontSize: '0.75rem' }}
-                                               type="text"
-                                               value={selectedBlock.content?.title || ''}
-                                               onChange={e => handleUpdateBlockContent('title', e.target.value)}
-                                               placeholder="Word Search Puzzle"
-                                             />
-                                           </div>
-
-                                           <div className="cs-form-group">
-                                             <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Instructions / Question Prompt</label>
-                                             <textarea
-                                               className="cs-form-input"
-                                               style={{ minHeight: '44px', fontSize: '0.75rem' }}
-                                               value={selectedBlock.content?.prompt || selectedBlock.content?.instruction || ''}
-                                               onChange={e => {
-                                                 handleUpdateBlockContent('prompt', e.target.value);
-                                                 handleUpdateBlockContent('instruction', e.target.value);
-                                               }}
-                                               placeholder="Find the hidden words in the grid."
-                                             />
-                                           </div>
 
                                            <div className="cs-form-group">
                                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Grid Size (Dimensions)</label>
@@ -10155,8 +10236,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                       type="text"
                                                       value={item.word || ''}
                                                       onChange={e => {
+                                                        const val = e.target.value;
                                                         const updated = [...items];
-                                                        updated[idx] = { ...updated[idx], word: e.target.value };
+                                                        const autoPhonetic = getPhoneticGuide(val);
+                                                        updated[idx] = { ...updated[idx], word: val, phonetic: autoPhonetic };
                                                         handleUpdateBlockContent('items', updated);
                                                       }}
                                                       placeholder="e.g. Extraordinary"
@@ -10199,40 +10282,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         </div>
                                       )}
 
-                                      {/* BLOCK TYPE: VOICE RECORDER */}
-                                      {(['voice_recorder', 'voice recorder', 'voice'].includes((selectedBlock.type || '').toLowerCase())) && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Voice Recorder Settings</span>
-
-                                          <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Prompt Instruction / Question</label>
-                                            <textarea
-                                              className="cs-form-input"
-                                              style={{ minHeight: '54px', fontSize: '0.75rem' }}
-                                              value={selectedBlock.content?.prompt || selectedBlock.content?.question || ''}
-                                              onChange={e => {
-                                                handleUpdateBlockMultipleContent({
-                                                  prompt: e.target.value,
-                                                  question: e.target.value
-                                                });
-                                              }}
-                                              placeholder="e.g. Record yourself talking about your daily routine."
-                                            />
-                                          </div>
-
-                                          <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Max Duration Limit (Seconds)</label>
-                                            <input
-                                              className="cs-form-input"
-                                              style={{ height: '32px', fontSize: '0.75rem' }}
-                                              type="number"
-                                              value={selectedBlock.content?.maxDuration || 10}
-                                              onChange={e => handleUpdateBlockContent('maxDuration', parseInt(e.target.value) || 10)}
-                                              placeholder="e.g. 10"
-                                            />
-                                          </div>
-                                        </div>
-                                      )}
 
                                       {/* BLOCK TYPE: HOTSPOT EXPLORER */}
                                       {(['hotspot_explorer', 'hotspot explorer', 'hotspot'].includes((selectedBlock.type || '').toLowerCase())) && (
