@@ -1141,12 +1141,11 @@ export default function PreviewCanvasRenderer({
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f1f5f9', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%', overflowY: 'auto' }}>
               {passages.map((p, pIdx) => {
-                const titleText = p.title || (passages.length > 1 ? `Passage #${pIdx + 1}` : 'Passage Title');
                 const passageText = p.passage || 'Read this text carefully...';
                 return (
                   <div key={pIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderBottom: pIdx < passages.length - 1 ? '1px dashed #cbd5e1' : 'none', paddingBottom: pIdx < passages.length - 1 ? '0.5rem' : 0 }}>
                     <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <FiFileText /> Reading Passage: {titleText}
+                      <FiFileText /> Reading Passage{passages.length > 1 ? ` #${pIdx + 1}` : ''}
                     </div>
                     <div style={{ fontSize: '0.72rem', color: '#334155', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', whiteSpace: 'pre-wrap', maxHeight: '140px', overflowY: 'auto' }}>
                       {passageText}
