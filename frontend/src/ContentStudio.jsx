@@ -2989,7 +2989,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           const items = Array.isArray(rawItems) && rawItems.length > 0 
             ? rawItems 
             : [{ id: 'dict-1', audioUrl: block.content?.url || block.content?.audioUrl || '', text: block.content?.text || block.content?.targetText || '' }];
-          const quizOptions = block.content?.options || [];
+          const responseType = block.content?.responseType || (block.content?.options && block.content.options.length > 0 ? 'quiz' : 'text');
+          const isQuizMode = responseType === 'quiz';
+          const quizOptions = isQuizMode ? (block.content?.options || []) : [];
 
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%', boxSizing: 'border-box', overflowY: 'auto' }}>
@@ -8909,9 +8911,95 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                 style={{ minHeight: '44px', fontSize: '0.75rem' }}
                                                 value={selectedBlock.content?.question || ''}
                                                 onChange={e => handleUpdateBlockContent('question', e.target.value)}
-                                                placeholder="e.g. Listen to the audio tracks and write down what you hear."
+                                                placeholder="e.g. Listen to the audio tracks and answer."
                                               />
                                             </div>
+
+                                            <div className="cs-form-group">
+                                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Answer Input Mode</label>
+                                              <select
+                                                className="cs-form-input"
+                                                style={{ height: '32px', fontSize: '0.75rem', fontWeight: 600, color: '#0b57d0' }}
+                                                value={selectedBlock.content?.responseType || (selectedBlock.content?.options && selectedBlock.content.options.length > 0 ? 'quiz' : 'text')}
+                                                onChange={e => {
+                                                  const mode = e.target.value;
+                                                  if (mode === 'quiz') {
+                                                    const opts = selectedBlock.content?.options && selectedBlock.content.options.length > 0
+                                                      ? selectedBlock.content.options
+                                                      : ['Option A', 'Option B'];
+                                                    handleUpdateBlockMultipleContent({ responseType: 'quiz', options: opts });
+                                                  } else {
+                                                    handleUpdateBlockContent('responseType', 'text');
+                                                  }
+                                                }}
+                                              >
+                                                <option value="text">Text Input (Typing)</option>
+                                                <option value="quiz">Quiz (Multiple Choice)</option>
+                                              </select>
+                                            </div>
+
+                                            {/* If Quiz Mode is Selected */}
+                                            {(selectedBlock.content?.responseType === 'quiz' || (selectedBlock.content?.options && selectedBlock.content.options.length > 0 && selectedBlock.content?.responseType !== 'text')) && (
+                                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '0.6rem' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                  <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#15803d' }}>Quiz MCQ Options</span>
+                                                  <button
+                                                    type="button"
+                                                    className="cs-btn-outline"
+                                                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #16a34a', color: '#16a34a', background: '#ffffff' }}
+                                                    onClick={() => {
+                                                      const opts = [...(selectedBlock.content?.options || [])];
+                                                      opts.push(`Option ${String.fromCharCode(65 + opts.length)}`);
+                                                      handleUpdateBlockContent('options', opts);
+                                                    }}
+                                                  >
+                                                    + Add Quiz Option
+                                                  </button>
+                                                </div>
+
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                                  {(selectedBlock.content?.options || []).map((opt, optIdx) => {
+                                                    const isCorrect = (selectedBlock.content?.correctAnswer ?? 0) === optIdx;
+                                                    return (
+                                                      <div key={optIdx} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#ffffff', border: isCorrect ? '1.5px solid #22c55e' : '1px solid #cbd5e1', borderRadius: '6px', padding: '0.35rem 0.5rem' }}>
+                                                        <input
+                                                          type="radio"
+                                                          name={`dictation_correct_${selectedBlock.id}`}
+                                                          checked={isCorrect}
+                                                          onChange={() => handleUpdateBlockContent('correctAnswer', optIdx)}
+                                                          title="Mark as correct answer"
+                                                        />
+                                                        <input
+                                                          className="cs-form-input"
+                                                          style={{ height: '26px', fontSize: '0.72rem', flex: 1 }}
+                                                          type="text"
+                                                          value={typeof opt === 'object' ? opt?.text || '' : opt}
+                                                          placeholder={`Option ${String.fromCharCode(65 + optIdx)}`}
+                                                          onChange={(e) => {
+                                                            const opts = [...(selectedBlock.content?.options || [])];
+                                                            opts[optIdx] = e.target.value;
+                                                            handleUpdateBlockContent('options', opts);
+                                                          }}
+                                                        />
+                                                        <button
+                                                          type="button"
+                                                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0 2px' }}
+                                                          onClick={() => {
+                                                            const opts = (selectedBlock.content?.options || []).filter((_, i) => i !== optIdx);
+                                                            handleUpdateBlockContent('options', opts);
+                                                            if ((selectedBlock.content?.correctAnswer ?? 0) >= opts.length) {
+                                                              handleUpdateBlockContent('correctAnswer', Math.max(0, opts.length - 1));
+                                                            }
+                                                          }}
+                                                        >
+                                                          <FiTrash2 style={{ fontSize: '0.72rem' }} />
+                                                        </button>
+                                                      </div>
+                                                    );
+                                                  })}
+                                                </div>
+                                              </div>
+                                            )}
 
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                                               {items.map((item, idx) => (

@@ -1239,6 +1239,10 @@ export default function PreviewCanvasRenderer({
           const items = Array.isArray(rawItems) && rawItems.length > 0
             ? rawItems
             : [{ id: 'dict-1', audioUrl: block.content?.url || block.content?.audioUrl || '', text: block.content?.text || block.content?.targetText || '' }];
+          const responseType = block.content?.responseType || (block.content?.options && block.content.options.length > 0 ? 'quiz' : 'text');
+          const isQuizMode = responseType === 'quiz';
+          const quizOptions = isQuizMode ? (block.content?.options || []) : [];
+          const correctIdx = parseInt(block.content?.correctAnswerIndex ?? block.content?.correctAnswer) || 0;
 
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.85rem', flex: 1, height: '100%', boxSizing: 'border-box', overflowY: 'auto' }}>
@@ -1246,7 +1250,7 @@ export default function PreviewCanvasRenderer({
                 <FiVolume2 style={{ fontSize: '1rem' }} /> Dictation Exercise
               </div>
               <div style={{ fontSize: '0.75rem', color: '#1e293b', background: '#ffffff', padding: '0.45rem 0.65rem', borderRadius: '6px', border: '1px solid #93c5fd' }}>
-                <strong>Instruction:</strong> {block.content?.question || 'Listen carefully to the audio and type exactly what you hear.'}
+                <strong>Instruction:</strong> {block.content?.question || (isQuizMode ? 'Listen carefully and select the correct answer option.' : 'Listen carefully to the audio and type exactly what you hear.')}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -1263,14 +1267,65 @@ export default function PreviewCanvasRenderer({
                       ) : (
                         <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontStyle: 'italic' }}>No audio file configured for track #{idx + 1}.</div>
                       )}
-                      <input
-                        type="text"
-                        className="cs-form-input"
-                        placeholder="Type the dictation here..."
-                        value={userVal}
-                        onChange={e => setPreviewAnswers(prev => ({ ...prev, [dictKey]: e.target.value }))}
-                        style={{ width: '100%', height: '34px', borderRadius: '6px', border: '1px solid #94a3b8', padding: '0 10px', fontSize: '0.78rem', background: '#ffffff' }}
-                      />
+
+                      {quizOptions.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '4px' }}>
+                          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e40af' }}>Select Correct Answer:</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.4rem' }}>
+                            {quizOptions.map((opt, oIdx) => {
+                              const isSelected = userVal === oIdx || userVal === String(oIdx);
+                              const isCorrect = oIdx === correctIdx;
+                              let bg = '#ffffff';
+                              let border = '1px solid #94a3b8';
+                              let color = '#334155';
+
+                              if (userVal !== undefined && userVal !== '') {
+                                if (isSelected) {
+                                  bg = isCorrect ? '#dcfce7' : '#fee2e2';
+                                  border = isCorrect ? '2px solid #22c55e' : '2px solid #ef4444';
+                                  color = isCorrect ? '#15803d' : '#991b1b';
+                                } else if (isCorrect) {
+                                  bg = '#f0fdf4';
+                                  border = '1.5px dashed #22c55e';
+                                  color = '#166534';
+                                }
+                              }
+
+                              const optText = typeof opt === 'object' ? opt?.text || '' : opt;
+                              return (
+                                <button
+                                  key={oIdx}
+                                  type="button"
+                                  onClick={() => setPreviewAnswers(prev => ({ ...prev, [dictKey]: oIdx }))}
+                                  style={{
+                                    padding: '0.45rem 0.6rem',
+                                    borderRadius: '6px',
+                                    border,
+                                    background: bg,
+                                    color,
+                                    fontSize: '0.75rem',
+                                    fontWeight: isSelected ? 700 : 500,
+                                    cursor: 'pointer',
+                                    textAlign: 'left',
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                >
+                                  <strong>{String.fromCharCode(65 + oIdx)}.</strong> {optText}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          className="cs-form-input"
+                          placeholder="Type the dictation here..."
+                          value={userVal}
+                          onChange={e => setPreviewAnswers(prev => ({ ...prev, [dictKey]: e.target.value }))}
+                          style={{ width: '100%', height: '34px', borderRadius: '6px', border: '1px solid #94a3b8', padding: '0 10px', fontSize: '0.78rem', background: '#ffffff' }}
+                        />
+                      )}
                     </div>
                   );
                 })}
