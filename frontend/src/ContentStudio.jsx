@@ -9423,7 +9423,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                 <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Front Text (Question/Word)" value={card.front || ''}
                                                    onChange={e => { const cards = [...selectedBlock.content.cards]; cards[cIdx] = { ...cards[cIdx], front: e.target.value }; handleUpdateBlockContent('cards', cards); }} />
                                                 <MediaUploadField
-                                                   label="Card Image (Optional)"
+                                                   label="Card Image"
                                                    value={card.imageUrl || card.image || ''}
                                                    mediaType="image"
                                                    onChange={url => {
