@@ -5860,9 +5860,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           }
 
           /* Responsive Tables & Grids */
-          .cs-table-container {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
+          .cs-table-container, .cs-table-wrap {
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            width: 100% !important;
           }
 
           /* Studio builders split view mobile stack */
@@ -5872,6 +5873,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           .fss-left, .fss-right, .fss-middle {
             width: 100% !important;
             max-width: 100% !important;
+          }
+        }
+
+        @media (max-width: 1024px) {
+          .cs-body {
+            padding: 1rem !important;
+          }
+          .cs-card {
+            padding: 1rem !important;
           }
         }
 
@@ -11680,7 +11690,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       </button>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                       <div className="cs-form-group">
                         <label className="cs-form-label" style={{ fontSize: '0.75rem' }}>Version Number <span style={{ color: '#ef4444' }}>*</span></label>
                         <input
