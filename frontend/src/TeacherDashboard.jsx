@@ -1905,42 +1905,41 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             <>
               
               <div className="sd-card" style={{ padding: '1.25rem 1.5rem' }}>
-                <div className="sd-table-toolbar">
-                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <div className="sd-table-search">
-                      <FiSearch/>
-                      <input
-                        type="text"
-                        placeholder="Search students..."
-                        value={searchQuery}
-                        onChange={e => { setSearchQuery(e.target.value); setStudentPage(1); }}
-                      />
-                    </div>
-                    <select
-                      className="sd-form-input"
-                      style={{ width: '160px', height: '38px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem' }}
-                      value={studentClassFilter}
-                      onChange={e => { setStudentClassFilter(e.target.value); setStudentPage(1); }}
-                    >
-                      <option value="">All Classes</option>
-                      {[3, 4, 5, 6, 7, 8].map(num => (
-                        <option key={num} value={`Class ${num}`}>Class {num}</option>
-                      ))}
-                    </select>
-
-                    <select
-                      className="sd-form-input"
-                      style={{ width: '160px', height: '38px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem' }}
-                      value={studentSectionFilter}
-                      onChange={e => { setStudentSectionFilter(e.target.value); setStudentPage(1); }}
-                    >
-                      <option value="">All Sections</option>
-                      {['A', 'B', 'C', 'D'].map(sec => (
-                        <option key={sec} value={sec}>Section {sec}</option>
-                      ))}
-                    </select>
+                <div className="sd-table-toolbar" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                  <div className="sd-table-search" style={{ minWidth: '200px', flex: '1 1 200px', maxWidth: '300px' }}>
+                    <FiSearch/>
+                    <input
+                      type="text"
+                      placeholder="Search students..."
+                      value={searchQuery}
+                      onChange={e => { setSearchQuery(e.target.value); setStudentPage(1); }}
+                    />
                   </div>
-                  <div className="sd-table-actions">
+                  <select
+                    className="sd-form-input"
+                    style={{ width: '130px', height: '38px', padding: '0 0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.82rem' }}
+                    value={studentClassFilter}
+                    onChange={e => { setStudentClassFilter(e.target.value); setStudentPage(1); }}
+                  >
+                    <option value="">All Classes</option>
+                    {[3, 4, 5, 6, 7, 8].map(num => (
+                      <option key={num} value={`Class ${num}`}>Class {num}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    className="sd-form-input"
+                    style={{ width: '130px', height: '38px', padding: '0 0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.82rem' }}
+                    value={studentSectionFilter}
+                    onChange={e => { setStudentSectionFilter(e.target.value); setStudentPage(1); }}
+                  >
+                    <option value="">All Sections</option>
+                    {['A', 'B', 'C', 'D'].map(sec => (
+                      <option key={sec} value={sec}>Section {sec}</option>
+                    ))}
+                  </select>
+
+                  <div className="sd-table-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                     <button
                       className="sd-btn-outline"
                       style={{
