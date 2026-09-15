@@ -629,6 +629,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [publishPage, setPublishPage] = useState(1);
+  const [publishSearch, setPublishSearch] = useState('');
 
   // Multi-select and View Details states for Experiences
   const [selectedExperienceIds, setSelectedExperienceIds] = useState([]);
@@ -11727,11 +11728,60 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
                   {/* Card 2: Published Packages Build Table */}
                   <div className="cs-card" style={{ padding: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                      <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>Published Build History</h3>
-                      {publishHistory.length > 0 && (
-                        <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{publishHistory.length} build{publishHistory.length !== 1 ? 's' : ''} total</span>
-                      )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '1rem', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>Published Build History</h3>
+                        {publishHistory.length > 0 && (
+                          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{publishHistory.length} build{publishHistory.length !== 1 ? 's' : ''} total</span>
+                        )}
+                      </div>
+
+                      {/* Search Bar */}
+                      <div style={{ position: 'relative', width: '260px' }}>
+                        <FiSearch style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.82rem' }} />
+                        <input
+                          type="text"
+                          className="cs-form-input"
+                          placeholder="Search lesson or package file..."
+                          value={publishSearch}
+                          onChange={e => {
+                            setPublishSearch(e.target.value);
+                            setPublishPage(1);
+                          }}
+                          style={{
+                            paddingLeft: '2.1rem',
+                            height: '32px',
+                            fontSize: '0.75rem',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            width: '100%'
+                          }}
+                        />
+                        {publishSearch && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPublishSearch('');
+                              setPublishPage(1);
+                            }}
+                            style={{
+                              position: 'absolute',
+                              right: '8px',
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              background: 'none',
+                              border: 'none',
+                              color: '#94a3b8',
+                              cursor: 'pointer',
+                              padding: 0,
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <FiX style={{ fontSize: '0.8rem' }} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="cs-table-wrap">
                       <table className="cs-table">
@@ -11750,12 +11800,20 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         <tbody>
                           {(() => {
                             const PUBLISH_PER_PAGE = 5;
-                            const paginatedHistory = publishHistory.slice((publishPage - 1) * PUBLISH_PER_PAGE, publishPage * PUBLISH_PER_PAGE);
-                            if (paginatedHistory.length === 0) {
+                            const filteredHistory = publishHistory.filter(pkg => {
+                              if (!publishSearch.trim()) return true;
+                              const query = publishSearch.toLowerCase();
+                              const title = (pkg.experience_title || selectedExperience?.title || '').toLowerCase();
+                              const ver = `v${pkg.version_number || ''}`.toLowerCase();
+                              const zip = `${title.replace(/\s+/g, '_')}_v${pkg.version_number || '1.0.0'}.zip`.toLowerCase();
+                              return title.includes(query) || ver.includes(query) || zip.includes(query);
+                            });
+                            const paginatedHistory = filteredHistory.slice((publishPage - 1) * PUBLISH_PER_PAGE, publishPage * PUBLISH_PER_PAGE);
+                            if (filteredHistory.length === 0) {
                               return (
                                 <tr>
                                   <td colSpan="8" style={{ textAlign: 'center', color: '#64748b', padding: '1.5rem', fontSize: '0.82rem' }}>
-                                    No builds published yet. Specify a version above to compile.
+                                    {publishSearch.trim() ? `No builds found matching "${publishSearch}".` : 'No builds published yet. Specify a version above to compile.'}
                                   </td>
                                 </tr>
                               );
@@ -11765,7 +11823,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               const zipFilename = `${lessonTitle.replace(/\s+/g, '_')}_v${pkg.version_number || '1.0.0'}.zip`;
                               // The actual overall list index for the current item
                               const overallIdx = (publishPage - 1) * PUBLISH_PER_PAGE + idx;
-                              const isLatest = overallIdx === 0;
+                              const isLatest = publishHistory.findIndex(p => p.id === pkg.id) === 0;
                               return (
                                 <tr key={pkg.id}>
                                   <td style={{ fontWeight: 700, color: '#475569' }}>{overallIdx + 1}</td>
@@ -11810,43 +11868,58 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     </div>
 
                     {/* Pagination Footer */}
-                    {publishHistory.length > 5 && (
-                      <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #f1f5f9' }}>
-                        <div className="cs-pagination-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                            Showing {publishHistory.length > 0 ? (publishPage - 1) * 5 + 1 : 0} to {Math.min(publishPage * 5, publishHistory.length)} of {publishHistory.length} builds
-                          </span>
-                          <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                            <button
-                              className="cs-page-link"
-                              disabled={publishPage === 1}
-                              onClick={() => setPublishPage(publishPage - 1)}
-                              style={{ cursor: publishPage === 1 ? 'not-allowed' : 'pointer', opacity: publishPage === 1 ? 0.5 : 1 }}
-                            >
-                              &lt;
-                            </button>
-                            {Array.from({ length: Math.max(1, Math.ceil(publishHistory.length / 5)) }, (_, i) => i + 1).map(pageNum => (
+                    {(() => {
+                      const filteredHistory = publishHistory.filter(pkg => {
+                        if (!publishSearch.trim()) return true;
+                        const query = publishSearch.toLowerCase();
+                        const title = (pkg.experience_title || selectedExperience?.title || '').toLowerCase();
+                        const ver = `v${pkg.version_number || ''}`.toLowerCase();
+                        const zip = `${title.replace(/\s+/g, '_')}_v${pkg.version_number || '1.0.0'}.zip`.toLowerCase();
+                        return title.includes(query) || ver.includes(query) || zip.includes(query);
+                      });
+                      const totalFiltered = filteredHistory.length;
+                      const maxPage = Math.max(1, Math.ceil(totalFiltered / 5));
+
+                      if (totalFiltered <= 5 && !publishSearch.trim()) return null;
+
+                      return (
+                        <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #f1f5f9' }}>
+                          <div className="cs-pagination-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                              Showing {totalFiltered > 0 ? (publishPage - 1) * 5 + 1 : 0} to {Math.min(publishPage * 5, totalFiltered)} of {totalFiltered} builds
+                            </span>
+                            <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
                               <button
-                                key={pageNum}
-                                className={`cs-page-link ${publishPage === pageNum ? 'active' : ''}`}
-                                onClick={() => setPublishPage(pageNum)}
-                                style={{ cursor: 'pointer' }}
+                                className="cs-page-link"
+                                disabled={publishPage === 1}
+                                onClick={() => setPublishPage(publishPage - 1)}
+                                style={{ cursor: publishPage === 1 ? 'not-allowed' : 'pointer', opacity: publishPage === 1 ? 0.5 : 1 }}
                               >
-                                {pageNum}
+                                &lt;
                               </button>
-                            ))}
-                            <button
-                              className="cs-page-link"
-                              disabled={publishPage >= Math.ceil(publishHistory.length / 5)}
-                              onClick={() => setPublishPage(publishPage + 1)}
-                              style={{ cursor: publishPage >= Math.ceil(publishHistory.length / 5) ? 'not-allowed' : 'pointer', opacity: publishPage >= Math.ceil(publishHistory.length / 5) ? 0.5 : 1 }}
-                            >
-                              &gt;
-                            </button>
+                              {Array.from({ length: maxPage }, (_, i) => i + 1).map(pageNum => (
+                                <button
+                                  key={pageNum}
+                                  className={`cs-page-link ${publishPage === pageNum ? 'active' : ''}`}
+                                  onClick={() => setPublishPage(pageNum)}
+                                  style={{ cursor: 'pointer' }}
+                                >
+                                  {pageNum}
+                                </button>
+                              ))}
+                              <button
+                                className="cs-page-link"
+                                disabled={publishPage >= maxPage}
+                                onClick={() => setPublishPage(publishPage + 1)}
+                                style={{ cursor: publishPage >= maxPage ? 'not-allowed' : 'pointer', opacity: publishPage >= maxPage ? 0.5 : 1 }}
+                              >
+                                &gt;
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
