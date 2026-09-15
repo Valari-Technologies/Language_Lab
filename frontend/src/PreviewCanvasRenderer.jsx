@@ -498,7 +498,7 @@ export default function PreviewCanvasRenderer({
                 return (
                   <div key={qIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
                     <div style={{ border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.78rem', fontWeight: 600, color: '#c2410c', boxShadow: '0 2px 4px rgba(249,115,22,0.04)' }}>
-                      ❓ {questionsList.length > 1 ? `#${qIdx + 1}: ` : ''}{qText}
+                      {questionsList.length > 1 ? `#${qIdx + 1}: ` : ''}{qText}
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
