@@ -9406,7 +9406,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
                                             <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Flashcards List</span>
                                             <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
-                                              onClick={() => { const cards = [...(selectedBlock.content?.cards || [])]; cards.push({ id: `card-${Date.now()}`, front: 'Front word', back: 'Back definition or context', imageUrl: '' }); handleUpdateBlockContent('cards', cards); }}>
+                                              onClick={() => { const cards = [...(selectedBlock.content?.cards || [])]; cards.push({ id: `card-${Date.now()}`, front: 'Front word', imageUrl: '' }); handleUpdateBlockContent('cards', cards); }}>
                                               + Add Card
                                             </button>
                                           </div>
@@ -9422,8 +9422,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                 </div>
                                                 <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Front Text (Question/Word)" value={card.front || ''}
                                                    onChange={e => { const cards = [...selectedBlock.content.cards]; cards[cIdx] = { ...cards[cIdx], front: e.target.value }; handleUpdateBlockContent('cards', cards); }} />
-                                                <textarea className="cs-form-input" style={{ minHeight: '36px', fontSize: '0.72rem', lineHeight: 1.3 }} placeholder="Back Text (Answer/Meaning)" value={card.back || ''}
-                                                   onChange={e => { const cards = [...selectedBlock.content.cards]; cards[cIdx] = { ...cards[cIdx], back: e.target.value }; handleUpdateBlockContent('cards', cards); }} />
                                                 <MediaUploadField
                                                    label="Card Image (Optional)"
                                                    value={card.imageUrl || card.image || ''}
