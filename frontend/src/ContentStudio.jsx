@@ -5593,22 +5593,24 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           width: 100%;
           border-collapse: collapse;
           text-align: left;
-          font-size: 0.84rem;
+          font-size: 0.78rem;
         }
         .cs-table th {
           color: #64748b;
-          font-weight: 600;
-          padding: 0.75rem 1rem;
+          font-weight: 700;
+          padding: 0.6rem 0.65rem;
           border-bottom: 1.5px solid #e2e8f0;
           text-transform: uppercase;
-          font-size: 0.72rem;
-          letter-spacing: 0.05em;
+          font-size: 0.68rem;
+          letter-spacing: 0.04em;
+          white-space: nowrap;
         }
         .cs-table td {
-          padding: 0.85rem 1rem;
+          padding: 0.6rem 0.65rem;
           border-bottom: 1px solid #e2e8f0;
           color: #334155;
           vertical-align: middle;
+          font-size: 0.76rem;
         }
         .cs-table tr:hover td {
           background-color: #f8fafc;
@@ -11836,25 +11838,25 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               const isLatest = publishHistory.findIndex(p => p.id === pkg.id) === 0;
                               return (
                                 <tr key={pkg.id}>
-                                  <td style={{ fontWeight: 700, color: '#475569' }}>{overallIdx + 1}</td>
+                                  <td style={{ fontWeight: 700, color: '#475569', width: '36px', textAlign: 'center' }}>{overallIdx + 1}</td>
                                   <td
-                                    style={{ fontWeight: 700, color: '#0f172a', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                    style={{ fontWeight: 700, color: '#0f172a', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                                     title={lessonTitle}
                                   >
                                     {lessonTitle}
                                   </td>
-                                  <td style={{ fontWeight: 700, color: '#0284c7' }}>v{pkg.version_number || '—'}</td>
-                                  <td style={{ color: '#475569', fontSize: '0.72rem', fontFamily: 'monospace' }}>{zipFilename}</td>
-                                  <td>{pkg.package_size ? formatBytes(pkg.package_size) : '—'}</td>
-                                  <td style={{ whiteSpace: 'nowrap' }}>{pkg.published_at ? new Date(pkg.published_at).toLocaleString() : '—'}</td>
-                                  <td>
+                                  <td style={{ fontWeight: 700, color: '#0284c7', whiteSpace: 'nowrap' }}>v{pkg.version_number || '—'}</td>
+                                  <td style={{ color: '#475569', fontSize: '0.68rem', fontFamily: 'monospace', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={zipFilename}>{zipFilename}</td>
+                                  <td style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}>{pkg.package_size ? formatBytes(pkg.package_size) : '—'}</td>
+                                  <td style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}>{pkg.published_at ? new Date(pkg.published_at).toLocaleDateString() + ', ' + new Date(pkg.published_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                                  <td style={{ whiteSpace: 'nowrap' }}>
                                     <span className={`cs-badge ${isLatest ? 'cs-badge-published' : ''}`}
-                                      style={isLatest ? {} : { background: '#f1f5f9', color: '#64748b' }}>
-                                      {isLatest ? 'Latest' : `Build ${pkg.build_number}`}
+                                      style={isLatest ? { fontSize: '0.62rem', padding: '2px 6px' } : { background: '#f1f5f9', color: '#64748b', fontSize: '0.62rem', padding: '2px 6px' }}>
+                                      {isLatest ? 'LATEST' : `BUILD ${pkg.build_number}`}
                                     </span>
                                   </td>
-                                  <td>
-                                    <div style={{ display: 'flex', gap: 4 }}>
+                                  <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
+                                    <div style={{ display: 'inline-flex' }}>
                                       <button
                                         title="Download package (.zip)"
                                         data-testid="download-elab-btn"
