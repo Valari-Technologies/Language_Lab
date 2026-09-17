@@ -8204,15 +8204,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
                                   const allowedTypes = MODULE_ELEMENTS[activeModule] || [];
 
-                                  const isAllowed = (tmplType) => {
-                                    if (selectedExperience?.experience_type === 'ASSESSMENT') return true;
-                                    if (!activeModule) return true;
-                                    const mapped = tmplType.toLowerCase();
-                                    if (mapped === 'quiz') return allowedTypes.includes('quiz') || allowedTypes.includes('mcq');
-                                    if (mapped === 'match_items') return allowedTypes.includes('match') || allowedTypes.includes('match_items');
-                                    if (mapped === 'roleplay_simulation') return allowedTypes.includes('roleplay_simulation');
-                                    return allowedTypes.includes(mapped);
-                                  };
+                                   const isAllowed = (tmplType) => {
+                                     return true; // Show all 25 elements across all modules
+                                   };
 
                                   return {
                                     ...cat,
