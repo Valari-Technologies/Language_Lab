@@ -2248,6 +2248,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           normalizedType = 'hotspot_explorer';
         } else if (['functional_reading', 'functional reading'].includes(rawType)) {
           normalizedType = 'functional_reading';
+        } else if (['multimedia_reading_assessment', 'multimedia reading assessment', 'multimedia_reading'].includes(rawType)) {
+          normalizedType = 'multimedia_reading_assessment';
         }
         return {
           ...el,
@@ -2520,6 +2522,28 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             height: 80,
             info: 'Exploration description here...',
             hint: 'Click on the highlighted object'
+          }
+        ]
+      };
+    } else if (['multimedia_reading_assessment', 'multimedia reading assessment', 'multimedia_reading'].includes(type.toLowerCase())) {
+      newBlock.type = 'multimedia_reading_assessment';
+      newBlock.content = {
+        mediaType: 'multimedia',
+        documentText: 'Read, listen, or view the media carefully before completing the assessment questions below.',
+        documentUrl: '',
+        audioUrl: '',
+        videoUrl: '',
+        scenario: 'Analyze the multimedia material and answer the interactive questions.',
+        questions: [
+          {
+            id: 'q1',
+            question: 'What is the main topic of the presentation?',
+            imageUrl: '',
+            options: [
+              { text: 'Option A', imageUrl: '' },
+              { text: 'Option B', imageUrl: '' }
+            ],
+            correctAnswerIndex: 0
           }
         ]
       };
@@ -3744,6 +3768,64 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           <div style={{ fontSize: '0.6rem', fontWeight: 700, color: isNpc ? '#6b21a8' : '#e0f2fe' }}>{speakerName}</div>
                           <div style={{ fontSize: '0.72rem', lineHeight: 1.3 }}>{text}</div>
 
+                          {isNpc && (
+                            <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #f3e8ff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <button
+                                type="button"
+                                title="Click to listen to Speaker A"
+                                onClick={() => {
+                                  const targetUrl = t.audioUrl || t.audio ? resolveMediaUrl(t.audioUrl || t.audio) : null;
+                                  if (targetUrl) {
+                                    const a = new Audio(targetUrl);
+                                    a.play();
+                                  } else if (text && ('speechSynthesis' in window)) {
+                                    window.speechSynthesis.cancel();
+                                    const utt = new SpeechSynthesisUtterance(text);
+                                    utt.rate = 0.92;
+                                    utt.pitch = 1.08;
+                                    const voices = window.speechSynthesis.getVoices();
+                                    const attractiveVoice = voices.find(v => 
+                                      v.lang.startsWith('en') && (
+                                        v.name.includes('Natural') ||
+                                        v.name.includes('Google US English') ||
+                                        v.name.includes('Google UK English Female') ||
+                                        v.name.includes('Samantha') ||
+                                        v.name.includes('Jenny') ||
+                                        v.name.includes('Zira') ||
+                                        v.name.includes('Ava') ||
+                                        v.name.includes('Karen')
+                                      )
+                                    ) || voices.find(v => v.lang.startsWith('en'));
+                                    if (attractiveVoice) utt.voice = attractiveVoice;
+                                    window.speechSynthesis.speak(utt);
+                                  }
+                                }}
+                                style={{
+                                  background: '#f3e8ff',
+                                  border: '1px solid #d8b4fe',
+                                  borderRadius: '16px',
+                                  padding: '3px 10px',
+                                  color: '#7e22ce',
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  cursor: 'pointer',
+                                  boxShadow: '0 1px 2px rgba(126,34,206,0.1)'
+                                }}
+                              >
+                                <FiVolume2 style={{ fontSize: '0.82rem', color: '#9333ea' }} /> Listen
+                              </button>
+                            </div>
+                          )}
+
+                          {isNpc && (t.audioUrl || t.audio) && (
+                            <div style={{ marginTop: '2px' }}>
+                              <audio src={resolveMediaUrl(t.audioUrl || t.audio)} controls style={{ width: '100%', height: '24px' }} />
+                            </div>
+                          )}
+
                           {!isNpc && (block.content?.allowAudioRecord !== false) && (t.allowAudioRecord !== false) && (
                             <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
                               <button
@@ -3934,7 +4016,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           </div>
         )}
 
-        {block.type === 'functional_reading' && (() => {
+        {['functional_reading', 'functional reading'].includes((block.type || '').toLowerCase()) && (() => {
           const docType = (block.content?.documentType || 'poster').toLowerCase();
           const isTextDoc = docType === 'text';
           const docUrl = block.content?.documentUrl || block.content?.url || '';
@@ -3999,6 +4081,93 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         placeholder="Write answer here..."
                         style={{ height: '24px', fontSize: '0.65rem', borderRadius: '4px', border: '1px solid #cbd5e1', padding: '0 6px', background: '#f8fafc' }}
                       />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {['multimedia_reading_assessment', 'multimedia reading assessment', 'multimedia_reading', 'multimedia reading'].includes((block.type || '').toLowerCase()) && (() => {
+          const mediaType = (block.content?.mediaType || 'audio').toLowerCase();
+          const scenarioText = block.content?.scenario || '';
+          const docText = block.content?.documentText || '';
+          const audioUrl = block.content?.audioUrl || '';
+          const videoUrl = block.content?.videoUrl || '';
+          const questionsList = block.content?.questions || [];
+
+          const resolvedAudio = audioUrl ? resolveMediaUrl(audioUrl) : '';
+          const resolvedVideo = videoUrl ? resolveMediaUrl(videoUrl) : '';
+
+          return (
+            <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem', border: '1.5px solid #0284c7', background: '#f0f9ff', borderRadius: '8px', padding: '0.75rem', overflowY: 'auto' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0369a1', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <FiFileText /> Multimedia Reading & Assessment
+                </div>
+                <span style={{ fontSize: '0.62rem', padding: '1px 6px', background: '#0284c7', color: '#ffffff', borderRadius: '8px', textTransform: 'uppercase', fontWeight: 700 }}>
+                  {mediaType}
+                </span>
+              </div>
+
+              {/* Media Preview: Audio or Video */}
+              {mediaType === 'video' ? (
+                resolvedVideo ? (
+                  <div style={{ width: '100%', borderRadius: '6px', overflow: 'hidden', border: '1px solid #7dd3fc', background: '#000000' }}>
+                    <video src={resolvedVideo} controls style={{ width: '100%', maxHeight: '150px', display: 'block', objectFit: 'contain' }} />
+                  </div>
+                ) : (
+                  <div style={{ width: '100%', height: '60px', border: '1px dashed #7dd3fc', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7', fontSize: '0.68rem', background: '#ffffff' }}>
+                    No video file selected
+                  </div>
+                )
+              ) : (
+                resolvedAudio ? (
+                  <div style={{ background: '#ffffff', border: '1px solid #7dd3fc', borderRadius: '6px', padding: '0.4rem 0.6rem' }}>
+                    <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#0369a1', marginBottom: '2px' }}>🎵 Audio Clip Attached</div>
+                    <audio src={resolvedAudio} controls style={{ width: '100%', height: '28px' }} />
+                  </div>
+                ) : (
+                  <div style={{ width: '100%', height: '50px', border: '1px dashed #7dd3fc', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7', fontSize: '0.68rem', background: '#ffffff' }}>
+                    No audio file selected
+                  </div>
+                )
+              )}
+
+              {/* Quiz Questions Preview */}
+              {questionsList.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderTop: '1px dashed #7dd3fc', paddingTop: '0.4rem', marginTop: '0.2rem' }}>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#0369a1' }}>Quiz Questions ({questionsList.length}):</span>
+                  {questionsList.map((q, qIdx) => (
+                    <div key={q.id || qIdx} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: '#ffffff', padding: '6px', borderRadius: '6px', border: '1px solid #7dd3fc' }}>
+                      <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#0f172a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>#{qIdx + 1}: {q.question || 'Question prompt...'}</span>
+                        <span style={{ fontSize: '0.6rem', padding: '1px 5px', background: '#e0f2fe', color: '#0284c7', borderRadius: '4px', fontWeight: 600 }}>
+                          ⏱ Pauses at {q.pauseAt !== undefined ? q.pauseAt : 35}s
+                        </span>
+                      </div>
+                      {(q.type || 'mcq') === 'fill_blank' ? (
+                        <div style={{ fontSize: '0.62rem', fontWeight: 600, color: '#0369a1', background: '#f8fafc', padding: '4px 6px', borderRadius: '4px', border: '1px solid #e2e8f0', marginTop: '2px' }}>
+                          ✍️ Target Blank Answer: <strong style={{ color: '#16a34a' }}>{q.blankAnswer || q.correctAnswer || '(Not set)'}</strong>
+                        </div>
+                      ) : (
+                        q.options && q.options.length > 0 && (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginTop: '2px' }}>
+                            {q.options.map((opt, oIdx) => {
+                              const optText = typeof opt === 'object' ? opt?.text : opt;
+                              const optImg = typeof opt === 'object' && opt?.imageUrl ? resolveMediaUrl(opt.imageUrl) : '';
+                              return (
+                                <div key={oIdx} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#f8fafc', padding: '3px 6px', borderRadius: '4px', border: '1px solid #e2e8f0', fontSize: '0.62rem' }}>
+                                  <span style={{ fontWeight: 'bold', color: '#0369a1' }}>{String.fromCharCode(65 + oIdx)}.</span>
+                                  {optImg && <img src={optImg} alt="" style={{ width: '18px', height: '18px', borderRadius: '3px', objectFit: 'cover' }} />}
+                                  <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{optText}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )
+                      )}
                     </div>
                   ))}
                 </div>
@@ -7961,7 +8130,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                       { type: 'Input', desc: 'Free text typing input area', icon: <FiType style={{ color: '#0ea5e9' }} />, bg: '#e0f9ff' },
                                       { type: 'Roleplay_Simulation', desc: 'Ordered npc-student conversation roleplay', icon: <FiUsers style={{ color: '#3b82f6' }} />, bg: '#dbeafe' },
                                       { type: 'Hotspot_Explorer', desc: 'Click/explore hotspots on a target image', icon: <FiGrid style={{ color: '#ea580c' }} />, bg: '#ffedd5' },
-                                      { type: 'Functional_Reading', desc: 'Read document and answer dynamic questions', icon: <FiFileText style={{ color: '#6366f1' }} />, bg: '#e0e7ff' }
+                                      { type: 'Functional_Reading', desc: 'Read document and answer dynamic questions', icon: <FiFileText style={{ color: '#6366f1' }} />, bg: '#e0e7ff' },
+                                      { type: 'Multimedia_Reading_Assessment', desc: 'Interactive audio/video/poster reading with image quiz', icon: <FiFileText style={{ color: '#0284c7' }} />, bg: '#e0f2fe' }
                                     ]
                                   },
                                   {
@@ -9818,20 +9988,38 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                         />
                                                       </div>
                                                     )}
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '2px' }}>
-                                                       <input
-                                                         type="checkbox"
-                                                         id={`turn-audio-rec-${tIdx}-${selectedBlock.id}`}
-                                                         checked={turn.allowAudioRecord !== false}
-                                                         onChange={e => {
-                                                           const updated = conversation.map((t, i) => i === tIdx ? { ...t, allowAudioRecord: e.target.checked } : t);
-                                                           handleUpdateBlockMultipleContent({ conversation: updated });
-                                                         }}
-                                                       />
-                                                       <label htmlFor={`turn-audio-rec-${tIdx}-${selectedBlock.id}`} style={{ fontSize: '0.62rem', fontWeight: 600, color: '#475569', cursor: 'pointer' }}>
-                                                         Audio Record Answer Option Enabled
-                                                       </label>
-                                                     </div>
+
+                                                    {turn.speaker === 'npc' && (
+                                                      <MediaUploadField
+                                                        label="Speaker A Audio Prompt (Optional)"
+                                                        value={turn.audioUrl || turn.audio || ''}
+                                                        mediaType="audio"
+                                                        onChange={url => {
+                                                          const updated = conversation.map((t, i) => i === tIdx ? { ...t, audioUrl: url, audio: url } : t);
+                                                          handleUpdateBlockMultipleContent({ conversation: updated });
+                                                        }}
+                                                        actionLoading={actionLoading}
+                                                        setActionLoading={setActionLoading}
+                                                        showFeedback={showFeedback}
+                                                      />
+                                                    )}
+
+                                                    {turn.speaker === 'user' && (
+                                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '2px' }}>
+                                                        <input
+                                                          type="checkbox"
+                                                          id={`turn-audio-rec-${tIdx}-${selectedBlock.id}`}
+                                                          checked={turn.allowAudioRecord !== false}
+                                                          onChange={e => {
+                                                            const updated = conversation.map((t, i) => i === tIdx ? { ...t, allowAudioRecord: e.target.checked } : t);
+                                                            handleUpdateBlockMultipleContent({ conversation: updated });
+                                                          }}
+                                                        />
+                                                        <label htmlFor={`turn-audio-rec-${tIdx}-${selectedBlock.id}`} style={{ fontSize: '0.62rem', fontWeight: 600, color: '#475569', cursor: 'pointer' }}>
+                                                          Audio Record Answer Option Enabled
+                                                        </label>
+                                                      </div>
+                                                    )}
                                                   </div>
                                                 ));
                                               })()}
@@ -9922,7 +10110,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                       )}
 
                                       {/* BLOCK TYPE: FUNCTIONAL READING */}
-                                      {selectedBlock.type === 'functional_reading' && (() => {
+                                      {['functional_reading', 'functional reading'].includes((selectedBlock.type || '').toLowerCase()) && (() => {
                                         const docType = (selectedBlock.content?.documentType || 'poster').toLowerCase();
                                         const isTextDoc = docType === 'text';
 
@@ -10172,7 +10360,266 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                             </div>
                                           </div>
                                         </div>
-                                      )}                                      {/* BLOCK TYPE: TRUE FALSE */}
+                                      )}
+
+                                      {['multimedia_reading_assessment', 'multimedia reading assessment', 'multimedia_reading', 'multimedia reading'].includes((selectedBlock.type || '').toLowerCase()) && (() => {
+                                        const questions = selectedBlock.content?.questions || [];
+                                        const mediaType = (selectedBlock.content?.mediaType || 'audio').toLowerCase();
+
+                                        return (
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0284c7' }}>Multimedia Reading & Assessment Settings</span>
+
+                                            <div className="cs-form-group">
+                                              <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Media Type</label>
+                                              <select
+                                                className="cs-form-input"
+                                                style={{ height: '32px', fontSize: '0.75rem', fontWeight: 600, color: '#0284c7' }}
+                                                value={mediaType === 'video' ? 'video' : 'audio'}
+                                                onChange={e => handleUpdateBlockContent('mediaType', e.target.value)}
+                                              >
+                                                <option value="audio">Audio</option>
+                                                <option value="video">Video</option>
+                                              </select>
+                                            </div>
+
+                                            {mediaType === 'video' ? (
+                                              <MediaUploadField
+                                                label="Video Lesson / Clip File"
+                                                value={selectedBlock.content?.videoUrl || ''}
+                                                mediaType="video"
+                                                onChange={url => handleUpdateBlockContent('videoUrl', url)}
+                                                actionLoading={actionLoading}
+                                                setActionLoading={setActionLoading}
+                                                showFeedback={showFeedback}
+                                              />
+                                            ) : (
+                                              <MediaUploadField
+                                                label="Audio Track File"
+                                                value={selectedBlock.content?.audioUrl || ''}
+                                                mediaType="audio"
+                                                onChange={url => handleUpdateBlockContent('audioUrl', url)}
+                                                actionLoading={actionLoading}
+                                                setActionLoading={setActionLoading}
+                                                showFeedback={showFeedback}
+                                              />
+                                            )}
+
+                                            {/* Quiz Questions Section */}
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', borderTop: '1px dashed #cbd5e1', paddingTop: '0.5rem' }}>
+                                              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#0369a1' }}>Quiz Questions</span>
+                                              <button
+                                                type="button"
+                                                className="cs-btn-outline"
+                                                style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0284c7', color: '#0284c7' }}
+                                                onClick={() => {
+                                                  const updatedQs = [...questions];
+                                                  updatedQs.push({
+                                                    id: `q_${Date.now()}`,
+                                                    type: 'mcq',
+                                                    question: 'New Question Prompt?',
+                                                    pauseAt: 35,
+                                                    options: [
+                                                      { text: 'Option A', imageUrl: '' },
+                                                      { text: 'Option B', imageUrl: '' }
+                                                    ],
+                                                    correctAnswerIndex: 0
+                                                  });
+                                                  handleUpdateBlockContent('questions', updatedQs);
+                                                }}
+                                              >
+                                                + Add Question
+                                              </button>
+                                            </div>
+
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                              {questions.map((q, qIdx) => (
+                                                <div key={q.id || qIdx} style={{ background: '#f8fafc', border: '1.5px solid #cbd5e1', borderRadius: '8px', padding: '0.65rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontSize: '0.68rem', fontWeight: 'bold', color: '#0284c7' }}>Question #{qIdx + 1}</span>
+                                                    {questions.length > 1 && (
+                                                      <button
+                                                        type="button"
+                                                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                                                        onClick={() => {
+                                                          const filtered = questions.filter((_, i) => i !== qIdx);
+                                                          handleUpdateBlockContent('questions', filtered);
+                                                        }}
+                                                      >
+                                                        <FiTrash2 style={{ fontSize: '0.72rem' }} />
+                                                      </button>
+                                                    )}
+                                                  </div>
+
+                                                  <div className="cs-form-group" style={{ marginBottom: 0 }}>
+                                                    <label className="cs-form-label" style={{ fontSize: '0.65rem', fontWeight: 600, color: '#475569' }}>Question Mode / Type</label>
+                                                    <select
+                                                      className="cs-form-input"
+                                                      style={{ height: '34px', fontSize: '0.75rem', fontWeight: 600, color: '#0284c7', padding: '0 0.5rem', width: '100%', borderRadius: '6px', border: '1px solid #7dd3fc', backgroundColor: '#ffffff' }}
+                                                      value={q.type || 'mcq'}
+                                                      onChange={e => {
+                                                        const updatedQs = [...questions];
+                                                        updatedQs[qIdx] = { ...updatedQs[qIdx], type: e.target.value };
+                                                        handleUpdateBlockContent('questions', updatedQs);
+                                                      }}
+                                                    >
+                                                      <option value="mcq">Multiple Choice Quiz (MCQ)</option>
+                                                      <option value="fill_blank">Fill in the Blanks</option>
+                                                    </select>
+                                                  </div>
+
+                                                  <div className="cs-form-group" style={{ marginBottom: 0 }}>
+                                                    <label className="cs-form-label" style={{ fontSize: '0.65rem', fontWeight: 600, color: '#475569' }}>Pause / Trigger Time (Seconds)</label>
+                                                    <input
+                                                      className="cs-form-input"
+                                                      style={{ height: '32px', fontSize: '0.75rem', padding: '0 0.5rem', width: '100%', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                                      type="number"
+                                                      min="0"
+                                                      step="1"
+                                                      value={q.pauseAt !== undefined ? q.pauseAt : 35}
+                                                        onChange={e => {
+                                                          const updatedQs = [...questions];
+                                                          updatedQs[qIdx] = { ...updatedQs[qIdx], pauseAt: parseFloat(e.target.value) || 0 };
+                                                          handleUpdateBlockContent('questions', updatedQs);
+                                                        }}
+                                                        placeholder="e.g. 35"
+                                                      />
+                                                    </div>
+
+                                                  <div className="cs-form-group" style={{ marginBottom: 0 }}>
+                                                    <label className="cs-form-label" style={{ fontSize: '0.6rem' }}>Question Text</label>
+                                                    <input
+                                                      className="cs-form-input"
+                                                      style={{ height: '28px', fontSize: '0.72rem' }}
+                                                      type="text"
+                                                      value={q.question || ''}
+                                                      onChange={e => {
+                                                        const updatedQs = [...questions];
+                                                        updatedQs[qIdx] = { ...updatedQs[qIdx], question: e.target.value };
+                                                        handleUpdateBlockContent('questions', updatedQs);
+                                                      }}
+                                                      placeholder="Type question prompt..."
+                                                    />
+                                                  </div>
+
+                                                  {(q.type || 'mcq') === 'fill_blank' ? (
+                                                    <div className="cs-form-group" style={{ marginBottom: 0 }}>
+                                                      <label className="cs-form-label" style={{ fontSize: '0.6rem' }}>Target Correct Blank Answer</label>
+                                                      <input
+                                                        className="cs-form-input"
+                                                        style={{ height: '28px', fontSize: '0.72rem' }}
+                                                        type="text"
+                                                        value={q.blankAnswer || q.correctAnswer || ''}
+                                                        onChange={e => {
+                                                          const updatedQs = [...questions];
+                                                          updatedQs[qIdx] = { ...updatedQs[qIdx], blankAnswer: e.target.value, correctAnswer: e.target.value };
+                                                          handleUpdateBlockContent('questions', updatedQs);
+                                                        }}
+                                                        placeholder="Type expected correct answer..."
+                                                      />
+                                                    </div>
+                                                  ) : (
+                                                    /* Options List */
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.2rem' }}>
+                                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <label className="cs-form-label" style={{ fontSize: '0.62rem', margin: 0, color: '#334155' }}>Options (Select Correct)</label>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                            const currOpts = [...(q.options || [])];
+                                                            currOpts.push({ text: `Option ${String.fromCharCode(65 + currOpts.length)}`, imageUrl: '' });
+                                                            const updatedQs = [...questions];
+                                                            updatedQs[qIdx] = { ...updatedQs[qIdx], options: currOpts };
+                                                            handleUpdateBlockContent('questions', updatedQs);
+                                                          }}
+                                                          style={{ background: '#e0f2fe', border: '1px solid #7dd3fc', borderRadius: '4px', padding: '0.15rem 0.4rem', fontSize: '0.62rem', color: '#0284c7', fontWeight: 700, cursor: 'pointer' }}
+                                                        >
+                                                          + Add Option
+                                                        </button>
+                                                      </div>
+
+                                                      {(q.options || []).map((opt, oIdx) => {
+                                                        const optText = typeof opt === 'object' ? (opt?.text || '') : opt;
+                                                        const optImg = typeof opt === 'object' ? (opt?.imageUrl || '') : '';
+                                                        const isCorrect = (q.correctAnswerIndex ?? 0) === oIdx;
+
+                                                        return (
+                                                          <div key={oIdx} style={{ background: '#ffffff', border: isCorrect ? '1.5px solid #22c55e' : '1px solid #cbd5e1', borderRadius: '6px', padding: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                                            <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                                                              <input
+                                                                type="radio"
+                                                                name={`mm_correct_${selectedBlock.id}_q${qIdx}`}
+                                                                checked={isCorrect}
+                                                                onChange={() => {
+                                                                  const updatedQs = [...questions];
+                                                                  updatedQs[qIdx] = { ...updatedQs[qIdx], correctAnswerIndex: oIdx };
+                                                                  handleUpdateBlockContent('questions', updatedQs);
+                                                                }}
+                                                                style={{ cursor: 'pointer' }}
+                                                              />
+                                                              <span style={{ fontSize: '0.68rem', fontWeight: 'bold', color: '#475569' }}>{String.fromCharCode(65 + oIdx)}:</span>
+                                                              <input
+                                                                className="cs-form-input"
+                                                                style={{ height: '24px', fontSize: '0.7rem', flex: 1 }}
+                                                                type="text"
+                                                                value={optText}
+                                                                placeholder={`Option ${oIdx + 1} text...`}
+                                                                onChange={e => {
+                                                                  const currOpts = [...(q.options || [])];
+                                                                  currOpts[oIdx] = { text: e.target.value, imageUrl: optImg };
+                                                                  const updatedQs = [...questions];
+                                                                  updatedQs[qIdx] = { ...updatedQs[qIdx], options: currOpts };
+                                                                  handleUpdateBlockContent('questions', updatedQs);
+                                                                }}
+                                                              />
+                                                              {(q.options || []).length > 2 && (
+                                                                <button
+                                                                  type="button"
+                                                                  onClick={() => {
+                                                                    const currOpts = [...(q.options || [])];
+                                                                    currOpts.splice(oIdx, 1);
+                                                                    let nextCorrect = q.correctAnswerIndex || 0;
+                                                                    if (nextCorrect >= currOpts.length) nextCorrect = Math.max(0, currOpts.length - 1);
+                                                                    const updatedQs = [...questions];
+                                                                    updatedQs[qIdx] = { ...updatedQs[qIdx], options: currOpts, correctAnswerIndex: nextCorrect };
+                                                                    handleUpdateBlockContent('questions', updatedQs);
+                                                                  }}
+                                                                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                                                                >
+                                                                  <FiTrash2 style={{ fontSize: '0.72rem' }} />
+                                                                </button>
+                                                              )}
+                                                            </div>
+
+                                                            {/* Option Photo Upload */}
+                                                            <MediaUploadField
+                                                              label={`Option ${String.fromCharCode(65 + oIdx)} Image (Optional)`}
+                                                              value={optImg}
+                                                              mediaType="image"
+                                                              onChange={url => {
+                                                                const currOpts = [...(q.options || [])];
+                                                                currOpts[oIdx] = { text: optText, imageUrl: url };
+                                                                const updatedQs = [...questions];
+                                                                updatedQs[qIdx] = { ...updatedQs[qIdx], options: currOpts };
+                                                                handleUpdateBlockContent('questions', updatedQs);
+                                                              }}
+                                                              actionLoading={actionLoading}
+                                                              setActionLoading={setActionLoading}
+                                                              showFeedback={showFeedback}
+                                                            />
+                                                          </div>
+                                                        );
+                                                      })}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
+
+                                      {/* BLOCK TYPE: TRUE FALSE */}
                                       {(['true_false', 'true false', 'true/false'].includes((selectedBlock.type || '').toLowerCase())) && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

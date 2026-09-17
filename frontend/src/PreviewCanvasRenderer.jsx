@@ -151,6 +151,347 @@ const CustomAudioPlayer = ({ src, style = {} }) => {
   );
 };
 
+const MultimediaInteractiveQuizPlayer = ({
+  block,
+  mediaType,
+  resolvedVideo,
+  resolvedAudio,
+  questionsList,
+  previewAnswers,
+  setPreviewAnswers,
+  activeScreenId,
+  resolveUrl
+}) => {
+  const videoRef = React.useRef(null);
+  const audioRef = React.useRef(null);
+  const [currentTime, setCurrentTime] = React.useState(0);
+  const [triggeredPauseIdx, setTriggeredPauseIdx] = React.useState(null);
+  const [blankInputs, setBlankInputs] = React.useState({});
+  const pausedTimeRef = React.useRef({});
+
+  const handleTimeUpdate = (e) => {
+    const time = e.target.currentTime || 0;
+    setCurrentTime(time);
+
+    questionsList.forEach((q, idx) => {
+      const pauseSec = q.pauseAt !== undefined ? parseFloat(q.pauseAt) : 35;
+      const qKey = `${activeScreenId}_${block.id}_q${idx}`;
+      const isAnswered = previewAnswers[qKey] !== undefined;
+
+      // Allow re-triggering if user seeked backwards
+      if (time < pauseSec - 0.8) {
+        pausedTimeRef.current[idx] = false;
+      }
+
+      if (pauseSec > 0 && time >= pauseSec && !isAnswered && !pausedTimeRef.current[idx]) {
+        pausedTimeRef.current[idx] = true;
+        setTriggeredPauseIdx(idx);
+
+        if (mediaType === 'video' && videoRef.current) {
+          videoRef.current.pause();
+          videoRef.current.currentTime = pauseSec;
+        } else if (mediaType === 'audio' && audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = pauseSec;
+        }
+      }
+    });
+  };
+
+  const handleSelectOption = (qIdx, value) => {
+    const qKey = `${activeScreenId}_${block.id}_q${qIdx}`;
+    const isAnswered = previewAnswers[qKey] !== undefined;
+    if (isAnswered) return;
+
+    setPreviewAnswers(prev => ({ ...prev, [qKey]: value }));
+
+    if (triggeredPauseIdx === qIdx || triggeredPauseIdx !== null) {
+      setTriggeredPauseIdx(null);
+      if (mediaType === 'video' && videoRef.current) {
+        videoRef.current.play().catch(() => {});
+      } else if (mediaType === 'audio' && audioRef.current) {
+        audioRef.current.play().catch(() => {});
+      }
+    }
+  };
+
+  return (
+    <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.85rem', border: '1.5px solid #0284c7', background: '#f0f9ff', borderRadius: '12px', padding: '1rem', boxShadow: '0 4px 12px rgba(2, 132, 199, 0.08)', overflowY: 'auto' }}>
+      <style>{`
+        @keyframes quizSmoothAppear {
+          0% { opacity: 0; transform: translateY(-16px) scale(0.97); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
+      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0369a1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #bae6fd', paddingBottom: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <FiFileText /> Multimedia Reading & Quiz Assessment
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.65rem', padding: '2px 8px', background: '#0284c7', color: '#ffffff', borderRadius: '12px', textTransform: 'uppercase', fontWeight: 700 }}>
+            {mediaType}
+          </span>
+          <span style={{ fontSize: '0.65rem', padding: '2px 8px', background: '#e0f2fe', color: '#0369a1', borderRadius: '12px', fontWeight: 700 }}>
+            ⏱ {Math.floor(currentTime)}s
+          </span>
+        </div>
+      </div>
+
+      {/* Video / Audio Player Section */}
+      {mediaType === 'video' ? (
+        resolvedVideo ? (
+          <div style={{ width: '100%', borderRadius: '10px', overflow: 'hidden', border: '1px solid #7dd3fc', background: '#000000', position: 'relative' }}>
+            <video
+              ref={videoRef}
+              src={resolvedVideo}
+              controls
+              onTimeUpdate={handleTimeUpdate}
+              controlsList="nodownload noplaybackrate noremoteplayback"
+              disablePictureInPicture
+              style={{ width: '100%', maxHeight: '260px', display: 'block', objectFit: 'contain' }}
+            />
+            {triggeredPauseIdx !== null && (
+              <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(239, 68, 68, 0.95)', color: '#ffffff', padding: '4px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px', boxShadow: '0 2px 8px rgba(0,0,0,0.3)', animation: 'pulse 1.5s infinite' }}>
+                <span>⏸ Paused for Quiz Question #{triggeredPauseIdx + 1}</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ width: '100%', height: '100px', border: '1.5px dashed #7dd3fc', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7', fontSize: '0.75rem', background: '#ffffff' }}>
+            No video file configured
+          </div>
+        )
+      ) : (
+        resolvedAudio ? (
+          <div style={{ background: '#ffffff', border: '1px solid #7dd3fc', borderRadius: '8px', padding: '0.6rem 0.8rem', position: 'relative' }}>
+            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0369a1', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>🎵 Listen to Audio Clip:</span>
+              {triggeredPauseIdx !== null && (
+                <span style={{ background: '#ef4444', color: '#ffffff', padding: '2px 8px', borderRadius: '10px', fontSize: '0.62rem', fontWeight: 700 }}>
+                  Paused for Quiz #{triggeredPauseIdx + 1}
+                </span>
+              )}
+            </div>
+            <audio
+              ref={audioRef}
+              src={resolvedAudio}
+              controls
+              onTimeUpdate={handleTimeUpdate}
+              style={{ width: '100%', height: '36px' }}
+            />
+          </div>
+        ) : (
+          <div style={{ width: '100%', height: '80px', border: '1.5px dashed #7dd3fc', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7', fontSize: '0.75rem', background: '#ffffff' }}>
+            No audio file configured
+          </div>
+        )
+      )}
+
+      {/* Interactive Triggered Quiz Section */}
+      {questionsList.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginTop: '0.35rem' }}>
+          <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0369a1', borderBottom: '1px dashed #7dd3fc', paddingBottom: '0.35rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>📝 Interactive Assessment Questions ({questionsList.length}):</span>
+            <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#0284c7' }}>
+              Questions trigger at set video timestamps
+            </span>
+          </div>
+
+          {questionsList.map((q, qIdx) => {
+            const qKey = `${activeScreenId}_${block.id}_q${qIdx}`;
+            const selectedOptIdx = previewAnswers[qKey];
+            const hasAnswered = selectedOptIdx !== undefined;
+            const pauseSec = q.pauseAt !== undefined ? parseFloat(q.pauseAt) : 35;
+            const isTargetTrigger = triggeredPauseIdx === qIdx;
+            const isFillBlank = (q.type || 'mcq') === 'fill_blank';
+
+            // Hide question until video/audio playback reaches target timestamp (or triggered / answered)
+            const shouldShow = pauseSec === 0 || currentTime >= pauseSec || hasAnswered || isTargetTrigger;
+
+            if (!shouldShow) return null;
+
+            return (
+              <div
+                key={q.id || qIdx}
+                style={{
+                  background: isTargetTrigger ? '#f0fdf4' : '#ffffff',
+                  border: isTargetTrigger ? '2px solid #22c55e' : '1.5px solid #bae6fd',
+                  borderRadius: '10px',
+                  padding: '0.85rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.6rem',
+                  boxShadow: isTargetTrigger ? '0 0 16px rgba(34, 197, 94, 0.3)' : '0 2px 6px rgba(0,0,0,0.04)',
+                  animation: 'quizSmoothAppear 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+                }}
+              >
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>#{qIdx + 1}: {q.question || 'Question prompt...'}</span>
+                    <span style={{ fontSize: '0.6rem', padding: '1px 6px', background: isFillBlank ? '#fef3c7' : '#e0f2fe', color: isFillBlank ? '#b45309' : '#0284c7', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase' }}>
+                      {isFillBlank ? 'Fill in Blank' : 'MCQ Quiz'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '0.64rem', padding: '2px 6px', background: isTargetTrigger ? '#dcfce7' : '#e0f2fe', color: isTargetTrigger ? '#15803d' : '#0284c7', borderRadius: '4px', fontWeight: 700 }}>
+                      ⏱ Triggers at {pauseSec}s
+                    </span>
+                  </div>
+                </div>
+
+                {isTargetTrigger && !hasAnswered && (
+                  <div style={{ background: '#dcfce7', border: '1px solid #86efac', borderRadius: '6px', padding: '6px 10px', fontSize: '0.72rem', color: '#166534', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>⚡ Question Active! Complete your answer below to resume playback.</span>
+                  </div>
+                )}
+
+                {/* Fill in the Blanks Question Mode */}
+                {isFillBlank ? (() => {
+                  const expectedAns = (q.blankAnswer || q.correctAnswer || '').trim().toLowerCase();
+                  const userTyped = hasAnswered ? String(selectedOptIdx) : (blankInputs[qKey] || '');
+                  const isCorrect = userTyped.trim().toLowerCase() === expectedAns;
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.2rem' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <input
+                          type="text"
+                          disabled={hasAnswered}
+                          placeholder="Type your answer in the blank..."
+                          value={userTyped}
+                          onChange={e => setBlankInputs({ ...blankInputs, [qKey]: e.target.value })}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && !hasAnswered && userTyped.trim()) {
+                              handleSelectOption(qIdx, userTyped.trim());
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            height: '34px',
+                            fontSize: '0.78rem',
+                            borderRadius: '6px',
+                            border: hasAnswered
+                              ? (isCorrect ? '1.5px solid #16a34a' : '1.5px solid #ef4444')
+                              : '1.5px solid #0284c7',
+                            padding: '0 10px',
+                            background: hasAnswered ? (isCorrect ? '#ecfdf5' : '#fef2f2') : '#ffffff',
+                            color: '#1e293b',
+                            fontWeight: 600
+                          }}
+                        />
+                        {!hasAnswered && (
+                          <button
+                            type="button"
+                            onClick={() => handleSelectOption(qIdx, userTyped.trim())}
+                            style={{
+                              background: '#0284c7',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '0 12px',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Submit
+                          </button>
+                        )}
+                      </div>
+                      {hasAnswered && (
+                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: isCorrect ? '#16a34a' : '#ef4444', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {isCorrect ? (
+                            <span>✓ Correct Answer!</span>
+                          ) : (
+                            <span>✗ Incorrect. Expected answer: "<strong>{q.blankAnswer || q.correctAnswer}</strong>"</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })() : (
+                  /* MCQ Options List */
+                  q.options && q.options.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.2rem' }}>
+                      {q.options.map((opt, oIdx) => {
+                        const optText = typeof opt === 'object' ? opt?.text : opt;
+                        const optImg = typeof opt === 'object' && opt?.imageUrl ? resolveUrl(opt.imageUrl) : '';
+                        const isCorrect = (q.correctAnswerIndex ?? q.correctAnswer ?? 0) === oIdx;
+                        const isSelected = selectedOptIdx === oIdx;
+
+                        let borderCol = '#cbd5e1';
+                        let bgCol = '#ffffff';
+                        let textCol = '#1e293b';
+
+                        if (hasAnswered) {
+                          if (isCorrect) {
+                            borderCol = '#16a34a';
+                            bgCol = '#ecfdf5';
+                            textCol = '#15803d';
+                          } else if (isSelected) {
+                            borderCol = '#ef4444';
+                            bgCol = '#fef2f2';
+                            textCol = '#b91c1c';
+                          }
+                        }
+
+                        return (
+                          <div
+                            key={oIdx}
+                            onClick={() => handleSelectOption(qIdx, oIdx)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.6rem',
+                              background: bgCol,
+                              border: `1.5px solid ${borderCol}`,
+                              borderRadius: '8px',
+                              padding: '0.5rem 0.75rem',
+                              fontSize: '0.76rem',
+                              cursor: hasAnswered ? 'default' : 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <span style={{
+                              width: '18px',
+                              height: '18px',
+                              borderRadius: '50%',
+                              border: `1.5px solid ${borderCol}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.65rem',
+                              fontWeight: 'bold',
+                              background: isSelected ? borderCol : 'transparent',
+                              color: isSelected ? '#ffffff' : textCol
+                            }}>
+                              {String.fromCharCode(65 + oIdx)}
+                            </span>
+
+                            {optImg && (
+                              <img src={optImg} alt="" style={{ width: '28px', height: '28px', borderRadius: '4px', objectFit: 'cover' }} />
+                            )}
+
+                            <span style={{ flex: 1, color: textCol, fontWeight: isSelected ? 600 : 400 }}>
+                              {optText}
+                            </span>
+
+                            {hasAnswered && isCorrect && <FiCheckCircle style={{ color: '#16a34a', fontSize: '0.9rem' }} />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const defaultResolveUrl = (url) => {
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
@@ -309,6 +650,8 @@ export default function PreviewCanvasRenderer({
       normType = 'hotspot_explorer';
     } else if (['functional_reading', 'functional reading'].includes(rawType)) {
       normType = 'functional_reading';
+    } else if (['multimedia_reading_assessment', 'multimedia reading assessment', 'multimedia_reading'].includes(rawType)) {
+      normType = 'multimedia_reading_assessment';
     }
     switch (normType) {
       case 'heading':
@@ -1696,6 +2039,64 @@ export default function PreviewCanvasRenderer({
                           <div style={{ fontSize: '0.6rem', fontWeight: 700, color: isNpc ? '#6b21a8' : '#e0f2fe' }}>{speakerName}</div>
                           <div style={{ fontSize: '0.72rem', lineHeight: 1.3 }}>{text}</div>
 
+                          {isNpc && (
+                            <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #f3e8ff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <button
+                                type="button"
+                                title="Click to listen to Speaker A"
+                                onClick={() => {
+                                  const targetUrl = t.audioUrl || t.audio ? (resolveUrl ? resolveUrl(t.audioUrl || t.audio) : defaultResolveUrl(t.audioUrl || t.audio)) : null;
+                                  if (targetUrl) {
+                                    const a = new Audio(targetUrl);
+                                    a.play();
+                                  } else if (text && ('speechSynthesis' in window)) {
+                                    window.speechSynthesis.cancel();
+                                    const utt = new SpeechSynthesisUtterance(text);
+                                    utt.rate = 0.92;
+                                    utt.pitch = 1.08;
+                                    const voices = window.speechSynthesis.getVoices();
+                                    const attractiveVoice = voices.find(v => 
+                                      v.lang.startsWith('en') && (
+                                        v.name.includes('Natural') ||
+                                        v.name.includes('Google US English') ||
+                                        v.name.includes('Google UK English Female') ||
+                                        v.name.includes('Samantha') ||
+                                        v.name.includes('Jenny') ||
+                                        v.name.includes('Zira') ||
+                                        v.name.includes('Ava') ||
+                                        v.name.includes('Karen')
+                                      )
+                                    ) || voices.find(v => v.lang.startsWith('en'));
+                                    if (attractiveVoice) utt.voice = attractiveVoice;
+                                    window.speechSynthesis.speak(utt);
+                                  }
+                                }}
+                                style={{
+                                  background: '#f3e8ff',
+                                  border: '1px solid #d8b4fe',
+                                  borderRadius: '16px',
+                                  padding: '3px 10px',
+                                  color: '#7e22ce',
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  cursor: 'pointer',
+                                  boxShadow: '0 1px 2px rgba(126,34,206,0.1)'
+                                }}
+                              >
+                                <FiVolume2 style={{ fontSize: '0.82rem', color: '#9333ea' }} /> Listen
+                              </button>
+                            </div>
+                          )}
+
+                          {isNpc && (t.audioUrl || t.audio) && (
+                            <div style={{ marginTop: '2px' }}>
+                              <audio src={resolveUrl ? resolveUrl(t.audioUrl || t.audio) : defaultResolveUrl(t.audioUrl || t.audio)} controls style={{ width: '100%', height: '24px' }} />
+                            </div>
+                          )}
+
                           {!isNpc && (block.content?.allowAudioRecord !== false) && (t.allowAudioRecord !== false) && (
                             <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
                               <button
@@ -1832,6 +2233,31 @@ export default function PreviewCanvasRenderer({
             )}
           </div>
         );
+
+      case 'multimedia_reading_assessment':
+        {
+          const mediaType = (block.content?.mediaType || 'audio').toLowerCase();
+          const audioUrl = block.content?.audioUrl || '';
+          const videoUrl = block.content?.videoUrl || '';
+          const questionsList = block.content?.questions || [];
+
+          const resolvedAudio = audioUrl ? resolveUrl(audioUrl) : '';
+          const resolvedVideo = videoUrl ? resolveUrl(videoUrl) : '';
+
+          return (
+            <MultimediaInteractiveQuizPlayer
+              block={block}
+              mediaType={mediaType}
+              resolvedVideo={resolvedVideo}
+              resolvedAudio={resolvedAudio}
+              questionsList={questionsList}
+              previewAnswers={previewAnswers}
+              setPreviewAnswers={setPreviewAnswers}
+              activeScreenId={activeScreenId}
+              resolveUrl={resolveUrl}
+            />
+          );
+        }
 
       case 'audio_mystery':
         {
