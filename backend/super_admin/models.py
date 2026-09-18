@@ -95,6 +95,7 @@ class School(models.Model):
     logo = models.CharField(max_length=255, null=True, blank=True)
     school_code = models.CharField(max_length=50, null=True, blank=True)
     lan_phone = models.CharField(max_length=20, null=True, blank=True)
+    academic_year = models.CharField(max_length=20, default='2026-2027', null=True, blank=True)
     is_active = models.BooleanField(default=True)
     schoolAdminId = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='schools_administered')
     licenseId = models.ForeignKey('License', on_delete=models.SET_NULL, null=True, blank=True, related_name='schools_linked')

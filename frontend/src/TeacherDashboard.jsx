@@ -444,11 +444,11 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const isAnyOverlayOpen = showModal || showClassCrudDetailModal || showStudentCrudDetailModal;
 
   const [studentForm, setStudentForm] = useState({
-    class_id: '', username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: '2025 - 2026', is_active: true
+    class_id: '', username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: '2026-2027', is_active: true
   });
   const [classForm, setClassForm] = useState({
     class_name: '', school: '', grade: '', section: 'A',
-    academic_year: '2025 - 2026', is_active: true
+    academic_year: '2026-2027', is_active: true
   });
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -720,6 +720,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         });
         if (matchedClass) matchedClassId = matchedClass.class_id;
       }
+      const defaultSchoolAcademicYear = schools[0]?.academic_year || '2026-2027';
       setStudentForm(entity ? {
         class_id: matchedClassId,
         username: entity.username || '', password: '',
@@ -727,10 +728,11 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         roll_no: entity.roll_no || '',
         grade: entity.grade ? (entity.grade.startsWith('Grade') ? entity.grade.replace('Grade', 'Class') : entity.grade) : '',
         section: entity.section || '',
-        academic_year: entity.academic_year || '2025 - 2026',
+        academic_year: entity.academic_year || defaultSchoolAcademicYear,
         is_active: entity.is_active !== undefined ? entity.is_active : true
-      } : { class_id: '', username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: '2025 - 2026', is_active: true });
+      } : { class_id: '', username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: defaultSchoolAcademicYear, is_active: true });
     } else if (tab === 'classes') {
+      const defaultSchoolAcademicYear = schools[0]?.academic_year || '2026-2027';
       const extractedSec = entity && entity.class_name && ['A','B','C','D'].includes(entity.class_name.slice(-1).toUpperCase()) ? entity.class_name.slice(-1).toUpperCase() : 'A';
       const defaultGradeId = grades[0]?.id || '';
       const defaultGradeNum = grades[0] ? (grades[0].grade_name.match(/\d+/)?.[0] || '3') : '3';
@@ -739,11 +741,11 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         school: entity.school || (schools[0]?.school_id || ''),
         grade: entity.grade || defaultGradeId,
         section: extractedSec,
-        academic_year: entity.academic_year || '2025 - 2026',
+        academic_year: entity.academic_year || defaultSchoolAcademicYear,
         is_active: entity.is_active !== undefined ? entity.is_active : true
       } : {
         class_name: `Class ${defaultGradeNum}-A`, school: schools[0]?.school_id || '',
-        grade: defaultGradeId, section: 'A', academic_year: '2025 - 2026', is_active: true
+        grade: defaultGradeId, section: 'A', academic_year: defaultSchoolAcademicYear, is_active: true
       });
     }
   };
@@ -2755,8 +2757,12 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </div>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Academic Year *</label>
-                        <input className="sd-form-input" type="text" value={classForm.academic_year}
-                          onChange={e => setClassForm({ ...classForm, academic_year: e.target.value })} required/>
+                        <input className="sd-form-input" type="text" maxLength={9} value={classForm.academic_year || ''}
+                          onChange={e => {
+                            const clean = e.target.value.replace(/\D/g, '').slice(0, 8);
+                            const formatted = clean.length > 4 ? `${clean.slice(0, 4)}-${clean.slice(4)}` : clean;
+                            setClassForm({ ...classForm, academic_year: formatted });
+                          }} placeholder="2026-2027" required/>
                       </div>
                     </div>
                     <label className="sd-checkbox-label">

@@ -162,6 +162,7 @@ class SchoolViewSet(CMSBaseViewSet):
         address = data.get("address", "")
         phone = data.get("phone", "")
         lan_phone = data.get("lan_phone") or data.get("lan") or ""
+        academic_year = data.get("academic_year") or data.get("academicYear") or "2026-2027"
         school_code = data.get("school_code") or ""
         contact_email = data.get("contactEmail") or data.get("email") or ""
         if phone:
@@ -220,6 +221,7 @@ class SchoolViewSet(CMSBaseViewSet):
                 address=address,
                 phone=phone,
                 lan_phone=lan_phone,
+                academic_year=academic_year,
                 email=contact_email,
                 contactEmail=contact_email,
                 is_active=True

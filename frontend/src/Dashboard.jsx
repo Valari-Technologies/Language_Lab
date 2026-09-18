@@ -591,6 +591,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [isAddingSchool, setIsAddingSchool] = useState(false);
   const [newSchoolForm, setNewSchoolForm] = useState({
     school_name: '', school_code: '', phone: '', lan: '', address: '', city: '', state: '', pincode: '',
+    academic_year: '2026-2027',
     admin_name: '', email: '', password: '',
     maxLmsServers: 2, concurrentUsersPerServer: 40, licenseDuration: '1 Year', expiryDate: ''
   });
@@ -1541,6 +1542,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         phone: cleanPhone,
         lan_phone: newSchoolForm.lan || '',
         lan: newSchoolForm.lan || '',
+        academic_year: newSchoolForm.academic_year || '2026-2027',
         contactEmail: newSchoolForm.email || 'school@example.com',
         email: newSchoolForm.email || 'school@example.com',
         logo: '',
@@ -2492,6 +2494,22 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             <label className="sd-form-label">Pincode <span style={{ color: '#ef4444' }}>*</span></label>
                             <input className="sd-form-input" type="text" placeholder="Enter pincode" required
                               value={newSchoolForm.pincode} onChange={e => setNewSchoolForm({ ...newSchoolForm, pincode: e.target.value })} />
+                          </div>
+                          <div className="sd-form-group">
+                            <label className="sd-form-label">Academic Year <span style={{ color: '#ef4444' }}>*</span></label>
+                            <input
+                              className="sd-form-input"
+                              type="text"
+                              maxLength={9}
+                              placeholder="2026-2027"
+                              required
+                              value={newSchoolForm.academic_year || ''}
+                              onChange={e => {
+                                const clean = e.target.value.replace(/\D/g, '').slice(0, 8);
+                                const formatted = clean.length > 4 ? `${clean.slice(0, 4)}-${clean.slice(4)}` : clean;
+                                setNewSchoolForm({ ...newSchoolForm, academic_year: formatted });
+                              }}
+                            />
                           </div>
                           <div className="sd-form-group">
                             <label className="sd-form-label">Phone Number (10 Digits) <span style={{ color: '#ef4444' }}>*</span></label>

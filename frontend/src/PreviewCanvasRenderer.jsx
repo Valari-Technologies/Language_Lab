@@ -1086,10 +1086,19 @@ export default function PreviewCanvasRenderer({
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {leftItems.map((left, pIdx) => {
+                const leftText = typeof left === 'object' ? (left?.text || left?.label || '') : (left || '');
+                const leftImg = typeof left === 'object' ? (left?.imageUrl || left?.image || '') : '';
+                const resolvedLeftImg = leftImg ? (resolveUrl ? resolveUrl(leftImg) : defaultResolveUrl(leftImg)) : '';
                 const selected = dragDropSelections[`${block.id}_${pIdx}`] || '';
+
                 return (
                   <div key={pIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #fbcfe8', fontSize: '0.72rem' }}>
-                    <span style={{ fontWeight: 600, color: '#9d174d' }}>{left}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {resolvedLeftImg && (
+                        <img src={resolvedLeftImg} alt="Left option" style={{ width: '32px', height: '32px', borderRadius: '6px', objectFit: 'cover', border: '1px solid #fbcfe8' }} />
+                      )}
+                      <span style={{ fontWeight: 600, color: '#9d174d' }}>{leftText}</span>
+                    </div>
                     <select
                       value={selected}
                       onChange={(e) => {
@@ -1102,9 +1111,12 @@ export default function PreviewCanvasRenderer({
                       style={{ padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #fbcfe8', fontSize: '0.7rem', color: '#9d174d', outline: 'none' }}
                     >
                       <option value="">Select match...</option>
-                      {rightItems.map((right, idx) => (
-                        <option key={idx} value={right}>{right}</option>
-                      ))}
+                      {rightItems.map((right, idx) => {
+                        const rightText = typeof right === 'object' ? (right?.text || right?.label || '') : (right || '');
+                        return (
+                          <option key={idx} value={rightText}>{rightText}</option>
+                        );
+                      })}
                     </select>
                   </div>
                 );

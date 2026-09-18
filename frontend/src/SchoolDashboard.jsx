@@ -815,9 +815,15 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const initForm = (tab, entity = null) => {
     setErrorMsg('');
     const defaultSchool = getSelectedSchoolId();
+    const matchedSchoolObj = schools.find(s =>
+      String(s.school_id) === String(defaultSchool) ||
+      String(s.school_name).toLowerCase() === String(profileForm.school_name || user?.school_name || '').toLowerCase()
+    ) || schools[0];
+    const defaultSchoolAcademicYear = matchedSchoolObj?.academic_year || '2026-2027';
+
     if (tab === 'teachers') {
       let parsedClasses = [];
-      let academic_year = '2025 - 2026';
+      let academic_year = defaultSchoolAcademicYear;
       if (entity && entity.assigned_class_ids && entity.assigned_class_ids.length > 0) {
         entity.assigned_class_ids.forEach(cid => {
           const clsObj = classes.find(c => Number(c.class_id || c.id) === Number(cid));
@@ -852,10 +858,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         qualification: entity.qualification || '',
         assigned_class_ids: entity.assigned_class_ids || [],
         classes_list: parsedClasses,
-        academic_year
+        academic_year: entity.academic_year || academic_year
       } : { username: '', password: '', email:'', full_name:'', phone_no:'', is_active:true,
             school: defaultSchool, qualification:'', assigned_class_ids: [],
-            classes_list: [], academic_year: '2025 - 2026' });
+            classes_list: [], academic_year: defaultSchoolAcademicYear });
     } else if (tab === 'students') {
       setStudentForm(entity ? {
         username: entity.username || '', password: '', email: entity.email || '',
@@ -863,9 +869,9 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         roll_no: entity.roll_no || '',
         grade: entity.grade ? (entity.grade.startsWith('Grade') ? entity.grade.replace('Grade', 'Class') : entity.grade) : '',
         section: entity.section || '',
-        academic_year: entity.academic_year || '2025 - 2026',
+        academic_year: entity.academic_year || defaultSchoolAcademicYear,
         is_active: entity.is_active !== undefined ? entity.is_active : true
-      } : { username:'', password:'', email:'', full_name:'', roll_no:'', grade:'', section:'', academic_year: '2025 - 2026', is_active:true });
+      } : { username:'', password:'', email:'', full_name:'', roll_no:'', grade:'', section:'', academic_year: defaultSchoolAcademicYear, is_active:true });
     } else if (tab === 'classes') {
       const extractedSec = entity && entity.class_name && ['A','B','C','D'].includes(entity.class_name.slice(-1).toUpperCase()) ? entity.class_name.slice(-1).toUpperCase() : 'A';
       const defaultGradeId = grades[0]?.id || '';
@@ -875,12 +881,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         school: entity.school || defaultSchool,
         grade: entity.grade || defaultGradeId,
         section: extractedSec,
-        academic_year: entity.academic_year || '2025 - 2026',
+        academic_year: entity.academic_year || defaultSchoolAcademicYear,
         is_active: entity.is_active !== undefined ? entity.is_active : true,
         assigned_teacher_ids: entity.assigned_teacher_ids || []
       } : {
         class_name: `Class ${defaultGradeNum}-A`, school: defaultSchool,
-        grade: defaultGradeId, section: 'A', academic_year: '2025 - 2026', is_active: true,
+        grade: defaultGradeId, section: 'A', academic_year: defaultSchoolAcademicYear, is_active: true,
         assigned_teacher_ids: []
       });
     }
@@ -3545,8 +3551,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 1.5fr auto', gap: '1rem', alignItems: 'end', marginBottom: '1.5rem' }}>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Academic Year *</label>
-                        <input className="sd-form-input" type="text" value={teacherForm.academic_year}
-                          onChange={e => setTeacherForm({...teacherForm, academic_year:e.target.value})} placeholder="e.g. 2025 - 2026" required/>
+                        <input className="sd-form-input" type="text" maxLength={9} value={teacherForm.academic_year || ''}
+                          onChange={e => {
+                            const clean = e.target.value.replace(/\D/g, '').slice(0, 8);
+                            const formatted = clean.length > 4 ? `${clean.slice(0, 4)}-${clean.slice(4)}` : clean;
+                            setTeacherForm({...teacherForm, academic_year: formatted});
+                          }} placeholder="2026-2027" required/>
                       </div>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Class</label>
@@ -3754,8 +3764,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </div>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Academic Year *</label>
-                        <input className="sd-form-input" type="text" value={studentForm.academic_year || ''}
-                          onChange={e => setStudentForm({...studentForm, academic_year: e.target.value})} placeholder="e.g. 2025 - 2026" required/>
+                        <input className="sd-form-input" type="text" maxLength={9} value={studentForm.academic_year || ''}
+                          onChange={e => {
+                            const clean = e.target.value.replace(/\D/g, '').slice(0, 8);
+                            const formatted = clean.length > 4 ? `${clean.slice(0, 4)}-${clean.slice(4)}` : clean;
+                            setStudentForm({...studentForm, academic_year: formatted});
+                          }} placeholder="2026-2027" required/>
                       </div>
                     </div>
 
@@ -3823,8 +3837,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </div>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Academic Year *</label>
-                        <input className="sd-form-input" type="text" value={classForm.academic_year}
-                          onChange={e => setClassForm({...classForm, academic_year:e.target.value})} placeholder="e.g. 2026" required/>
+                        <input className="sd-form-input" type="text" maxLength={9} value={classForm.academic_year || ''}
+                          onChange={e => {
+                            const clean = e.target.value.replace(/\D/g, '').slice(0, 8);
+                            const formatted = clean.length > 4 ? `${clean.slice(0, 4)}-${clean.slice(4)}` : clean;
+                            setClassForm({...classForm, academic_year: formatted});
+                          }} placeholder="2026-2027" required/>
                       </div>
                     </div>
 

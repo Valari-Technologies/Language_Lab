@@ -1844,21 +1844,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         setOutcomesText(textStr);
         setIsNewExperience(false);
         if (changeViewToBuilder) {
-          if (data.experience_type === 'ASSESSMENT') {
-            const defaultActivity = (data.activities || []).find(a =>
-              (a.skills && a.skills.some(s => s.name === 'assessment' || s === 'assessment')) ||
-              (a.activity_type === 'ASSESSMENT')
-            );
-            if (defaultActivity) {
-              await loadActivityDetail(defaultActivity.id, 'screen-builder');
-            } else {
-              window.history.pushState({ csView: 'experience-builder' }, '', '/content-studio');
-              setView('experience-builder');
-            }
-          } else {
-            window.history.pushState({ csView: 'experience-builder' }, '', '/content-studio');
-            setView('experience-builder');
-          }
+          window.history.pushState({ csView: 'experience-builder' }, '', '/content-studio');
+          setView('experience-builder');
         }
       } else {
         showFeedback('Failed to load experience details', 'error');
@@ -3229,21 +3216,41 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.25rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                 <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#7c3aed', textTransform: 'uppercase' }}>Column A</span>
-                {(block.content?.leftItems || []).map((left, pIdx) => (
-                  <div key={pIdx} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '0.7rem', fontWeight: 600, color: '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>{left || `Item ${pIdx + 1}`}</span>
-                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#7c3aed' }}></span>
-                  </div>
-                ))}
+                {(block.content?.leftItems || []).map((left, pIdx) => {
+                  const leftText = typeof left === 'object' ? (left?.text || left?.label || '') : (left || '');
+                  const leftImg = typeof left === 'object' ? (left?.imageUrl || left?.image || '') : '';
+                  const resolvedLeftImg = leftImg ? resolveMediaUrl(leftImg) : '';
+
+                  return (
+                    <div key={pIdx} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '0.7rem', fontWeight: 600, color: '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {resolvedLeftImg && (
+                          <img src={resolvedLeftImg} alt="Left" style={{ width: '28px', height: '28px', borderRadius: '4px', objectFit: 'cover' }} />
+                        )}
+                        <span>{leftText || `Item ${pIdx + 1}`}</span>
+                      </div>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#7c3aed' }}></span>
+                    </div>
+                  );
+                })}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                 <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#7c3aed', textTransform: 'uppercase' }}>Column B</span>
-                {(block.content?.rightItems || []).map((right, pIdx) => (
-                  <div key={pIdx} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '0.7rem', fontWeight: 600, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#7c3aed' }}></span>
-                    <span>{right || `Match ${pIdx + 1}`}</span>
-                  </div>
-                ))}
+                {(block.content?.rightItems || []).map((right, pIdx) => {
+                  const rightText = typeof right === 'object' ? (right?.text || right?.label || '') : (right || '');
+                  const rightImg = typeof right === 'object' ? (right?.imageUrl || right?.image || '') : '';
+                  const resolvedRightImg = rightImg ? resolveMediaUrl(rightImg) : '';
+
+                  return (
+                    <div key={pIdx} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '0.7rem', fontWeight: 600, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#7c3aed' }}></span>
+                      {resolvedRightImg && (
+                        <img src={resolvedRightImg} alt="Right" style={{ width: '28px', height: '28px', borderRadius: '4px', objectFit: 'cover' }} />
+                      )}
+                      <span>{rightText || `Match ${pIdx + 1}`}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -9744,8 +9751,116 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                          </div>
                                        )}
 
-                                       {/* BLOCK TYPE: SENTENCE BUILDER */}
-                                       {selectedBlock.type === 'sentence_builder' && (
+                                      {/* BLOCK TYPE: MATCH ITEMS */}
+                                       {selectedBlock.type === 'match' && (
+                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                           <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Match Column Pairs</span>
+                                           <div className="cs-form-group">
+                                             <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question Instruction</label>
+                                             <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
+                                               onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Match left side options with correct right answers" />
+                                           </div>
+                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                                             <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Match Pairs</span>
+                                             <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
+                                               onClick={() => {
+                                                 const leftItems = [...(selectedBlock.content?.leftItems || []), { text: `Item ${(selectedBlock.content?.leftItems || []).length + 1}`, imageUrl: '' }];
+                                                 const rightItems = [...(selectedBlock.content?.rightItems || []), { text: `Match ${(selectedBlock.content?.rightItems || []).length + 1}`, imageUrl: '' }];
+                                                 handleUpdateBlockMultipleContent({ leftItems, rightItems });
+                                               }}>
+                                               + Add Match
+                                             </button>
+                                           </div>
+                                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '350px', overflowY: 'auto' }}>
+                                             {(selectedBlock.content?.leftItems || []).map((left, pIdx) => {
+                                               const leftText = typeof left === 'object' ? (left?.text || left?.label || '') : (left || '');
+                                               const leftImg = typeof left === 'object' ? (left?.imageUrl || left?.image || '') : '';
+                                               const rightItem = (selectedBlock.content?.rightItems || [])[pIdx];
+                                               const rightText = typeof rightItem === 'object' ? (rightItem?.text || rightItem?.label || '') : (rightItem || '');
+                                               const rightImg = typeof rightItem === 'object' ? (rightItem?.imageUrl || rightItem?.image || '') : '';
+
+                                               return (
+                                                 <div key={pIdx} style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                     <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#0284c7' }}>Pair #{pIdx + 1}</span>
+                                                     <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                                                       onClick={() => {
+                                                         const leftItems = (selectedBlock.content.leftItems || []).filter((_, i) => i !== pIdx);
+                                                         const rightItems = (selectedBlock.content.rightItems || []).filter((_, i) => i !== pIdx);
+                                                         handleUpdateBlockMultipleContent({ leftItems, rightItems });
+                                                       }}>
+                                                       <FiTrash2 style={{ fontSize: '0.72rem' }} />
+                                                     </button>
+                                                   </div>
+
+                                                   {/* Left Side (Column A) */}
+                                                   <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                                     <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#475569' }}>Column A (Left Side)</span>
+                                                     <input
+                                                       className="cs-form-input"
+                                                       style={{ height: '24px', fontSize: '0.72rem' }}
+                                                       type="text"
+                                                       placeholder="Column A Text..."
+                                                       value={leftText}
+                                                       onChange={e => {
+                                                         const leftItems = [...(selectedBlock.content?.leftItems || [])];
+                                                         leftItems[pIdx] = { text: e.target.value, imageUrl: leftImg };
+                                                         handleUpdateBlockContent('leftItems', leftItems);
+                                                       }}
+                                                     />
+                                                     <MediaUploadField
+                                                       label="Column A Image (Optional)"
+                                                       value={leftImg}
+                                                       mediaType="image"
+                                                       onChange={url => {
+                                                         const leftItems = [...(selectedBlock.content?.leftItems || [])];
+                                                         leftItems[pIdx] = { text: leftText, imageUrl: url };
+                                                         handleUpdateBlockContent('leftItems', leftItems);
+                                                       }}
+                                                       actionLoading={actionLoading}
+                                                       setActionLoading={setActionLoading}
+                                                       showFeedback={showFeedback}
+                                                     />
+                                                   </div>
+
+                                                   {/* Right Side (Column B) */}
+                                                   <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                                     <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#475569' }}>Column B (Right Side)</span>
+                                                     <input
+                                                       className="cs-form-input"
+                                                       style={{ height: '24px', fontSize: '0.72rem' }}
+                                                       type="text"
+                                                       placeholder="Column B Text..."
+                                                       value={rightText}
+                                                       onChange={e => {
+                                                         const rightItems = [...(selectedBlock.content?.rightItems || [])];
+                                                         rightItems[pIdx] = { text: e.target.value, imageUrl: rightImg };
+                                                         handleUpdateBlockContent('rightItems', rightItems);
+                                                       }}
+                                                     />
+                                                     <MediaUploadField
+                                                       label="Column B Image (Optional)"
+                                                       value={rightImg}
+                                                       mediaType="image"
+                                                       onChange={url => {
+                                                         const rightItems = [...(selectedBlock.content?.rightItems || [])];
+                                                         rightItems[pIdx] = { text: rightText, imageUrl: url };
+                                                         handleUpdateBlockContent('rightItems', rightItems);
+                                                       }}
+                                                       actionLoading={actionLoading}
+                                                       setActionLoading={setActionLoading}
+                                                       showFeedback={showFeedback}
+                                                     />
+                                                   </div>
+                                                 </div>
+                                               );
+                                             })}
+                                           </div>
+                                         </div>
+                                       )}
+
+                                      {/* BLOCK TYPE: SENTENCE BUILDER */}
+                                      {selectedBlock.type === 'sentence_builder' && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Sentence Builder Config</span>
