@@ -2135,12 +2135,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         let fg = '#0284c7';
                         let badgeLabel = 'School';
 
-                        if (act.activity_type.startsWith('school_admin')) {
+                        const actType = act?.activity_type || '';
+                        if (actType.startsWith('school_admin')) {
                           icon = <FiUserCheck />;
                           bg = '#f0fdf4';
                           fg = '#16a34a';
                           badgeLabel = 'School Admin';
-                        } else if (act.activity_type.startsWith('grade')) {
+                        } else if (actType.startsWith('grade')) {
                           icon = <FiLayers />;
                           bg = '#fef3c7';
                           fg = '#d97706';
@@ -5107,12 +5108,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     let fg = '#0284c7';
                     let badgeLabel = 'School';
 
-                    if (act.activity_type.startsWith('school_admin')) {
+                    const actType = act?.activity_type || '';
+                    if (actType.startsWith('school_admin')) {
                       icon = <FiUserCheck />;
                       bg = '#f0fdf4';
                       fg = '#16a34a';
                       badgeLabel = 'School Admin';
-                    } else if (act.activity_type.startsWith('grade')) {
+                    } else if (actType.startsWith('grade')) {
                       icon = <FiLayers />;
                       bg = '#fef3c7';
                       fg = '#d97706';

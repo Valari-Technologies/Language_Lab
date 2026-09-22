@@ -530,7 +530,11 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       if (res.ok) {
         const d = await res.json();
         const allCls = d.results || d;
+        const currentUserId = user?.id || user?.pk || propUser?.id || propUser?.pk;
         const myClasses = allCls.filter(c => {
+          if (Array.isArray(c.assigned_teacher_user_ids) && currentUserId) {
+            return c.assigned_teacher_user_ids.includes(currentUserId);
+          }
           if (!c.teacher_name) return false;
           const tNames = c.teacher_name.split(',').map(n => n.trim().toLowerCase());
           const userFull = (user?.full_name || propUser?.full_name || '').trim().toLowerCase();
