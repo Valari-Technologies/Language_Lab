@@ -1890,7 +1890,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             <div style={{ position: 'relative' }}>
               <button className="sd-icon-btn" style={{ position: 'relative' }} onClick={(e) => { e.stopPropagation(); setShowNotifDropdown(!showNotifDropdown); }}>
                 <FiBell/>
-                {notifications.some(n => !n.read) && (
+                {notifications.some(n => !(n.read || n.is_read)) && (
                   <span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' }} />
                 )}
               </button>
@@ -1904,18 +1904,21 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     {notifications.length === 0 ? (
                       <span style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '10px 0' }}>No new notifications.</span>
                     ) : (
-                      notifications.map(n => (
-                        <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: n.read ? 'transparent' : '#f0fdf4', borderLeft: n.read ? 'none' : '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', textAlign: 'left' }}>
-                           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                             <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
-                             <span style={{ fontSize: '0.75rem', color: '#475569' }}>{n.message || n.text}</span>
-                             <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
-                           </div>
-                           <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); handleDeleteNotification(n.id); }} title="Delete">
-                             <FiX size={14} />
-                           </button>
-                        </div>
-                      ))
+                      notifications.map(n => {
+                        const isRead = n.read !== undefined ? n.read : n.is_read;
+                        return (
+                          <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: isRead ? 'transparent' : '#f0fdf4', borderLeft: isRead ? 'none' : '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', textAlign: 'left' }}>
+                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                               <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: isRead ? 600 : 700 }}>{n.title || 'Notification'}</span>
+                               <span style={{ fontSize: '0.75rem', color: '#475569' }}>{n.message || n.text}</span>
+                               <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || (n.created_at ? new Date(n.created_at).toLocaleTimeString() : '')}</span>
+                             </div>
+                             <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); handleDeleteNotification(n.id); }} title="Delete">
+                               <FiX size={14} />
+                             </button>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                   <div style={{ borderTop: '1px solid #f1f5f9', marginTop: '10px', paddingTop: '8px', textAlign: 'center' }}>
@@ -4668,30 +4671,33 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <span style={{ fontSize: '0.9rem' }}>All caught up! No notifications.</span>
                     </div>
                   ) : (
-                    notifications.map(n => (
-                      <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: n.read ? '#ffffff' : '#f0fdf4', border: `1px solid ${n.read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
-                          <span style={{ fontSize: '0.8rem', color: '#475569' }}>{n.message || n.text}</span>
-                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                          {!n.read && (
-                            <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={async () => {
-                              try {
-                                await apiFetch('/api/v1/dashboard/notifications', { method: 'POST' });
-                                setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true } : item));
-                              } catch (e) { console.error(e); }
-                            }}>
-                              Mark read
+                    notifications.map(n => {
+                      const isRead = n.read !== undefined ? n.read : n.is_read;
+                      return (
+                        <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: isRead ? '#ffffff' : '#f0fdf4', border: `1px solid ${isRead ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: isRead ? 600 : 700 }}>{n.title || 'Notification'}</span>
+                            <span style={{ fontSize: '0.8rem', color: '#475569' }}>{n.message || n.text}</span>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{n.time || (n.created_at ? new Date(n.created_at).toLocaleDateString() : '')}</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            {!isRead && (
+                              <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={async () => {
+                                try {
+                                  await apiFetch('/api/v1/dashboard/notifications', { method: 'POST' });
+                                  setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true, is_read: true } : item));
+                                } catch (e) { console.error(e); }
+                              }}>
+                                Mark read
+                              </button>
+                            )}
+                            <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleDeleteNotification(n.id)} title="Delete">
+                              <FiX size={16} />
                             </button>
-                          )}
-                          <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleDeleteNotification(n.id)} title="Delete">
-                            <FiX size={16} />
-                          </button>
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>

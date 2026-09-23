@@ -605,7 +605,7 @@ class DashboardRecentActivityAPIView(APIView):
         activities = []
 
         if role == "SUPER_ADMIN":
-            from super_admin.models import School, Grade
+            from super_admin.models import School, Grade, ActivityLog
             from accounts.models import User
 
             recent_schools = School.objects.all().order_by("-updated_at")[:15]
@@ -638,6 +638,15 @@ class DashboardRecentActivityAPIView(APIView):
                     "activity_type": act_type,
                     "message": f"Grade '{g.grade_name}' {action_text}.",
                     "timestamp": g.updated_at
+                })
+
+            logs = ActivityLog.objects.all().order_by("-created_at")[:20]
+            for log in logs:
+                activities.append({
+                    "id": f"activity-log-{log.id}",
+                    "activity_type": log.activity_type,
+                    "message": log.message,
+                    "timestamp": log.created_at
                 })
 
         elif role == "CONTENT_CREATOR":
@@ -1335,6 +1344,19 @@ class SuperAdminExperienceViewSet(viewsets.ViewSet):
         experience.review_remark = None
         experience.save(update_fields=["pending_version", "pending_release_notes", "review_remark"])
 
+        # Notify Content Creator
+        if experience.created_by:
+            try:
+                from content_studio.models import Notification
+                Notification.objects.create(
+                    user=experience.created_by,
+                    title="Experience Approved",
+                    message=f"Your lesson '{experience.title}' (Version {result['version']}) has been approved and published.",
+                    notification_type=Notification.NotificationType.INFO,
+                )
+            except Exception as e:
+                print("Failed to create approval notification:", e)
+
         version_obj = result["version_obj"]
         response_data = {
             "message": "Experience approved and package generated successfully.",
@@ -1365,6 +1387,19 @@ class SuperAdminExperienceViewSet(viewsets.ViewSet):
         experience.pending_version = None
         experience.pending_release_notes = None
         experience.save(update_fields=["status", "review_remark", "pending_version", "pending_release_notes"])
+
+        # Notify Content Creator
+        if experience.created_by:
+            try:
+                from content_studio.models import Notification
+                Notification.objects.create(
+                    user=experience.created_by,
+                    title="Experience Rejected",
+                    message=f"Your lesson '{experience.title}' was reviewed and returned with feedback: {remark or 'No remark provided.'}",
+                    notification_type=Notification.NotificationType.WARNING,
+                )
+            except Exception as e:
+                print("Failed to create rejection notification:", e)
 
         return Response(
             {

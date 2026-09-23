@@ -143,10 +143,21 @@ class SchoolViewSet(CMSBaseViewSet):
                 users_to_delete.add(u)
 
         with transaction.atomic():
+            school_name_copy = instance.school_name
             instance.delete()
             for user in users_to_delete:
                 if User.objects.filter(pk=user.pk).exists():
                     user.delete()
+
+            try:
+                from super_admin.models import ActivityLog
+                ActivityLog.objects.create(
+                    activity_type="school_deleted",
+                    message=f"School '{school_name_copy}' was deleted.",
+                    user=request.user if request and request.user and request.user.is_authenticated else None
+                )
+            except Exception as e:
+                print("Failed to create ActivityLog for school deletion:", e)
 
         return Response(
             {"message": "School and associated admin deleted successfully"},
@@ -247,6 +258,7 @@ class SchoolViewSet(CMSBaseViewSet):
                 maxLmsServers=max_servers,
                 concurrentUsersPerServer=concurrent_users,
                 expiryDate=expiry_date,
+                licenseDuration=duration,
                 status=License.Status.ACTIVE
             )
             
@@ -344,19 +356,24 @@ Language Lab Team
                         pass
 
                 if duration or expiry_str:
-                    issue_date = license_obj.issueDate or timezone.now().date()
+                    today = timezone.now().date()
                     if duration == "1 Year":
-                        license_obj.expiryDate = issue_date + timedelta(days=365)
-                        update_fields.append("expiryDate")
+                        license_obj.expiryDate = today + timedelta(days=365)
+                        license_obj.licenseDuration = "1 Year"
+                        update_fields.extend(["expiryDate", "licenseDuration"])
                     elif duration == "2 Years":
-                        license_obj.expiryDate = issue_date + timedelta(days=730)
-                        update_fields.append("expiryDate")
-                    elif expiry_str:
-                        try:
-                            license_obj.expiryDate = timezone.datetime.strptime(expiry_str, "%Y-%m-%d").date()
-                            update_fields.append("expiryDate")
-                        except Exception:
-                            pass
+                        license_obj.expiryDate = today + timedelta(days=730)
+                        license_obj.licenseDuration = "2 Years"
+                        update_fields.extend(["expiryDate", "licenseDuration"])
+                    elif duration == "Custom" or expiry_str:
+                        if expiry_str:
+                            try:
+                                license_obj.expiryDate = timezone.datetime.strptime(expiry_str, "%Y-%m-%d").date()
+                                update_fields.append("expiryDate")
+                            except Exception:
+                                pass
+                        license_obj.licenseDuration = "Custom"
+                        update_fields.append("licenseDuration")
 
                 if update_fields:
                     license_obj.save(update_fields=update_fields)
