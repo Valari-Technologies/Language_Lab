@@ -173,7 +173,7 @@ class ClassSerializer(serializers.ModelSerializer):
         from django.db.models import Q
         from assessments.models import ExperienceAssignment
         assignments = ExperienceAssignment.objects.filter(school=obj.school).filter(
-            Q(class_obj=obj) | Q(grade=obj.grade)
+            Q(class_obj=obj) | Q(class_obj__isnull=True, grade=obj.grade)
         ).values("id", "experience_ref", "experience_title", "assigned_at")
         return list(assignments)
 
@@ -200,6 +200,7 @@ class ClassSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         ret['assigned_teacher_ids'] = list(TeacherClass.objects.filter(class_obj=instance).values_list('teacher_id', flat=True))
+        ret['assigned_teacher_user_ids'] = list(TeacherClass.objects.filter(class_obj=instance).values_list('teacher__user_id', flat=True))
         # Keep full class_name with section (e.g. "Class 3-A")
         name = ret.get("class_name") or ""
         # Ensure section prefix is "Section "

@@ -240,16 +240,29 @@ class TeacherDashboardAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        assigned_teacher_classes = TeacherClass.objects.filter(
+            teacher=teacher,
+            class_obj__is_active=True
+        ).select_related("class_obj")
+
         assigned_classes = list(
-            TeacherClass.objects.filter(teacher=teacher)
-            .select_related("class_obj")
-            .values_list("class_obj__class_name", flat=True)
+            assigned_teacher_classes.values_list("class_obj__class_name", flat=True)
         )
+
+        teacher_grade_ids = list(
+            assigned_teacher_classes.values_list("class_obj__grade_id", flat=True).distinct()
+        )
+
+        from content_studio.models import Experience
+        active_experiences_count = Experience.objects.filter(
+            is_deleted=False,
+            status=Experience.Status.APPROVED,
+            grade_id__in=teacher_grade_ids
+        ).count()
 
         data = {
             "assigned_classes": assigned_classes,
-            # No Teacher<->Experience assignment relationship exists in the schema yet.
-            "active_experiences": 0,
+            "active_experiences": active_experiences_count,
             # No Submission/grading model exists in this codebase yet -- returning an
             # empty/zero value instead of inventing fake numbers.
             "grading_queue_count": 0,

@@ -3,6 +3,7 @@ name: Deploy Docker Setup Branch
 on:
   push:
     branches:
+      - main
       - feature/docker-setup
   workflow_dispatch:
 

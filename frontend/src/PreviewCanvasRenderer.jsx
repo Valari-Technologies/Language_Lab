@@ -1,10 +1,496 @@
 import React from 'react';
 import { 
   FiVolume2, FiImage, FiMonitor, FiFileText, FiEdit2, FiMic, 
-  FiCheckCircle,
+  FiCheckCircle, FiPlay, FiPause,
   FiActivity, FiType, FiGrid, FiHelpCircle, FiUsers
 } from 'react-icons/fi';
 import { API_BASE_URL } from './config';
+
+const getScrambledWords = (wordsList) => {
+  if (!wordsList || wordsList.length <= 1) return wordsList || [];
+  const str = wordsList.join('|');
+  let hash = 0;
+  for (let k = 0; k < str.length; k++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(k);
+    hash |= 0;
+  }
+  const seededRandom = (seed) => {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+  };
+  const shuffled = [...wordsList];
+  let currentSeed = Math.abs(hash) + 1;
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(seededRandom(currentSeed++) * (i + 1));
+    const temp = shuffled[i];
+    shuffled[i] = shuffled[j];
+    shuffled[j] = temp;
+  }
+  if (shuffled.length > 1 && shuffled.every((w, idx) => w === wordsList[idx])) {
+    const temp = shuffled[0];
+    shuffled[0] = shuffled[shuffled.length - 1];
+    shuffled[shuffled.length - 1] = temp;
+  }
+  return shuffled;
+};
+
+const CustomAudioPlayer = ({ src, style = {} }) => {
+  const audioRef = React.useRef(null);
+  const [isPlaying, setIsPlaying] = React.useState(false);
+  const [currentTime, setCurrentTime] = React.useState(0);
+  const [duration, setDuration] = React.useState(0);
+
+  const togglePlay = (e) => {
+    e.stopPropagation();
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime || 0);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration || 0);
+    }
+  };
+
+  const handleSeek = (e) => {
+    e.stopPropagation();
+    const newTime = parseFloat(e.target.value);
+    setCurrentTime(newTime);
+    if (audioRef.current) {
+      audioRef.current.currentTime = newTime;
+    }
+  };
+
+  const formatTime = (secs) => {
+    if (isNaN(secs) || secs < 0) return '0:00';
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  return (
+    <div
+      onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        background: '#ffffff',
+        border: '1px solid #cbd5e1',
+        borderRadius: '8px',
+        padding: '0.4rem 0.6rem',
+        width: '100%',
+        boxSizing: 'border-box',
+        ...style
+      }}
+    >
+      <audio
+        ref={audioRef}
+        src={src}
+        onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={handleLoadedMetadata}
+        onEnded={() => setIsPlaying(false)}
+      />
+
+      <button
+        type="button"
+        onClick={togglePlay}
+        style={{
+          width: '28px',
+          height: '28px',
+          borderRadius: '50%',
+          background: '#0ea5e9',
+          color: '#ffffff',
+          border: 'none',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '0.85rem',
+          flexShrink: 0
+        }}
+      >
+        {isPlaying ? <FiPause /> : <FiPlay style={{ marginLeft: '2px' }} />}
+      </button>
+
+      <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#475569', minWidth: '60px', flexShrink: 0 }}>
+        {formatTime(currentTime)} / {formatTime(duration)}
+      </span>
+
+      <input
+        type="range"
+        min="0"
+        max={duration || 100}
+        step="0.1"
+        value={currentTime}
+        onChange={handleSeek}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          flex: 1,
+          height: '5px',
+          accentColor: '#0ea5e9',
+          cursor: 'pointer'
+        }}
+      />
+    </div>
+  );
+};
+
+const MultimediaInteractiveQuizPlayer = ({
+  block,
+  mediaType,
+  resolvedVideo,
+  resolvedAudio,
+  questionsList,
+  previewAnswers,
+  setPreviewAnswers,
+  activeScreenId,
+  resolveUrl
+}) => {
+  const videoRef = React.useRef(null);
+  const audioRef = React.useRef(null);
+  const [currentTime, setCurrentTime] = React.useState(0);
+  const [triggeredPauseIdx, setTriggeredPauseIdx] = React.useState(null);
+  const [blankInputs, setBlankInputs] = React.useState({});
+  const pausedTimeRef = React.useRef({});
+
+  const handleTimeUpdate = (e) => {
+    const time = e.target.currentTime || 0;
+    setCurrentTime(time);
+
+    questionsList.forEach((q, idx) => {
+      const pauseSec = q.pauseAt !== undefined ? parseFloat(q.pauseAt) : 35;
+      const qKey = `${activeScreenId}_${block.id}_q${idx}`;
+      const isAnswered = previewAnswers[qKey] !== undefined;
+
+      // Allow re-triggering if user seeked backwards
+      if (time < pauseSec - 0.8) {
+        pausedTimeRef.current[idx] = false;
+      }
+
+      if (pauseSec > 0 && time >= pauseSec && !isAnswered && !pausedTimeRef.current[idx]) {
+        pausedTimeRef.current[idx] = true;
+        setTriggeredPauseIdx(idx);
+
+        if (mediaType === 'video' && videoRef.current) {
+          videoRef.current.pause();
+          videoRef.current.currentTime = pauseSec;
+        } else if (mediaType === 'audio' && audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = pauseSec;
+        }
+      }
+    });
+  };
+
+  const handleSelectOption = (qIdx, value) => {
+    const qKey = `${activeScreenId}_${block.id}_q${qIdx}`;
+    const isAnswered = previewAnswers[qKey] !== undefined;
+    if (isAnswered) return;
+
+    setPreviewAnswers(prev => ({ ...prev, [qKey]: value }));
+
+    if (triggeredPauseIdx === qIdx || triggeredPauseIdx !== null) {
+      setTriggeredPauseIdx(null);
+      if (mediaType === 'video' && videoRef.current) {
+        videoRef.current.play().catch(() => {});
+      } else if (mediaType === 'audio' && audioRef.current) {
+        audioRef.current.play().catch(() => {});
+      }
+    }
+  };
+
+  return (
+    <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.85rem', border: '1.5px solid #0284c7', background: '#f0f9ff', borderRadius: '12px', padding: '1rem', boxShadow: '0 4px 12px rgba(2, 132, 199, 0.08)', overflowY: 'auto' }}>
+      <style>{`
+        @keyframes quizSmoothAppear {
+          0% { opacity: 0; transform: translateY(-16px) scale(0.97); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
+      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0369a1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #bae6fd', paddingBottom: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <FiFileText /> Multimedia Reading & Quiz Assessment
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.65rem', padding: '2px 8px', background: '#0284c7', color: '#ffffff', borderRadius: '12px', textTransform: 'uppercase', fontWeight: 700 }}>
+            {mediaType}
+          </span>
+          <span style={{ fontSize: '0.65rem', padding: '2px 8px', background: '#e0f2fe', color: '#0369a1', borderRadius: '12px', fontWeight: 700 }}>
+            ⏱ {Math.floor(currentTime)}s
+          </span>
+        </div>
+      </div>
+
+      {/* Video / Audio Player Section */}
+      {mediaType === 'video' ? (
+        resolvedVideo ? (
+          <div style={{ width: '100%', borderRadius: '10px', overflow: 'hidden', border: '1px solid #7dd3fc', background: '#000000', position: 'relative' }}>
+            <video
+              ref={videoRef}
+              src={resolvedVideo}
+              controls
+              onTimeUpdate={handleTimeUpdate}
+              controlsList="nodownload noplaybackrate noremoteplayback"
+              disablePictureInPicture
+              style={{ width: '100%', maxHeight: '260px', display: 'block', objectFit: 'contain' }}
+            />
+            {triggeredPauseIdx !== null && (
+              <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(239, 68, 68, 0.95)', color: '#ffffff', padding: '4px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px', boxShadow: '0 2px 8px rgba(0,0,0,0.3)', animation: 'pulse 1.5s infinite' }}>
+                <span>⏸ Paused for Quiz Question #{triggeredPauseIdx + 1}</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ width: '100%', height: '100px', border: '1.5px dashed #7dd3fc', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7', fontSize: '0.75rem', background: '#ffffff' }}>
+            No video file configured
+          </div>
+        )
+      ) : (
+        resolvedAudio ? (
+          <div style={{ background: '#ffffff', border: '1px solid #7dd3fc', borderRadius: '8px', padding: '0.6rem 0.8rem', position: 'relative' }}>
+            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0369a1', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>🎵 Listen to Audio Clip:</span>
+              {triggeredPauseIdx !== null && (
+                <span style={{ background: '#ef4444', color: '#ffffff', padding: '2px 8px', borderRadius: '10px', fontSize: '0.62rem', fontWeight: 700 }}>
+                  Paused for Quiz #{triggeredPauseIdx + 1}
+                </span>
+              )}
+            </div>
+            <audio
+              ref={audioRef}
+              src={resolvedAudio}
+              controls
+              onTimeUpdate={handleTimeUpdate}
+              style={{ width: '100%', height: '36px' }}
+            />
+          </div>
+        ) : (
+          <div style={{ width: '100%', height: '80px', border: '1.5px dashed #7dd3fc', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7', fontSize: '0.75rem', background: '#ffffff' }}>
+            No audio file configured
+          </div>
+        )
+      )}
+
+      {/* Interactive Triggered Quiz Section */}
+      {questionsList.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginTop: '0.35rem' }}>
+          <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0369a1', borderBottom: '1px dashed #7dd3fc', paddingBottom: '0.35rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>📝 Interactive Assessment Questions ({questionsList.length}):</span>
+            <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#0284c7' }}>
+              Questions trigger at set video timestamps
+            </span>
+          </div>
+
+          {questionsList.map((q, qIdx) => {
+            const qKey = `${activeScreenId}_${block.id}_q${qIdx}`;
+            const selectedOptIdx = previewAnswers[qKey];
+            const hasAnswered = selectedOptIdx !== undefined;
+            const pauseSec = q.pauseAt !== undefined ? parseFloat(q.pauseAt) : 35;
+            const isTargetTrigger = triggeredPauseIdx === qIdx;
+            const isFillBlank = (q.type || 'mcq') === 'fill_blank';
+
+            // Hide question until video/audio playback reaches target timestamp (or triggered / answered)
+            const shouldShow = pauseSec === 0 || currentTime >= pauseSec || hasAnswered || isTargetTrigger;
+
+            if (!shouldShow) return null;
+
+            return (
+              <div
+                key={q.id || qIdx}
+                style={{
+                  background: isTargetTrigger ? '#f0fdf4' : '#ffffff',
+                  border: isTargetTrigger ? '2px solid #22c55e' : '1.5px solid #bae6fd',
+                  borderRadius: '10px',
+                  padding: '0.85rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.6rem',
+                  boxShadow: isTargetTrigger ? '0 0 16px rgba(34, 197, 94, 0.3)' : '0 2px 6px rgba(0,0,0,0.04)',
+                  animation: 'quizSmoothAppear 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+                }}
+              >
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>#{qIdx + 1}: {q.question || 'Question prompt...'}</span>
+                    <span style={{ fontSize: '0.6rem', padding: '1px 6px', background: isFillBlank ? '#fef3c7' : '#e0f2fe', color: isFillBlank ? '#b45309' : '#0284c7', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase' }}>
+                      {isFillBlank ? 'Fill in Blank' : 'MCQ Quiz'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '0.64rem', padding: '2px 6px', background: isTargetTrigger ? '#dcfce7' : '#e0f2fe', color: isTargetTrigger ? '#15803d' : '#0284c7', borderRadius: '4px', fontWeight: 700 }}>
+                      ⏱ Triggers at {pauseSec}s
+                    </span>
+                  </div>
+                </div>
+
+                {isTargetTrigger && !hasAnswered && (
+                  <div style={{ background: '#dcfce7', border: '1px solid #86efac', borderRadius: '6px', padding: '6px 10px', fontSize: '0.72rem', color: '#166534', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>⚡ Question Active! Complete your answer below to resume playback.</span>
+                  </div>
+                )}
+
+                {/* Fill in the Blanks Question Mode */}
+                {isFillBlank ? (() => {
+                  const expectedAns = (q.blankAnswer || q.correctAnswer || '').trim().toLowerCase();
+                  const userTyped = hasAnswered ? String(selectedOptIdx) : (blankInputs[qKey] || '');
+                  const isCorrect = userTyped.trim().toLowerCase() === expectedAns;
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.2rem' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <input
+                          type="text"
+                          disabled={hasAnswered}
+                          placeholder="Type your answer in the blank..."
+                          value={userTyped}
+                          onChange={e => setBlankInputs({ ...blankInputs, [qKey]: e.target.value })}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && !hasAnswered && userTyped.trim()) {
+                              handleSelectOption(qIdx, userTyped.trim());
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            height: '34px',
+                            fontSize: '0.78rem',
+                            borderRadius: '6px',
+                            border: hasAnswered
+                              ? (isCorrect ? '1.5px solid #16a34a' : '1.5px solid #ef4444')
+                              : '1.5px solid #0284c7',
+                            padding: '0 10px',
+                            background: hasAnswered ? (isCorrect ? '#ecfdf5' : '#fef2f2') : '#ffffff',
+                            color: '#1e293b',
+                            fontWeight: 600
+                          }}
+                        />
+                        {!hasAnswered && (
+                          <button
+                            type="button"
+                            onClick={() => handleSelectOption(qIdx, userTyped.trim())}
+                            style={{
+                              background: '#0284c7',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '0 12px',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Submit
+                          </button>
+                        )}
+                      </div>
+                      {hasAnswered && (
+                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: isCorrect ? '#16a34a' : '#ef4444', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {isCorrect ? (
+                            <span>✓ Correct Answer!</span>
+                          ) : (
+                            <span>✗ Incorrect. Expected answer: "<strong>{q.blankAnswer || q.correctAnswer}</strong>"</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })() : (
+                  /* MCQ Options List */
+                  q.options && q.options.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.2rem' }}>
+                      {q.options.map((opt, oIdx) => {
+                        const optText = typeof opt === 'object' ? opt?.text : opt;
+                        const optImg = typeof opt === 'object' && opt?.imageUrl ? resolveUrl(opt.imageUrl) : '';
+                        const isCorrect = (q.correctAnswerIndex ?? q.correctAnswer ?? 0) === oIdx;
+                        const isSelected = selectedOptIdx === oIdx;
+
+                        let borderCol = '#cbd5e1';
+                        let bgCol = '#ffffff';
+                        let textCol = '#1e293b';
+
+                        if (hasAnswered) {
+                          if (isCorrect) {
+                            borderCol = '#16a34a';
+                            bgCol = '#ecfdf5';
+                            textCol = '#15803d';
+                          } else if (isSelected) {
+                            borderCol = '#ef4444';
+                            bgCol = '#fef2f2';
+                            textCol = '#b91c1c';
+                          }
+                        }
+
+                        return (
+                          <div
+                            key={oIdx}
+                            onClick={() => handleSelectOption(qIdx, oIdx)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.6rem',
+                              background: bgCol,
+                              border: `1.5px solid ${borderCol}`,
+                              borderRadius: '8px',
+                              padding: '0.5rem 0.75rem',
+                              fontSize: '0.76rem',
+                              cursor: hasAnswered ? 'default' : 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <span style={{
+                              width: '18px',
+                              height: '18px',
+                              borderRadius: '50%',
+                              border: `1.5px solid ${borderCol}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.65rem',
+                              fontWeight: 'bold',
+                              background: isSelected ? borderCol : 'transparent',
+                              color: isSelected ? '#ffffff' : textCol
+                            }}>
+                              {String.fromCharCode(65 + oIdx)}
+                            </span>
+
+                            {optImg && (
+                              <img src={optImg} alt="" style={{ width: '28px', height: '28px', borderRadius: '4px', objectFit: 'cover' }} />
+                            )}
+
+                            <span style={{ flex: 1, color: textCol, fontWeight: isSelected ? 600 : 400 }}>
+                              {optText}
+                            </span>
+
+                            {hasAnswered && isCorrect && <FiCheckCircle style={{ color: '#16a34a', fontSize: '0.9rem' }} />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const defaultResolveUrl = (url) => {
   if (!url) return '';
@@ -12,6 +498,126 @@ const defaultResolveUrl = (url) => {
   const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
   const path = url.startsWith('/') ? url : '/' + url;
   return `${base}${path}`;
+};
+
+const HotspotExplorerPreviewBlock = ({ block, resolveUrl }) => {
+  const [activeIdx, setActiveIdx] = React.useState(0);
+  const resolvedImg = resolveUrl ? resolveUrl(block.content?.imageUrl) : defaultResolveUrl(block.content?.imageUrl);
+  const hotspots = block.content?.hotspots || [];
+  const currentIdx = activeIdx < hotspots.length ? activeIdx : 0;
+  const activeHs = hotspots[currentIdx];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f8fafc', borderRadius: '8px', padding: '0.75rem', position: 'relative', overflow: 'hidden', flex: 1, height: '100%', minHeight: 0 }}>
+      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <FiGrid /> Hotspot Explorer
+      </div>
+      {block.content?.imageUrl ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          <div style={{ position: 'relative', width: '100%', height: block.styles?.height || 'auto', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block' }}>
+            <img
+              src={resolvedImg}
+              alt="Hotspot explorer source"
+              style={{
+                width: '100%',
+                height: block.styles?.height && block.styles?.height !== 'auto' ? block.styles.height : 'auto',
+                maxHeight: '450px',
+                objectFit: block.styles?.objectFit || 'cover',
+                display: 'block'
+              }}
+            />
+            {hotspots.map((h, hidx) => {
+              const isActive = hidx === currentIdx;
+              return (
+                <div
+                  key={h.id || hidx}
+                  title={h.name || `Target ${hidx + 1}`}
+                  onClick={() => setActiveIdx(hidx)}
+                  style={{
+                    position: 'absolute',
+                    left: `${(h.x / 400) * 100}%`,
+                    top: `${(h.y / 250) * 100}%`,
+                    width: '26px',
+                    height: '26px',
+                    borderRadius: '50%',
+                    background: isActive
+                      ? 'radial-gradient(circle, #2563eb 0%, #1d4ed8 100%)'
+                      : 'radial-gradient(circle, #ef4444 0%, #dc2626 100%)',
+                    border: isActive ? '3px solid #60a5fa' : '2px solid #ffffff',
+                    boxShadow: isActive
+                      ? '0 0 12px rgba(37, 99, 235, 0.9), 0 2px 6px rgba(0,0,0,0.4)'
+                      : '0 0 10px rgba(239, 68, 68, 0.7), 0 2px 4px rgba(0,0,0,0.3)',
+                    color: '#ffffff',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    transform: 'translate(-50%, -50%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    zIndex: 5,
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {hidx + 1}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Compact Column-Wise Target Name Chips below Image */}
+          {hotspots.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
+              {hotspots.map((hs, idx) => {
+                const isActive = idx === currentIdx;
+                return (
+                  <div
+                    key={hs.id || idx}
+                    onClick={() => setActiveIdx(idx)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      padding: '0.35rem 0.75rem',
+                      background: isActive ? '#eff6ff' : '#ffffff',
+                      border: isActive ? '1.5px solid #3b82f6' : '1px solid #cbd5e1',
+                      borderRadius: '20px',
+                      boxShadow: isActive ? '0 2px 6px rgba(59, 130, 246, 0.2)' : '0 1px 2px rgba(0,0,0,0.05)',
+                      cursor: 'pointer',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      color: isActive ? '#1d4ed8' : '#334155',
+                      transition: 'all 0.18s ease'
+                    }}
+                  >
+                    <span style={{
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '50%',
+                      background: isActive ? '#2563eb' : '#ef4444',
+                      color: '#ffffff',
+                      fontSize: '0.65rem',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      {idx + 1}
+                    </span>
+                    <span>{hs.name || `Target ${idx + 1}`}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', border: '1px dashed #cbd5e1', borderRadius: '6px', color: '#94a3b8', fontSize: '0.7rem' }}>
+          No target explorer image selected
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default function PreviewCanvasRenderer({
@@ -30,14 +636,31 @@ export default function PreviewCanvasRenderer({
   resolveUrl = defaultResolveUrl
 }) {
   const renderSingleBlock = (block) => {
-    switch (block.type) {
+    const rawType = (block.type || '').toLowerCase();
+    let normType = rawType;
+    if (['roleplay_simulation', 'roleplay simulation', 'roleplay', 'role_play', 'dialogue'].includes(rawType)) {
+      normType = 'roleplay_simulation';
+    } else if (['sentence_builder', 'sentence builder'].includes(rawType)) {
+      normType = 'sentence_builder';
+    } else if (['fill_blank', 'fill_blanks', 'fill_in_blanks'].includes(rawType)) {
+      normType = 'fill_blank';
+    } else if (['audio_mystery', 'audio mystery'].includes(rawType)) {
+      normType = 'audio_mystery';
+    } else if (['hotspot_explorer', 'hotspot explorer'].includes(rawType)) {
+      normType = 'hotspot_explorer';
+    } else if (['functional_reading', 'functional reading'].includes(rawType)) {
+      normType = 'functional_reading';
+    } else if (['multimedia_reading_assessment', 'multimedia reading assessment', 'multimedia_reading'].includes(rawType)) {
+      normType = 'multimedia_reading_assessment';
+    }
+    switch (normType) {
       case 'heading':
         return (
           <div style={{ textAlign: (block.styles?.alignment || 'Center').toLowerCase(), marginBottom: '0.5rem', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <span style={{
-              fontFamily: block.styles?.fontFamily || 'Poppins',
+              fontFamily: block.styles?.fontFamily === 'Georgia' ? 'Georgia, serif' : block.styles?.fontFamily === 'Inter' ? "'Inter', sans-serif" : block.styles?.fontFamily === 'Roboto' ? "'Roboto', sans-serif" : block.styles?.fontFamily ? `'${block.styles.fontFamily}', sans-serif` : "'Poppins', sans-serif",
               fontSize: `${(parseInt(block.styles?.fontSize) || 36) * 0.72}px`,
-              fontWeight: block.styles?.fontWeight === 'Bold' ? 800 : block.styles?.fontWeight === 'SemiBold' ? 600 : 400,
+              fontWeight: (block.styles?.fontWeight || '').toLowerCase() === 'bold' || block.styles?.fontWeight === '700' ? 700 : (block.styles?.fontWeight || '').toLowerCase() === 'semibold' || block.styles?.fontWeight === '600' ? 600 : 400,
               color: block.styles?.color || '#1e293b',
               lineHeight: 1.25,
               display: 'inline-block',
@@ -53,9 +676,9 @@ export default function PreviewCanvasRenderer({
         return (
           <div style={{
             textAlign: (block.styles?.alignment || 'Left').toLowerCase(),
-            fontFamily: block.styles?.fontFamily || 'Poppins',
+            fontFamily: block.styles?.fontFamily === 'Georgia' ? 'Georgia, serif' : block.styles?.fontFamily === 'Inter' ? "'Inter', sans-serif" : block.styles?.fontFamily === 'Roboto' ? "'Roboto', sans-serif" : block.styles?.fontFamily ? `'${block.styles.fontFamily}', sans-serif` : "'Poppins', sans-serif",
             fontSize: block.styles?.fontSize || '15px',
-            fontWeight: block.styles?.fontWeight === 'Bold' ? 700 : block.styles?.fontWeight === 'SemiBold' ? 600 : 400,
+            fontWeight: (block.styles?.fontWeight || '').toLowerCase() === 'bold' || block.styles?.fontWeight === '700' ? 700 : (block.styles?.fontWeight || '').toLowerCase() === 'semibold' || block.styles?.fontWeight === '600' ? 600 : 400,
             color: block.styles?.color || '#334155',
             lineHeight: 1.5,
             whiteSpace: 'pre-wrap',
@@ -71,6 +694,10 @@ export default function PreviewCanvasRenderer({
         );
 
       case 'image':
+        const imgBlockAnswerKey = `${activeScreenId}_${block.id}`;
+        const selectedImgAns = previewAnswers[imgBlockAnswerKey];
+        const hasImgSelected = selectedImgAns !== undefined;
+
         return (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', flex: 1, height: block.styles?.height || '100%', width: '100%' }}>
             {block.content?.url ? (
@@ -90,21 +717,86 @@ export default function PreviewCanvasRenderer({
             {block.content?.caption && (
               <span style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic' }}>{block.content.caption}</span>
             )}
+            {block.content?.hasQuestion && (
+              <div style={{ width: '100%', marginTop: '0.5rem', padding: '0.75rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', textAlign: 'left', boxSizing: 'border-box' }}>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', marginBottom: '0.5rem' }}>
+                  {block.content.questionText || 'Answer the question:'}
+                </div>
+                {block.content.questionOptions && block.content.questionOptions.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    {block.content.questionOptions.map((opt, oIdx) => {
+                      const isCorrect = (block.content.correctAnswer || '').trim().toLowerCase() === opt.trim().toLowerCase();
+                      const isSelected = selectedImgAns === opt || selectedImgAns === oIdx;
+
+                      let borderCol = '#cbd5e1';
+                      let bgCol = '#ffffff';
+                      let textCol = '#1e293b';
+
+                      if (hasImgSelected) {
+                        if (isCorrect) {
+                          borderCol = '#16a34a';
+                          bgCol = '#ecfdf5';
+                          textCol = '#15803d';
+                        } else if (isSelected) {
+                          borderCol = '#ef4444';
+                          bgCol = '#fef2f2';
+                          textCol = '#b91c1c';
+                        }
+                      }
+
+                      return (
+                        <div
+                          key={oIdx}
+                          onClick={() => {
+                            if (!hasImgSelected) {
+                              setPreviewAnswers(prev => ({
+                                ...prev,
+                                [imgBlockAnswerKey]: opt
+                              }));
+                            }
+                          }}
+                          style={{
+                            padding: '0.45rem 0.75rem',
+                            borderRadius: '6px',
+                            border: `1.5px solid ${borderCol}`,
+                            background: bgCol,
+                            color: textCol,
+                            fontSize: '0.78rem',
+                            fontWeight: isSelected ? 700 : 500,
+                            cursor: hasImgSelected ? 'default' : 'pointer',
+                            transition: 'all 0.15s ease',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                          }}
+                        >
+                          <span>{opt}</span>
+                          {hasImgSelected && isCorrect && <span style={{ fontSize: '0.72rem', fontWeight: 700 }}>✓ Correct</span>}
+                          {hasImgSelected && isSelected && !isCorrect && <span style={{ fontSize: '0.72rem', fontWeight: 700 }}>✗ Incorrect</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         );
 
       case 'audio':
         return (
-          <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, height: '100%', boxSizing: 'border-box', width: '100%' }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#0ea5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.9rem', flexShrink: 0 }}>
-              <FiVolume2 />
+          <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.6rem', flex: 1, height: '100%', boxSizing: 'border-box', width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#0ea5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1rem', flexShrink: 0 }}>
+                <FiVolume2 />
+              </div>
+              <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0369a1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{block.content?.title || 'Voice Instruction'}</div>
+                <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: 1 }}>{(block.content?.url || block.content?.audio) ? 'Audio track ready' : 'No track attached'}</div>
+              </div>
             </div>
-            <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0369a1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{block.content?.title || 'Voice Instruction'}</div>
-              <div style={{ fontSize: '0.62rem', color: '#64748b', marginTop: 1 }}>{block.content?.url ? 'Audio track attached' : 'No track attached'}</div>
-            </div>
-            {block.content?.url && (
-              <audio src={resolveUrl(block.content.url)} controls style={{ width: '180px', height: '32px', flexShrink: 0 }} />
+            {(block.content?.url || block.content?.audio) && (
+              <CustomAudioPlayer src={resolveUrl(block.content?.url || block.content?.audio)} />
             )}
           </div>
         );
@@ -114,7 +806,7 @@ export default function PreviewCanvasRenderer({
           <div className="video-element-wrapper" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, width: '100%', height: block.styles?.height || '100%' }}>
             {block.content?.url ? (
               <div style={{ width: '100%', height: '100%', flex: 1, borderRadius: '12px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <video src={resolveUrl(block.content.url)} controls style={{ width: '100%', height: '100%', display: 'block', objectFit: block.styles?.objectFit || 'contain' }} />
+                <video src={resolveUrl(block.content.url)} controls controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture onContextMenu={e => e.preventDefault()} style={{ width: '100%', height: '100%', display: 'block', objectFit: block.styles?.objectFit || 'contain' }} />
               </div>
             ) : (
               <div style={{ width: '100%', height: block.styles?.height || '220px', flex: 1, border: '1.5px dashed #cbd5e1', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
@@ -125,163 +817,118 @@ export default function PreviewCanvasRenderer({
           </div>
         );
 
-      case 'dialogue':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', padding: '0.5rem 0' }}>
-            {(block.content?.steps || []).map((st, i) => {
-              const isLeft = st.side !== 'right';
-              return (
-                <div
-                  key={i}
-                  style={{
-                    display: 'flex',
-                    justifyContent: isLeft ? 'flex-start' : 'flex-end',
-                    alignItems: 'flex-start',
-                    gap: '0.65rem',
-                    flexDirection: isLeft ? 'row' : 'row-reverse'
-                  }}
-                >
-                  <div style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    background: st.avatarColor || '#0ea5e9',
-                    color: '#ffffff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 700,
-                    fontSize: '0.8rem',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                    flexShrink: 0
-                  }}>{st.name ? st.name.charAt(0).toUpperCase() : '?'}</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: isLeft ? 'flex-start' : 'flex-end' }}>
-                    <span style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600, marginBottom: '2px', padding: '0 4px' }}>{st.name}</span>
-                    <div style={{
-                      background: isLeft ? '#f1f5f9' : '#0b57d0',
-                      color: isLeft ? '#1e293b' : '#ffffff',
-                      padding: '0.65rem 0.95rem',
-                      borderRadius: isLeft ? '0 12px 12px 12px' : '12px 0 12px 12px',
-                      fontSize: '0.82rem',
-                      lineHeight: 1.45,
-                      maxWidth: '340px',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                      border: isLeft ? '1px solid #e2e8f0' : 'none'
-                    }}>{st.text}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-
       case 'quiz':
-        const blockAnswerKey = `${activeScreenId}_${block.id}`;
-        const selectedAnsIndex = previewAnswers[blockAnswerKey];
-        const hasSelected = selectedAnsIndex !== undefined;
+        {
+          const rawQuestions = block.content?.questions;
+          const questionsList = rawQuestions && rawQuestions.length > 0
+            ? rawQuestions
+            : [{
+                question: block.content?.question || 'Quiz question text label...',
+                options: block.content?.options || ['', '', '', ''],
+                correctAnswerIndex: block.content?.correctAnswerIndex ?? 0
+              }];
 
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', height: '100%', padding: '2px 0' }}>
-            <div style={{ border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.78rem', fontWeight: 600, color: '#c2410c', boxShadow: '0 2px 4px rgba(249,115,22,0.04)' }}>
-              ❓ {block.content?.question || 'Quiz question text label...'}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', height: '100%', justifyContent: 'space-between' }}>
-              {(block.content?.options || ['', '', '', '']).map((opt, oIdx) => {
-                const isCorrectAnswer = parseInt(block.content?.correctAnswerIndex) === oIdx;
-                const isSelected = selectedAnsIndex === oIdx;
-
-                let borderCol = '#cbd5e1';
-                let bgCol = '#ffffff';
-                let textCol = '#1e293b';
-
-                if (hasSelected) {
-                  if (isCorrectAnswer) {
-                    borderCol = '#16a34a';
-                    bgCol = '#ecfdf5';
-                    textCol = '#15803d';
-                  } else if (isSelected) {
-                    borderCol = '#ef4444';
-                    bgCol = '#fef2f2';
-                    textCol = '#b91c1c';
-                  }
-                }
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', height: '100%', padding: '2px 0' }}>
+              {questionsList.map((qObj, qIdx) => {
+                const blockAnswerKey = `${activeScreenId}_${block.id}_q${qIdx}`;
+                const selectedAnsIndex = previewAnswers[blockAnswerKey];
+                const hasSelected = selectedAnsIndex !== undefined;
+                const qText = qObj.question || `Question #${qIdx + 1}`;
+                const options = qObj.options || ['', '', '', ''];
+                const correctIdx = parseInt(qObj.correctAnswerIndex ?? qObj.correctAnswer) || 0;
 
                 return (
-                  <div
-                    key={oIdx}
-                    onClick={() => {
-                      if (!hasSelected) {
-                        setPreviewAnswers(prev => ({
-                          ...prev,
-                          [blockAnswerKey]: oIdx
-                        }));
-                      }
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      background: bgCol,
-                      border: `1.5px solid ${borderCol}`,
-                      borderRadius: '6px',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.72rem',
-                      cursor: hasSelected ? 'default' : 'pointer',
-                      transition: 'all 0.15s',
-                      boxSizing: 'border-box',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
-                    }}
-                  >
-                    <span style={{
-                      width: '14px',
-                      height: '14px',
-                      borderRadius: '50%',
-                      border: '1px solid #cbd5e1',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '0.55rem',
-                      fontWeight: 'bold',
-                      background: isSelected || (hasSelected && isCorrectAnswer) ? borderCol : 'none',
-                      color: isSelected || (hasSelected && isCorrectAnswer) ? '#ffffff' : '#64748b',
-                      borderColor: borderCol
-                    }}>
-                      {String.fromCharCode(65 + oIdx)}
-                    </span>
-                    <span style={{ fontWeight: 600, color: textCol }}>{(typeof opt === 'object' ? opt?.text : opt) || `Quiz Option ${oIdx + 1}`}</span>
+                  <div key={qIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                    <div style={{ border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.78rem', fontWeight: 600, color: '#c2410c', boxShadow: '0 2px 4px rgba(249,115,22,0.04)' }}>
+                      {questionsList.length > 1 ? `#${qIdx + 1}: ` : ''}{qText}
+                    </div>
 
-                    {hasSelected && isCorrectAnswer && (
-                      <span style={{ marginLeft: 'auto', color: '#16a34a', fontSize: '0.58rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                        ✓ Correct Choice
-                      </span>
-                    )}
-                    {hasSelected && isSelected && !isCorrectAnswer && (
-                      <span style={{ marginLeft: 'auto', color: '#ef4444', fontSize: '0.58rem', fontWeight: 'bold' }}>
-                        ✗ Incorrect Choice
-                      </span>
-                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      {options.map((opt, oIdx) => {
+                        const isCorrectAnswer = correctIdx === oIdx;
+                        const isSelected = selectedAnsIndex === oIdx;
+
+                        let borderCol = '#cbd5e1';
+                        let bgCol = '#ffffff';
+                        let textCol = '#1e293b';
+
+                        if (hasSelected) {
+                          if (isCorrectAnswer) {
+                            borderCol = '#16a34a';
+                            bgCol = '#ecfdf5';
+                            textCol = '#15803d';
+                          } else if (isSelected) {
+                            borderCol = '#ef4444';
+                            bgCol = '#fef2f2';
+                            textCol = '#b91c1c';
+                          }
+                        }
+
+                        const optionText = typeof opt === 'object' ? opt?.text : opt;
+
+                        return (
+                          <div
+                            key={oIdx}
+                            onClick={() => {
+                              if (!hasSelected) {
+                                setPreviewAnswers(prev => ({
+                                  ...prev,
+                                  [blockAnswerKey]: oIdx
+                                }));
+                              }
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.5rem',
+                              background: bgCol,
+                              border: `1.5px solid ${borderCol}`,
+                              borderRadius: '6px',
+                              padding: '0.45rem 0.65rem',
+                              fontSize: '0.72rem',
+                              cursor: hasSelected ? 'default' : 'pointer',
+                              transition: 'all 0.15s',
+                              boxSizing: 'border-box',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+                            }}
+                          >
+                            <span style={{
+                              width: '14px',
+                              height: '14px',
+                              borderRadius: '50%',
+                              border: `1px solid ${borderCol}`,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.55rem',
+                              fontWeight: 'bold',
+                              background: hasSelected && isCorrectAnswer ? '#16a34a' : 'none',
+                              color: hasSelected && isCorrectAnswer ? '#ffffff' : textCol
+                            }}>{String.fromCharCode(65 + oIdx)}</span>
+                            <span style={{ color: textCol, fontWeight: isSelected || (hasSelected && isCorrectAnswer) ? 600 : 400 }}>
+                              {optionText || `Option ${oIdx + 1}`}
+                            </span>
+                            {hasSelected && isCorrectAnswer && (
+                              <span style={{ marginLeft: 'auto', color: '#16a34a', fontSize: '0.58rem', fontWeight: 'bold' }}>
+                                ✓ Correct
+                              </span>
+                            )}
+                            {hasSelected && isSelected && !isCorrectAnswer && (
+                              <span style={{ marginLeft: 'auto', color: '#ef4444', fontSize: '0.58rem', fontWeight: 'bold' }}>
+                                ✗ Incorrect
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
             </div>
-
-            {hasSelected && (
-              <button
-                onClick={() => {
-                  setPreviewAnswers(prev => {
-                    const updated = { ...prev };
-                    delete updated[blockAnswerKey];
-                    return updated;
-                  });
-                }}
-                style={{ alignSelf: 'flex-end', border: 'none', background: 'none', color: '#0b57d0', fontSize: '0.65rem', fontWeight: 600, cursor: 'pointer', marginTop: '2px' }}
-              >
-                ↺ Reset Answer Choice
-              </button>
-            )}
-          </div>
-        );
+          );
+        }
 
       case 'voice_recorder':
         const blockRecordKey = `${activeScreenId}_${block.id}`;
@@ -350,9 +997,15 @@ export default function PreviewCanvasRenderer({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {list.map((pair, pIdx) => {
                 const selected = dragDropSelections[`${block.id}_${pair.id || pIdx}`] || '';
+                const pairImg = resolveUrl ? resolveUrl(pair.sourceImage || pair.source_image) : defaultResolveUrl(pair.sourceImage || pair.source_image);
                 return (
                   <div key={pair.id || pIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.72rem' }}>
-                    <span style={{ fontWeight: 600, color: '#1e293b' }}>{pair.source || pair.left}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {pairImg && (
+                        <img src={pairImg} alt="" style={{ width: '20px', height: '20px', borderRadius: '4px', objectFit: 'cover' }} />
+                      )}
+                      <span style={{ fontWeight: 600, color: '#1e293b' }}>{pair.source || pair.left}</span>
+                    </div>
                     <select
                       value={selected}
                       onChange={(e) => {
@@ -433,10 +1086,19 @@ export default function PreviewCanvasRenderer({
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {leftItems.map((left, pIdx) => {
+                const leftText = typeof left === 'object' ? (left?.text || left?.label || '') : (left || '');
+                const leftImg = typeof left === 'object' ? (left?.imageUrl || left?.image || '') : '';
+                const resolvedLeftImg = leftImg ? (resolveUrl ? resolveUrl(leftImg) : defaultResolveUrl(leftImg)) : '';
                 const selected = dragDropSelections[`${block.id}_${pIdx}`] || '';
+
                 return (
                   <div key={pIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #fbcfe8', fontSize: '0.72rem' }}>
-                    <span style={{ fontWeight: 600, color: '#9d174d' }}>{left}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {resolvedLeftImg && (
+                        <img src={resolvedLeftImg} alt="Left option" style={{ width: '32px', height: '32px', borderRadius: '6px', objectFit: 'cover', border: '1px solid #fbcfe8' }} />
+                      )}
+                      <span style={{ fontWeight: 600, color: '#9d174d' }}>{leftText}</span>
+                    </div>
                     <select
                       value={selected}
                       onChange={(e) => {
@@ -449,9 +1111,12 @@ export default function PreviewCanvasRenderer({
                       style={{ padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #fbcfe8', fontSize: '0.7rem', color: '#9d174d', outline: 'none' }}
                     >
                       <option value="">Select match...</option>
-                      {rightItems.map((right, idx) => (
-                        <option key={idx} value={right}>{right}</option>
-                      ))}
+                      {rightItems.map((right, idx) => {
+                        const rightText = typeof right === 'object' ? (right?.text || right?.label || '') : (right || '');
+                        return (
+                          <option key={idx} value={rightText}>{rightText}</option>
+                        );
+                      })}
                     </select>
                   </div>
                 );
@@ -461,23 +1126,90 @@ export default function PreviewCanvasRenderer({
         );
 
       case 'sequence':
-        const items = block.content?.items || [];
-        const seqQuestion = block.content?.question || 'Sort items in correct sequence';
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#92400e' }}>
-              🔢 {seqQuestion}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.25rem' }}>
-              {items.map((item, idx) => (
-                <div key={idx} style={{ background: '#ffffff', border: '1px solid #fef3c7', borderRadius: '6px', padding: '6px 8px', fontSize: '0.72rem', fontWeight: 600, color: '#451a03', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ background: '#fef3c7', color: '#b45309', borderRadius: '4px', padding: '1px 5px', fontSize: '0.62rem', fontWeight: 800 }}>{idx + 1}</span>
-                  <span>{item || `Step description ${idx + 1}`}</span>
+        {
+          const blockSeqKey = `${activeScreenId}_${block.id}`;
+          const originalItems = block.content?.items || [];
+          const seqQuestion = block.content?.question || 'Arrange the items in the correct order.';
+          
+          let activeOrder = previewAnswers[blockSeqKey];
+          if (!activeOrder) {
+            // Shuffle initially so student has to rearrange it
+            activeOrder = [...originalItems];
+          }
+          
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#92400e' }}>
+                  🔢 {seqQuestion}
                 </div>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const shuffled = [...originalItems].sort(() => Math.random() - 0.5);
+                    setPreviewAnswers(prev => ({
+                      ...prev,
+                      [blockSeqKey]: shuffled
+                    }));
+                  }}
+                  style={{ background: 'none', border: '1px solid #b45309', color: '#b45309', borderRadius: '4px', fontSize: '0.62rem', fontWeight: 700, padding: '2px 6px', cursor: 'pointer' }}
+                >
+                  Shuffle Items
+                </button>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.25rem' }}>
+                {activeOrder.map((item, idx) => (
+                  <div key={idx} style={{ background: '#ffffff', border: '1px solid #fef3c7', borderRadius: '6px', padding: '6px 8px', fontSize: '0.72rem', fontWeight: 600, color: '#451a03', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ background: '#fef3c7', color: '#b45309', borderRadius: '4px', padding: '1px 5px', fontSize: '0.62rem', fontWeight: 800 }}>{idx + 1}</span>
+                    <span style={{ flex: 1 }}>{item || `Step description ${idx + 1}`}</span>
+                    
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() => {
+                        const updated = [...activeOrder];
+                        const temp = updated[idx];
+                        updated[idx] = updated[idx - 1];
+                        updated[idx - 1] = temp;
+                        setPreviewAnswers(prev => ({
+                          ...prev,
+                          [blockSeqKey]: updated
+                        }));
+                      }}
+                      style={{ background: 'none', border: 'none', color: idx === 0 ? '#cbd5e1' : '#b45309', cursor: idx === 0 ? 'default' : 'pointer', fontSize: '0.75rem' }}
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === activeOrder.length - 1}
+                      onClick={() => {
+                        const updated = [...activeOrder];
+                        const temp = updated[idx];
+                        updated[idx] = updated[idx + 1];
+                        updated[idx + 1] = temp;
+                        setPreviewAnswers(prev => ({
+                          ...prev,
+                          [blockSeqKey]: updated
+                        }));
+                      }}
+                      style={{ background: 'none', border: 'none', color: idx === activeOrder.length - 1 ? '#cbd5e1' : '#b45309', cursor: idx === activeOrder.length - 1 ? 'default' : 'pointer', fontSize: '0.75rem' }}
+                    >
+                      ▼
+                    </button>
+                  </div>
+                ))}
+              </div>
+              
+              {JSON.stringify(activeOrder) === JSON.stringify(originalItems) && originalItems.length > 0 && (
+                <span style={{ color: '#16a34a', fontSize: '0.68rem', fontWeight: 700, marginTop: '4px', alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  ✓ Correct Order!
+                </span>
+              )}
             </div>
-          </div>
-        );
+          );
+        }
 
       case 'flashcard':
         const cards = block.content?.cards || [];
@@ -487,6 +1219,7 @@ export default function PreviewCanvasRenderer({
             <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '0.5rem', width: '100%' }}>
               {cards.map((card, cIdx) => {
                 const isFlipped = flippedCards[`${block.id}-${cIdx}`];
+                const cardImg = resolveUrl ? resolveUrl(card.imageUrl || card.image) : defaultResolveUrl(card.imageUrl || card.image);
                 return (
                   <div
                     key={card.id || cIdx}
@@ -499,7 +1232,7 @@ export default function PreviewCanvasRenderer({
                     style={{
                       flexShrink: 0,
                       width: '130px',
-                      height: '90px',
+                      height: '95px',
                       background: isFlipped ? '#fdf2f8' : '#ffffff',
                       border: isFlipped ? '2px solid #ec4899' : '1px solid #cbd5e1',
                       borderRadius: '12px',
@@ -511,9 +1244,13 @@ export default function PreviewCanvasRenderer({
                       padding: '0.5rem',
                       textAlign: 'center',
                       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                      transition: 'all 0.2s'
+                      transition: 'all 0.2s',
+                      gap: '4px'
                     }}
                   >
+                    {!isFlipped && cardImg && (
+                      <img src={cardImg} alt="" style={{ width: '28px', height: '24px', borderRadius: '4px', objectFit: 'cover' }} />
+                    )}
                     <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isFlipped ? '#be185d' : '#1e293b' }}>
                       {isFlipped ? card.back : card.front}
                     </span>
@@ -528,163 +1265,428 @@ export default function PreviewCanvasRenderer({
         );
 
       case 'sentence_builder':
-        const sentenceQuestion = block.content?.question || 'Reorder the words to make a correct sentence.';
-        const sentenceWords = block.content?.words || [];
-        const selection = dragDropSelections[block.id] || [];
+        const rawSentencesList = block.content?.sentences;
+        const sentencesList = rawSentencesList && rawSentencesList.length > 0
+          ? rawSentencesList
+          : [{ question: block.content?.question || '', sentence: block.content?.sentence || '', words: block.content?.words || [] }];
 
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#ecfeff', padding: '1rem', borderRadius: '12px', border: '1px solid #a5f3fc', marginTop: '0.5rem' }}>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0891b2' }}>
-              🧩 {sentenceQuestion}
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', background: '#ecfeff', padding: '0.85rem', borderRadius: '12px', border: '1px solid #a5f3fc', flex: 1, overflowY: 'auto' }}>
+            {sentencesList.map((item, sIdx) => {
+              const sentenceQuestion = item.question?.trim();
+              const originalWords = item.words && item.words.length > 0
+                ? item.words
+                : (item.sentence?.trim() ? item.sentence.trim().split(' ').filter(Boolean) : []);
+              const sentenceWords = getScrambledWords(originalWords);
+              const selectionKey = `${block.id}_${sIdx}`;
+              const selection = dragDropSelections[selectionKey] || [];
 
-            <div style={{ minHeight: '38px', padding: '0.5rem', background: '#ffffff', borderRadius: '8px', border: '1.5px dashed #06b6d4', display: 'flex', flexWrap: 'wrap', gap: '0.25rem', alignItems: 'center' }}>
-              {selection.length === 0 ? (
-                <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Click words below...</span>
-              ) : (
-                selection.map((word, wIdx) => (
-                  <button
-                    key={wIdx}
-                    type="button"
-                    onClick={() => {
-                      setDragDropSelections(prev => ({
-                        ...prev,
-                        [block.id]: (prev[block.id] || []).filter((_, idx) => idx !== wIdx)
-                      }));
-                    }}
-                    style={{ background: '#06b6d4', color: '#ffffff', border: 'none', borderRadius: '6px', padding: '2px 8px', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    {word} ×
-                  </button>
-                ))
-              )}
-            </div>
+              return (
+                <div key={sIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', borderBottom: sIdx < sentencesList.length - 1 ? '1px dashed #a5f3fc' : 'none', paddingBottom: sIdx < sentencesList.length - 1 ? '0.75rem' : 0 }}>
+                  {sentenceQuestion && (
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0891b2' }}>
+                      🧩 {sentenceQuestion}
+                    </div>
+                  )}
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-              {sentenceWords.map((word, wIdx) => {
-                const isUsed = selection.includes(word);
-                return (
-                  <button
-                    key={wIdx}
-                    type="button"
-                    disabled={isUsed}
-                    onClick={() => {
-                      setDragDropSelections(prev => ({
-                        ...prev,
-                        [block.id]: [...(prev[block.id] || []), word]
-                      }));
-                    }}
-                    style={{
-                      background: isUsed ? '#e2e8f0' : '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '6px',
-                      padding: '3px 8px',
-                      fontSize: '0.7rem',
-                      fontWeight: 600,
-                      color: isUsed ? '#94a3b8' : '#0891b2',
-                      cursor: isUsed ? 'default' : 'pointer'
-                    }}
-                  >
-                    {word}
-                  </button>
-                );
-              })}
-            </div>
+                  <div style={{ minHeight: '38px', padding: '0.4rem 0.6rem', background: '#ffffff', borderRadius: '8px', border: '1.5px dashed #06b6d4', display: 'flex', flexWrap: 'wrap', gap: '0.25rem', alignItems: 'center' }}>
+                    {selection.length === 0 ? (
+                      <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Click words below...</span>
+                    ) : (
+                      selection.map((word, wIdx) => (
+                        <button
+                          key={wIdx}
+                          type="button"
+                          onClick={() => {
+                            setDragDropSelections(prev => ({
+                              ...prev,
+                              [selectionKey]: (prev[selectionKey] || []).filter((_, idx) => idx !== wIdx)
+                            }));
+                          }}
+                          style={{ background: '#06b6d4', color: '#ffffff', border: 'none', borderRadius: '6px', padding: '2px 8px', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}
+                        >
+                          {word} ×
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                    {sentenceWords.map((word, wIdx) => {
+                      const isUsed = selection.includes(word);
+                      return (
+                        <button
+                          key={wIdx}
+                          type="button"
+                          disabled={isUsed}
+                          onClick={() => {
+                            setDragDropSelections(prev => ({
+                              ...prev,
+                              [selectionKey]: [...(prev[selectionKey] || []), word]
+                            }));
+                          }}
+                          style={{
+                            background: isUsed ? '#e2e8f0' : '#ffffff',
+                            color: isUsed ? '#94a3b8' : '#0891b2',
+                            border: `1px solid ${isUsed ? '#cbd5e1' : '#67e8f9'}`,
+                            borderRadius: '6px',
+                            padding: '3px 9px',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            cursor: isUsed ? 'not-allowed' : 'pointer'
+                          }}
+                        >
+                          {word}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         );
 
       case 'word_search':
-        const wordQuestion = block.content?.question || 'Word Search Puzzle';
-        const grid = [
-          ['L', 'A', 'N', 'G', 'U', 'A', 'G', 'E'],
-          ['E', 'X', 'P', 'E', 'R', 'I', 'E', 'N'],
-          ['A', 'C', 'T', 'I', 'V', 'I', 'T', 'Y'],
-          ['S', 'C', 'R', 'E', 'E', 'N', 'P', 'C']
-        ];
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#faf5ff', padding: '1rem', borderRadius: '12px', border: '1px solid #f3e8ff', marginTop: '0.5rem' }}>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#6b21a8' }}>
-              🔍 {wordQuestion}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '4px', maxWidth: '240px', margin: '0 auto', background: '#f3e8ff', padding: '4px', borderRadius: '8px' }}>
-              {grid.flatMap((row, rIdx) => row.map((char, cIdx) => (
-                <div
-                  key={`${rIdx}-${cIdx}`}
-                  style={{
-                    aspectRatio: '1',
-                    background: '#ffffff',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.68rem',
-                    fontWeight: 800,
-                    color: '#6b21a8',
-                    border: '1px solid #cbd5e1',
-                    cursor: 'pointer'
-                  }}
-                  onClick={(e) => {
-                    const currBg = e.currentTarget.style.backgroundColor;
-                    e.currentTarget.style.backgroundColor = currBg === 'rgb(216, 180, 254)' ? '#ffffff' : '#d8b4fe';
-                  }}
-                >
-                  {char}
+        {
+          const wordQuestion = block.content?.question || 'Word Search Puzzle';
+          const gridSize = block.content?.gridSize || 8;
+          const words = block.content?.words || [];
+
+          // Deterministic seed based on content
+          const seedString = words.join(',') + '_' + gridSize;
+          
+          // Seeded random helper
+          let h = 1779033703 ^ seedString.length;
+          for (let i = 0; i < seedString.length; i++) {
+            h = Math.imul(h ^ seedString.charCodeAt(i), 3432918353);
+            h = (h << 13) | (h >>> 19);
+          }
+          const seededRandom = () => {
+            h = Math.imul(h ^ (h >>> 16), 2246822507);
+            h = Math.imul(h ^ (h >>> 13), 3266489909);
+            return ((h ^= h >>> 16) >>> 0) / 4294967296;
+          };
+
+          // Generate grid deterministically
+          const grid = Array(gridSize).fill(null).map(() => Array(gridSize).fill(''));
+          const directions = [[1, 0], [0, 1]];
+          
+          words.forEach(word => {
+            const cleanWord = word.toUpperCase().replace(/[^A-Z]/g, '');
+            if (!cleanWord) return;
+            
+            let placed = false;
+            let attempts = 0;
+            
+            while (!placed && attempts < 100) {
+              attempts++;
+              const dir = directions[Math.floor(seededRandom() * directions.length)];
+              const dx = dir[0];
+              const dy = dir[1];
+              
+              const startX = Math.floor(seededRandom() * (gridSize - (dx === 1 ? cleanWord.length : 0)));
+              const startY = Math.floor(seededRandom() * (gridSize - (dy === 1 ? cleanWord.length : 0)));
+              
+              let canPlace = true;
+              for (let i = 0; i < cleanWord.length; i++) {
+                const x = startX + i * dx;
+                const y = startY + i * dy;
+                if (grid[y][x] !== '' && grid[y][x] !== cleanWord[i]) {
+                  canPlace = false;
+                  break;
+                }
+              }
+              
+              if (canPlace) {
+                for (let i = 0; i < cleanWord.length; i++) {
+                  const x = startX + i * dx;
+                  const y = startY + i * dy;
+                  grid[y][x] = cleanWord[i];
+                }
+                placed = true;
+              }
+            }
+          });
+          
+          const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+          for (let r = 0; r < gridSize; r++) {
+            for (let c = 0; c < gridSize; c++) {
+              if (grid[r][c] === '') {
+                grid[r][c] = alphabet[Math.floor(seededRandom() * alphabet.length)];
+              }
+            }
+          }
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: 'linear-gradient(135deg, #faf5ff 0%, #eff6ff 100%)', padding: '1rem', borderRadius: '12px', border: '1.5px solid #c7d2fe', marginTop: '0.5rem', boxShadow: '0 4px 12px rgba(99, 102, 241, 0.06)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e0e7ff', paddingBottom: '0.4rem' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#3730a3', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>🔍</span> {wordQuestion}
                 </div>
-              )))}
+                <span style={{ background: '#4f46e5', color: '#ffffff', fontSize: '0.62rem', fontWeight: 700, padding: '2px 8px', borderRadius: '12px' }}>
+                  {words.length} Words to Find
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'center', marginTop: '0.2rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gridSize}, 1fr)`, gap: '4px', width: gridSize > 8 ? '230px' : '190px', maxWidth: '100%', background: '#ffffff', padding: '6px', borderRadius: '10px', border: '1.5px solid #c7d2fe', boxShadow: '0 2px 6px rgba(0,0,0,0.04)', boxSizing: 'border-box' }}>
+                  {grid.flatMap((row, rIdx) => row.map((char, cIdx) => (
+                    <div
+                      key={`${rIdx}-${cIdx}`}
+                      style={{
+                        aspectRatio: '1',
+                        background: '#f5f3ff',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: gridSize > 8 ? '0.58rem' : '0.68rem',
+                        fontWeight: 800,
+                        color: '#3730a3',
+                        border: '1px solid #e0e7ff',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onClick={(e) => {
+                        const currBg = e.currentTarget.style.backgroundColor;
+                        if (currBg === 'rgb(129, 140, 248)' || currBg === '#818cf8') {
+                          e.currentTarget.style.backgroundColor = '#f5f3ff';
+                          e.currentTarget.style.color = '#3730a3';
+                        } else {
+                          e.currentTarget.style.backgroundColor = '#818cf8';
+                          e.currentTarget.style.color = '#ffffff';
+                        }
+                      }}
+                    >
+                      {char}
+                    </div>
+                  )))}
+                </div>
+                
+                <div style={{ flex: '1', minWidth: '120px', background: '#ffffff', border: '1px solid #e0e7ff', borderRadius: '10px', padding: '0.65rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <span style={{ fontSize: '0.64rem', fontWeight: 800, color: '#4338ca', textTransform: 'uppercase', letterSpacing: '0.04em' }}>📋 Hidden Words</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                    {words.map((w, wIdx) => (
+                      <span key={wIdx} style={{ background: '#f5f3ff', border: '1px solid #c7d2fe', borderRadius: '16px', padding: '2px 8px', fontSize: '0.65rem', fontWeight: 700, color: '#4338ca', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#6366f1' }}></span>
+                        {w}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        );
+          );
+        }
 
       case 'reading_passage':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f1f5f9', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiFileText /> Reading Passage: {block.content?.title || 'Passage Title'}
+        {
+          const blockReadKey = `${activeScreenId}_${block.id}_read`;
+          const isRead = !!previewAnswers[blockReadKey];
+          const rawPassages = block.content?.passages;
+          const passages = rawPassages && rawPassages.length > 0
+            ? rawPassages
+            : [{
+                title: block.content?.title || '',
+                passage: block.content?.passage || '',
+                question: block.content?.question || ''
+              }];
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f1f5f9', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%', overflowY: 'auto' }}>
+              {passages.map((p, pIdx) => {
+                const passageText = p.passage || 'Read this text carefully...';
+                return (
+                  <div key={pIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderBottom: pIdx < passages.length - 1 ? '1px dashed #cbd5e1' : 'none', paddingBottom: pIdx < passages.length - 1 ? '0.5rem' : 0 }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FiFileText /> Reading Passage{passages.length > 1 ? ` #${pIdx + 1}` : ''}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#334155', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', whiteSpace: 'pre-wrap', maxHeight: '140px', overflowY: 'auto' }}>
+                      {passageText}
+                    </div>
+                    {p.question && (
+                      <div style={{ fontSize: '0.7rem', color: '#475569', fontStyle: 'italic', background: '#e2e8f0', padding: '4px 8px', borderRadius: '4px' }}>
+                        Question: {p.question}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <button 
+                type="button" 
+                onClick={() => {
+                  setPreviewAnswers(prev => ({
+                    ...prev,
+                    [blockReadKey]: !isRead
+                  }));
+                }}
+                style={{ 
+                  width: 'fit-content', 
+                  padding: '4px 12px', 
+                  borderRadius: '20px', 
+                  background: isRead ? '#d1fae5' : '#10b981', 
+                  color: isRead ? '#065f46' : '#fff', 
+                  border: isRead ? '1px solid #065f46' : 'none', 
+                  fontSize: '0.68rem', 
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  marginTop: '4px'
+                }}
+              >
+                {isRead ? '✓ Read' : 'Mark as Read'}
+              </button>
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#334155', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', whiteSpace: 'pre-wrap', flex: 1, overflowY: 'auto' }}>
-              {block.content?.passage || 'Read this text carefully...'}
-            </div>
-            {block.content?.question && (
-              <div style={{ fontSize: '0.7rem', color: '#475569', fontStyle: 'italic' }}>
-                Question: {block.content?.question}
-              </div>
-            )}
-            <button disabled style={{ width: 'fit-content', padding: '4px 12px', borderRadius: '20px', background: '#10b981', color: '#fff', border: 'none', fontSize: '0.68rem', fontWeight: 600 }}>Mark as Read</button>
-          </div>
-        );
+          );
+        }
 
       case 'writing_prompt':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fdf2f8', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#9d174d', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiEdit2 /> Writing Prompt (Word Count Gate)
+        {
+          const blockWriteKey = `${activeScreenId}_${block.id}`;
+          const currentText = previewAnswers[blockWriteKey] || '';
+          const wordCount = currentText.trim() === '' ? 0 : currentText.trim().split(/\s+/).length;
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fbcfe8', background: '#fdf2f8', borderRadius: '8px', padding: '0.75rem', width: '100%', boxSizing: 'border-box' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#9d174d', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiEdit2 /> Writing Prompt (Word Count Gate)
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>
+                Prompt: {block.content?.prompt || 'Write about your favorite hobby.'}
+              </div>
+              <textarea 
+                placeholder={block.content?.placeholder || 'Start writing here...'} 
+                value={currentText}
+                onChange={e => {
+                  const val = e.target.value;
+                  setPreviewAnswers(prev => ({
+                    ...prev,
+                    [blockWriteKey]: val
+                  }));
+                }}
+                style={{ 
+                  width: '100%', 
+                  height: '80px', 
+                  minHeight: '60px', 
+                  borderRadius: '6px', 
+                  border: '1px solid #cbd5e1', 
+                  padding: '6px', 
+                  fontSize: '0.72rem', 
+                  background: '#ffffff', 
+                  resize: 'vertical',
+                  boxSizing: 'border-box' 
+                }} 
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#9d174d', fontWeight: 600 }}>
+                <span>Minimum word count: {block.content?.minWords || 10} words</span>
+                <span>{wordCount} words</span>
+              </div>
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>
-              Prompt: {block.content?.prompt || 'Write about your favorite hobby.'}
-            </div>
-            <textarea disabled placeholder={block.content?.placeholder || 'Start writing here...'} style={{ width: '100%', flex: 1, height: '100%', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '6px', fontSize: '0.72rem', background: '#f8fafc', resize: 'none' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#9d174d', fontWeight: 600 }}>
-              <span>Minimum word count: {block.content?.minWords || 10} words</span>
-              <span>0 words</span>
-            </div>
-          </div>
-        );
+          );
+        }
 
       case 'dictation':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiVolume2 /> Dictation (Listening Module)
+        {
+          const rawItems = block.content?.items;
+          const items = Array.isArray(rawItems) && rawItems.length > 0
+            ? rawItems
+            : [{ id: 'dict-1', audioUrl: block.content?.url || block.content?.audioUrl || '', text: block.content?.text || block.content?.targetText || '' }];
+          const responseType = block.content?.responseType || (block.content?.options && block.content.options.length > 0 ? 'quiz' : 'text');
+          const isQuizMode = responseType === 'quiz';
+          const quizOptions = isQuizMode ? (block.content?.options || []) : [];
+          const correctIdx = parseInt(block.content?.correctAnswerIndex ?? block.content?.correctAnswer) || 0;
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.85rem', flex: 1, height: '100%', boxSizing: 'border-box', overflowY: 'auto' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiVolume2 style={{ fontSize: '1rem' }} /> Dictation Exercise
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#1e293b', background: '#ffffff', padding: '0.45rem 0.65rem', borderRadius: '6px', border: '1px solid #93c5fd' }}>
+                <strong>Instruction:</strong> {block.content?.question || (isQuizMode ? 'Listen carefully and select the correct answer option.' : 'Listen carefully to the audio and type exactly what you hear.')}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {items.map((item, idx) => {
+                  const dictKey = `${activeScreenId}_${block.id}_${item.id || idx}`;
+                  const userVal = previewAnswers[dictKey] !== undefined ? previewAnswers[dictKey] : (idx === 0 && items.length === 1 ? (previewAnswers[`${activeScreenId}_${block.id}`] || '') : '');
+                  const audioSrc = item.audioUrl || item.url;
+
+                  return (
+                    <div key={item.id || idx} style={{ background: '#ffffff', padding: '0.6rem', borderRadius: '8px', border: '1px solid #93c5fd', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#1d4ed8' }}>🎵 Dictation Track #{idx + 1}</div>
+                      {audioSrc ? (
+                        <CustomAudioPlayer src={resolveUrl(audioSrc)} />
+                      ) : (
+                        <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontStyle: 'italic' }}>No audio file configured for track #{idx + 1}.</div>
+                      )}
+
+                      {quizOptions.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '4px' }}>
+                          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e40af' }}>Select Correct Answer:</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.4rem' }}>
+                            {quizOptions.map((opt, oIdx) => {
+                              const isSelected = userVal === oIdx || userVal === String(oIdx);
+                              const isCorrect = oIdx === correctIdx;
+                              let bg = '#ffffff';
+                              let border = '1px solid #94a3b8';
+                              let color = '#334155';
+
+                              if (userVal !== undefined && userVal !== '') {
+                                if (isSelected) {
+                                  bg = isCorrect ? '#dcfce7' : '#fee2e2';
+                                  border = isCorrect ? '2px solid #22c55e' : '2px solid #ef4444';
+                                  color = isCorrect ? '#15803d' : '#991b1b';
+                                } else if (isCorrect) {
+                                  bg = '#f0fdf4';
+                                  border = '1.5px dashed #22c55e';
+                                  color = '#166534';
+                                }
+                              }
+
+                              const optText = typeof opt === 'object' ? opt?.text || '' : opt;
+                              return (
+                                <button
+                                  key={oIdx}
+                                  type="button"
+                                  onClick={() => setPreviewAnswers(prev => ({ ...prev, [dictKey]: oIdx }))}
+                                  style={{
+                                    padding: '0.45rem 0.6rem',
+                                    borderRadius: '6px',
+                                    border,
+                                    background: bg,
+                                    color,
+                                    fontSize: '0.75rem',
+                                    fontWeight: isSelected ? 700 : 500,
+                                    cursor: 'pointer',
+                                    textAlign: 'left',
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                >
+                                  <strong>{String.fromCharCode(65 + oIdx)}.</strong> {optText}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          className="cs-form-input"
+                          placeholder="Type the dictation here..."
+                          value={userVal}
+                          onChange={e => setPreviewAnswers(prev => ({ ...prev, [dictKey]: e.target.value }))}
+                          style={{ width: '100%', height: '34px', borderRadius: '6px', border: '1px solid #94a3b8', padding: '0 10px', fontSize: '0.78rem', background: '#ffffff' }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#475569' }}>
-              <strong>Prompt/Question:</strong> {block.content?.question || 'Listen and type what you hear.'}
-            </div>
-            <div style={{ fontSize: '0.68rem', color: '#64748b', fontStyle: 'italic', wordBreak: 'break-all' }}>
-              Audio Source: {block.content?.url || '(No audio file selected)'}
-            </div>
-            <input type="text" disabled placeholder="User types response here..." style={{ width: '100%', height: '30px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 8px', fontSize: '0.72rem', background: '#f8fafc' }} />
-          </div>
-        );
+          );
+        }
 
       case 'grammar_correction':
         return (
@@ -712,16 +1714,30 @@ export default function PreviewCanvasRenderer({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {pronItems.map((item, itemIdx) => (
-                  <div key={item.id || itemIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '6px', padding: '0.4rem 0.6rem' }}>
-                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b' }}>
-                      Word: {item.word || 'Hello'}
+                  <div key={item.id || itemIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '6px', padding: '0.45rem 0.65rem' }}>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ color: '#b45309', fontWeight: 800 }}>{itemIdx + 1}.</span>
+                      <span>{item.word || `Word ${itemIdx + 1}`}</span>
                     </div>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span>Phonetic: {item.phonetic || '/həˈloʊ/'}</span>
-                      <button type="button" style={{ background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '4px', padding: '2px 6px', fontSize: '0.65rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                        <FiMic size={10} /> Speak
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        background: '#f59e0b',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '16px',
+                        padding: '4px 10px',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        boxShadow: '0 1px 3px rgba(245, 158, 11, 0.3)'
+                      }}
+                    >
+                      <FiMic style={{ fontSize: '0.8rem' }} /> Record
+                    </button>
                   </div>
                 ))}
               </div>
@@ -755,115 +1771,174 @@ export default function PreviewCanvasRenderer({
 
       case 'input':
         {
-          const inputPlaceholder = block.content?.placeholder || 'Type your answer here...';
+          const inputPlaceholder = block.content?.placeholder || 'Type your response here...';
+          const isTextArea = block.content?.inputType === 'textarea';
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '8px', padding: '0.75rem', marginTop: '0.5rem' }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FiType /> Text Input Area
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.85rem',
+              border: '1.5px solid #60a5fa',
+              background: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)',
+              borderRadius: '12px',
+              padding: '1.1rem',
+              marginTop: '0.5rem',
+              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.08)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '26px',
+                    height: '26px',
+                    borderRadius: '7px',
+                    background: '#2563eb',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.85rem'
+                  }}>
+                    <FiType />
+                  </div>
+                  <span>{block.content?.label || block.content?.question || 'Text Input Field'}</span>
+                </div>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#3b82f6', background: '#dbeafe', padding: '2px 8px', borderRadius: '12px' }}>
+                  {isTextArea ? 'Multi-line Text' : 'Single Line Input'}
+                </span>
               </div>
-              <input 
-                type="text" 
-                placeholder={inputPlaceholder} 
-                value={previewAnswers[block.id] || ''}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setPreviewAnswers(prev => ({ ...prev, [block.id]: val }));
-                }}
-                style={{ width: '100%', height: '36px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 8px', fontSize: '0.75rem', background: '#ffffff' }} 
-              />
+
+              {block.content?.prompt && (
+                <div style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.45, fontWeight: 500 }}>
+                  {block.content.prompt}
+                </div>
+              )}
+
+              <div style={{ position: 'relative', width: '100%' }}>
+                {isTextArea ? (
+                  <textarea
+                    placeholder={inputPlaceholder}
+                    rows={block.content?.rows || 3}
+                    value={previewAnswers[block.id] || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPreviewAnswers(prev => ({ ...prev, [block.id]: val }));
+                    }}
+                    style={{
+                      width: '100%',
+                      borderRadius: '8px',
+                      border: '1.5px solid #cbd5e1',
+                      padding: '10px 12px',
+                      fontSize: '0.78rem',
+                      background: '#ffffff',
+                      color: '#0f172a',
+                      outline: 'none',
+                      resize: 'none',
+                      fontFamily: 'inherit',
+                      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.04)'
+                    }}
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    placeholder={inputPlaceholder}
+                    value={previewAnswers[block.id] || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPreviewAnswers(prev => ({ ...prev, [block.id]: val }));
+                    }}
+                    style={{
+                      width: '100%',
+                      height: '38px',
+                      borderRadius: '8px',
+                      border: '1.5px solid #cbd5e1',
+                      padding: '0 12px',
+                      fontSize: '0.78rem',
+                      background: '#ffffff',
+                      color: '#0f172a',
+                      outline: 'none',
+                      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.04)'
+                    }}
+                  />
+                )}
+              </div>
+
+              {block.content?.maxLength && (
+                <div style={{ textAlign: 'right', fontSize: '0.7rem', color: '#64748b' }}>
+                  Max characters: <strong>{block.content.maxLength}</strong>
+                </div>
+              )}
             </div>
           );
         }
 
-      case 'memory':
-        {
-          const memoryCards = block.content?.cards || ['Card 1', 'Match 1', 'Card 2', 'Match 2'];
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #e0e7ff', background: '#f5f3ff', borderRadius: '8px', padding: '0.75rem', marginTop: '0.5rem' }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#4f46e5', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FiGrid /> Memory matching game
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.35rem' }}>
-                {memoryCards.map((card, idx) => {
-                  const isFlipped = flippedCards[`${block.id}-${idx}`];
-                  return (
-                    <div 
-                      key={idx} 
-                      onClick={() => {
-                        setFlippedCards(prev => ({ ...prev, [`${block.id}-${idx}`]: !prev[`${block.id}-${idx}`] }));
-                      }}
-                      style={{ 
-                        height: '50px', 
-                        background: isFlipped ? '#e0e7ff' : '#fff', 
-                        borderRadius: '6px', 
-                        border: '1px solid #cbd5e1', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        fontSize: '0.7rem', 
-                        fontWeight: 700, 
-                        color: '#4f46e5',
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                        padding: '2px'
-                      }}
-                    >
-                      {isFlipped ? card : '?'}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        }
 
       case 'true_false':
         {
-          const tfQuestion = block.content?.question || 'Is this statement true?';
-          const tfSelection = previewAnswers[block.id];
+          const rawStatements = block.content?.statements;
+          const statements = rawStatements && rawStatements.length > 0
+            ? rawStatements
+            : [{ question: block.content?.question || 'Is this statement true?', correctAnswer: block.content?.correctAnswer !== undefined ? block.content.correctAnswer : true }];
+          const userAnswers = previewAnswers[block.id] || {};
+
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '8px', padding: '0.75rem', marginTop: '0.5rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', border: '1px solid #fed7aa', background: '#fff7ed', borderRadius: '8px', padding: '0.75rem', marginTop: '0.5rem' }}>
               <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#c2410c', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FiCheckCircle /> True / False question
+                <FiCheckCircle /> True / False Challenge ({statements.length} Statement{statements.length > 1 ? 's' : ''})
               </div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>
-                {tfQuestion}
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button 
-                  type="button"
-                  onClick={() => setPreviewAnswers(prev => ({ ...prev, [block.id]: 'true' }))}
-                  style={{ 
-                    flex: 1, 
-                    padding: '6px', 
-                    borderRadius: '6px', 
-                    border: tfSelection === 'true' ? '1.5px solid #16a34a' : '1px solid #cbd5e1', 
-                    background: tfSelection === 'true' ? '#dcfce7' : '#fff', 
-                    color: tfSelection === 'true' ? '#16a34a' : '#64748b', 
-                    fontSize: '0.68rem', 
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  True
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setPreviewAnswers(prev => ({ ...prev, [block.id]: 'false' }))}
-                  style={{ 
-                    flex: 1, 
-                    padding: '6px', 
-                    borderRadius: '6px', 
-                    border: tfSelection === 'false' ? '1.5px solid #16a34a' : '1px solid #cbd5e1', 
-                    background: tfSelection === 'false' ? '#dcfce7' : '#fff', 
-                    color: tfSelection === 'false' ? '#16a34a' : '#64748b', 
-                    fontSize: '0.68rem', 
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  False
-                </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                {statements.map((stmt, sIdx) => {
+                  const currentSel = userAnswers[sIdx];
+                  return (
+                    <div key={sIdx} style={{ background: '#ffffff', border: '1px solid #ffedd5', borderRadius: '6px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#334155' }}>
+                        <span style={{ fontWeight: 700, color: '#ea580c', marginRight: '4px' }}>#{sIdx + 1}:</span>
+                        {stmt.question || 'Is this statement true?'}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewAnswers(prev => ({
+                            ...prev,
+                            [block.id]: { ...(prev[block.id] || {}), [sIdx]: true }
+                          }))}
+                          style={{
+                            flex: 1,
+                            padding: '6px',
+                            borderRadius: '6px',
+                            border: currentSel === true ? '1.5px solid #16a34a' : '1px solid #cbd5e1',
+                            background: currentSel === true ? '#dcfce7' : '#fff',
+                            color: currentSel === true ? '#16a34a' : '#64748b',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          True
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewAnswers(prev => ({
+                            ...prev,
+                            [block.id]: { ...(prev[block.id] || {}), [sIdx]: false }
+                          }))}
+                          style={{
+                            flex: 1,
+                            padding: '6px',
+                            borderRadius: '6px',
+                            border: currentSel === false ? '1.5px solid #16a34a' : '1px solid #cbd5e1',
+                            background: currentSel === false ? '#dcfce7' : '#fff',
+                            color: currentSel === false ? '#16a34a' : '#64748b',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          False
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
@@ -880,106 +1955,479 @@ export default function PreviewCanvasRenderer({
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.68rem', color: '#64748b' }}>
               <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: block.content?.recordingRequired ? '#10b981' : '#ef4444' }}></span>
-              Recording Required | Max Duration: {block.content?.maxDuration || 60}s
+              Recording Required | Max Duration: {block.content?.maxDuration || 10}s
             </div>
           </div>
         );
 
       case 'roleplay_simulation':
-        return (
-          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #c084fc', background: '#faf5ff', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#6b21a8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiUsers /> Roleplay Simulation
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-              <strong>Scenario:</strong> {block.content?.scenario || 'Scenario details...'}
-            </div>
-            <div style={{ fontSize: '0.7rem', border: '1px dashed #d8b4fe', padding: '6px', borderRadius: '6px', background: '#fff' }}>
-              <strong>NPC speaker:</strong> {block.content?.npcCharacter || 'NPC'}
-              <div style={{ fontSize: '0.66rem', color: '#475569', marginTop: '2px' }}>
-                Conversation contains {(block.content?.conversation || []).length} turns.
+        {
+          const npcName = block.content?.npcCharacter || 'NPC';
+          const userRole = block.content?.userRole || 'Student';
+          const npcAvatarRaw = block.content?.npcImage || block.content?.npcAvatarUrl || block.content?.speakerAAvatarUrl;
+          const studentAvatarRaw = block.content?.userAvatarUrl || block.content?.speakerBAvatarUrl;
+          const npcAvatarUrl = resolveUrl ? resolveUrl(npcAvatarRaw) : defaultResolveUrl(npcAvatarRaw);
+          const studentAvatarUrl = resolveUrl ? resolveUrl(studentAvatarRaw) : defaultResolveUrl(studentAvatarRaw);
+          const turns = block.content?.conversation || [];
+
+          return (
+            <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.65rem', border: '1px solid #c084fc', background: '#faf5ff', borderRadius: '8px', padding: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#6b21a8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <FiUsers /> Roleplay Simulation
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {npcAvatarUrl && (
+                    <img
+                      src={npcAvatarUrl}
+                      alt={npcName}
+                      title={`NPC: ${npcName}`}
+                      style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #a855f7' }}
+                    />
+                  )}
+                  {studentAvatarUrl && (
+                    <img
+                      src={studentAvatarUrl}
+                      alt={userRole}
+                      title={`Student: ${userRole}`}
+                      style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #3b82f6' }}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {block.content?.scenario && (
+                <div style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic' }}>
+                  <strong>Scenario:</strong> {block.content.scenario}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
+                {turns.length > 0 ? (
+                  turns.map((t, tIdx) => {
+                    const isNpc = t.speaker === 'npc' || t.speaker === 'NPC Speaker' || !t.speaker;
+                    const speakerName = isNpc ? npcName : userRole;
+                    const text = t.text || t.prompt || '(No dialogue provided)';
+                    const currentAvatar = isNpc ? npcAvatarUrl : studentAvatarUrl;
+
+                    return (
+                      <div
+                        key={tIdx}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          justifyContent: isNpc ? 'flex-start' : 'flex-end',
+                          gap: '0.5rem',
+                          alignSelf: isNpc ? 'flex-start' : 'flex-end',
+                          maxWidth: '85%'
+                        }}
+                      >
+                        {isNpc && (
+                          currentAvatar ? (
+                            <img
+                              src={currentAvatar}
+                              alt={speakerName}
+                              style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, marginTop: '2px' }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: '0.6rem', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', background: '#e9d5ff', color: '#6b21a8', flexShrink: 0 }}>
+                              {speakerName}
+                            </span>
+                          )
+                        )}
+
+                        <div style={{
+                          background: isNpc ? '#ffffff' : '#3b82f6',
+                          color: isNpc ? '#1e293b' : '#ffffff',
+                          border: isNpc ? '1px solid #e9d5ff' : 'none',
+                          borderRadius: isNpc ? '10px 10px 10px 2px' : '10px 10px 2px 10px',
+                          padding: '0.45rem 0.65rem',
+                          textAlign: isNpc ? 'left' : 'right',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px'
+                        }}>
+                          <div style={{ fontSize: '0.6rem', fontWeight: 700, color: isNpc ? '#6b21a8' : '#e0f2fe' }}>{speakerName}</div>
+                          <div style={{ fontSize: '0.72rem', lineHeight: 1.3 }}>{text}</div>
+
+                          {isNpc && (
+                            <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #f3e8ff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <button
+                                type="button"
+                                title="Click to listen to Speaker A"
+                                onClick={() => {
+                                  const targetUrl = t.audioUrl || t.audio ? (resolveUrl ? resolveUrl(t.audioUrl || t.audio) : defaultResolveUrl(t.audioUrl || t.audio)) : null;
+                                  if (targetUrl) {
+                                    const a = new Audio(targetUrl);
+                                    a.play();
+                                  } else if (text && ('speechSynthesis' in window)) {
+                                    window.speechSynthesis.cancel();
+                                    const utt = new SpeechSynthesisUtterance(text);
+                                    utt.rate = 0.92;
+                                    utt.pitch = 1.08;
+                                    const voices = window.speechSynthesis.getVoices();
+                                    const attractiveVoice = voices.find(v => 
+                                      v.lang.startsWith('en') && (
+                                        v.name.includes('Natural') ||
+                                        v.name.includes('Google US English') ||
+                                        v.name.includes('Google UK English Female') ||
+                                        v.name.includes('Samantha') ||
+                                        v.name.includes('Jenny') ||
+                                        v.name.includes('Zira') ||
+                                        v.name.includes('Ava') ||
+                                        v.name.includes('Karen')
+                                      )
+                                    ) || voices.find(v => v.lang.startsWith('en'));
+                                    if (attractiveVoice) utt.voice = attractiveVoice;
+                                    window.speechSynthesis.speak(utt);
+                                  }
+                                }}
+                                style={{
+                                  background: '#f3e8ff',
+                                  border: '1px solid #d8b4fe',
+                                  borderRadius: '16px',
+                                  padding: '3px 10px',
+                                  color: '#7e22ce',
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  cursor: 'pointer',
+                                  boxShadow: '0 1px 2px rgba(126,34,206,0.1)'
+                                }}
+                              >
+                                <FiVolume2 style={{ fontSize: '0.82rem', color: '#9333ea' }} /> Listen
+                              </button>
+                            </div>
+                          )}
+
+                          {isNpc && (t.audioUrl || t.audio) && (
+                            <div style={{ marginTop: '2px' }}>
+                              <audio src={resolveUrl ? resolveUrl(t.audioUrl || t.audio) : defaultResolveUrl(t.audioUrl || t.audio)} controls style={{ width: '100%', height: '24px' }} />
+                            </div>
+                          )}
+
+                          {!isNpc && (block.content?.allowAudioRecord !== false) && (t.allowAudioRecord !== false) && (
+                            <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                              <button
+                                type="button"
+                                style={{
+                                  background: 'rgba(255,255,255,0.25)',
+                                  border: 'none',
+                                  borderRadius: '12px',
+                                  padding: '2px 8px',
+                                  color: '#ffffff',
+                                  fontSize: '0.62rem',
+                                  fontWeight: 700,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <FiMic style={{ fontSize: '0.7rem' }} /> Record Answer
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {!isNpc && (
+                          currentAvatar ? (
+                            <img
+                              src={currentAvatar}
+                              alt={speakerName}
+                              style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, marginTop: '2px' }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: '0.6rem', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', background: '#3b82f6', color: '#ffffff', flexShrink: 0 }}>
+                              {speakerName}
+                            </span>
+                          )
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontStyle: 'italic', textAlign: 'center', padding: '0.5rem' }}>
+                    No dialogue turns added yet.
+                  </div>
+                )}
               </div>
             </div>
+          );
+        }
+
+      case 'hotspot_explorer':
+        return <HotspotExplorerPreviewBlock block={block} resolveUrl={resolveUrl} />;
+
+      case 'functional_reading':
+        const docType = (block.content?.documentType || 'poster').toLowerCase();
+        const isTextDoc = docType === 'text';
+        const docUrl = block.content?.documentUrl || block.content?.url || '';
+        const docText = block.content?.documentText || '';
+        const questionsList = block.content?.questions || [];
+
+        return (
+          <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.75rem', border: '1px solid #818cf8', background: '#ffffff', borderRadius: '12px', padding: '1rem', boxShadow: '0 2px 8px rgba(99,102,241,0.06)' }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#3730a3', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e0e7ff', paddingBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiFileText /> Functional Reading
+              </div>
+              <span style={{ fontSize: '0.68rem', padding: '2px 8px', background: '#e0e7ff', color: '#4338ca', borderRadius: '12px', textTransform: 'uppercase', fontWeight: 700 }}>
+                {isTextDoc ? 'TEXT' : 'POSTER'}
+              </span>
+            </div>
+
+            {block.content?.scenario && (
+              <div style={{ fontSize: '0.78rem', color: '#475569', background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px', borderLeft: '3px solid #6366f1' }}>
+                {block.content.scenario}
+              </div>
+            )}
+
+            {isTextDoc ? (
+              docText ? (
+                <div style={{ width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '0.85rem', fontSize: '0.78rem', color: '#1e293b', whiteSpace: 'pre-wrap', maxHeight: '280px', overflowY: 'auto' }}>
+                  {docText}
+                </div>
+              ) : (
+                <div style={{ width: '100%', height: '100px', border: '1.5px dashed #cbd5e1', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.72rem' }}>
+                  No document text provided
+                </div>
+              )
+            ) : (
+              docUrl ? (
+                <div style={{ width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.25rem' }}>
+                  <img
+                    src={resolveUrl(docUrl)}
+                    alt="Functional Reading Document"
+                    style={{ width: '100%', maxHeight: '320px', objectFit: block.styles?.objectFit || 'contain', borderRadius: '6px' }}
+                  />
+                </div>
+              ) : (
+                <div style={{ width: '100%', height: '160px', border: '1.5px dashed #cbd5e1', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+                  <FiImage style={{ fontSize: '2rem', marginBottom: '4px', opacity: 0.6 }} />
+                  <span style={{ fontSize: '0.72rem' }}>No document image configured.</span>
+                </div>
+              )
+            )}
+
+            {questionsList.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.25rem' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1e293b' }}>
+                  Questions ({questionsList.length}):
+                </div>
+                {questionsList.map((q, qIdx) => {
+                  const qKey = `${activeScreenId}_${block.id}_q${qIdx}`;
+                  const userAns = previewAnswers[qKey];
+
+                  return (
+                    <div key={q.id || qIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e293b' }}>
+                        {qIdx + 1}. {q.question || 'Question prompt...'}
+                      </div>
+                      <input
+                        className="cs-form-input"
+                        style={{ height: '32px', fontSize: '0.75rem', borderRadius: '6px', border: '1px solid #94a3b8', padding: '0 8px', background: '#ffffff' }}
+                        type="text"
+                        placeholder="Type your answer here..."
+                        value={userAns || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setPreviewAnswers(prev => ({ ...prev, [qKey]: val }));
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
 
-      case 'hotspot_explorer':
+      case 'multimedia_reading_assessment':
         {
-          const resolvedImg = resolveUrl ? resolveUrl(block.content?.imageUrl) : defaultResolveUrl(block.content?.imageUrl);
+          const mediaType = (block.content?.mediaType || 'audio').toLowerCase();
+          const audioUrl = block.content?.audioUrl || '';
+          const videoUrl = block.content?.videoUrl || '';
+          const questionsList = block.content?.questions || [];
+
+          const resolvedAudio = audioUrl ? resolveUrl(audioUrl) : '';
+          const resolvedVideo = videoUrl ? resolveUrl(videoUrl) : '';
+
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f8fafc', borderRadius: '8px', padding: '0.75rem', position: 'relative', overflow: 'hidden', flex: 1, height: '100%', minHeight: 0 }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FiGrid /> Hotspot Explorer
+            <MultimediaInteractiveQuizPlayer
+              block={block}
+              mediaType={mediaType}
+              resolvedVideo={resolvedVideo}
+              resolvedAudio={resolvedAudio}
+              questionsList={questionsList}
+              previewAnswers={previewAnswers}
+              setPreviewAnswers={setPreviewAnswers}
+              activeScreenId={activeScreenId}
+              resolveUrl={resolveUrl}
+            />
+          );
+        }
+
+      case 'audio_mystery':
+        {
+          const mysteryKey = `${activeScreenId}_${block.id}`;
+          const selectedAns = previewAnswers[mysteryKey];
+          const hasSelected = selectedAns !== undefined;
+          const options = block.content?.options || [];
+          const correctIdx = parseInt(block.content?.correctAnswerIndex ?? block.content?.correctAnswer) || 0;
+
+          return (
+            <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.75rem', border: '1px solid #67e8f9', background: '#ecfeff', borderRadius: '10px', padding: '0.85rem', width: '100%', boxSizing: 'border-box', overflowY: 'auto' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0891b2', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FiVolume2 style={{ fontSize: '1.1rem' }} /> Audio Mystery Challenge
               </div>
-              {block.content?.imageUrl ? (
-                <div style={{ position: 'relative', width: '100%', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block' }}>
-                  <img src={resolvedImg} alt="Hotspot explorer source" style={{ width: '100%', display: 'block' }} />
-                  {(block.content.hotspots || []).map((h, hidx) => (
-                    <div
-                      key={h.id || hidx}
-                      style={{
-                        position: 'absolute',
-                        left: `${(h.x / 400) * 100}%`,
-                        top: `${(h.y / 250) * 100}%`,
-                        width: `${(h.width / 400) * 100}%`,
-                        height: `${(h.height / 250) * 100}%`,
-                        border: '2px solid #ef4444',
-                        background: 'rgba(239, 68, 68, 0.25)',
-                        color: '#fff',
-                        fontSize: '9px',
-                        padding: '1px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    >
-                      {h.name || `H${hidx + 1}`}
-                    </div>
-                  ))}
+
+              {/* Main Audio File if configured */}
+              {(block.content?.url || block.content?.audio) && (
+                <div style={{ background: '#ffffff', padding: '0.5rem', borderRadius: '8px', border: '1px solid #7dd3fc' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#0369a1', marginBottom: '4px' }}>🎵 Main Mystery Audio:</div>
+                  <CustomAudioPlayer src={resolveUrl(block.content?.url || block.content?.audio)} />
                 </div>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', border: '1px dashed #cbd5e1', borderRadius: '6px', color: '#94a3b8', fontSize: '0.7rem' }}>
-                  No target explorer image selected
+              )}
+
+              {/* Audios Section with Audio Players */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0e7490' }}>
+                  🔊 Progressive Audios:
+                </div>
+                {(block.content?.clues || []).map((c, cIdx) => (
+                  <div key={cIdx} style={{ background: '#ffffff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '0.5rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#0369a1' }}>
+                      Audio #{cIdx + 1}: {c.description || `Audio track (${c.duration || 5}s)`}
+                    </div>
+                    {c.audio ? (
+                      <CustomAudioPlayer src={resolveUrl(c.audio)} />
+                    ) : (
+                      <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontStyle: 'italic' }}>No audio file attached for Audio #{cIdx + 1}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Question displayed directly above Options */}
+              <div style={{ fontSize: '0.78rem', color: '#1e293b', background: '#ffffff', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #bae6fd', fontWeight: 600 }}>
+                <strong>Question:</strong> {block.content?.question || 'Listen to the audio clues and guess the mystery item!'}
+              </div>
+
+              {/* Answer options if provided */}
+              {options && options.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0e7490' }}>Select your answer:</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    {options.map((opt, oIdx) => {
+                      const isCorrect = correctIdx === oIdx;
+                      const isSelected = selectedAns === oIdx;
+                      const optText = typeof opt === 'object' ? opt?.text : opt;
+
+                      let bg = '#ffffff';
+                      let border = '#cbd5e1';
+                      let textCol = '#334155';
+
+                      if (hasSelected) {
+                        if (isCorrect) {
+                          bg = '#dcfce7';
+                          border = '#16a34a';
+                          textCol = '#15803d';
+                        } else if (isSelected) {
+                          bg = '#fee2e2';
+                          border = '#ef4444';
+                          textCol = '#b91c1c';
+                        }
+                      }
+
+                      return (
+                        <button
+                          key={oIdx}
+                          type="button"
+                          onClick={() => {
+                            if (!hasSelected) {
+                              setPreviewAnswers(prev => ({ ...prev, [mysteryKey]: oIdx }));
+                            }
+                          }}
+                          style={{
+                            padding: '0.4rem 0.75rem',
+                            borderRadius: '6px',
+                            border: `1.5px solid ${border}`,
+                            background: bg,
+                            color: textCol,
+                            fontSize: '0.75rem',
+                            fontWeight: isSelected ? 700 : 500,
+                            cursor: hasSelected ? 'default' : 'pointer'
+                          }}
+                        >
+                          {optText}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
           );
         }
 
-      case 'functional_reading':
-        return (
-          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #818cf8', background: '#eef2ff', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#3730a3', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiFileText /> Functional Reading
-            </div>
-            <div style={{ fontSize: '0.7rem', color: '#475569' }}>
-              <strong>Document Type:</strong> <span style={{ textTransform: 'uppercase', fontWeight: 700 }}>{block.content?.documentType || 'form'}</span>
-            </div>
-            <div style={{ fontSize: '0.68rem', color: '#64748b' }}>
-              Questions configured: {(block.content?.questions || []).length}
-            </div>
-          </div>
-        );
-
-      case 'audio_mystery':
-        return (
-          <div style={{ flex: 1, height: '100%', minHeight: 0,  display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #67e8f9', background: '#ecfeff', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0891b2', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiVolume2 /> Audio Mystery
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#475569' }}>
-              <strong>Question:</strong> {block.content?.question || 'Mystery description question...'}
-            </div>
-            <div style={{ fontSize: '0.68rem', color: '#64748b' }}>
-              Clues configuration: {(block.content?.clues || []).length} progressive clues.
-            </div>
-          </div>
-        );
-
       default:
         return null;
     }
   };
+
+  // Compute vertical dynamic flow positions to prevent overlap when content height exceeds saved editor top coordinates
+  let currentBottom = 0;
+  const sortedElements = [...(elements || [])].sort((a, b) => {
+    const topA = parseInt(a.styles?.top || 0, 10) || 0;
+    const topB = parseInt(b.styles?.top || 0, 10) || 0;
+    return topA - topB;
+  });
+
+  const processedElements = sortedElements.map((block) => {
+    const rawTop = parseInt(block.styles?.top || 0, 10);
+    const parsedTop = isNaN(rawTop) ? 0 : rawTop;
+    const computedTop = currentBottom > 0 ? Math.max(parsedTop, currentBottom + 16) : parsedTop;
+
+    // Estimate realistic rendered block height
+    let estimatedHeight = 100;
+    const normType = (block.type || '').toLowerCase();
+    const isFB = normType === 'fill_blank' || normType === 'fill_blanks' || normType === 'fill_in_blanks';
+    
+    if (isFB) {
+      const bCount = (block.content?.blanks || []).length || 1;
+      estimatedHeight = 140 + bCount * 45;
+    } else if (normType === 'image') {
+      const hasQ = block.content?.hasQuestion;
+      const opts = block.content?.questionOptions?.length || 0;
+      estimatedHeight = hasQ ? 280 + opts * 40 : 220;
+    } else if (normType === 'word_search') {
+      estimatedHeight = 360;
+    } else if (normType === 'matching' || normType === 'match') {
+      const pairCount = (block.content?.pairs || block.content?.leftItems || []).length || 2;
+      estimatedHeight = 100 + pairCount * 45;
+    } else if (normType === 'quiz') {
+      const qCount = (block.content?.questions || []).length || 1;
+      estimatedHeight = 120 + qCount * 180;
+    } else if (normType === 'roleplay_simulation' || normType === 'roleplay') {
+      const turnCount = (block.content?.conversation || []).length || 2;
+      estimatedHeight = 140 + turnCount * 65;
+    }
+
+    if (block.styles?.height || block.styles?.minHeight) {
+      const explicitH = parseInt(block.styles?.height || block.styles?.minHeight, 10);
+      if (!isNaN(explicitH) && explicitH > 0) estimatedHeight = Math.max(estimatedHeight, explicitH);
+    }
+
+    currentBottom = computedTop + estimatedHeight;
+    return {
+      ...block,
+      _computedTop: computedTop
+    };
+  });
 
   return (
     <>
@@ -995,26 +2443,32 @@ export default function PreviewCanvasRenderer({
         }
       `}</style>
 
-      {elements.map((block) => (
+      {processedElements.map((block) => (
         <div
           key={block.id}
           className={block.styles?.customClass || ''}
           style={{
             position: 'absolute',
             left: block.styles?.left || '0px',
-            top: block.styles?.top || '0px',
-            width: block.styles?.blockWidth || '100%',
-            minHeight: block.styles?.minHeight || 'auto',
-            height: block.styles?.minHeight || 'auto',
+            top: `${block._computedTop}px`,
+            padding: '0.85rem',
+            borderRadius: '12px',
+            border: '1.5px solid #e2e8f0',
+            background: '#ffffff',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
             display: 'flex',
             flexDirection: 'column',
             boxSizing: 'border-box',
-            marginBottom: '0.25rem',
-            transition: 'all 0.15s',
+            overflow: 'hidden',
             zIndex: block.styles?.zIndex || 1,
             wordBreak: 'break-word',
             overflowWrap: 'anywhere',
-            overflow: 'hidden'
+            ...(block.styles?.blockWidth ? { width: block.styles.blockWidth } : { width: '100%' }),
+            fontFamily: block.styles?.fontFamily || 'inherit',
+            fontSize: block.styles?.fontSize || 'inherit',
+            fontWeight: block.styles?.fontWeight === 'Bold' ? 700 : block.styles?.fontWeight === 'SemiBold' ? 600 : block.styles?.fontWeight === 'Normal' ? 400 : 'inherit',
+            color: block.styles?.color || '#1e293b',
+            textAlign: (block.styles?.alignment || 'Left').toLowerCase()
           }}
         >
           {renderSingleBlock(block)}

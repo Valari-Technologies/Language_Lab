@@ -54,6 +54,7 @@ class License(models.Model):
     concurrentUsersPerServer = models.IntegerField(default=40)
     issueDate = models.DateField(auto_now_add=True)
     expiryDate = models.DateField()
+    licenseDuration = models.CharField(max_length=50, default="1 Year", null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
 
     class Meta:
@@ -95,6 +96,7 @@ class School(models.Model):
     logo = models.CharField(max_length=255, null=True, blank=True)
     school_code = models.CharField(max_length=50, null=True, blank=True)
     lan_phone = models.CharField(max_length=20, null=True, blank=True)
+    academic_year = models.CharField(max_length=20, default='2026-2027', null=True, blank=True)
     is_active = models.BooleanField(default=True)
     schoolAdminId = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='schools_administered')
     licenseId = models.ForeignKey('License', on_delete=models.SET_NULL, null=True, blank=True, related_name='schools_linked')
@@ -203,3 +205,17 @@ class PublishContent(models.Model):
 
     def __str__(self):
         return self.release_name
+
+
+class ActivityLog(models.Model):
+    activity_type = models.CharField(max_length=50)
+    message = models.TextField()
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "cms_activitylog"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.activity_type}: {self.message}"

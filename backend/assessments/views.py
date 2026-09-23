@@ -13,6 +13,7 @@ from super_admin.models import School, Grade
 from school_admin.models import Class, Teacher, TeacherClass
 from teacher.models import Student
 from django.contrib.auth import get_user_model
+from django.conf import settings
 
 from .models import ExperienceAssignment, StudentAttempt, ScreenResponse
 from .serializers import (
@@ -289,6 +290,8 @@ class SyncResponsesAPIView(APIView):
 
 def filter_attempts_for_user(queryset, user):
     queryset = filter_queryset_by_school(queryset, user)
+    if not getattr(settings, "SHOW_DEMO_DATA_IN_REPORTS", False):
+        queryset = queryset.exclude(lms_attempt_id__startswith="DEMO")
     if user.role == "TEACHER":
         teacher_classes = Class.objects.filter(teacherclass__teacher__user=user)
         queryset = queryset.filter(assignment__class_obj__in=teacher_classes)
@@ -622,6 +625,8 @@ class ReportsStudentDetailAPIView(APIView):
         attempts = StudentAttempt.objects.filter(student=student_user)
         if school:
             attempts = attempts.filter(school=school)
+        if not getattr(settings, "SHOW_DEMO_DATA_IN_REPORTS", False):
+            attempts = attempts.exclude(lms_attempt_id__startswith="DEMO")
             
         total_attempts = attempts.count()
         completed = attempts.filter(status="COMPLETED").count()
@@ -666,6 +671,8 @@ class ReportsTeachersAPIView(APIView):
             teachers = Teacher.objects.all().select_related("user")
             
         attempts = filter_queryset_by_school(StudentAttempt.objects.all(), request.user)
+        if not getattr(settings, "SHOW_DEMO_DATA_IN_REPORTS", False):
+            attempts = attempts.exclude(lms_attempt_id__startswith="DEMO")
         
         results = []
         for t in teachers:
@@ -772,27 +779,37 @@ class ReportsStudentCompletionAPIView(APIView):
 
         # Base student users in this school
         student_users = User.objects.filter(role="STUDENT", student__school=school)
+        if not getattr(settings, "SHOW_DEMO_DATA_IN_REPORTS", False):
+            student_users = student_users.exclude(username__startswith="DEMO")
 
         if user.role == "TEACHER":
             # For TEACHER: only pull data for students belonging to their assigned classes.
             # 1. Get the classes assigned to this teacher
             teacher_classes = Class.objects.filter(teacherclass__teacher__user=user)
             # 2. Get students who have attempts in those classes
-            student_ids = StudentAttempt.objects.filter(
+            student_attempts_filter = StudentAttempt.objects.filter(
                 assignment__class_obj__in=teacher_classes
-            ).values_list("student_id", flat=True).distinct()
+            )
+            if not getattr(settings, "SHOW_DEMO_DATA_IN_REPORTS", False):
+                student_attempts_filter = student_attempts_filter.exclude(lms_attempt_id__startswith="DEMO")
+            student_ids = student_attempts_filter.values_list("student_id", flat=True).distinct()
             # 3. Filter student users
             student_users = student_users.filter(id__in=student_ids)
 
         # Annotate
+        filter_q = (
+            models.Q(assignments__attempts__status="completed") |
+            models.Q(assignments__attempts__status="COMPLETED")
+        ) & models.Q(assignments__attempts__student=models.F("id"))
+
+        if not getattr(settings, "SHOW_DEMO_DATA_IN_REPORTS", False):
+            filter_q &= ~models.Q(assignments__attempts__lms_attempt_id__startswith="DEMO")
+
         queryset = student_users.annotate(
             total_assigned_experiences=models.Count("assignments", distinct=True),
             completed_experiences_count=models.Count(
                 "assignments__attempts",
-                filter=(
-                    models.Q(assignments__attempts__status="completed") |
-                    models.Q(assignments__attempts__status="COMPLETED")
-                ) & models.Q(assignments__attempts__student=models.F("id")),
+                filter=filter_q,
                 distinct=True
             )
         )

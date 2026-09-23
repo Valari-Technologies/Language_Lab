@@ -115,9 +115,10 @@ class ActivitySerializer(serializers.ModelSerializer):
 
         experience = attrs.get("experience")
         if experience and not self.instance:
-            if experience.activities.count() >= 5:
-                raise serializers.ValidationError("An experience cannot have more than 5 activities.")
+            if experience.activities.count() >= 6:
+                raise serializers.ValidationError("An experience cannot have more than 6 activities.")
 
+        validate_activity_duration(self, attrs)
         return validate_strict_fields(self, attrs)
 
 
@@ -166,10 +167,34 @@ class ActivityDetailSerializer(serializers.ModelSerializer):
 
         experience = attrs.get("experience")
         if experience and not self.instance:
-            if experience.activities.count() >= 5:
-                raise serializers.ValidationError("An experience cannot have more than 5 activities.")
+            if experience.activities.count() >= 6:
+                raise serializers.ValidationError("An experience cannot have more than 6 activities.")
 
+        validate_activity_duration(self, attrs)
         return validate_strict_fields(self, attrs)
+
+
+def validate_activity_duration(serializer, attrs):
+    experience = attrs.get("experience")
+    if not experience and serializer.instance:
+        experience = serializer.instance.experience
+
+    if experience and experience.estimated_duration is not None:
+        new_duration = attrs.get(
+            "estimated_duration",
+            serializer.instance.estimated_duration if serializer.instance else 0
+        )
+        existing_activities = experience.activities.all()
+        if serializer.instance:
+            existing_activities = existing_activities.exclude(pk=serializer.instance.pk)
+
+        sum_existing = sum(act.estimated_duration or 0 for act in existing_activities)
+        total_duration = sum_existing + (new_duration or 0)
+
+        if total_duration > experience.estimated_duration:
+            raise serializers.ValidationError({
+                "estimated_duration": f"Total duration of activities ({total_duration} min) cannot exceed the lesson estimated duration ({experience.estimated_duration} min)."
+            })
 
 
 def validate_strict_fields(serializer, attrs):
@@ -231,6 +256,11 @@ class ExperienceSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["created_by", "is_deleted"]
 
+    def validate_description(self, value):
+        if value and len(value) > 200:
+            raise serializers.ValidationError("Description cannot exceed 200 characters.")
+        return value
+
     def validate(self, attrs):
         return validate_strict_fields(self, attrs)
 
@@ -271,6 +301,11 @@ class ExperienceDetailSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["created_by", "is_deleted"]
+
+    def validate_description(self, value):
+        if value and len(value) > 200:
+            raise serializers.ValidationError("Description cannot exceed 200 characters.")
+        return value
 
     def validate(self, attrs):
         return validate_strict_fields(self, attrs)

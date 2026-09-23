@@ -7,7 +7,7 @@ import {
   FiFileText,
   FiTrendingUp, FiClock,
   FiChevronLeft, FiChevronRight, FiLock, FiAlertTriangle,
-  FiEye, FiEyeOff, FiUpload, FiRefreshCw, FiMoreVertical
+  FiEye, FiEyeOff, FiUpload, FiDownload, FiRefreshCw, FiMoreVertical
 } from 'react-icons/fi';
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
@@ -23,8 +23,57 @@ const resolveMediaUrl = (url) => {
 import teacherHeaderBanner from './assets/6.jpeg';
 import teacherBg from './assets/teacher_bg.png';
 import logoIcon from './assets/icon.png';
+import roundLogo from './assets/favicon.png';
 import AvatarCropperModal from './AvatarCropperModal';
 import HelpSupportModal from './HelpSupportModal';
+
+const sortClasses = (classesList) => {
+  if (!Array.isArray(classesList)) return [];
+  return [...classesList].sort((a, b) => {
+    const getGradeNum = (c) => {
+      if (c?.grade?.sort_order !== undefined && c.grade?.sort_order !== null) {
+        return Number(c.grade.sort_order);
+      }
+      if (c?.grade_sort_order !== undefined && c.grade_sort_order !== null) {
+        return Number(c.grade_sort_order);
+      }
+      const gStr = c?.grade_name || c?.grade?.grade_name || c?.class_name || '';
+      const match = gStr.match(/\d+/);
+      return match ? parseInt(match[0], 10) : 999;
+    };
+
+    const getSectionStr = (c) => {
+      const sec = c?.section ? String(c.section).replace(/^Section\s+/i, '').trim() : '';
+      if (sec) return sec.toUpperCase();
+      const name = c?.class_name || '';
+      if (name.includes('-')) {
+        const parts = name.split('-');
+        const lastPart = parts[parts.length - 1].trim();
+        const match = lastPart.match(/^[A-Za-z]+/);
+        if (match) return match[0].toUpperCase();
+      }
+      const alphaMatch = name.match(/\b([A-Za-z])\b/);
+      if (alphaMatch) return alphaMatch[1].toUpperCase();
+      return name.toUpperCase();
+    };
+
+    const gradeA = getGradeNum(a);
+    const gradeB = getGradeNum(b);
+    if (gradeA !== gradeB) {
+      return gradeA - gradeB;
+    }
+
+    const secA = getSectionStr(a);
+    const secB = getSectionStr(b);
+    if (secA !== secB) {
+      return secA.localeCompare(secB, undefined, { numeric: true, sensitivity: 'base' });
+    }
+
+    const yearA = a?.academic_year || '';
+    const yearB = b?.academic_year || '';
+    return yearB.localeCompare(yearA);
+  });
+};
 
 const getUserInitials = (u, defaultVal = 'U') => {
   if (!u) return defaultVal;
@@ -382,6 +431,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [tchClassFilter, setTchClassFilter] = useState('');
   const [tchSectionFilter, setTchSectionFilter] = useState('');
   const [studentClassFilter, setStudentClassFilter] = useState('');
+  const [studentSectionFilter, setStudentSectionFilter] = useState('');
   const [schools,  setSchools]  = useState([]);
   const [grades,   setGrades]   = useState([]);
 
@@ -394,11 +444,11 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const isAnyOverlayOpen = showModal || showClassCrudDetailModal || showStudentCrudDetailModal;
 
   const [studentForm, setStudentForm] = useState({
-    class_id: '', username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: '2025 - 2026', is_active: true
+    class_id: '', username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: '2026-2027', is_active: true
   });
   const [classForm, setClassForm] = useState({
     class_name: '', school: '', grade: '', section: 'A',
-    academic_year: '2025 - 2026', is_active: true
+    academic_year: '2026-2027', is_active: true
   });
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -480,16 +530,30 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       if (res.ok) {
         const d = await res.json();
         const allCls = d.results || d;
+        const currentUserId = user?.id || user?.pk || propUser?.id || propUser?.pk;
         const myClasses = allCls.filter(c => {
+          if (Array.isArray(c.assigned_teacher_user_ids) && currentUserId) {
+            return c.assigned_teacher_user_ids.includes(currentUserId);
+          }
           if (!c.teacher_name) return false;
           const tNames = c.teacher_name.split(',').map(n => n.trim().toLowerCase());
           const userFull = (user?.full_name || propUser?.full_name || '').trim().toLowerCase();
           const userUsername = (user?.username || propUser?.username || '').trim().toLowerCase();
           return (userFull && tNames.includes(userFull)) || (userUsername && tNames.includes(userUsername));
         });
-        setClasses(myClasses);
+        setClasses(sortClasses(myClasses));
       }
     } catch (e) { console.error('Failed to load classes.', e); }
+  };
+
+  const handleViewClassCrud = async (class_id) => {
+    try {
+      const res = await apiFetch(`/api/cms/v1/classes/${class_id}/`);
+      if (res.ok) {
+        setSelectedClassCrudDetail(await res.json());
+        setShowClassCrudDetailModal(true);
+      }
+    } catch (e) { console.error('Failed to load class detail', e); }
   };
 
   const loadNotifications = async () => {
@@ -660,6 +724,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         });
         if (matchedClass) matchedClassId = matchedClass.class_id;
       }
+      const defaultSchoolAcademicYear = schools[0]?.academic_year || '2026-2027';
       setStudentForm(entity ? {
         class_id: matchedClassId,
         username: entity.username || '', password: '',
@@ -667,10 +732,11 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         roll_no: entity.roll_no || '',
         grade: entity.grade ? (entity.grade.startsWith('Grade') ? entity.grade.replace('Grade', 'Class') : entity.grade) : '',
         section: entity.section || '',
-        academic_year: entity.academic_year || '2025 - 2026',
+        academic_year: entity.academic_year || defaultSchoolAcademicYear,
         is_active: entity.is_active !== undefined ? entity.is_active : true
-      } : { class_id: '', username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: '2025 - 2026', is_active: true });
+      } : { class_id: '', username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: defaultSchoolAcademicYear, is_active: true });
     } else if (tab === 'classes') {
+      const defaultSchoolAcademicYear = schools[0]?.academic_year || '2026-2027';
       const extractedSec = entity && entity.class_name && ['A','B','C','D'].includes(entity.class_name.slice(-1).toUpperCase()) ? entity.class_name.slice(-1).toUpperCase() : 'A';
       const defaultGradeId = grades[0]?.id || '';
       const defaultGradeNum = grades[0] ? (grades[0].grade_name.match(/\d+/)?.[0] || '3') : '3';
@@ -679,11 +745,11 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         school: entity.school || (schools[0]?.school_id || ''),
         grade: entity.grade || defaultGradeId,
         section: extractedSec,
-        academic_year: entity.academic_year || '2025 - 2026',
+        academic_year: entity.academic_year || defaultSchoolAcademicYear,
         is_active: entity.is_active !== undefined ? entity.is_active : true
       } : {
         class_name: `Class ${defaultGradeNum}-A`, school: schools[0]?.school_id || '',
-        grade: defaultGradeId, section: 'A', academic_year: '2025 - 2026', is_active: true
+        grade: defaultGradeId, section: 'A', academic_year: defaultSchoolAcademicYear, is_active: true
       });
     }
   };
@@ -971,7 +1037,66 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         return gradeVal === filterVal;
       });
     }
+    if (studentSectionFilter) {
+      list = list.filter(s => {
+        const secVal = s.section ? String(s.section).replace('Section', '').trim().toUpperCase() : '';
+        const filterVal = String(studentSectionFilter).toUpperCase();
+        return secVal === filterVal;
+      });
+    }
     return filterList(list);
+  };
+
+  const handleExportStudents = () => {
+    const list = getFilteredStudents();
+    if (list.length === 0) {
+      showFeedback('No students to export', 'warning');
+      return;
+    }
+    
+    // Headers
+    const headers = ['Full Name', 'Roll No', 'LMS Login Code', 'Class', 'Section', 'Academic Year', 'Status'];
+    
+    // Helper to escape CSV values
+    const escapeCSV = (val) => {
+      if (val === null || val === undefined) return '';
+      const str = String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    
+    const rows = list.map(s => {
+      const fullName = s.full_name || s.username || 'N/A';
+      const rollNo = s.roll_no || 'N/A';
+      const loginCode = s.username || 'N/A';
+      const className = s.grade ? (String(s.grade).startsWith('Class') || String(s.grade).startsWith('Grade') ? String(s.grade).replace('Grade', 'Class') : `Class ${s.grade}`) : 'N/A';
+      const section = s.section ? (String(s.section).startsWith('Section') ? s.section : `Section ${s.section}`) : 'N/A';
+      const academicYear = s.academic_year || '2025 - 2026';
+      const status = s.is_active ? 'Active' : 'Inactive';
+      
+      return [
+        escapeCSV(fullName),
+        escapeCSV(rollNo),
+        escapeCSV(loginCode),
+        escapeCSV(className),
+        escapeCSV(section),
+        escapeCSV(academicYear),
+        escapeCSV(status)
+      ];
+    });
+    
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `students_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   /* ── Filter helpers ── */
@@ -994,6 +1119,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     setTchClassFilter('');
     setTchSectionFilter('');
     setStudentClassFilter('');
+    setStudentSectionFilter('');
     setIsSidebarOpen(false);
     setStudentPage(1);
     setClassPage(1);
@@ -1393,7 +1519,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             overflow: 'hidden'
           }}
         >
-          {!navCollapsed && (
+          {!navCollapsed ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <img src={logoIcon} alt="Logo" style={{ width: '48px', height: '76px', objectFit: 'contain' }} />
               <div>
@@ -1401,30 +1527,40 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div className="sd-brand-sub">Teacher Portal</div>
               </div>
             </div>
+          ) : (
+            <img 
+              src={roundLogo} 
+              alt="Logo" 
+              onClick={toggleNavCollapsed} 
+              style={{ width: '28px', height: '28px', objectFit: 'contain', cursor: 'pointer' }} 
+              title="Expand sidebar"
+            />
           )}
-          <button
-            onClick={toggleNavCollapsed}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'rgba(255, 255, 255, 0.75)',
-              cursor: 'pointer',
-              padding: '6px',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'background 0.2s'
-            }}
-            onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-            title={navCollapsed ? 'Expand sidebar' : 'Close sidebar'}
-          >
-            <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="20px" width="20px" xmlns="http://www.w3.org/2000/svg">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="9" y1="3" x2="9" y2="21"></line>
-            </svg>
-          </button>
+          {!navCollapsed && (
+            <button
+              onClick={toggleNavCollapsed}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'rgba(255, 255, 255, 0.75)',
+                cursor: 'pointer',
+                padding: '6px',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+              title={navCollapsed ? 'Expand sidebar' : 'Close sidebar'}
+            >
+              <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="20px" width="20px" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="3" x2="9" y2="21"></line>
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Nav */}
@@ -1579,7 +1715,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             <div style={{ position: 'relative' }}>
               <button className="sd-icon-btn" style={{ position: 'relative' }} onClick={(e) => { e.stopPropagation(); setShowNotifDropdown(!showNotifDropdown); }}>
                 <FiBell/>
-                {notifications.some(n => !n.read) && (
+                {notifications.some(n => !(n.read || n.is_read)) && (
                   <span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' }} />
                 )}
               </button>
@@ -1593,18 +1729,21 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     {notifications.length === 0 ? (
                       <span style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '10px 0' }}>No new notifications.</span>
                     ) : (
-                      notifications.map(n => (
-                        <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: n.read ? 'transparent' : '#f0fdf4', borderLeft: n.read ? 'none' : '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', textAlign: 'left' }}>
-                           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                             <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
-                             <span style={{ fontSize: '0.75rem', color: '#475569' }}>{n.message || n.text}</span>
-                             <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
-                           </div>
-                           <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); handleDeleteNotification(n.id); }} title="Delete">
-                             <FiX size={14} />
-                           </button>
-                        </div>
-                      ))
+                      notifications.map(n => {
+                        const isRead = n.read !== undefined ? n.read : n.is_read;
+                        return (
+                          <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: isRead ? 'transparent' : '#f0fdf4', borderLeft: isRead ? 'none' : '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', textAlign: 'left' }}>
+                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                               <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: isRead ? 600 : 700 }}>{n.title || 'Notification'}</span>
+                               <span style={{ fontSize: '0.75rem', color: '#475569' }}>{n.message || n.text}</span>
+                               <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || (n.created_at ? new Date(n.created_at).toLocaleTimeString() : '')}</span>
+                             </div>
+                             <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); handleDeleteNotification(n.id); }} title="Delete">
+                               <FiX size={14} />
+                             </button>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                   <div style={{ borderTop: '1px solid #f1f5f9', marginTop: '10px', paddingTop: '8px', textAlign: 'center' }}>
@@ -1775,30 +1914,41 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             <>
               
               <div className="sd-card" style={{ padding: '1.25rem 1.5rem' }}>
-                <div className="sd-table-toolbar">
-                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <div className="sd-table-search">
-                      <FiSearch/>
-                      <input
-                        type="text"
-                        placeholder="Search students..."
-                        value={searchQuery}
-                        onChange={e => { setSearchQuery(e.target.value); setStudentPage(1); }}
-                      />
-                    </div>
-                    <select
-                      className="sd-form-input"
-                      style={{ width: '160px', height: '38px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem' }}
-                      value={studentClassFilter}
-                      onChange={e => { setStudentClassFilter(e.target.value); setStudentPage(1); }}
-                    >
-                      <option value="">All Classes</option>
-                      {[3, 4, 5, 6, 7, 8].map(num => (
-                        <option key={num} value={`Class ${num}`}>Class {num}</option>
-                      ))}
-                    </select>
+                <div className="sd-table-toolbar" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                  <div className="sd-table-search" style={{ minWidth: '200px', flex: '1 1 200px', maxWidth: '300px' }}>
+                    <FiSearch/>
+                    <input
+                      type="text"
+                      placeholder="Search students..."
+                      value={searchQuery}
+                      onChange={e => { setSearchQuery(e.target.value); setStudentPage(1); }}
+                    />
                   </div>
-                  <div className="sd-table-actions">
+                  <select
+                    className="sd-form-input"
+                    style={{ width: '130px', height: '38px', padding: '0 0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.82rem' }}
+                    value={studentClassFilter}
+                    onChange={e => { setStudentClassFilter(e.target.value); setStudentPage(1); }}
+                  >
+                    <option value="">All Classes</option>
+                    {[3, 4, 5, 6, 7, 8].map(num => (
+                      <option key={num} value={`Class ${num}`}>Class {num}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    className="sd-form-input"
+                    style={{ width: '130px', height: '38px', padding: '0 0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.82rem' }}
+                    value={studentSectionFilter}
+                    onChange={e => { setStudentSectionFilter(e.target.value); setStudentPage(1); }}
+                  >
+                    <option value="">All Sections</option>
+                    {['A', 'B', 'C', 'D'].map(sec => (
+                      <option key={sec} value={sec}>Section {sec}</option>
+                    ))}
+                  </select>
+
+                  <div className="sd-table-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                     <button
                       className="sd-btn-outline"
                       style={{
@@ -1820,6 +1970,9 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     )}
                     <button className="sd-btn-outline" onClick={() => { setImportActive(!importActive); setUploadSummary(null); }}>
                       Excel Import
+                    </button>
+                    <button className="sd-btn-outline" onClick={handleExportStudents} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <FiDownload /> Export
                     </button>
                     <button className="sd-btn-primary" onClick={openAddModal}><FiPlus/>Add Student</button>
                   </div>
@@ -2232,7 +2385,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             </td>
                             <td>
                               <div className="sd-action-cell" style={{ justifyContent: 'center' }}>
-                                <button className="sd-icon-action view" style={{ color: '#0b75b3' }} onClick={() => { setSelectedClassCrudDetail(c); setShowClassCrudDetailModal(true); }} title="View">
+                                <button className="sd-icon-action view" style={{ color: '#0b75b3' }} onClick={() => handleViewClassCrud(c.class_id || c.id)} title="View">
                                   <FiEye/>
                                 </button>
                               </div>
@@ -2550,11 +2703,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         onChange={e => setStudentForm({ ...studentForm, is_active: e.target.checked })}/>
                       Account is Active
                     </label>
-                    {modalType === 'add' && (
-                      <p style={{fontSize:'0.75rem',color:'#2563eb',margin:'0.5rem 0 0',fontStyle:'italic',background:'#eff6ff',padding:'0.4rem 0.6rem',borderRadius:'6px'}}>
-                        🔑 Login: <strong>Roll No</strong> is used as both username and initial password.
-                      </p>
-                    )}
+                   
                   </>)}
 
                   {/* Class fields */}
@@ -2615,8 +2764,12 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </div>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Academic Year *</label>
-                        <input className="sd-form-input" type="text" value={classForm.academic_year}
-                          onChange={e => setClassForm({ ...classForm, academic_year: e.target.value })} required/>
+                        <input className="sd-form-input" type="text" maxLength={9} value={classForm.academic_year || ''}
+                          onChange={e => {
+                            const clean = e.target.value.replace(/\D/g, '').slice(0, 8);
+                            const formatted = clean.length > 4 ? `${clean.slice(0, 4)}-${clean.slice(4)}` : clean;
+                            setClassForm({ ...classForm, academic_year: formatted });
+                          }} placeholder="2026-2027" required/>
                       </div>
                     </div>
                     <label className="sd-checkbox-label">
@@ -3039,30 +3192,33 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <span style={{ fontSize: '0.9rem' }}>All caught up! No notifications.</span>
                     </div>
                   ) : (
-                    notifications.map(n => (
-                      <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: n.read ? '#ffffff' : '#f0fdf4', border: `1px solid ${n.read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
-                          <span style={{ fontSize: '0.8rem', color: '#475569' }}>{n.message || n.text}</span>
-                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                          {!n.read && (
-                            <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={async () => {
-                              try {
-                                await apiFetch('/api/v1/dashboard/notifications', { method: 'POST' });
-                                setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true } : item));
-                              } catch (e) { console.error(e); }
-                            }}>
-                              Mark read
+                    notifications.map(n => {
+                      const isRead = n.read !== undefined ? n.read : n.is_read;
+                      return (
+                        <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: isRead ? '#ffffff' : '#f0fdf4', border: `1px solid ${isRead ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: isRead ? 600 : 700 }}>{n.title || 'Notification'}</span>
+                            <span style={{ fontSize: '0.8rem', color: '#475569' }}>{n.message || n.text}</span>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{n.time || (n.created_at ? new Date(n.created_at).toLocaleDateString() : '')}</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            {!isRead && (
+                              <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={async () => {
+                                try {
+                                  await apiFetch('/api/v1/dashboard/notifications', { method: 'POST' });
+                                  setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true, is_read: true } : item));
+                                } catch (e) { console.error(e); }
+                              }}>
+                                Mark read
+                              </button>
+                            )}
+                            <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleDeleteNotification(n.id)} title="Delete">
+                              <FiX size={16} />
                             </button>
-                          )}
-                          <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleDeleteNotification(n.id)} title="Delete">
-                            <FiX size={16} />
-                          </button>
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>

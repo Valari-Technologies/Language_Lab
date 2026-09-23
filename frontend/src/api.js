@@ -59,9 +59,8 @@ export async function logoutSession() {
 }
 
 export async function apiFetch(endpoint, options = {}) {
-  const token = localStorage.getItem('access_token');
-
   const executeRequest = async () => {
+    const token = localStorage.getItem('access_token');
     const headers = {
       ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -81,9 +80,10 @@ export async function apiFetch(endpoint, options = {}) {
     if (refreshed) {
       response = await executeRequest();
     } else {
-      await logoutSession();
-      window.location.reload();
-      throw new Error('Session expired');
+      window.dispatchEvent(new CustomEvent('session-expired', {
+        detail: { message: 'Your session has expired due to inactivity. Please log in again to perform actions.' }
+      }));
+      throw new Error('Session expired. Please log in again.');
     }
   }
 

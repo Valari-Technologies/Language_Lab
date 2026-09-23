@@ -7,7 +7,8 @@ import {
   FiCheckCircle, FiFileText,
   FiAward, FiLock,
   FiChevronLeft, FiChevronRight, FiEye, FiEyeOff,
-  FiCornerDownRight, FiXCircle, FiMoreVertical, FiAlertTriangle, FiInfo, FiRefreshCw, FiUpload, FiClock, FiActivity
+  FiCornerDownRight, FiXCircle, FiMoreVertical, FiAlertTriangle, FiInfo, FiRefreshCw, FiUpload, FiClock, FiActivity,
+  FiHome, FiUserCheck, FiLayers
 } from 'react-icons/fi';
 import PreviewCanvasRenderer from './PreviewCanvasRenderer';
 import './Dashboard.css';
@@ -100,6 +101,7 @@ const getPreviewMediaUrl = (screen, type) => {
 };
 
 import logoIcon from './assets/icon.png';
+import roundLogo from './assets/favicon.png';
 import AvatarCropperModal from './AvatarCropperModal';
 import HelpSupportModal from './HelpSupportModal';
 
@@ -589,6 +591,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [isAddingSchool, setIsAddingSchool] = useState(false);
   const [newSchoolForm, setNewSchoolForm] = useState({
     school_name: '', school_code: '', phone: '', lan: '', address: '', city: '', state: '', pincode: '',
+    academic_year: '2026-2027',
     admin_name: '', email: '', password: '',
     maxLmsServers: 2, concurrentUsersPerServer: 40, licenseDuration: '1 Year', expiryDate: ''
   });
@@ -784,25 +787,30 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   /* ══════════════════════════════════
      DATA LOADERS (unchanged from original)
      ══════════════════════════════════ */
+  const handleLoadError = (label, err) => {
+    if (err?.message === 'Session expired. Please log in again.') return;
+    console.error(label, err);
+  };
+
   const loadSchools = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/schools/');
       if (res.ok) { const data = await res.json(); setSchools(data.results || data); }
-    } catch (e) { console.error('Failed to load schools', e); }
+    } catch (e) { handleLoadError('Failed to load schools', e); }
   };
 
   const loadPublishContents = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/publish-contents/');
       if (res.ok) { const data = await res.json(); setPublishContents(data.results || data); }
-    } catch (e) { console.error('Failed to load publish contents', e); }
+    } catch (e) { handleLoadError('Failed to load publish contents', e); }
   };
 
   const loadDashboardStats = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/dashboard-stats/');
       if (res.ok) { const data = await res.json(); setDashboardStats(data); }
-    } catch (e) { console.error('Failed to load dashboard stats', e); }
+    } catch (e) { handleLoadError('Failed to load dashboard stats', e); }
   };
 
   const loadRecentActivities = async () => {
@@ -813,7 +821,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setRecentActivitiesList(data);
       }
     } catch (e) {
-      console.error('Failed to load recent activities', e);
+      handleLoadError('Failed to load recent activities', e);
     }
   };
 
@@ -900,7 +908,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setGrades(filtered);
       }
     } catch (e) {
-      console.error('Failed to load grades', e);
+      handleLoadError('Failed to load grades', e);
     }
   };
 
@@ -908,7 +916,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     try {
       const res = await apiFetch('/api/v1/content/experiences/');
       if (res.ok) { const data = await res.json(); setExperiences(data.results || data); }
-    } catch (e) { console.error('Failed to load experiences', e); }
+    } catch (e) { handleLoadError('Failed to load experiences', e); }
   };
 
   const loadSuperAdminExperiences = async () => {
@@ -924,7 +932,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setSubmittedExperiences(data.results || data);
       }
     } catch (e) {
-      console.error('Failed to load submitted experiences', e);
+      handleLoadError('Failed to load submitted experiences', e);
     }
   };
 
@@ -983,28 +991,28 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     try {
       const res = await apiFetch('/api/v1/content/experiences/');
       if (res.ok) { const data = await res.json(); setExperienceBuilders(data.results || data); }
-    } catch (e) { console.error('Failed to load experience builders', e); }
+    } catch (e) { handleLoadError('Failed to load experience builders', e); }
   };
 
   const loadSchoolAdmins = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/school-admins/');
       if (res.ok) { const data = await res.json(); setSchoolAdmins(data.results || data); }
-    } catch (e) { console.error('Failed to load school admins', e); }
+    } catch (e) { handleLoadError('Failed to load school admins', e); }
   };
 
   const loadTeachers = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/teachers/');
       if (res.ok) { const data = await res.json(); setTeachers(data.results || data); }
-    } catch (e) { console.error('Failed to load teachers', e); }
+    } catch (e) { handleLoadError('Failed to load teachers', e); }
   };
 
   const loadStudents = async () => {
     try {
       const res = await apiFetch('/api/cms/v1/students/');
       if (res.ok) { const data = await res.json(); setStudents(data.results || data); }
-    } catch (e) { console.error('Failed to load students', e); }
+    } catch (e) { handleLoadError('Failed to load students', e); }
   };
 
   const formatErrorMsg = (err) => {
@@ -1089,7 +1097,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setNotifications(await res.json());
       }
     } catch (e) {
-      console.error('Failed to load notifications', e);
+      handleLoadError('Failed to load notifications', e);
     }
   };
 
@@ -1100,7 +1108,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setNotifications(notifications.map(n => ({ ...n, read: true })));
       }
     } catch (e) {
-      console.error('Failed to mark notifications read', e);
+      handleLoadError('Failed to mark notifications read', e);
     }
   };
 
@@ -1111,7 +1119,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setNotifications(notifications.filter(n => n.id !== id));
       }
     } catch (e) {
-      console.error('Failed to delete notification', e);
+      handleLoadError('Failed to delete notification', e);
     }
   };
 
@@ -1122,7 +1130,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setNotifications([]);
       }
     } catch (e) {
-      console.error('Failed to clear notifications', e);
+      handleLoadError('Failed to clear notifications', e);
     }
   };
 
@@ -1143,7 +1151,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         });
       }
     } catch (e) {
-      console.error('Failed to load user profile', e);
+      handleLoadError('Failed to load user profile', e);
     }
   };
 
@@ -1159,7 +1167,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         loadNotifications()
       ]);
     } catch (e) {
-      console.error('Failed to load data from backend server.', e);
+      handleLoadError('Failed to load data from backend server.', e);
     } finally {
       setLoading(false);
     }
@@ -1216,9 +1224,16 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     if (tab === 'schools') {
       setSchoolForm(entity ? {
         school_name: entity.school_name || '', school_code: entity.school_code || '', address: entity.address || '',
-        phone: entity.phone || '', email: entity.email || '', logo: entity.logo || '',
-        is_active: entity.is_active !== undefined ? entity.is_active : true
-      } : { school_name: '', school_code: '', address: '', phone: '', email: '', logo: '', is_active: true });
+        phone: entity.phone || '', email: entity.email || entity.contactEmail || '', logo: entity.logo || '',
+        is_active: entity.is_active !== undefined ? entity.is_active : true,
+        maxLmsServers: entity.license?.maxLmsServers ?? entity.maxLmsServers ?? 2,
+        concurrentUsersPerServer: entity.license?.concurrentUsersPerServer ?? entity.concurrentUsersPerServer ?? 40,
+        licenseDuration: entity.license?.licenseDuration || entity.licenseDuration || '1 Year',
+        expiryDate: entity.license?.expiryDate || entity.expiryDate || ''
+      } : {
+        school_name: '', school_code: '', address: '', phone: '', email: '', logo: '', is_active: true,
+        maxLmsServers: 2, concurrentUsersPerServer: 40, licenseDuration: '1 Year', expiryDate: ''
+      });
     } else if (tab === 'publish-contents' || tab === 'reports') {
       setPublishForm(entity ? {
         release_name: entity.release_name || '', grade: entity.grade || '',
@@ -1527,6 +1542,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         phone: cleanPhone,
         lan_phone: newSchoolForm.lan || '',
         lan: newSchoolForm.lan || '',
+        academic_year: newSchoolForm.academic_year || '2026-2027',
         contactEmail: newSchoolForm.email || 'school@example.com',
         email: newSchoolForm.email || 'school@example.com',
         logo: '',
@@ -1709,7 +1725,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             overflow: 'hidden'
           }}
         >
-          {!navCollapsed && (
+          {!navCollapsed ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <img src={logoIcon} alt="Logo" style={{ width: '48px', height: '76px', objectFit: 'contain' }} />
               <div>
@@ -1717,30 +1733,40 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 <div className="sd-brand-sub">Admin Portal</div>
               </div>
             </div>
+          ) : (
+            <img 
+              src={roundLogo} 
+              alt="Logo" 
+              onClick={toggleNavCollapsed} 
+              style={{ width: '28px', height: '28px', objectFit: 'contain', cursor: 'pointer' }} 
+              title="Expand sidebar"
+            />
           )}
-          <button
-            onClick={toggleNavCollapsed}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'rgba(255, 255, 255, 0.75)',
-              cursor: 'pointer',
-              padding: '6px',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'background 0.2s'
-            }}
-            onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-            title={navCollapsed ? 'Expand sidebar' : 'Close sidebar'}
-          >
-            <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="20px" width="20px" xmlns="http://www.w3.org/2000/svg">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="9" y1="3" x2="9" y2="21"></line>
-            </svg>
-          </button>
+          {!navCollapsed && (
+            <button
+              onClick={toggleNavCollapsed}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'rgba(255, 255, 255, 0.75)',
+                cursor: 'pointer',
+                padding: '6px',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+              title={navCollapsed ? 'Expand sidebar' : 'Close sidebar'}
+            >
+              <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="20px" width="20px" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="3" x2="9" y2="21"></line>
+              </svg>
+            </button>
+          )}
         </div>
 
         <nav className="sd-nav" style={{ padding: navCollapsed ? '1rem 0.5rem' : '1.5rem 1rem' }}>
@@ -1930,7 +1956,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             <div style={{ position: 'relative' }}>
               <button className="sd-icon-btn" style={{ position: 'relative' }} onClick={(e) => { e.stopPropagation(); setShowNotifDropdown(!showNotifDropdown); }}>
                 <FiBell />
-                {notifications.some(n => !n.read) && (
+                {notifications.some(n => !(n.read || n.is_read)) && (
                   <span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' }} />
                 )}
               </button>
@@ -1944,18 +1970,21 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     {notifications.length === 0 ? (
                       <span style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '10px 0' }}>No new notifications.</span>
                     ) : (
-                      notifications.map(n => (
-                        <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: n.read ? 'transparent' : '#f0fdf4', borderLeft: n.read ? 'none' : '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', textAlign: 'left' }}>
-                           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                             <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
-                             <span style={{ fontSize: '0.75rem', color: '#475569' }}>{n.message || n.text}</span>
-                             <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
-                           </div>
-                           <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); handleDeleteNotification(n.id); }} title="Delete">
-                             <FiX size={14} />
-                           </button>
-                        </div>
-                      ))
+                      notifications.map(n => {
+                        const isRead = n.read !== undefined ? n.read : n.is_read;
+                        return (
+                          <div key={n.id} style={{ padding: '8px', borderRadius: '6px', backgroundColor: isRead ? 'transparent' : '#f0fdf4', borderLeft: isRead ? 'none' : '3px solid #22c55e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', textAlign: 'left' }}>
+                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                               <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: isRead ? 600 : 700 }}>{n.title || 'Notification'}</span>
+                               <span style={{ fontSize: '0.75rem', color: '#475569' }}>{n.message || n.text}</span>
+                               <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{n.time || (n.created_at ? new Date(n.created_at).toLocaleTimeString() : '')}</span>
+                             </div>
+                             <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { e.stopPropagation(); handleDeleteNotification(n.id); }} title="Delete">
+                               <FiX size={14} />
+                             </button>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                   <div style={{ borderTop: '1px solid #f1f5f9', marginTop: '10px', paddingTop: '8px', textAlign: 'center' }}>
@@ -2104,20 +2133,47 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>No recent activity.</div>
                     ) : (
                       recentActivitiesList.slice(0, 6).map((act, idx) => {
-                        const isEdit = act.activity_type === 'experience_edited';
+                        let icon = <FiHome />;
+                        let bg = '#e0f2fe';
+                        let fg = '#0284c7';
+                        let badgeLabel = 'School';
+
+                        const actType = act?.activity_type || '';
+                        if (actType.startsWith('school_admin')) {
+                          icon = <FiUserCheck />;
+                          bg = '#f0fdf4';
+                          fg = '#16a34a';
+                          badgeLabel = 'School Admin';
+                        } else if (actType.startsWith('grade')) {
+                          icon = <FiLayers />;
+                          bg = '#fef3c7';
+                          fg = '#d97706';
+                          badgeLabel = 'Grade';
+                        } else if (act.activity_type === 'experience_edited') {
+                          icon = <FiEdit2 />;
+                          bg = '#e0f2fe';
+                          fg = '#0284c7';
+                          badgeLabel = 'Experience';
+                        } else if (act.activity_type === 'media_uploaded') {
+                          icon = <FiUpload />;
+                          bg = '#ffedd5';
+                          fg = '#ea580c';
+                          badgeLabel = 'Media';
+                        }
+
                         return (
                           <div className="sd-activity-item" key={act.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 0', borderBottom: '1px solid #f1f5f9' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: 0 }}>
-                              <div className="sd-activity-icon-container" style={{ width: 36, height: 36, borderRadius: '50%', background: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0284c7' : '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                {isEdit ? <FiEdit2 /> : <FiUpload />}
+                              <div className="sd-activity-icon-container" style={{ width: 36, height: 36, borderRadius: '50%', background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                {icon}
                               </div>
                               <div style={{ minWidth: 0, flex: 1 }}>
                                 <div className="sd-activity-desc" style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{act.message}</div>
                                 <div className="sd-activity-meta" style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '2px' }}>{new Date(act.timestamp).toLocaleDateString()}</div>
                               </div>
                             </div>
-                            <span className="sd-activity-badge" style={{ fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: '12px', background: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0369a1' : '#ea580c', flexShrink: 0 }}>
-                              {isEdit ? 'Experience' : 'Media'}
+                            <span className="sd-activity-badge" style={{ fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: '12px', background: bg, color: fg, flexShrink: 0 }}>
+                              {badgeLabel}
                             </span>
                           </div>
                         );
@@ -2442,6 +2498,22 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             <label className="sd-form-label">Pincode <span style={{ color: '#ef4444' }}>*</span></label>
                             <input className="sd-form-input" type="text" placeholder="Enter pincode" required
                               value={newSchoolForm.pincode} onChange={e => setNewSchoolForm({ ...newSchoolForm, pincode: e.target.value })} />
+                          </div>
+                          <div className="sd-form-group">
+                            <label className="sd-form-label">Academic Year <span style={{ color: '#ef4444' }}>*</span></label>
+                            <input
+                              className="sd-form-input"
+                              type="text"
+                              maxLength={9}
+                              placeholder="2026-2027"
+                              required
+                              value={newSchoolForm.academic_year || ''}
+                              onChange={e => {
+                                const clean = e.target.value.replace(/\D/g, '').slice(0, 8);
+                                const formatted = clean.length > 4 ? `${clean.slice(0, 4)}-${clean.slice(4)}` : clean;
+                                setNewSchoolForm({ ...newSchoolForm, academic_year: formatted });
+                              }}
+                            />
                           </div>
                           <div className="sd-form-group">
                             <label className="sd-form-label">Phone Number (10 Digits) <span style={{ color: '#ef4444' }}>*</span></label>
@@ -3647,6 +3719,62 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       <input type="checkbox" checked={schoolForm.is_active} onChange={e => setSchoolForm({ ...schoolForm, is_active: e.target.checked })} />
                       Active / Enable Tenant Scoping
                     </label>
+
+                    {/* License Configuration */}
+                    <div style={{ marginTop: '1.5rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem' }}>
+                      <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '1rem' }}>License Configuration</h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
+                        <div className="sd-form-group" style={{ marginBottom: 0 }}>
+                          <label className="sd-form-label">Max LMS Servers *</label>
+                          <input
+                            className="sd-form-input"
+                            type="number"
+                            min="1"
+                            required
+                            value={schoolForm.maxLmsServers ?? 2}
+                            onChange={e => setSchoolForm({ ...schoolForm, maxLmsServers: e.target.value })}
+                          />
+                        </div>
+                        <div className="sd-form-group" style={{ marginBottom: 0 }}>
+                          <label className="sd-form-label">Concurrent Users Per Server *</label>
+                          <input
+                            className="sd-form-input"
+                            type="number"
+                            min="1"
+                            required
+                            value={schoolForm.concurrentUsersPerServer ?? 40}
+                            onChange={e => setSchoolForm({ ...schoolForm, concurrentUsersPerServer: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                        <div className="sd-form-group" style={{ marginBottom: 0 }}>
+                          <label className="sd-form-label">License Duration *</label>
+                          <select
+                            className="sd-form-input"
+                            required
+                            value={schoolForm.licenseDuration || '1 Year'}
+                            onChange={e => setSchoolForm({ ...schoolForm, licenseDuration: e.target.value })}
+                          >
+                            <option value="1 Year">1 Year</option>
+                            <option value="2 Years">2 Years</option>
+                            <option value="Custom">Custom Expiry Date</option>
+                          </select>
+                        </div>
+                        {schoolForm.licenseDuration === 'Custom' && (
+                          <div className="sd-form-group" style={{ marginBottom: 0 }}>
+                            <label className="sd-form-label">Custom Expiry Date *</label>
+                            <input
+                              className="sd-form-input"
+                              type="date"
+                              required
+                              value={schoolForm.expiryDate || ''}
+                              onChange={e => setSchoolForm({ ...schoolForm, expiryDate: e.target.value })}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </>)}
 
                   {/* School Admins Form */}
@@ -4016,14 +4144,46 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         <div className="sd-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) { setPreviewExperience(null); setActivePreviewScreen(null); } }} style={{ zIndex: 9999 }}>
           <div className="sd-modal" style={{ width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', margin: 0, borderRadius: 0, top: 0, left: 0, position: 'fixed', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
             {/* Modal Header */}
-            <div className="sd-modal-header" style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', flexShrink: 0, background: '#f8fafc' }}>
+            <div className="sd-modal-header" style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', flexShrink: 0, background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <span className="sd-modal-title" style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>Interactive Student Player Simulator</span>
                 <span style={{ fontSize: '0.85rem', color: '#64748b', marginLeft: '12px', paddingLeft: '12px', borderLeft: '1px solid #cbd5e1' }}>
                   <strong>Lesson:</strong> {previewExperience.title} • <strong>Grade:</strong> {previewExperience.grade_name || `Grade ${previewExperience.grade}`} • <strong>Difficulty:</strong> {previewExperience.difficulty}
                 </span>
               </div>
-              <button className="sd-modal-close" onClick={() => { setPreviewExperience(null); setActivePreviewScreen(null); }}><FiX /></button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                {previewExperience.status === 'PENDING_APPROVAL' && (
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button
+                      type="button"
+                      className="sd-btn-primary"
+                      style={{ padding: '0.5rem 1rem', backgroundColor: '#ef4444', border: 'none', color: '#fff', fontSize: '0.85rem', fontWeight: 600, borderRadius: '6px', cursor: 'pointer' }}
+                      onClick={() => {
+                        setRejectingId(previewExperience.id);
+                        setRejectRemark('');
+                        setShowRejectModal(true);
+                        setPreviewExperience(null);
+                        setActivePreviewScreen(null);
+                      }}
+                    >
+                      ❌ Reject Experience
+                    </button>
+                    <button
+                      type="button"
+                      className="sd-btn-primary"
+                      style={{ padding: '0.5rem 1rem', backgroundColor: '#22c55e', border: 'none', color: '#fff', fontSize: '0.85rem', fontWeight: 600, borderRadius: '6px', cursor: 'pointer' }}
+                      onClick={() => {
+                        handleApproveExperience(previewExperience.id);
+                        setPreviewExperience(null);
+                        setActivePreviewScreen(null);
+                      }}
+                    >
+                      ✅ Approve Experience
+                    </button>
+                  </div>
+                )}
+                <button className="sd-modal-close" onClick={() => { setPreviewExperience(null); setActivePreviewScreen(null); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FiX /></button>
+              </div>
             </div>
 
             {/* Modal Body: Split view */}
@@ -4092,7 +4252,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 flex: 1,
                 display: 'flex',
                 flexDirection: 'column',
-                height: 'calc(100vh - 120px)',
+                height: '100%',
                 overflow: 'hidden',
                 position: 'relative'
               }}>
@@ -4107,7 +4267,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       display: 'flex',
                       justifyContent: 'center',
                       alignItems: 'flex-start',
-                      backgroundColor: '#ffffff'
+                      backgroundColor: '#f1f5f9'
                     }}>
                       <div 
                         ref={previewScaleRef}
@@ -4258,6 +4418,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                   <video
                                     src={getPreviewMediaUrl(activePreviewScreen, 'video')}
                                     controls
+                                    controlsList="nodownload noplaybackrate noremoteplayback"
+                                    disablePictureInPicture
+                                    onContextMenu={e => e.preventDefault()}
                                     style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                                   />
                                 </div>
@@ -4287,6 +4450,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                   <audio
                                     src={getPreviewMediaUrl(activePreviewScreen, 'audio')}
                                     controls
+                                    controlsList="nodownload noplaybackrate noremoteplayback"
+                                    disablePictureInPicture
+                                    onContextMenu={e => e.preventDefault()}
                                     style={{ width: '100%' }}
                                   />
                                 </div>
@@ -4428,19 +4594,20 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                   {/* Navigation Footer Inside Canvas */}
                   <div className="preview-footer-sticky" style={{ 
                     position: 'sticky',
-                    bottom: 0,
+                    bottom: '1.5rem',
                     left: 0,
                     right: 0,
-                    background: '#ffffff',
-                    borderTop: '1px solid #e2e8f0',
-                    padding: '1rem 1.5rem',
+                    background: 'transparent',
+                    borderTop: 'none',
+                    padding: '0 2rem',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     zIndex: 50,
-                    boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.05)',
+                    boxShadow: 'none',
                     boxSizing: 'border-box',
-                    width: '100%'
+                    width: '100%',
+                    pointerEvents: 'none'
                   }}>
                     {(() => {
                       const flat = getFlatScreens();
@@ -4452,7 +4619,19 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             className="sd-btn-outline"
                             disabled={idx <= 0}
                             onClick={handlePrevScreen}
-                            style={{ padding: '0.45rem 1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            style={{ 
+                              padding: '0.6rem 1.2rem', 
+                              fontSize: '0.85rem', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '6px',
+                              backgroundColor: '#ffffff',
+                              border: '1px solid #cbd5e1',
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              pointerEvents: 'auto'
+                            }}
                           >
                             ← Previous Screen
                           </button>
@@ -4462,7 +4641,19 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             className="sd-btn-outline"
                             disabled={idx === -1 || idx === flat.length - 1}
                             onClick={handleNextScreen}
-                            style={{ padding: '0.45rem 1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            style={{ 
+                              padding: '0.6rem 1.2rem', 
+                              fontSize: '0.85rem', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '6px',
+                              backgroundColor: '#ffffff',
+                              border: '1px solid #cbd5e1',
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              pointerEvents: 'auto'
+                            }}
                           >
                             Next Screen →
                           </button>
@@ -4478,42 +4669,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 </div>
               )}
               </div>
-            </div>
-
-            {/* Sticky Modal Footer: Action controls */}
-            <div className="sd-modal-footer" style={{ position: 'sticky', bottom: 0, backgroundColor: '#ffffff', borderTop: '1px solid #e2e8f0', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100, flexShrink: 0 }}>
-              <button type="button" className="sd-btn-cancel" onClick={() => { setPreviewExperience(null); setActivePreviewScreen(null); }}>Close Preview</button>
-
-              {previewExperience.status === 'PENDING_APPROVAL' && (
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <button
-                    type="button"
-                    className="sd-btn-primary"
-                    style={{ padding: '0.65rem 1.5rem', backgroundColor: '#ef4444', border: 'none', color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}
-                    onClick={() => {
-                      setRejectingId(previewExperience.id);
-                      setRejectRemark('');
-                      setShowRejectModal(true);
-                      setPreviewExperience(null);
-                      setActivePreviewScreen(null);
-                    }}
-                  >
-                    ❌ Reject Experience
-                  </button>
-                  <button
-                    type="button"
-                    className="sd-btn-primary"
-                    style={{ padding: '0.65rem 1.5rem', backgroundColor: '#22c55e', border: 'none', color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}
-                    onClick={() => {
-                      handleApproveExperience(previewExperience.id);
-                      setPreviewExperience(null);
-                      setActivePreviewScreen(null);
-                    }}
-                  >
-                    ✅ Approve Experience
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -4951,21 +5106,48 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
                   {recentActivitiesList.map((act, i) => {
-                    const isEdit = act.activity_type === 'experience_edited';
+                    let icon = <FiHome />;
+                    let bg = '#e0f2fe';
+                    let fg = '#0284c7';
+                    let badgeLabel = 'School';
+
+                    const actType = act?.activity_type || '';
+                    if (actType.startsWith('school_admin')) {
+                      icon = <FiUserCheck />;
+                      bg = '#f0fdf4';
+                      fg = '#16a34a';
+                      badgeLabel = 'School Admin';
+                    } else if (actType.startsWith('grade')) {
+                      icon = <FiLayers />;
+                      bg = '#fef3c7';
+                      fg = '#d97706';
+                      badgeLabel = 'Grade';
+                    } else if (act.activity_type === 'experience_edited') {
+                      icon = <FiEdit2 />;
+                      bg = '#e0f2fe';
+                      fg = '#0284c7';
+                      badgeLabel = 'Experience';
+                    } else if (act.activity_type === 'media_uploaded') {
+                      icon = <FiUpload />;
+                      bg = '#ffedd5';
+                      fg = '#ea580c';
+                      badgeLabel = 'Media';
+                    }
+
                     const actDate = new Date(act.timestamp);
                     return (
                       <div key={act.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: i === recentActivitiesList.length - 1 ? 'none' : '1px solid #e2e8f0' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                          <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0284c7' : '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {isEdit ? <FiEdit2 /> : <FiUpload />}
+                          <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {icon}
                           </div>
                           <div>
                             <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>{act.message}</div>
                             <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>{actDate.toLocaleDateString()} at {actDate.toLocaleTimeString()}</div>
                           </div>
                         </div>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '4px 10px', borderRadius: '12px', backgroundColor: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0369a1' : '#ea580c' }}>
-                          {isEdit ? 'Experience' : 'Media'}
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '4px 10px', borderRadius: '12px', backgroundColor: bg, color: fg }}>
+                          {badgeLabel}
                         </span>
                       </div>
                     );
@@ -5024,30 +5206,33 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       <span style={{ fontSize: '0.9rem' }}>All caught up! No notifications.</span>
                     </div>
                   ) : (
-                    notifications.map(n => (
-                      <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: n.read ? '#ffffff' : '#f0fdf4', border: `1px solid ${n.read ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: n.read ? 600 : 700 }}>{n.title || 'Notification'}</span>
-                          <span style={{ fontSize: '0.8rem', color: '#475569' }}>{n.message || n.text}</span>
-                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{n.time || new Date(n.created_at).toLocaleDateString()}</span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                          {!n.read && (
-                            <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={async () => {
-                              try {
-                                await apiFetch('/api/v1/dashboard/notifications', { method: 'POST' });
-                                setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true } : item));
-                              } catch (e) { console.error(e); }
-                            }}>
-                              Mark read
+                    notifications.map(n => {
+                      const isRead = n.read !== undefined ? n.read : n.is_read;
+                      return (
+                        <div key={n.id} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', backgroundColor: isRead ? '#ffffff' : '#f0fdf4', border: `1px solid ${isRead ? '#e2e8f0' : '#bbf7d0'}`, position: 'relative', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: isRead ? 600 : 700 }}>{n.title || 'Notification'}</span>
+                            <span style={{ fontSize: '0.8rem', color: '#475569' }}>{n.message || n.text}</span>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{n.time || (n.created_at ? new Date(n.created_at).toLocaleDateString() : '')}</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            {!isRead && (
+                              <button style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }} onClick={async () => {
+                                try {
+                                  await apiFetch('/api/v1/dashboard/notifications', { method: 'POST' });
+                                  setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true, is_read: true } : item));
+                                } catch (e) { console.error(e); }
+                              }}>
+                                Mark read
+                              </button>
+                            )}
+                            <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleDeleteNotification(n.id)} title="Delete">
+                              <FiX size={16} />
                             </button>
-                          )}
-                          <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleDeleteNotification(n.id)} title="Delete">
-                            <FiX size={16} />
-                          </button>
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>

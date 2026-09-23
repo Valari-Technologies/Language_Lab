@@ -39,7 +39,7 @@ class ClassViewSet(CMSBaseViewSet):
         return filter_queryset_by_school(
             Class.objects.select_related("school", "grade").all(),
             self.request.user,
-        )
+        ).order_by("grade__sort_order", "class_name")
 
 
 class TeacherClassViewSet(CMSBaseViewSet):
@@ -603,10 +603,13 @@ class ClassViewSet(CMSBaseViewSet):
     search_fields = ["class_name"]
 
     def get_queryset(self):
-        return filter_queryset_by_school(
+        qs = filter_queryset_by_school(
             Class.objects.select_related("school", "grade").all(),
             self.request.user,
-        )
+        ).order_by("grade__sort_order", "class_name")
+        if self.request.user and self.request.user.is_authenticated and self.request.user.role == "TEACHER":
+            qs = qs.filter(teacherclass__teacher__user=self.request.user)
+        return qs.distinct()
 
 
 class TeacherClassViewSet(CMSBaseViewSet):

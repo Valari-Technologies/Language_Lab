@@ -604,7 +604,52 @@ class DashboardRecentActivityAPIView(APIView):
         role = getattr(user, "role", "STUDENT")
         activities = []
 
-        if role in ["SUPER_ADMIN", "CONTENT_CREATOR"]:
+        if role == "SUPER_ADMIN":
+            from super_admin.models import School, Grade, ActivityLog
+            from accounts.models import User
+
+            recent_schools = School.objects.all().order_by("-updated_at")[:15]
+            for sch in recent_schools:
+                act_type = "school_created" if sch.created_at == sch.updated_at else "school_updated"
+                action_text = "was created" if act_type == "school_created" else "was updated"
+                activities.append({
+                    "id": f"school-{sch.school_id}",
+                    "activity_type": act_type,
+                    "message": f"School '{sch.school_name}' {action_text}.",
+                    "timestamp": sch.updated_at
+                })
+
+            recent_admins = User.objects.filter(role="SCHOOL_ADMIN").order_by("-date_joined")[:10]
+            for adm in recent_admins:
+                name = adm.full_name or adm.username
+                activities.append({
+                    "id": f"school-admin-{adm.id}",
+                    "activity_type": "school_admin_added",
+                    "message": f"School Admin '{name}' was created.",
+                    "timestamp": adm.date_joined
+                })
+
+            recent_grades = Grade.objects.all().order_by("-updated_at")[:10]
+            for g in recent_grades:
+                act_type = "grade_created" if g.created_at == g.updated_at else "grade_updated"
+                action_text = "was created" if act_type == "grade_created" else "was updated"
+                activities.append({
+                    "id": f"grade-{g.id}",
+                    "activity_type": act_type,
+                    "message": f"Grade '{g.grade_name}' {action_text}.",
+                    "timestamp": g.updated_at
+                })
+
+            logs = ActivityLog.objects.all().order_by("-created_at")[:20]
+            for log in logs:
+                activities.append({
+                    "id": f"activity-log-{log.id}",
+                    "activity_type": log.activity_type,
+                    "message": log.message,
+                    "timestamp": log.created_at
+                })
+
+        elif role == "CONTENT_CREATOR":
             recent_experiences = Experience.objects.filter(is_deleted=False).order_by("-updated_at")[:15]
             for s in recent_experiences:
                 activities.append({
@@ -660,19 +705,71 @@ class DashboardRecentActivityAPIView(APIView):
                     })
             
         elif role == "TEACHER":
-            from school_admin.models import Teacher
+            from school_admin.models import Teacher, Class
             from teacher.models import Student
+            from django.db.models import Q
+            import re
             
             teacher = Teacher.objects.filter(user=user).first()
             if teacher:
-                recent_students = Student.objects.filter(school=teacher.school).order_by("-created_at")[:15]
-                for st in recent_students:
-                    activities.append({
-                        "id": f"student-{st.student_id}",
-                        "activity_type": "student_enrolled",
-                        "message": f"Student '{st.user.full_name or st.user.username}' was enrolled in school.",
-                        "timestamp": st.created_at
-                    })
+                teacher_classes = Class.objects.filter(teacherclass__teacher=teacher).select_related("grade")
+                if teacher_classes.exists():
+                    def extract_class_section(class_name):
+                        if not class_name:
+                            return ""
+                        name = class_name.strip().upper()
+                        if '-' in name:
+                            part = name.split('-')[-1].strip()
+                            if part and part.isalpha() and len(part) == 1:
+                                return part
+                        if name and name[-1].isalpha():
+                            return name[-1]
+                        return ""
+
+                    def normalize_grade(grade_str):
+                        if not grade_str:
+                            return ""
+                        match = re.search(r"\d+", str(grade_str))
+                        if match:
+                            return match.group(0)
+                        return str(grade_str).strip().upper()
+
+                    q_filter = Q()
+                    for cls in teacher_classes:
+                        grade_norm = normalize_grade(cls.grade.grade_name if cls.grade else "")
+                        section_norm = extract_class_section(cls.class_name).strip().upper()
+                        ay_norm = (cls.academic_year or "").replace(" ", "").upper()
+
+                        class_q = Q()
+                        if grade_norm:
+                            class_q &= (
+                                Q(grade__icontains=grade_norm) |
+                                Q(grade__icontains=f"Grade {grade_norm}") |
+                                Q(grade__icontains=f"Class {grade_norm}")
+                            )
+                        if section_norm:
+                            class_q &= (
+                                Q(section__iexact=section_norm) |
+                                Q(section__icontains=f"Section {section_norm}")
+                            )
+                        if ay_norm:
+                            ay_with_spaces = f"{ay_norm[:4]} - {ay_norm[5:]}" if len(ay_norm) == 9 and ay_norm[4] == '-' else ay_norm
+                            class_q &= (
+                                Q(academic_year__iexact=ay_norm) |
+                                Q(academic_year__iexact=ay_with_spaces) |
+                                Q(academic_year__isnull=True) |
+                                Q(academic_year="")
+                            )
+                        q_filter |= class_q
+
+                    recent_students = Student.objects.filter(school=teacher.school).filter(q_filter).select_related("user").order_by("-created_at")[:15]
+                    for st in recent_students:
+                        activities.append({
+                            "id": f"student-{st.student_id}",
+                            "activity_type": "student_enrolled",
+                            "message": f"Student '{st.user.full_name or st.user.username}' was enrolled.",
+                            "timestamp": st.created_at
+                        })
 
         activities.sort(key=lambda x: x["timestamp"], reverse=True)
         recent_activities = activities[:50]
@@ -876,6 +973,21 @@ class PublishViewSet(viewsets.ViewSet):
         experience.pending_version = version or "1.0"
         experience.pending_release_notes = release_notes
         experience.save(update_fields=["status", "pending_version", "pending_release_notes"])
+
+        # Alert Super Admins via Notification models
+        try:
+            from accounts.models import User
+            from content_studio.models import Notification
+            super_admins = User.objects.filter(role="SUPER_ADMIN")
+            for admin in super_admins:
+                Notification.objects.create(
+                    user=admin,
+                    title="New Approval Request",
+                    message=f"Lesson '{experience.title}' (Version {experience.pending_version}) has been submitted for approval by {request.user.username}.",
+                    notification_type=Notification.NotificationType.INFO
+                )
+        except Exception as e:
+            print("Failed to create approval notifications:", e)
 
         return Response(
             {
@@ -1148,9 +1260,10 @@ class AIGenerateView(APIView):
             )
 
         allowed_types = [
-            "quiz", "dialogue", "fill_in_blanks", "full_screen", "remedial",
+            "quiz", "fill_in_blanks", "full_screen", "remedial",
             "dictation", "sequence_audio", "quiz_listening",
-            "roleplay", "pronunciation", "reading_passage", "match",
+            "roleplay_simulation", "functional_reading",
+            "pronunciation", "reading_passage", "match",
             "flashcards", "wordsearch", "fill_blank",
             "writing_prompt", "sentence_builder", "grammar_correction",
             "true_false", "drag_drop"
@@ -1231,6 +1344,19 @@ class SuperAdminExperienceViewSet(viewsets.ViewSet):
         experience.review_remark = None
         experience.save(update_fields=["pending_version", "pending_release_notes", "review_remark"])
 
+        # Notify Content Creator
+        if experience.created_by:
+            try:
+                from content_studio.models import Notification
+                Notification.objects.create(
+                    user=experience.created_by,
+                    title="Experience Approved",
+                    message=f"Your lesson '{experience.title}' (Version {result['version']}) has been approved and published.",
+                    notification_type=Notification.NotificationType.INFO,
+                )
+            except Exception as e:
+                print("Failed to create approval notification:", e)
+
         version_obj = result["version_obj"]
         response_data = {
             "message": "Experience approved and package generated successfully.",
@@ -1261,6 +1387,19 @@ class SuperAdminExperienceViewSet(viewsets.ViewSet):
         experience.pending_version = None
         experience.pending_release_notes = None
         experience.save(update_fields=["status", "review_remark", "pending_version", "pending_release_notes"])
+
+        # Notify Content Creator
+        if experience.created_by:
+            try:
+                from content_studio.models import Notification
+                Notification.objects.create(
+                    user=experience.created_by,
+                    title="Experience Rejected",
+                    message=f"Your lesson '{experience.title}' was reviewed and returned with feedback: {remark or 'No remark provided.'}",
+                    notification_type=Notification.NotificationType.WARNING,
+                )
+            except Exception as e:
+                print("Failed to create rejection notification:", e)
 
         return Response(
             {

@@ -48,5 +48,60 @@ urlpatterns = [
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+import os
+import re
+import mimetypes
+from django.http import HttpResponse, Http404, StreamingHttpResponse
+from django.urls import re_path
+
+def ranged_media_serve(request, path):
+    fullpath = os.path.join(settings.MEDIA_ROOT, path)
+    if not os.path.exists(fullpath) or not os.path.isfile(fullpath):
+        raise Http404("File not found")
+
+    content_type, _ = mimetypes.guess_type(fullpath)
+    content_type = content_type or 'application/octet-stream'
+    file_size = os.path.getsize(fullpath)
+
+    range_header = request.META.get('HTTP_RANGE', '').strip()
+    range_match = re.match(r'bytes=(\d+)-(\d+)?', range_header)
+
+    if range_match:
+        first_byte = int(range_match.group(1))
+        last_byte = int(range_match.group(2)) if range_match.group(2) else file_size - 1
+        if first_byte >= file_size:
+            return HttpResponse(status=416)
+        last_byte = min(last_byte, file_size - 1)
+        length = last_byte - first_byte + 1
+
+        def file_iterator(file_name, offset, length, chunk_size=32768):
+            with open(file_name, 'rb') as f:
+                f.seek(offset)
+                remaining = length
+                while remaining > 0:
+                    read_size = min(chunk_size, remaining)
+                    data = f.read(read_size)
+                    if not data:
+                        break
+                    remaining -= len(data)
+                    yield data
+
+        response = StreamingHttpResponse(
+            file_iterator(fullpath, first_byte, length),
+            status=206,
+            content_type=content_type
+        )
+        response['Content-Range'] = f'bytes {first_byte}-{last_byte}/{file_size}'
+        response['Content-Length'] = str(length)
+        response['Accept-Ranges'] = 'bytes'
+        return response
+
+    with open(fullpath, 'rb') as f:
+        response = HttpResponse(f.read(), content_type=content_type)
+    response['Content-Length'] = str(file_size)
+    response['Accept-Ranges'] = 'bytes'
+    return response
+
+urlpatterns += [
+    re_path(r'^media/(?P<path>.*)$', ranged_media_serve),
+]

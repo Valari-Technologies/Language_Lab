@@ -94,6 +94,22 @@ def check_experience_metadata(experience):
             "item": f"experience-{experience.id}"
         })
         
+    # Description length rule
+    if experience.description and len(experience.description) > 200:
+        results.append({
+            "rule": "experience_description_limit",
+            "severity": "ERROR",
+            "message": f"Experience description exceeds 200 characters limit ({len(experience.description)}/200).",
+            "item": f"experience-{experience.id}"
+        })
+    else:
+        results.append({
+            "rule": "experience_description_limit",
+            "severity": "PASSED",
+            "message": "Experience description is within 200 characters limit.",
+            "item": f"experience-{experience.id}"
+        })
+        
     return results
 
 def check_experience_has_activities(experience, activities):
@@ -106,18 +122,18 @@ def check_experience_has_activities(experience, activities):
             "message": "Experience has zero activities. At least one activity is required.",
             "item": f"experience-{experience.id}"
         })
-    elif num_activities > 5:
+    elif num_activities > 6:
         results.append({
             "rule": "experience_activities_required",
             "severity": "ERROR",
-            "message": f"Experience has too many activities ({num_activities}). Maximum of 5 activities is allowed.",
+            "message": f"Experience has too many activities ({num_activities}). Maximum of 6 activities is allowed.",
             "item": f"experience-{experience.id}"
         })
     else:
         results.append({
             "rule": "experience_activities_required",
             "severity": "PASSED",
-            "message": f"Experience contains {num_activities} activity/activities (1-5 limit satisfied).",
+            "message": f"Experience contains {num_activities} activity/activities (1-6 limit satisfied).",
             "item": f"experience-{experience.id}"
         })
     return results
@@ -128,7 +144,7 @@ def check_experience_duration_sanity(experience, activities):
     if experience.estimated_duration < sum_durations:
         results.append({
             "rule": "experience_duration_sanity",
-            "severity": "WARNING",
+            "severity": "ERROR",
             "message": f"Experience duration ({experience.estimated_duration}m) is less than the sum of its activities ({sum_durations}m).",
             "item": f"experience-{experience.id}"
         })

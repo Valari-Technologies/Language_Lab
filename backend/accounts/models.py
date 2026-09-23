@@ -13,7 +13,7 @@ class User(AbstractUser):
     role = models.CharField(
         max_length=20,
         choices=Role.choices,
-        default=Role.STUDENT
+        default=Role.CONTENT_CREATOR
     )
 
     full_name = models.CharField(
