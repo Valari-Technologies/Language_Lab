@@ -516,7 +516,10 @@ class BulkUploadAPIView(APIView):
                             if not academic_year_val or not str(academic_year_val).strip(): raise ValueError("academy year is required for student.")
 
                             full_name = str(fullname_val).strip()
-                            grade = str(grade_val).strip()
+                            grade_raw = str(grade_val).strip()
+                            import re
+                            grade_match = re.search(r"\d+", grade_raw)
+                            grade = f"Class {grade_match.group(0)}" if grade_match else grade_raw
                             section = str(section_val).strip()
                             roll_no = str(roll_no_val).strip()
                             status_str = str(status_val).strip().lower()

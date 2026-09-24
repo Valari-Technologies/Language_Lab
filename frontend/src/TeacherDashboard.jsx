@@ -715,9 +715,11 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     if (tab === 'students') {
       let matchedClassId = '';
       if (entity) {
-        const studentGradeVal = entity.grade ? (entity.grade.startsWith('Grade') ? entity.grade.replace('Grade', 'Class') : entity.grade) : '';
+        const rawG = entity.grade || '';
+        const matchG = String(rawG).match(/\d+/);
+        const studentGradeVal = matchG ? `Class ${matchG[0]}` : rawG;
         const matchedClass = classes.find(c => {
-          const classGradeVal = c.grade_name ? c.grade_name.replace('Grade', 'Class') : `Class ${c.grade}`;
+          const classGradeVal = c.grade_name ? (c.grade_name.includes('Class') ? c.grade_name : c.grade_name.replace('Grade', 'Class')) : `Class ${c.grade}`;
           return studentGradeVal === classGradeVal &&
                  (entity.section || '').toUpperCase() === (c.section || '').toUpperCase() &&
                  (entity.academic_year || '').replace(" ", "") === (c.academic_year || '').replace(" ", "");
@@ -725,12 +727,15 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         if (matchedClass) matchedClassId = matchedClass.class_id;
       }
       const defaultSchoolAcademicYear = schools[0]?.academic_year || '2026-2027';
+      const rawG = entity?.grade || '';
+      const matchG = String(rawG).match(/\d+/);
+      const formattedG = matchG ? `Class ${matchG[0]}` : rawG;
       setStudentForm(entity ? {
         class_id: matchedClassId,
         username: entity.username || '', password: '',
         email: entity.email || '', full_name: entity.full_name || '',
         roll_no: entity.roll_no || '',
-        grade: entity.grade ? (entity.grade.startsWith('Grade') ? entity.grade.replace('Grade', 'Class') : entity.grade) : '',
+        grade: formattedG,
         section: entity.section || '',
         academic_year: entity.academic_year || defaultSchoolAcademicYear,
         is_active: entity.is_active !== undefined ? entity.is_active : true

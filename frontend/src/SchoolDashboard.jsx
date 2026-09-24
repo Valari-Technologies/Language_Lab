@@ -863,11 +863,17 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             school: defaultSchool, qualification:'', assigned_class_ids: [],
             classes_list: [], academic_year: defaultSchoolAcademicYear });
     } else if (tab === 'students') {
+      const rawGrade = entity?.grade || '';
+      let formattedGrade = '';
+      if (rawGrade) {
+        const match = String(rawGrade).match(/\d+/);
+        formattedGrade = match ? `Class ${match[0]}` : rawGrade;
+      }
       setStudentForm(entity ? {
         username: entity.username || '', password: '', email: entity.email || '',
         full_name: entity.full_name || '',
         roll_no: entity.roll_no || '',
-        grade: entity.grade ? (entity.grade.startsWith('Grade') ? entity.grade.replace('Grade', 'Class') : entity.grade) : '',
+        grade: formattedGrade,
         section: entity.section || '',
         academic_year: entity.academic_year || defaultSchoolAcademicYear,
         is_active: entity.is_active !== undefined ? entity.is_active : true
@@ -4219,9 +4225,9 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       onChange={e => setStudentForm({...studentForm, grade:e.target.value})}
                       required
                     >
-                      <option value="">-- Select Grade ──</option>
+                      <option value="">-- Select Class --</option>
                       {[3, 4, 5, 6, 7, 8].map(num => (
-                        <option key={num} value={num}>Grade {num}</option>
+                        <option key={num} value={`Class ${num}`}>Class {num}</option>
                       ))}
                     </select>
                   </div>

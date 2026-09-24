@@ -1490,13 +1490,19 @@ export default function PreviewCanvasRenderer({
             : [{
                 title: block.content?.title || '',
                 passage: block.content?.passage || '',
-                question: block.content?.question || ''
+                questions: Array.isArray(block.content?.questions) && block.content?.questions.length > 0
+                  ? block.content.questions
+                  : (block.content?.question ? [block.content.question] : [])
               }];
 
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f1f5f9', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%', overflowY: 'auto' }}>
               {passages.map((p, pIdx) => {
                 const passageText = p.passage || 'Read this text carefully...';
+                const qList = Array.isArray(p.questions) && p.questions.length > 0
+                  ? p.questions.filter(q => q && q.trim())
+                  : (p.question && p.question.trim() ? [p.question.trim()] : []);
+
                 return (
                   <div key={pIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderBottom: pIdx < passages.length - 1 ? '1px dashed #cbd5e1' : 'none', paddingBottom: pIdx < passages.length - 1 ? '0.5rem' : 0 }}>
                     <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1505,11 +1511,11 @@ export default function PreviewCanvasRenderer({
                     <div style={{ fontSize: '0.72rem', color: '#334155', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', whiteSpace: 'pre-wrap', maxHeight: '140px', overflowY: 'auto' }}>
                       {passageText}
                     </div>
-                    {p.question && (
-                      <div style={{ fontSize: '0.7rem', color: '#475569', fontStyle: 'italic', background: '#e2e8f0', padding: '4px 8px', borderRadius: '4px' }}>
-                        Question: {p.question}
+                    {qList.map((qText, qIdx) => (
+                      <div key={qIdx} style={{ fontSize: '0.7rem', color: '#475569', fontStyle: 'italic', background: '#e2e8f0', padding: '4px 8px', borderRadius: '4px' }}>
+                        Question{qList.length > 1 ? ` #${qIdx + 1}` : ''}: {qText}
                       </div>
-                    )}
+                    ))}
                   </div>
                 );
               })}
@@ -1689,19 +1695,40 @@ export default function PreviewCanvasRenderer({
         }
 
       case 'grammar_correction':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #a7f3d0', background: '#ecfdf5', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiCheckCircle /> Grammar Correction
+        {
+          const rawPairs = block.content?.pairs;
+          const pairs = rawPairs && rawPairs.length > 0
+            ? rawPairs
+            : [{
+                incorrectSentence: block.content?.incorrectSentence || 'They is going to school.',
+                correctedSentence: block.content?.correctedSentence || 'They are going to school.'
+              }];
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #a7f3d0', background: '#ecfdf5', borderRadius: '8px', padding: '0.75rem', flex: 1, height: '100%', overflowY: 'auto' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiCheckCircle /> Grammar Correction
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {pairs.map((pair, pIdx) => (
+                  <div key={pIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', borderBottom: pIdx < pairs.length - 1 ? '1px dashed #a7f3d0' : 'none', paddingBottom: pIdx < pairs.length - 1 ? '0.5rem' : 0 }}>
+                    {pairs.length > 1 && (
+                      <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#047857' }}>
+                        Pair #{pIdx + 1}
+                      </div>
+                    )}
+                    <div style={{ fontSize: '0.72rem', color: '#b91c1c', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '6px', padding: '6px' }}>
+                      <strong>Incorrect:</strong> {pair.incorrectSentence || 'They is going to school.'}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#15803d', background: '#f0fdf4', border: '1px solid #dcfce7', borderRadius: '6px', padding: '6px' }}>
+                      <strong>Corrected:</strong> {pair.correctedSentence || 'They are going to school.'}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#b91c1c', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '6px', padding: '6px' }}>
-              <strong>Incorrect:</strong> {block.content?.incorrectSentence || 'They is going to school.'}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#15803d', background: '#f0fdf4', border: '1px solid #dcfce7', borderRadius: '6px', padding: '6px' }}>
-              <strong>Corrected:</strong> {block.content?.correctedSentence || 'They are going to school.'}
-            </div>
-          </div>
-        );
+          );
+        }
 
       case 'pronunciation':
         {

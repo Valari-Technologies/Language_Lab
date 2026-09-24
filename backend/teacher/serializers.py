@@ -44,6 +44,11 @@ class StudentSerializer(serializers.ModelSerializer):
         ret = super().to_representation(instance)
         ret["id"] = instance.student_id
         ret["academic_year"] = instance.academic_year or "2025 - 2026"
+        if ret.get("grade"):
+            import re
+            m = re.search(r"\d+", str(ret["grade"]))
+            if m:
+                ret["grade"] = f"Class {m.group(0)}"
         if instance.user:
             ret["username"] = instance.user.username
             ret["email"] = instance.user.email

@@ -3054,19 +3054,40 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           );
         })()}
 
-        {block.type === 'grammar_correction' && (
-          <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #a7f3d0', background: '#ecfdf5', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiCheckCircle /> Grammar Correction
+        {block.type === 'grammar_correction' && (() => {
+          const rawPairs = block.content?.pairs;
+          const pairs = rawPairs && rawPairs.length > 0
+            ? rawPairs
+            : [{
+                incorrectSentence: block.content?.incorrectSentence || 'They is going to school.',
+                correctedSentence: block.content?.correctedSentence || 'They are going to school.'
+              }];
+
+          return (
+            <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #a7f3d0', background: '#ecfdf5', borderRadius: '8px', padding: '0.75rem', overflowY: 'auto' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiCheckCircle /> Grammar Correction
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {pairs.map((pair, pIdx) => (
+                  <div key={pIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', borderBottom: pIdx < pairs.length - 1 ? '1px dashed #a7f3d0' : 'none', paddingBottom: pIdx < pairs.length - 1 ? '0.5rem' : 0 }}>
+                    {pairs.length > 1 && (
+                      <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#047857' }}>
+                        Pair #{pIdx + 1}
+                      </div>
+                    )}
+                    <div style={{ fontSize: '0.72rem', color: '#b91c1c', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '6px', padding: '6px' }}>
+                      <strong>Incorrect:</strong> {pair.incorrectSentence || 'They is going to school.'}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#15803d', background: '#f0fdf4', border: '1px solid #dcfce7', borderRadius: '6px', padding: '6px' }}>
+                      <strong>Corrected:</strong> {pair.correctedSentence || 'They are going to school.'}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#b91c1c', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '6px', padding: '6px' }}>
-              <strong>Incorrect:</strong> {block.content?.incorrectSentence || 'They is going to school.'}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#15803d', background: '#f0fdf4', border: '1px solid #dcfce7', borderRadius: '6px', padding: '6px' }}>
-              <strong>Corrected:</strong> {block.content?.correctedSentence || 'They are going to school.'}
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {block.type === 'reading_passage' && (() => {
           const rawPassages = block.content?.passages;
@@ -3075,13 +3096,19 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             : [{
                 title: block.content?.title || '',
                 passage: block.content?.passage || '',
-                question: block.content?.question || ''
+                questions: Array.isArray(block.content?.questions) && block.content?.questions.length > 0
+                  ? block.content.questions
+                  : (block.content?.question ? [block.content.question] : [])
               }];
 
           return (
             <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #cbd5e1', background: '#f1f5f9', borderRadius: '8px', padding: '0.75rem', overflowY: 'auto' }}>
               {passages.map((p, pIdx) => {
                 const passageText = p.passage || 'Read this text carefully...';
+                const qList = Array.isArray(p.questions) && p.questions.length > 0
+                  ? p.questions.filter(q => q && q.trim())
+                  : (p.question && p.question.trim() ? [p.question.trim()] : []);
+
                 return (
                   <div key={pIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderBottom: pIdx < passages.length - 1 ? '1px dashed #cbd5e1' : 'none', paddingBottom: pIdx < passages.length - 1 ? '0.5rem' : 0 }}>
                     <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -3090,11 +3117,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <div style={{ fontSize: '0.72rem', color: '#334155', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', whiteSpace: 'pre-wrap', maxHeight: '120px', overflowY: 'auto' }}>
                       {passageText}
                     </div>
-                    {p.question && (
-                      <div style={{ fontSize: '0.7rem', color: '#475569', fontStyle: 'italic', background: '#e2e8f0', padding: '4px 8px', borderRadius: '4px' }}>
-                        Question: {p.question}
+                    {qList.map((qText, qIdx) => (
+                      <div key={qIdx} style={{ fontSize: '0.7rem', color: '#475569', fontStyle: 'italic', background: '#e2e8f0', padding: '4px 8px', borderRadius: '4px' }}>
+                        Question{qList.length > 1 ? ` #${qIdx + 1}` : ''}: {qText}
                       </div>
-                    )}
+                    ))}
                   </div>
                 );
               })}
@@ -9295,47 +9322,74 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Reading Passage Settings</span>
-                                            <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
-                                              onClick={() => {
-                                                const passages = [...(selectedBlock.content?.passages || [{ title: selectedBlock.content?.title || '', passage: selectedBlock.content?.passage || '', question: selectedBlock.content?.question || '' }])];
-                                                passages.push({ title: '', passage: '', question: '' });
-                                                handleUpdateBlockMultipleContent({ passages, title: undefined, passage: undefined, question: undefined });
-                                              }}>
-                                              + Add Passage
-                                            </button>
                                           </div>
                                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '420px', overflowY: 'auto' }}>
                                             {(() => {
                                               const rawPassages = selectedBlock.content?.passages;
-                                              const passages = rawPassages && rawPassages.length > 0 ? rawPassages : [{ title: selectedBlock.content?.title || '', passage: selectedBlock.content?.passage || '', question: selectedBlock.content?.question || '' }];
-                                              return passages.map((p, pIdx) => (
-                                                <div key={pIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b' }}>Passage #{pIdx + 1}</span>
-                                                    {passages.length > 1 && (
-                                                      <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}
+                                              const passages = rawPassages && rawPassages.length > 0
+                                                ? rawPassages
+                                                : [{
+                                                    title: selectedBlock.content?.title || '',
+                                                    passage: selectedBlock.content?.passage || '',
+                                                    questions: Array.isArray(selectedBlock.content?.questions) && selectedBlock.content?.questions.length > 0
+                                                      ? selectedBlock.content.questions
+                                                      : (selectedBlock.content?.question ? [selectedBlock.content.question] : [''])
+                                                  }];
+                                              return passages.map((p, pIdx) => {
+                                                const qList = Array.isArray(p.questions) && p.questions.length > 0
+                                                  ? p.questions
+                                                  : (p.question ? [p.question] : ['']);
+
+                                                return (
+                                                  <div key={pIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b' }}>Passage #{pIdx + 1}</span>
+                                                    </div>
+                                                    <label className="cs-form-label" style={{ fontSize: '0.65rem', margin: 0 }}>Passage Content</label>
+                                                    <textarea className="cs-form-input" style={{ minHeight: '80px', fontSize: '0.72rem', lineHeight: 1.4 }} value={p.passage || ''}
+                                                      onChange={e => {
+                                                        const updated = passages.map((item, i) => i === pIdx ? { ...item, passage: e.target.value } : item);
+                                                        handleUpdateBlockMultipleContent({ passages: updated });
+                                                      }} placeholder="Type the text passage here..." />
+                                                    
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                                                      <label className="cs-form-label" style={{ fontSize: '0.65rem', margin: 0 }}>Follow-up Questions (Optional)</label>
+                                                      <button type="button" className="cs-btn-outline" style={{ padding: '0.15rem 0.4rem', fontSize: '0.62rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
                                                         onClick={() => {
-                                                          const updated = passages.filter((_, i) => i !== pIdx);
+                                                          const newQuestions = [...qList, ''];
+                                                          const updated = passages.map((item, i) => i === pIdx ? { ...item, questions: newQuestions, question: newQuestions[0] || '' } : item);
                                                           handleUpdateBlockMultipleContent({ passages: updated });
                                                         }}>
-                                                        <FiTrash2 style={{ fontSize: '0.72rem' }} />
+                                                        + Add Question
                                                       </button>
-                                                    )}
+                                                    </div>
+
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                      {qList.map((qVal, qIdx) => (
+                                                        <div key={qIdx} style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                                          <textarea className="cs-form-input" style={{ minHeight: '36px', fontSize: '0.72rem', flex: 1 }} value={qVal || ''}
+                                                            onChange={e => {
+                                                              const newQuestions = [...qList];
+                                                              newQuestions[qIdx] = e.target.value;
+                                                              const updated = passages.map((item, i) => i === pIdx ? { ...item, questions: newQuestions, question: newQuestions[0] || '' } : item);
+                                                              handleUpdateBlockMultipleContent({ passages: updated });
+                                                            }} placeholder={`Question #${qIdx + 1} (e.g. Why are trees important?)`} />
+                                                          {qList.length > 1 && (
+                                                            <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
+                                                              onClick={() => {
+                                                                const newQuestions = qList.filter((_, i) => i !== qIdx);
+                                                                const updated = passages.map((item, i) => i === pIdx ? { ...item, questions: newQuestions, question: newQuestions[0] || '' } : item);
+                                                                handleUpdateBlockMultipleContent({ passages: updated });
+                                                              }}>
+                                                              <FiTrash2 style={{ fontSize: '0.72rem' }} />
+                                                            </button>
+                                                          )}
+                                                        </div>
+                                                      ))}
+                                                    </div>
                                                   </div>
-                                                  <label className="cs-form-label" style={{ fontSize: '0.65rem', margin: 0 }}>Passage Content</label>
-                                                  <textarea className="cs-form-input" style={{ minHeight: '80px', fontSize: '0.72rem', lineHeight: 1.4 }} value={p.passage || ''}
-                                                    onChange={e => {
-                                                      const updated = passages.map((item, i) => i === pIdx ? { ...item, passage: e.target.value } : item);
-                                                      handleUpdateBlockMultipleContent({ passages: updated });
-                                                    }} placeholder="Type the text passage here..." />
-                                                  <label className="cs-form-label" style={{ fontSize: '0.65rem', margin: 0 }}>Follow-up Question (Optional)</label>
-                                                  <textarea className="cs-form-input" style={{ minHeight: '36px', fontSize: '0.72rem' }} value={p.question || ''}
-                                                    onChange={e => {
-                                                      const updated = passages.map((item, i) => i === pIdx ? { ...item, question: e.target.value } : item);
-                                                      handleUpdateBlockMultipleContent({ passages: updated });
-                                                    }} placeholder="e.g. Did you understand the text?" />
-                                                </div>
-                                              ));
+                                                );
+                                              });
                                             })()}
                                           </div>
                                         </div>
@@ -12512,24 +12566,33 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               </div>
 
               {/* Summary Card */}
-              <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', borderLeft: validationReport?.status === 'PASSED' ? '4px solid #10b981' : '4px solid #ef4444' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: '#1e293b' }}>
-                    Validation Report for "{selectedExperience?.title}"
-                  </h3>
-                  <span
-                    className={`cs-badge ${validationReport?.status === 'PASSED' ? 'cs-badge-published' : ''}`}
-                    style={validationReport?.status === 'PASSED' ? {} : { background: '#fef2f2', color: '#ef4444', border: '1px solid #fee2e2' }}
-                  >
-                    {validationReport?.status === 'PASSED' ? 'PASSED' : 'FAILED'}
-                  </span>
-                </div>
+              {(() => {
+                const errorsCount = validationReport?.errors ?? validationReport?.counts?.errors ?? 0;
+                const warningsCount = validationReport?.warnings ?? validationReport?.counts?.warnings ?? 0;
+                const isFailed = validationReport?.status === 'FAILED' || errorsCount > 0;
+                const isPassed = !isFailed;
 
-                <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.78rem', color: '#475569', marginTop: '0.25rem' }}>
-                  <span style={{ color: '#f59e0b' }}>Warnings: <strong>{validationReport?.warnings || 0}</strong></span>
-                  <span style={{ color: '#ef4444' }}>Errors: <strong>{validationReport?.errors || 0}</strong></span>
-                </div>
-              </div>
+                return (
+                  <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', borderLeft: isPassed ? '4px solid #10b981' : '4px solid #ef4444' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: '#1e293b' }}>
+                        Validation Report for "{selectedExperience?.title}"
+                      </h3>
+                      <span
+                        className={`cs-badge ${isPassed ? 'cs-badge-published' : ''}`}
+                        style={isPassed ? {} : { background: '#fef2f2', color: '#ef4444', border: '1px solid #fee2e2' }}
+                      >
+                        {isPassed ? 'PASSED' : 'FAILED'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.78rem', color: '#475569', marginTop: '0.25rem' }}>
+                      <span style={{ color: '#f59e0b' }}>Warnings: <strong>{warningsCount}</strong></span>
+                      <span style={{ color: '#ef4444' }}>Errors: <strong>{errorsCount}</strong></span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Errors & Warnings List */}
               <div className="cs-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
