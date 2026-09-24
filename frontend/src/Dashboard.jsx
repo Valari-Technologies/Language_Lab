@@ -502,6 +502,42 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const triggerAlert = (message, title = 'Attention', type = 'warning') => {
     setCustomAlert({ show: true, title, message, type });
   };
+
+  const copyToClipboard = async (text, successMsg = "Copied to clipboard!") => {
+    if (!text) return;
+    let copied = false;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      }
+    } catch (err) {
+      console.warn("Navigator clipboard failed, using fallback:", err);
+    }
+
+    if (!copied) {
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        copied = document.execCommand("copy");
+        document.body.removeChild(textArea);
+      } catch (err) {
+        console.error("Fallback copy failed:", err);
+      }
+    }
+
+    if (copied) {
+      triggerAlert(successMsg, "Copied", "success");
+    } else {
+      triggerAlert("Failed to copy. Please copy manually.", "Error", "error");
+    }
+  };
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(() => {
     return localStorage.getItem('sa_nav_collapsed') === 'true';
@@ -572,17 +608,19 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [showRecentActivityModal, setShowRecentActivityModal] = useState(false);
   const [recentActivitiesList, setRecentActivitiesList] = useState([]);
 
-  const addRecentActivity = (desc, tag, tagBg, tagColor, icon, color, bg) => {
+  const addRecentActivity = (desc, tag = 'School', tagBg, tagColor, icon, color, bg) => {
     const newActivity = {
       id: Date.now(),
-      icon: icon || <FiGrid />,
-      color: color || '#3b82f6',
-      bg: bg || '#eff6ff',
+      activity_type: 'school_deleted',
+      message: desc,
       desc,
+      icon: icon || <FiTrash2 />,
+      color: color || '#dc2626',
+      bg: bg || '#fee2e2',
       meta: `Super Admin • Just now`,
       tag,
-      tagBg: tagBg || '#dcfce7',
-      tagColor: tagColor || '#15803d'
+      tagBg: tagBg || '#fee2e2',
+      tagColor: tagColor || '#ef4444'
     };
     setRecentActivitiesList(prev => [newActivity, ...prev.slice(0, 9)]);
   };
@@ -1395,6 +1433,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           setSelectedSchoolIds([]);
           await loadSchools();
           await loadDashboardStats();
+          await loadRecentActivities();
         } else if (bulkType === 'bulk-users') {
           await Promise.all(ids.map(async id => {
             const isTeacher = teachers.some(t => t.teacher_id === id);
@@ -1441,6 +1480,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           addRecentActivity(`School "${name}" deleted`, 'School', '#fee2e2', '#dc2626', <FiTrash2 />, '#ef4444', '#fee2e2');
           await loadSchools();
           await loadDashboardStats();
+          await loadRecentActivities();
         }
         else if (targetTab === 'publish-contents') { await loadPublishContents(); await loadDashboardStats(); }
         else if (targetTab === 'grades') await loadGrades();
@@ -2139,7 +2179,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         let badgeLabel = 'School';
 
                         const actType = act?.activity_type || '';
-                        if (actType.startsWith('school_admin')) {
+                        if (actType === 'school_deleted' || actType.endsWith('_deleted')) {
+                          icon = <FiTrash2 />;
+                          bg = '#fee2e2';
+                          fg = '#dc2626';
+                          badgeLabel = 'School';
+                        } else if (actType.startsWith('school_admin')) {
                           icon = <FiUserCheck />;
                           bg = '#f0fdf4';
                           fg = '#16a34a';
@@ -2161,6 +2206,11 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                           badgeLabel = 'Media';
                         }
 
+                        const msgText = act?.message || act?.desc || '';
+                        const displayDate = act?.timestamp 
+                          ? (isNaN(new Date(act.timestamp).getTime()) ? act.timestamp : new Date(act.timestamp).toLocaleDateString()) 
+                          : (act?.meta || 'Just now');
+
                         return (
                           <div className="sd-activity-item" key={act.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 0', borderBottom: '1px solid #f1f5f9' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: 0 }}>
@@ -2168,8 +2218,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                 {icon}
                               </div>
                               <div style={{ minWidth: 0, flex: 1 }}>
-                                <div className="sd-activity-desc" style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{act.message}</div>
-                                <div className="sd-activity-meta" style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '2px' }}>{new Date(act.timestamp).toLocaleDateString()}</div>
+                                <div className="sd-activity-desc" style={{ fontSize: '0.84rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{msgText}</div>
+                                <div className="sd-activity-meta" style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '2px' }}>{displayDate}</div>
                               </div>
                             </div>
                             <span className="sd-activity-badge" style={{ fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: '12px', background: bg, color: fg, flexShrink: 0 }}>
@@ -2284,10 +2334,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <strong style={{ fontSize: '0.9rem', color: '#0f172a', fontFamily: 'monospace' }}>{selectedSchoolDetail.license.licenseKey}</strong>
                             <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(selectedSchoolDetail.license.licenseKey);
-                                triggerAlert("License key copied to clipboard!", "Copied", "success");
-                              }}
+                              onClick={() => copyToClipboard(selectedSchoolDetail.license.licenseKey, "License key copied to clipboard!")}
                               className="sd-btn-outline"
                               style={{ padding: '2px 8px', fontSize: '0.75rem' }}
                             >
@@ -5112,7 +5159,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     let badgeLabel = 'School';
 
                     const actType = act?.activity_type || '';
-                    if (actType.startsWith('school_admin')) {
+                    if (actType === 'school_deleted' || actType.endsWith('_deleted')) {
+                      icon = <FiTrash2 />;
+                      bg = '#fee2e2';
+                      fg = '#dc2626';
+                      badgeLabel = 'School';
+                    } else if (actType.startsWith('school_admin')) {
                       icon = <FiUserCheck />;
                       bg = '#f0fdf4';
                       fg = '#16a34a';
@@ -5134,7 +5186,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       badgeLabel = 'Media';
                     }
 
-                    const actDate = new Date(act.timestamp);
+                    const msgText = act?.message || act?.desc || '';
+                    const actDate = act?.timestamp ? new Date(act.timestamp) : null;
+                    const timeStr = actDate && !isNaN(actDate.getTime()) 
+                      ? `${actDate.toLocaleDateString()} at ${actDate.toLocaleTimeString()}`
+                      : (act?.meta || 'Just now');
+
                     return (
                       <div key={act.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', borderBottom: i === recentActivitiesList.length - 1 ? 'none' : '1px solid #e2e8f0' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -5142,8 +5199,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             {icon}
                           </div>
                           <div>
-                            <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>{act.message}</div>
-                            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>{actDate.toLocaleDateString()} at {actDate.toLocaleTimeString()}</div>
+                            <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>{msgText}</div>
+                            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>{timeStr}</div>
                           </div>
                         </div>
                         <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '4px 10px', borderRadius: '12px', backgroundColor: bg, color: fg }}>

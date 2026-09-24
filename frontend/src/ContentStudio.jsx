@@ -1843,6 +1843,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         }).filter(Boolean).join('\n');
         setOutcomesText(textStr);
         setIsNewExperience(false);
+        if (data.experience_type === 'ASSESSMENT' && data.activities && data.activities.length > 0) {
+          const assessAct = data.activities[0];
+          setSelectedActivity(assessAct);
+          loadActivityDetail(assessAct.id, false);
+        }
         if (changeViewToBuilder) {
           window.history.pushState({ csView: 'experience-builder' }, '', '/content-studio');
           setView('experience-builder');
