@@ -7258,7 +7258,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                             let defaultActivity = (savedExp.activities || []).find(a =>
                               (a.skills && a.skills.some(s => s.name === 'assessment' || s === 'assessment')) ||
                               (a.activity_type === 'ASSESSMENT')
-                            );
+                            ) || (savedExp.activities && savedExp.activities.length > 0 ? savedExp.activities[0] : null);
+
                             if (!defaultActivity) {
                               const skillIds = activitySkillOptions
                                 .filter(s => s.name === 'assessment')
@@ -7281,11 +7282,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                 defaultActivity = await createRes.json();
                               }
                             }
-                            if (defaultActivity) {
-                              setSelectedActivity(defaultActivity);
-                              setScreens(defaultActivity.screens || []);
-                              setView('screen-builder');
-                              setIsEditingScreen(false);
+                            if (defaultActivity && defaultActivity.id) {
+                              await loadActivityDetail(defaultActivity.id, 'screen-builder');
                             } else {
                               showFeedback('Failed to initialize assessment activity.', 'error');
                             }
