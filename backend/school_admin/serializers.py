@@ -172,10 +172,63 @@ class ClassSerializer(serializers.ModelSerializer):
     def get_assigned_lessons(self, obj):
         from django.db.models import Q
         from assessments.models import ExperienceAssignment
+        from content_studio.models import Experience
+
+        results = []
+        seen_refs = set()
+        sec = self.get_section(obj)
+        g_name = obj.grade.grade_name if obj.grade else "Grade Level"
+
+        # 1. ExperienceAssignment records for this class or grade
         assignments = ExperienceAssignment.objects.filter(school=obj.school).filter(
             Q(class_obj=obj) | Q(class_obj__isnull=True, grade=obj.grade)
-        ).values("id", "experience_ref", "experience_title", "assigned_at")
-        return list(assignments)
+        ).select_related('grade')
+
+        for a in assignments:
+            ref = a.experience_ref or f"EXP-ASSIGN-{a.id}"
+            title = a.experience_title or "Untitled Lesson"
+            seen_refs.add(ref)
+            seen_refs.add(title)
+            results.append({
+                "id": a.id,
+                "experience_ref": ref,
+                "experience_title": title,
+                "subject": "General",
+                "difficulty": "Intermediate",
+                "experience_type": "LESSON",
+                "assigned_at": a.assigned_at.isoformat() if a.assigned_at else None,
+                "status": "APPROVED",
+                "grade_name": g_name,
+                "section": sec
+            })
+
+        # 2. Also include Experiences from Content Studio matching this class's grade
+        if obj.grade:
+            exps = Experience.objects.filter(
+                is_deleted=False,
+                status__in=["APPROVED", "PUBLISHED"],
+                grade=obj.grade
+            )
+            for exp in exps:
+                ref = f"EXP-{exp.id}"
+                title = exp.title or "Untitled Lesson"
+                if ref not in seen_refs and title not in seen_refs:
+                    seen_refs.add(ref)
+                    seen_refs.add(title)
+                    results.append({
+                        "id": exp.id,
+                        "experience_ref": ref,
+                        "experience_title": title,
+                        "subject": exp.subject or "English",
+                        "difficulty": exp.difficulty or "Intermediate",
+                        "experience_type": exp.experience_type or "LESSON",
+                        "assigned_at": exp.updated_at.isoformat() if exp.updated_at else (exp.created_at.isoformat() if exp.created_at else None),
+                        "status": exp.status or "APPROVED",
+                        "grade_name": g_name,
+                        "section": sec
+                    })
+
+        return results
 
     def get_teacher_name(self, obj):
         teachers = Teacher.objects.filter(teacherclass__class_obj=obj)

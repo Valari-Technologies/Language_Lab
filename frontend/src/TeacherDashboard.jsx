@@ -438,6 +438,8 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   /* ── Forms ── */
   const [selectedClassCrudDetail, setSelectedClassCrudDetail] = useState(null);
   const [showClassCrudDetailModal, setShowClassCrudDetailModal] = useState(false);
+  const [classDetailTab, setClassDetailTab] = useState('lessons'); // 'lessons' | 'overview'
+  const [classLessonSearch, setClassLessonSearch] = useState('');
   const [selectedStudentCrudDetail, setSelectedStudentCrudDetail] = useState(null);
   const [showStudentCrudDetailModal, setShowStudentCrudDetailModal] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null); // { id, type }
@@ -548,12 +550,26 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
   const handleViewClassCrud = async (class_id) => {
     try {
+      setClassDetailTab('overview');
+      setClassLessonSearch('');
       const res = await apiFetch(`/api/cms/v1/classes/${class_id}/`);
       if (res.ok) {
         setSelectedClassCrudDetail(await res.json());
         setShowClassCrudDetailModal(true);
       }
     } catch (e) { console.error('Failed to load class detail', e); }
+  };
+
+  const handleViewClassLessons = async (class_id) => {
+    try {
+      setClassDetailTab('lessons');
+      setClassLessonSearch('');
+      const res = await apiFetch(`/api/cms/v1/classes/${class_id}/`);
+      if (res.ok) {
+        setSelectedClassCrudDetail(await res.json());
+        setShowClassCrudDetailModal(true);
+      }
+    } catch (e) { console.error('Failed to load class lessons', e); }
   };
 
   const loadNotifications = async () => {
@@ -2389,8 +2405,32 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               </span>
                             </td>
                             <td>
-                              <div className="sd-action-cell" style={{ justifyContent: 'center' }}>
-                                <button className="sd-icon-action view" style={{ color: '#0b75b3' }} onClick={() => handleViewClassCrud(c.class_id || c.id)} title="View">
+                              <div className="sd-action-cell" style={{ justifyContent: 'center', gap: '8px' }}>
+                                <button
+                                  className="sd-btn-outline"
+                                  style={{
+                                    padding: '0.35rem 0.75rem',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    color: '#4f46e5',
+                                    borderColor: '#c7d2fe',
+                                    backgroundColor: '#eef2ff',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                  onClick={() => handleViewClassLessons(c.class_id || c.id)}
+                                  title="View Lessons assigned to this class"
+                                >
+                                  View Lessons
+                                </button>
+                                <button
+                                  className="sd-icon-action view"
+                                  style={{ color: '#0b75b3' }}
+                                  onClick={() => handleViewClassCrud(c.class_id || c.id)}
+                                  title="View Class Details"
+                                >
                                   <FiEye/>
                                 </button>
                               </div>
@@ -2796,81 +2836,188 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           )}
 
           {/* ── Class CRUD Detail Modal ── */}
-          {showClassCrudDetailModal && selectedClassCrudDetail && (
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', minHeight: '600px', backgroundColor: 'transparent', zIndex: 900, display: 'flex', flexDirection: 'column', padding: '1.5rem' }}>
-              <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center' }}>
-                <button
-                  onClick={() => setShowClassCrudDetailModal(false)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#4f46e5', fontWeight: 600, fontSize: '0.9rem', padding: 0 }}
-                >
-                  ← Back to Classes
-                </button>
-              </div>
-              <div className="sd-card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Class Details</h3>
-                </div>
-                <div style={{ padding: '0.5rem 0', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
-                    <span style={{ color: '#64748b', fontWeight: 600 }}>Class:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{grades.find(g => g.id === selectedClassCrudDetail.grade)?.grade_name ? String(grades.find(g => g.id === selectedClassCrudDetail.grade)?.grade_name).replace('Grade', 'Class') : selectedClassCrudDetail.grade || 'N/A'}</span>
-                    
-                    <span style={{ color: '#64748b', fontWeight: 600 }}>Section:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.section ? (selectedClassCrudDetail.section.startsWith('Section') ? selectedClassCrudDetail.section : `Section ${selectedClassCrudDetail.section}`) : (selectedClassCrudDetail.class_name && selectedClassCrudDetail.class_name.includes('-') ? `Section ${selectedClassCrudDetail.class_name.split('-').pop().trim()}` : '—')}</span>
-                    
-                    <span style={{ color: '#64748b', fontWeight: 600 }}>School Name:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{schools.find(s => s.school_id === selectedClassCrudDetail.school)?.school_name || selectedClassCrudDetail.school || 'N/A'}</span>
-                    
-                    <span style={{ color: '#64748b', fontWeight: 600 }}>Academic Year:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.academic_year || 'N/A'}</span>
-                    
-                    <span style={{ color: '#64748b', fontWeight: 600 }}>Status:</span>
-                    <span>
-                      <span className={`sd-badge ${selectedClassCrudDetail.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
-                        {selectedClassCrudDetail.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </span>
-                  </div>
+          {showClassCrudDetailModal && selectedClassCrudDetail && (() => {
+            const gradeObj = grades.find(g => g.id === selectedClassCrudDetail.grade);
+            const gradeName = gradeObj?.grade_name ? String(gradeObj.grade_name).replace('Grade', 'Class') : (selectedClassCrudDetail.grade ? `Class ${selectedClassCrudDetail.grade}` : 'Class');
+            const secStr = selectedClassCrudDetail.section ? (selectedClassCrudDetail.section.startsWith('Section') ? selectedClassCrudDetail.section : `Section ${selectedClassCrudDetail.section}`) : (selectedClassCrudDetail.class_name && selectedClassCrudDetail.class_name.includes('-') ? `Section ${selectedClassCrudDetail.class_name.split('-').pop().trim()}` : '—');
+            const schoolName = schools.find(s => s.school_id === selectedClassCrudDetail.school)?.school_name || selectedClassCrudDetail.school || 'N/A';
+            const allAssigned = selectedClassCrudDetail.assigned_lessons || [];
 
-                  <hr style={{ border: 0, borderTop: '1px solid #e2e8f0', margin: '0.5rem 0' }} />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    <h4 style={{ fontSize: '1rem', fontWeight: 600, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <FiBookOpen style={{ color: '#4f46e5' }} /> Assigned Lessons
-                    </h4>
-                    {selectedClassCrudDetail.assigned_lessons && selectedClassCrudDetail.assigned_lessons.length > 0 ? (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.75rem', marginTop: '0.25rem' }}>
-                        {selectedClassCrudDetail.assigned_lessons.map((lesson, idx) => (
-                          <div
-                            key={lesson.id || idx}
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '4px',
-                              padding: '0.75rem 1rem',
-                              background: '#f8fafc',
-                              borderRadius: '8px',
-                              border: '1px solid #e2e8f0',
-                            }}
-                          >
-                            <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9rem' }}>
-                              {lesson.experience_title}
-                            </span>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>
-                              <span>Ref: {lesson.experience_ref}</span>
-                              <span>Assigned: {new Date(lesson.assigned_at).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                        ))
-                      }
+            const filteredLessons = allAssigned.filter(l => {
+              if (!classLessonSearch.trim()) return true;
+              const q = classLessonSearch.toLowerCase().trim();
+              return (l.experience_title || '').toLowerCase().includes(q) ||
+                     (l.experience_ref || '').toLowerCase().includes(q) ||
+                     (l.subject || '').toLowerCase().includes(q);
+            });
+
+            return (
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', minHeight: '600px', backgroundColor: 'transparent', zIndex: 900, display: 'flex', flexDirection: 'column', padding: '1.5rem' }}>
+                <div style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <button
+                    onClick={() => setShowClassCrudDetailModal(false)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#4f46e5', fontWeight: 600, fontSize: '0.9rem', padding: 0 }}
+                  >
+                    ← Back to Classes
+                  </button>
+                  <div style={{ display: 'flex', gap: '0.5rem', background: '#e2e8f0', padding: '4px', borderRadius: '8px' }}>
+                    <button
+                      onClick={() => setClassDetailTab('lessons')}
+                      style={{
+                        padding: '0.4rem 0.9rem',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        background: classDetailTab === 'lessons' ? '#ffffff' : 'transparent',
+                        color: classDetailTab === 'lessons' ? '#4f46e5' : '#64748b',
+                        boxShadow: classDetailTab === 'lessons' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <FiBookOpen /> Assigned Lessons ({allAssigned.length})
+                    </button>
+                    <button
+                      onClick={() => setClassDetailTab('overview')}
+                      style={{
+                        padding: '0.4rem 0.9rem',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        background: classDetailTab === 'overview' ? '#ffffff' : 'transparent',
+                        color: classDetailTab === 'overview' ? '#4f46e5' : '#64748b',
+                        boxShadow: classDetailTab === 'overview' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      Class Overview
+                    </button>
+                  </div>
+                </div>
+
+                <div className="sd-card" style={{ padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1.5px solid #e2e8f0', paddingBottom: '0.85rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                        {gradeName} – {secStr}
+                      </h3>
+                      <span className={`sd-badge ${selectedClassCrudDetail.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                        {selectedClassCrudDetail.is_active ? 'Active Class' : 'Inactive'}
+                      </span>
+                    </div>
+                    {classDetailTab === 'lessons' && (
+                      <div style={{ position: 'relative' }}>
+                        <FiSearch style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: '0.85rem' }} />
+                        <input
+                          type="text"
+                          placeholder="Search assigned lessons..."
+                          value={classLessonSearch}
+                          onChange={e => setClassLessonSearch(e.target.value)}
+                          style={{
+                            padding: '0.4rem 0.75rem 0.4rem 2rem',
+                            fontSize: '0.82rem',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '8px',
+                            width: '220px',
+                            background: '#ffffff'
+                          }}
+                        />
                       </div>
-                    ) : (
-                      <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.85rem' }}>No lessons assigned to this class or grade.</span>
                     )}
                   </div>
+
+                  {classDetailTab === 'overview' ? (
+                    <div style={{ padding: '0.5rem 0', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
+                        <span style={{ color: '#64748b', fontWeight: 600 }}>Class Level:</span>
+                        <span style={{ color: '#0f172a', fontWeight: 600 }}>{gradeName}</span>
+
+                        <span style={{ color: '#64748b', fontWeight: 600 }}>Section:</span>
+                        <span style={{ color: '#0f172a', fontWeight: 600 }}>{secStr}</span>
+
+                        <span style={{ color: '#64748b', fontWeight: 600 }}>Assigned Teacher(s):</span>
+                        <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.teacher_name || 'Unassigned'}</span>
+
+                        <span style={{ color: '#64748b', fontWeight: 600 }}>School:</span>
+                        <span style={{ color: '#0f172a', fontWeight: 500 }}>{schoolName}</span>
+
+                        <span style={{ color: '#64748b', fontWeight: 600 }}>Academic Year:</span>
+                        <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedClassCrudDetail.academic_year || 'N/A'}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {filteredLessons.length > 0 ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
+                          {filteredLessons.map((lesson, idx) => (
+                            <div
+                              key={lesson.id || idx}
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'space-between',
+                                padding: '1rem 1.15rem',
+                                background: '#ffffff',
+                                borderRadius: '12px',
+                                border: '1.5px solid #e2e8f0',
+                                boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+                                gap: '0.75rem'
+                              }}
+                            >
+                              <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#4f46e5', background: '#eef2ff', padding: '2px 8px', borderRadius: '12px' }}>
+                                    {lesson.experience_type || 'LESSON'}
+                                  </span>
+                                  <span className="sd-badge sd-badge-active" style={{ fontSize: '0.7rem' }}>
+                                    {lesson.status || 'Active'}
+                                  </span>
+                                </div>
+                                <h4 style={{ fontSize: '0.98rem', fontWeight: 700, color: '#0f172a', margin: '0 0 4px 0', lineHeight: 1.3 }}>
+                                  {lesson.experience_title}
+                                </h4>
+                                <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                  <span>Subject: {lesson.subject || 'General'}</span>
+                                  <span>•</span>
+                                  <span>Level: {lesson.difficulty || 'Intermediate'}</span>
+                                </div>
+                              </div>
+
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '0.6rem', marginTop: '0.2rem', fontSize: '0.75rem', color: '#64748b' }}>
+                                <span>Ref: {lesson.experience_ref}</span>
+                                <span>Assigned: {lesson.assigned_at ? new Date(lesson.assigned_at).toLocaleDateString() : 'N/A'}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3.5rem 2rem', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1', textAlign: 'center', gap: '0.75rem' }}>
+                          <div style={{ width: '54px', height: '54px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4f46e5' }}>
+                            <FiBookOpen style={{ fontSize: '1.75rem' }} />
+                          </div>
+                          <div>
+                            <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#1e293b', margin: '0 0 4px 0' }}>
+                              {classLessonSearch ? 'No matching lessons found' : 'No lessons have been assigned to this class yet.'}
+                            </h4>
+                            <p style={{ fontSize: '0.82rem', color: '#64748b', margin: 0, maxWidth: '380px' }}>
+                              {classLessonSearch ? 'Try adjusting your search criteria.' : `Lessons assigned to ${gradeName} (${secStr}) will appear here automatically.`}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ── Student CRUD Detail Modal ── */}
           {showStudentCrudDetailModal && selectedStudentCrudDetail && (

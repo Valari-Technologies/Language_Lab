@@ -591,6 +591,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   // Backend Integration States
   const [experiences, setExperiences] = useState([]);
+  const [allExperiences, setAllExperiences] = useState([]);
   const [mediaAssets, setMediaAssets] = useState([]);
   const [dashboardSummary, setDashboardSummary] = useState(null);
 
@@ -1135,6 +1136,18 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
   };
 
+  const loadAllExperiences = async () => {
+    try {
+      const res = await apiFetch('/api/v1/content/experiences/?page_size=1000');
+      if (res.ok) {
+        const data = await res.json();
+        setAllExperiences(data.results || data);
+      }
+    } catch (e) {
+      console.error('Failed to load all experiences for preview', e);
+    }
+  };
+
   const handlePageChange = (newPage) => {
     setPage(newPage);
     loadExperiencesData(newPage);
@@ -1288,6 +1301,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   useEffect(() => {
     loadUserProfile();
     loadExperiencesData();
+    loadAllExperiences();
     loadMediaData();
     loadSummaryData();
     loadRecentExperiences();
@@ -1296,6 +1310,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     loadGrades();
     loadActivitySkills();
   }, []);
+
+  useEffect(() => {
+    if (view === 'preview') {
+      loadAllExperiences();
+    }
+  }, [view]);
 
   /* ── Clock ticker ── */
   useEffect(() => {
@@ -5371,7 +5391,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         const payload = await res.json();
         setPreviewPayload(payload);
         if (targetExpId && (!selectedExperience || selectedExperience.id !== targetExpId)) {
-          const expObj = experiences.find(e => e.id === targetExpId);
+          const expObj = (allExperiences.length > 0 ? allExperiences : experiences).find(e => e.id === targetExpId);
           if (expObj) setSelectedExperience(expObj);
         }
 
@@ -11663,7 +11683,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           {/* ───────────────── VIEW 6: RUNTIME PREVIEW ───────────────── */}
           {view === 'preview' && (() => {
             // Sort and filter experiences by chosen experience type (LESSON or ASSESSMENT) - Newest / Most Recent first
-            const sortedExperiences = [...(experiences || [])]
+            const expSource = (allExperiences && allExperiences.length > 0) ? allExperiences : (experiences || []);
+            const sortedExperiences = [...expSource]
               .sort((a, b) => {
                 const dateA = new Date(a.updated_at || a.created_at || 0).getTime() || (typeof a.id === 'number' ? a.id : 0);
                 const dateB = new Date(b.updated_at || b.created_at || 0).getTime() || (typeof b.id === 'number' ? b.id : 0);
