@@ -640,7 +640,7 @@ class DashboardRecentActivityAPIView(APIView):
                     "timestamp": g.updated_at
                 })
 
-            logs = ActivityLog.objects.all().order_by("-created_at")[:20]
+            logs = ActivityLog.objects.all().order_by("-created_at")[:50]
             for log in logs:
                 activities.append({
                     "id": f"activity-log-{log.id}",

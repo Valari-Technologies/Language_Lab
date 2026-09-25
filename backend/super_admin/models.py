@@ -219,3 +219,28 @@ class ActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.activity_type}: {self.message}"
+
+
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
+
+
+@receiver(post_delete, sender=School)
+def log_school_deletion(sender, instance, **kwargs):
+    try:
+        school_name = getattr(instance, 'school_name', 'School')
+        from django.utils import timezone
+        import datetime
+        recent_exists = ActivityLog.objects.filter(
+            activity_type="school_deleted",
+            message=f"School '{school_name}' was deleted.",
+            created_at__gte=timezone.now() - datetime.timedelta(seconds=5)
+        ).exists()
+        if not recent_exists:
+            ActivityLog.objects.create(
+                activity_type="school_deleted",
+                message=f"School '{school_name}' was deleted."
+            )
+    except Exception as e:
+        print("Failed to log school deletion signal:", e)
+
