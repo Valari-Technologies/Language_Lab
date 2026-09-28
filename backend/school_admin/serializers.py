@@ -94,6 +94,20 @@ class TeacherSerializer(serializers.ModelSerializer):
             admin_school = get_user_school(request.user)
             if admin_school and attrs.get("school") and attrs["school"] != admin_school:
                 raise serializers.ValidationError({"school": "You can only manage teachers in your own school."})
+
+        assigned_class_ids = attrs.get("assigned_class_ids")
+        if assigned_class_ids:
+            query = TeacherClass.objects.filter(class_obj_id__in=assigned_class_ids)
+            if self.instance:
+                query = query.exclude(teacher=self.instance)
+            conflict = query.select_related("class_obj", "teacher__user").first()
+            if conflict:
+                t_name = conflict.teacher.user.full_name or conflict.teacher.user.username if conflict.teacher and conflict.teacher.user else "another teacher"
+                c_name = conflict.class_obj.class_name if conflict.class_obj else "This class"
+                raise serializers.ValidationError(
+                    f"Class '{c_name}' is already assigned to teacher '{t_name}'. A class & section can only be assigned to one teacher."
+                )
+
         return attrs
 
     def create(self, validated_data):
@@ -268,6 +282,10 @@ class ClassSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         request = self.context.get("request")
+        assigned_teacher_ids = attrs.get("assigned_teacher_ids")
+        if assigned_teacher_ids is not None and len(assigned_teacher_ids) > 1:
+            raise serializers.ValidationError("A class & section can only be assigned to one teacher.")
+
         if request and request.user.role in ["SCHOOL_ADMIN", "TEACHER"]:
             admin_school = get_user_school(request.user)
             if not admin_school:

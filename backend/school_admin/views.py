@@ -70,14 +70,14 @@ class BulkUploadAPIView(APIView):
         {"column": "phone_no",      "required": True,  "description": "Phone number"},
         {"column": "qualification", "required": True,  "description": "Qualification (e.g. B.Ed, M.A.)"},
         {"column": "class",         "required": True,  "description": "Class/Grade to assign"},
-        {"column": "section",       "required": True,  "description": "Section (e.g. A, B, C)"},
+        {"column": "section",       "required": True,  "description": "Section (e.g. A, B, C, D, E, F)"},
         {"column": "academic_year", "required": True,  "description": "Academic year (e.g. 2025-2026)"},
     ]
 
     STUDENT_COLUMNS = [
         {"column": "fullname",      "required": True,  "description": "Full name of the student"},
-        {"column": "class",         "required": True,  "description": "Class/Grade name"},
-        {"column": "section",       "required": True,  "description": "Section (e.g. A, B, C)"},
+        {"column": "class",         "required": True,  "description": "Class/Grade name (Grade 3 to 8 required)"},
+        {"column": "section",       "required": True,  "description": "Section (e.g. A, B, C, D, E, F)"},
         {"column": "roll no",       "required": True,  "description": "Roll number"},
         {"column": "status",        "required": True,  "description": "Status (e.g. active, inactive)"},
         {"column": "academy year",  "required": True,  "description": "Academic year (e.g. 2025-2026)"},
@@ -478,6 +478,13 @@ class BulkUploadAPIView(APIView):
                                     )
                                     classes_to_link.append(class_obj)
 
+                            # Validate that none of the target classes are already assigned to another teacher
+                            for cls in classes_to_link:
+                                existing_tc = TeacherClass.objects.filter(class_obj=cls).first()
+                                if existing_tc:
+                                    t_name = existing_tc.teacher.user.full_name or existing_tc.teacher.user.username if existing_tc.teacher and existing_tc.teacher.user else "another teacher"
+                                    raise ValueError(f"Class '{cls.class_name}' is already assigned to teacher '{t_name}'. A class & section can only be assigned to one teacher.")
+
                             # Create Django auth user
                             new_user = User.objects.create_user(
                                 username=username,
@@ -519,7 +526,12 @@ class BulkUploadAPIView(APIView):
                             grade_raw = str(grade_val).strip()
                             import re
                             grade_match = re.search(r"\d+", grade_raw)
-                            grade = f"Class {grade_match.group(0)}" if grade_match else grade_raw
+                            if not grade_match:
+                                raise ValueError(f"Invalid class/grade '{grade_raw}'. Class/Grade must be between 3 and 8.")
+                            grade_num = int(grade_match.group(0))
+                            if grade_num < 3 or grade_num > 8:
+                                raise ValueError(f"Invalid class/grade '{grade_raw}'. Only Grade 3 to 8 are allowed.")
+                            grade = f"Class {grade_num}"
                             section = str(section_val).strip()
                             roll_no = str(roll_no_val).strip()
                             status_str = str(status_val).strip().lower()

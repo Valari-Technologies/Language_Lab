@@ -4342,56 +4342,39 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         flexDirection: 'column', 
                         position: 'relative',
                         width: '100%',
-                        overflow: 'hidden'
+                        overflow: 'visible'
                       }}
                     >
                       {activePreviewScreen.elements && activePreviewScreen.elements.length > 0 ? (
-                        (() => {
-                          const baseCanvasHeight = getCanvasHeight(activePreviewScreen.elements);
-                          const scaledHeight = baseCanvasHeight * previewScaleFactor;
-                          return (
-                            <div style={{ 
-                              width: '100%', 
-                              height: `${scaledHeight}px`, 
-                              position: 'relative', 
-                              background: '#ffffff',
-                              overflow: 'hidden'
-                            }}>
-                               <div 
-                                 className="preview-canvas-viewport"
-                                 style={{
-                                   width: '1000px',
-                                   height: `${baseCanvasHeight}px`,
-                                   padding: '2rem',
-                                   boxSizing: 'border-box',
-                                   position: 'absolute',
-                                   left: 0,
-                                   top: 0,
-                                   transform: `scale(${previewScaleFactor})`,
-                                   transformOrigin: 'top left',
-                                   background: '#ffffff',
-                                   fontFamily: activePreviewScreen.content?.font || 'Poppins'
-                                 }}
-                               >
-                                 <PreviewCanvasRenderer
-                                   elements={activePreviewScreen.elements || []}
-                                   activeScreenId={activePreviewScreen.id || ''}
-                                   previewAnswers={previewAnswers}
-                                   setPreviewAnswers={setPreviewAnswers}
-                                   voiceRecordingStates={voiceRecordingStates}
-                                   setVoiceRecordingStates={setVoiceRecordingStates}
-                                   dragDropSelections={dragDropSelections}
-                                   setDragDropSelections={setDragDropSelections}
-                                   blankAnswers={blankAnswers}
-                                   setBlankAnswers={setBlankAnswers}
-                                   flippedCards={flippedCards}
-                                   setFlippedCards={setFlippedCards}
-                                   resolveUrl={resolvePreviewUrl}
-                                 />
-                              </div>
-                            </div>
-                          );
-                        })()
+                        <div 
+                          className="preview-canvas-viewport"
+                          style={{
+                            width: '100%',
+                            minHeight: '100%',
+                            padding: '2rem',
+                            boxSizing: 'border-box',
+                            background: '#ffffff',
+                            fontFamily: activePreviewScreen.content?.font || 'Poppins',
+                            display: 'flex',
+                            flexDirection: 'column'
+                          }}
+                        >
+                          <PreviewCanvasRenderer
+                            elements={activePreviewScreen.elements || []}
+                            activeScreenId={activePreviewScreen.id || ''}
+                            previewAnswers={previewAnswers}
+                            setPreviewAnswers={setPreviewAnswers}
+                            voiceRecordingStates={voiceRecordingStates}
+                            setVoiceRecordingStates={setVoiceRecordingStates}
+                            dragDropSelections={dragDropSelections}
+                            setDragDropSelections={setDragDropSelections}
+                            blankAnswers={blankAnswers}
+                            setBlankAnswers={setBlankAnswers}
+                            flippedCards={flippedCards}
+                            setFlippedCards={setFlippedCards}
+                            resolveUrl={resolvePreviewUrl}
+                          />
+                        </div>
                       ) : (
                         <div style={{ flex: 1, padding: '2.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                           <div style={{ maxWidth: '800px', width: '100%', margin: '0 auto' }}>

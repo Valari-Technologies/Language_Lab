@@ -12136,51 +12136,41 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         }}
                       >
                         {/* Content Preview Canvas body */}
-                        {(() => {
-                          const baseCanvasHeight = getCanvasHeight(activeScreenElements);
-                          const scaledHeight = baseCanvasHeight * previewScaleFactor;
-                          return (
-                            <div style={{
+                        {activeScreenElements && activeScreenElements.length > 0 ? (
+                          <div
+                            className="preview-canvas-viewport"
+                            style={{
                               width: '100%',
-                              height: `${scaledHeight}px`,
-                              position: 'relative',
-                              overflow: 'visible'
-                            }}>
-                              <div
-                                className="preview-canvas-viewport"
-                                style={{
-                                  width: '1000px',
-                                  height: `${baseCanvasHeight}px`,
-                                  padding: '2rem',
-                                  position: 'absolute',
-                                  left: 0,
-                                  top: 0,
-                                  transform: `scale(${previewScaleFactor})`,
-                                  transformOrigin: 'top left',
-                                  background: '#ffffff',
-                                  fontFamily: activeScreen?.content?.font || 'Poppins',
-                                  boxSizing: 'border-box',
-                                  overflow: 'visible'
-                                }}
-                              >
-                                <PreviewCanvasRenderer
-                                  elements={activeScreenElements}
-                                  activeScreenId={activeScreen?.id || ''}
-                                  previewAnswers={previewAnswers}
-                                  setPreviewAnswers={setPreviewAnswers}
-                                  voiceRecordingStates={voiceRecordingStates}
-                                  setVoiceRecordingStates={setVoiceRecordingStates}
-                                  dragDropSelections={dragDropSelections}
-                                  setDragDropSelections={setDragDropSelections}
-                                  blankAnswers={blankAnswers}
-                                  flippedCards={flippedCards}
-                                  setFlippedCards={setFlippedCards}
-                                  resolveUrl={resolveMediaUrl}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })()}
+                              minHeight: '100%',
+                              padding: '2rem',
+                              background: '#ffffff',
+                              fontFamily: activeScreen?.content?.font || 'Poppins',
+                              boxSizing: 'border-box',
+                              overflow: 'visible',
+                              display: 'flex',
+                              flexDirection: 'column'
+                            }}
+                          >
+                            <PreviewCanvasRenderer
+                              elements={activeScreenElements}
+                              activeScreenId={activeScreen?.id || ''}
+                              previewAnswers={previewAnswers}
+                              setPreviewAnswers={setPreviewAnswers}
+                              voiceRecordingStates={voiceRecordingStates}
+                              setVoiceRecordingStates={setVoiceRecordingStates}
+                              dragDropSelections={dragDropSelections}
+                              setDragDropSelections={setDragDropSelections}
+                              blankAnswers={blankAnswers}
+                              flippedCards={flippedCards}
+                              setFlippedCards={setFlippedCards}
+                              resolveUrl={resolveMediaUrl}
+                            />
+                          </div>
+                        ) : (
+                          <div style={{ flex: 1, padding: '2.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#94a3b8' }}>
+                            <span style={{ fontSize: '0.85rem' }}>No blocks in this screen yet.</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 

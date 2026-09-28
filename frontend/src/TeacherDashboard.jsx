@@ -758,7 +758,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       } : { class_id: '', username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: defaultSchoolAcademicYear, is_active: true });
     } else if (tab === 'classes') {
       const defaultSchoolAcademicYear = schools[0]?.academic_year || '2026-2027';
-      const extractedSec = entity && entity.class_name && ['A','B','C','D'].includes(entity.class_name.slice(-1).toUpperCase()) ? entity.class_name.slice(-1).toUpperCase() : 'A';
+      const extractedSec = entity && entity.class_name && ['A','B','C','D','E','F'].includes(entity.class_name.slice(-1).toUpperCase()) ? entity.class_name.slice(-1).toUpperCase() : 'A';
       const defaultGradeId = grades[0]?.id || '';
       const defaultGradeNum = grades[0] ? (grades[0].grade_name.match(/\d+/)?.[0] || '3') : '3';
       setClassForm(entity ? {
@@ -1964,7 +1964,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     onChange={e => { setStudentSectionFilter(e.target.value); setStudentPage(1); }}
                   >
                     <option value="">All Sections</option>
-                    {['A', 'B', 'C', 'D'].map(sec => (
+                    {['A', 'B', 'C', 'D', 'E', 'F'].map(sec => (
                       <option key={sec} value={sec}>Section {sec}</option>
                     ))}
                   </select>
@@ -2050,8 +2050,8 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <tbody>
                           {[
                             { col: 'fullname', req: true, desc: 'Full name of the student' },
-                            { col: 'class', req: true, desc: 'Class/Grade name' },
-                            { col: 'section', req: true, desc: 'Section (e.g. A, B, C)' },
+                            { col: 'class', req: true, desc: 'Class/Grade name (Grade 3 to 8 required)' },
+                            { col: 'section', req: true, desc: 'Section (e.g. A, B, C, D, E, F)' },
                             { col: 'roll no', req: true, desc: 'Roll number' },
                             { col: 'status', req: true, desc: 'Status (e.g. active, inactive)' },
                             { col: 'academy year', req: true, desc: 'Academic year (e.g. 2025-2026)' },
@@ -2358,7 +2358,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       onChange={e => { setTchSectionFilter(e.target.value); setClassPage(1); }}
                     >
                       <option value="">All Sections</option>
-                      {['A', 'B', 'C', 'D'].map(sec => (
+                      {['A', 'B', 'C', 'D', 'E', 'F'].map(sec => (
                         <option key={sec} value={sec}>Section {sec}</option>
                       ))}
                     </select>
@@ -2793,7 +2793,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               class_name: `Class ${num}-${selectedSecVal}`
                             });
                           }} required>
-                          {['A', 'B', 'C', 'D'].map(letter => (
+                          {['A', 'B', 'C', 'D', 'E', 'F'].map(letter => (
                             <option key={letter} value={letter}>Section {letter}</option>
                           ))}
                         </select>

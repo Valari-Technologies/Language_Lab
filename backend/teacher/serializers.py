@@ -57,6 +57,18 @@ class StudentSerializer(serializers.ModelSerializer):
             ret["role"] = instance.user.role
         return ret
 
+    def validate_grade(self, value):
+        if value:
+            import re
+            match = re.search(r"\d+", str(value))
+            if match:
+                num = int(match.group(0))
+                if num < 3 or num > 8:
+                    raise serializers.ValidationError("Class/Grade must be between 3 and 8.")
+            else:
+                raise serializers.ValidationError("Invalid Class/Grade. Grade 3 to 8 required.")
+        return value
+
     def validate(self, attrs):
         request = self.context.get("request")
         if not self.instance:

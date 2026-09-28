@@ -879,7 +879,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         is_active: entity.is_active !== undefined ? entity.is_active : true
       } : { username:'', password:'', email:'', full_name:'', roll_no:'', grade:'', section:'', academic_year: defaultSchoolAcademicYear, is_active:true });
     } else if (tab === 'classes') {
-      const extractedSec = entity && entity.class_name && ['A','B','C','D'].includes(entity.class_name.slice(-1).toUpperCase()) ? entity.class_name.slice(-1).toUpperCase() : 'A';
+      const extractedSec = entity && entity.class_name && ['A','B','C','D','E','F'].includes(entity.class_name.slice(-1).toUpperCase()) ? entity.class_name.slice(-1).toUpperCase() : 'A';
       const defaultGradeId = grades[0]?.id || '';
       const defaultGradeNum = grades[0] ? (grades[0].grade_name.match(/\d+/)?.[0] || '3') : '3';
       setClassForm(entity ? {
@@ -950,6 +950,15 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           );
 
           if (existingClass) {
+            if (existingClass.teacher_name) {
+              const editingTeacherId = modalType === 'edit' && selectedEntity ? (selectedEntity.teacher_id || selectedEntity.id) : null;
+              const assignedTeacherIds = existingClass.assigned_teacher_ids || [];
+              if (!editingTeacherId || !assignedTeacherIds.includes(editingTeacherId)) {
+                setErrorMsg(`${targetClassName} is already assigned to teacher '${existingClass.teacher_name}'. A class & section can only be assigned to one teacher.`);
+                setActionLoading(false);
+                return;
+              }
+            }
             assignedClassIds.push(existingClass.class_id || existingClass.id);
           } else {
             const gradeNum = cls.grade;
@@ -2188,7 +2197,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             { col: 'phone_no', req: true, desc: 'Phone number' },
                             { col: 'qualification', req: true, desc: 'Qualification (e.g. B.Ed, M.A.)' },
                             { col: 'class', req: true, desc: 'Class/Grade to assign' },
-                            { col: 'section', req: true, desc: 'Section (e.g. A, B, C)' },
+                            { col: 'section', req: true, desc: 'Section (e.g. A, B, C, D, E, F)' },
                             { col: 'academic_year', req: true, desc: 'Academic year (e.g. 2025-2026)' },
                           ].map((item, idx) => (
                             <tr key={idx} style={{ borderTop: '1px solid #f1f5f9' }}>
@@ -2520,7 +2529,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     onChange={e => { setStudentSectionFilter(e.target.value); setStudentPage(1); }}
                   >
                     <option value="">All Sections</option>
-                    {['A', 'B', 'C', 'D'].map(sec => (
+                    {['A', 'B', 'C', 'D', 'E', 'F'].map(sec => (
                       <option key={sec} value={sec}>Section {sec}</option>
                     ))}
                   </select>
@@ -2605,8 +2614,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <tbody>
                           {[
                             { col: 'fullname', req: true, desc: 'Full name of the student' },
-                            { col: 'class', req: true, desc: 'Class/Grade name' },
-                            { col: 'section', req: true, desc: 'Section (e.g. A, B, C)' },
+                            { col: 'class', req: true, desc: 'Class/Grade name (Grade 3 to 8 required)' },
+                            { col: 'section', req: true, desc: 'Section (e.g. A, B, C, D, E, F)' },
                             { col: 'roll no', req: true, desc: 'Roll number' },
                             { col: 'status', req: true, desc: 'Status (e.g. active, inactive)' },
                             { col: 'academy year', req: true, desc: 'Academic year (e.g. 2025-2026)' },
@@ -2926,7 +2935,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       onChange={e => { setSchSectionFilter(e.target.value); setClassPage(1); }}
                     >
                       <option value="">All Sections</option>
-                      {['A', 'B', 'C', 'D'].map(sec => (
+                      {['A', 'B', 'C', 'D', 'E', 'F'].map(sec => (
                         <option key={sec} value={sec}>Section {sec}</option>
                       ))}
                     </select>
@@ -3582,7 +3591,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <select className="sd-form-input" value={tempClassSection}
                           onChange={e => setTempClassSection(e.target.value)}>
                           <option value="">-- Select Section --</option>
-                          {['A', 'B', 'C', 'D'].map(letter => (
+                          {['A', 'B', 'C', 'D', 'E', 'F'].map(letter => (
                             <option key={letter} value={letter}>Section {letter}</option>
                           ))}
                         </select>
@@ -3593,12 +3602,29 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           className="sd-btn-outline"
                           onClick={() => {
                             if (tempClassGrade && tempClassSection) {
+                              const targetClassName = `Class ${tempClassGrade}-${tempClassSection}`;
+                              const targetAcademicYear = teacherForm.academic_year || defaultSchoolAcademicYear;
+                              const existingClass = classes.find(c =>
+                                (c.class_name || '').toLowerCase() === targetClassName.toLowerCase() &&
+                                (c.academic_year || '') === targetAcademicYear
+                              );
+
+                              if (existingClass && existingClass.teacher_name) {
+                                const editingTeacherId = modalType === 'edit' && selectedEntity ? (selectedEntity.teacher_id || selectedEntity.id) : null;
+                                const assignedTeacherIds = existingClass.assigned_teacher_ids || [];
+                                if (!editingTeacherId || !assignedTeacherIds.includes(editingTeacherId)) {
+                                  setErrorMsg(`${targetClassName} is already assigned to teacher '${existingClass.teacher_name}'. A class & section can only be assigned to one teacher.`);
+                                  return;
+                                }
+                              }
+
                               const exists = teacherForm.classes_list?.some(c => c.grade === tempClassGrade && c.section === tempClassSection);
                               if (!exists) {
                                 setTeacherForm(prev => ({
                                   ...prev,
                                   classes_list: [...(prev.classes_list || []), { grade: tempClassGrade, section: tempClassSection }]
                                 }));
+                                setErrorMsg('');
                               }
                               setTempClassGrade('');
                               setTempClassSection('');
@@ -3766,7 +3792,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <select className="sd-form-input" value={studentForm.section || ''}
                           onChange={e => setStudentForm({...studentForm, section: e.target.value})} required>
                           <option value="">-- Select Section --</option>
-                          {['A', 'B', 'C', 'D'].map(letter => (
+                          {['A', 'B', 'C', 'D', 'E', 'F'].map(letter => (
                             <option key={letter} value={letter}>Section {letter}</option>
                           ))}
                         </select>
@@ -3832,7 +3858,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               class_name: `Class ${num}-${selectedSecVal}`
                             });
                           }} required>
-                          {['A', 'B', 'C', 'D'].map(letter => (
+                          {['A', 'B', 'C', 'D', 'E', 'F'].map(letter => (
                             <option key={letter} value={letter}>Section {letter}</option>
                           ))}
                         </select>
