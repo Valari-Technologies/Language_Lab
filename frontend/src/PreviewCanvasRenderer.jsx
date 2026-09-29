@@ -1995,7 +1995,8 @@ export default function PreviewCanvasRenderer({
           const studentAvatarRaw = block.content?.userAvatarUrl || block.content?.speakerBAvatarUrl;
           const npcAvatarUrl = resolveUrl ? resolveUrl(npcAvatarRaw) : defaultResolveUrl(npcAvatarRaw);
           const studentAvatarUrl = resolveUrl ? resolveUrl(studentAvatarRaw) : defaultResolveUrl(studentAvatarRaw);
-          const turns = block.content?.conversation || [];
+          const rawTurns = block.content?.conversation || block.content?.steps || block.content?.dialogue_lines || block.content?.lines || block.content?.turns || block.content?.script || block.content?.items;
+          const turns = Array.isArray(rawTurns) ? rawTurns : [];
 
           return (
             <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.65rem', border: '1px solid #c084fc', background: '#faf5ff', borderRadius: '8px', padding: '0.75rem' }}>
@@ -2032,9 +2033,10 @@ export default function PreviewCanvasRenderer({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
                 {turns.length > 0 ? (
                   turns.map((t, tIdx) => {
-                    const isNpc = t.speaker === 'npc' || t.speaker === 'NPC Speaker' || !t.speaker;
-                    const speakerName = isNpc ? npcName : userRole;
-                    const text = t.text || t.prompt || '(No dialogue provided)';
+                    const spkLower = String(t.speaker || t.name || '').toLowerCase();
+                    const isNpc = ['npc', 'npc speaker', 'speaker_a', 'speakera', 'character_a', 'a', 'instructor', 'teacher'].includes(spkLower) || !t.speaker || t.side === 'left';
+                    const speakerName = t.name || t.speakerName || (isNpc ? npcName : userRole);
+                    const text = t.text || t.prompt || t.expectedResponse || t.speech || t.dialogue || t.statement || t.content || (typeof t === 'string' ? t : '') || '(No dialogue provided)';
                     const currentAvatar = isNpc ? npcAvatarUrl : studentAvatarUrl;
 
                     return (
@@ -2427,6 +2429,12 @@ export default function PreviewCanvasRenderer({
     if (isFB) {
       const bCount = (block.content?.blanks || []).length || 1;
       estimatedHeight = 140 + bCount * 45;
+    } else if (normType === 'video') {
+      const parsedH = parseInt(block.styles?.height || block.styles?.minHeight);
+      estimatedHeight = (!isNaN(parsedH) && parsedH > 0) ? parsedH : 220;
+    } else if (normType === 'audio') {
+      const parsedH = parseInt(block.styles?.height || block.styles?.minHeight);
+      estimatedHeight = (!isNaN(parsedH) && parsedH > 0) ? parsedH : 100;
     } else if (normType === 'image') {
       const hasQ = block.content?.hasQuestion;
       const opts = block.content?.questionOptions?.length || 0;
@@ -2440,7 +2448,8 @@ export default function PreviewCanvasRenderer({
       const qCount = (block.content?.questions || []).length || 1;
       estimatedHeight = 120 + qCount * 180;
     } else if (normType === 'roleplay_simulation' || normType === 'roleplay') {
-      const turnCount = (block.content?.conversation || []).length || 2;
+      const turnsArr = block.content?.conversation || block.content?.steps || block.content?.dialogue_lines || block.content?.lines || block.content?.turns || block.content?.script || block.content?.items || [];
+      const turnCount = Array.isArray(turnsArr) ? turnsArr.length : 2;
       estimatedHeight = 140 + turnCount * 65;
     }
 

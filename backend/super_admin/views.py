@@ -98,15 +98,21 @@ class GradeViewSet(CMSBaseViewSet):
 def cleanup_stale_school_users(email):
     if not email:
         return
-    for user in User.objects.filter(email=email):
-        has_admin_profile = SchoolAdminProfile.objects.filter(user=user).exists()
+    for user in list(User.objects.filter(email=email)):
+        has_admin_profile = SchoolAdminProfile.objects.filter(user=user, school__isnull=False).exists()
         has_school_admin_link = School.objects.filter(schoolAdminId=user).exists()
         try:
             from school_admin.models import Teacher
-            has_teacher = Teacher.objects.filter(user=user).exists()
+            has_teacher = Teacher.objects.filter(user=user, school__isnull=False).exists()
         except Exception:
             has_teacher = False
-        if not (has_admin_profile or has_school_admin_link or has_teacher):
+        try:
+            from school_admin.models import Student
+            has_student = Student.objects.filter(user=user, school__isnull=False).exists()
+        except Exception:
+            has_student = False
+
+        if not (has_admin_profile or has_school_admin_link or has_teacher or has_student):
             user.delete()
 
 
@@ -176,6 +182,13 @@ class SchoolViewSet(CMSBaseViewSet):
         academic_year = data.get("academic_year") or data.get("academicYear") or "2026-2027"
         school_code = data.get("school_code") or ""
         contact_email = data.get("contactEmail") or data.get("email") or ""
+        admin_email = data.get("admin_email") or contact_email
+
+        if contact_email:
+            cleanup_stale_school_users(contact_email)
+        if admin_email:
+            cleanup_stale_school_users(admin_email)
+
         if phone:
             cleaned_phone = "".join(c for c in phone if c.isdigit())
             if len(cleaned_phone) != 10 or len(phone) != 10:
@@ -186,13 +199,6 @@ class SchoolViewSet(CMSBaseViewSet):
         
         admin_name = data.get("admin_name") or data.get("admin_full_name") or "School Admin"
         admin_username = data.get("admin_username")
-        admin_email = data.get("admin_email") or contact_email
-
-        if contact_email:
-            cleanup_stale_school_users(contact_email)
-        if admin_email:
-            cleanup_stale_school_users(admin_email)
-
         admin_password = data.get("admin_password")
         
         max_servers = int(data.get("maxLmsServers", 2))

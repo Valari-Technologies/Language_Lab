@@ -1070,7 +1070,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       if (isNaN(height)) {
         if (block.type === 'video' || block.type === 'image' || block.type === 'hotspot_explorer') {
           const extraQ = block.content?.hasQuestion ? 120 : 0;
-          height = Math.max(450, (parseInt(block.styles?.height) || 450) + extraQ);
+          const parsedH = parseInt(block.styles?.height || block.styles?.minHeight);
+          height = (!isNaN(parsedH) && parsedH > 0) ? (parsedH + extraQ) : (220 + extraQ);
         }
         else if (block.type === 'functional_reading') {
           const qCount = (block.content?.questions || []).length || 1;
@@ -1457,12 +1458,17 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   }, [currentPath]);
 
   /* ── Clear editor path from URL when navigating away & sync history ── */
+  /* ── Sync current view with browser history state ── */
   useEffect(() => {
-    if (view !== 'screen-builder') {
-      if (window.location.pathname.startsWith('/content-studio/editor/')) {
-        window.history.replaceState({ csView: view }, '', '/content-studio');
-        setCurrentPath('/content-studio');
+    const currentState = window.history.state;
+    if (!currentState || currentState.csView !== view) {
+      const path = (view === 'screen-builder' && selectedScreen?.id) ? `/content-studio/editor/${selectedScreen.id}` : '/content-studio';
+      if (currentState?.csView && currentState.csView !== view) {
+        window.history.pushState({ csView: view }, '', path);
+      } else {
+        window.history.replaceState({ csView: view }, '', path);
       }
+      setCurrentPath(path);
     }
   }, [view]);
 
@@ -1475,6 +1481,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         if (stateView !== 'screen-builder') {
           setIsEditingScreen(false);
         }
+      } else {
+        setView('experiences');
+        setIsEditingScreen(false);
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -2370,7 +2379,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
     const targetPath = `/content-studio/editor/${sc.id}`;
     if (window.location.pathname !== targetPath) {
-      window.history.pushState({}, '', targetPath);
+      window.history.pushState({ csView: 'screen-builder' }, '', targetPath);
       setCurrentPath(targetPath);
     }
   };
@@ -2793,8 +2802,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           boxSizing: 'border-box',
           overflow: 'hidden',
           ...(block.styles?.blockWidth ? { width: block.styles.blockWidth } : { width: '100%' }),
-          minHeight: block.styles?.height || block.styles?.minHeight || 'auto',
-          height: 'auto',
+          minHeight: (block.styles?.height && block.styles.height !== 'auto') ? block.styles.height : (block.styles?.minHeight || 'auto'),
+          height: (block.styles?.height && block.styles.height !== 'auto') ? block.styles.height : 'auto',
 
           fontFamily: block.styles?.fontFamily || 'inherit',
           fontSize: block.styles?.fontSize || 'inherit',
@@ -2941,11 +2950,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         )}
 
         {block.type === 'video' && (
-          <div style={{ background: '#f3e8ff', border: '1px solid #d8b4fe', borderRadius: '8px', overflow: 'hidden', flex: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ background: '#f3e8ff', border: '1px solid #d8b4fe', borderRadius: '8px', overflow: 'hidden', flex: 1, width: '100%', height: (block.styles?.height && block.styles.height !== 'auto') ? block.styles.height : '100%', minHeight: (block.styles?.height && block.styles.height !== 'auto') ? block.styles.height : 'auto', display: 'flex', flexDirection: 'column' }}>
             {block.content?.url ? (
               <video src={resolveMediaUrl(block.content.url)} controls controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture onContextMenu={e => e.preventDefault()} onMouseDown={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()} style={{ width: '100%', height: '100%', flex: 1, display: 'block', objectFit: block.styles?.objectFit || 'contain' }} />
             ) : (
-              <div style={{ padding: '2rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', gap: '0.35rem', flex: 1 }}>
+              <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#7c3aed', gap: '0.35rem', flex: 1, height: '100%' }}>
                 <FiMonitor style={{ fontSize: '1.75rem' }} />
                 <span style={{ fontSize: '0.72rem', fontWeight: 600 }}>No Video Source Configured</span>
               </div>
@@ -11893,9 +11902,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             const activeActivity = previewPayload?.activities?.[previewActivityIndex];
             const activeScreen = activeActivity?.screens?.[previewScreenIndex];
             const totalScreens = activeActivity?.screens?.length || 1;
-            const activeScreenElements = (selectedScreen && activeScreen && (selectedScreen.id === activeScreen.id || selectedScreen.title === activeScreen.title) && screenForm?.elements)
+            const activeScreenElements = (selectedScreen && activeScreen && (String(selectedScreen.id) === String(activeScreen.id) || selectedScreen.title === activeScreen.title) && screenForm?.elements && screenForm.elements.length > 0)
               ? screenForm.elements
-              : (activeScreen?.elements || []);
+              : (activeScreen?.elements && activeScreen.elements.length > 0 ? activeScreen.elements : (selectedScreen && screenForm?.elements ? screenForm.elements : []));
 
             const getNextScreenTarget = () => {
               const activities = previewPayload?.activities;

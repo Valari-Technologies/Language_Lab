@@ -153,6 +153,11 @@ def build_runtime_payload(experience, request=None):
 
                 el_type = el.get("type", "")
                 el_content = el.get("content", {})
+                if el_type == "roleplay_simulation" and el_content:
+                    conv = el_content.get("conversation") or el_content.get("steps") or el_content.get("dialogue_lines") or el_content.get("lines") or el_content.get("turns") or []
+                    if conv:
+                        el_content["conversation"] = conv
+                        el_content["steps"] = conv
                 if el_type in ["image", "video", "audio"] and el_content:
                     raw_url = el_content.get("url")
                     if raw_url:

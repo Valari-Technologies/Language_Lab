@@ -787,7 +787,61 @@ class DashboardNotificationsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        notifications = Notification.objects.filter(user=request.user).order_by("-created_at")[:15]
+        user = request.user
+        notifications = list(Notification.objects.filter(user=user).order_by("-created_at")[:15])
+
+        if not notifications:
+            created_notifs = []
+            try:
+                from super_admin.models import School, SchoolAdminProfile
+                from school_admin.models import Teacher, Student, Class
+
+                school = getattr(user, 'school_administered', None)
+                if not school and hasattr(user, 'schools_administered'):
+                    school = user.schools_administered.filter(is_active=True).first()
+                if not school:
+                    profile = SchoolAdminProfile.objects.filter(user=user).first()
+                    if profile and profile.school:
+                        school = profile.school
+
+                if school:
+                    t_count = Teacher.objects.filter(school=school).count()
+                    s_count = Student.objects.filter(school=school).count()
+                    c_count = Class.objects.filter(school=school).count()
+
+                    if s_count > 0:
+                        created_notifs.append(Notification.objects.create(
+                            user=user,
+                            title="Student Enrolment Active",
+                            message=f"{s_count} students are currently enrolled in {school.school_name}.",
+                            notification_type=Notification.NotificationType.INFO
+                        ))
+                    if t_count > 0:
+                        created_notifs.append(Notification.objects.create(
+                            user=user,
+                            title="Teacher Roster Configured",
+                            message=f"{t_count} teachers are active in your school portal.",
+                            notification_type=Notification.NotificationType.INFO
+                        ))
+                    if c_count > 0:
+                        created_notifs.append(Notification.objects.create(
+                            user=user,
+                            title="Academic Classes Ready",
+                            message=f"{c_count} classes active for current academic session.",
+                            notification_type=Notification.NotificationType.INFO
+                        ))
+
+                if not created_notifs:
+                    created_notifs.append(Notification.objects.create(
+                        user=user,
+                        title="Welcome to LinguaLab",
+                        message="Your portal notifications and school dashboard are now active.",
+                        notification_type=Notification.NotificationType.INFO
+                    ))
+                notifications = created_notifs
+            except Exception as e:
+                logger.error(f"Error seeding dashboard notifications: {e}")
+
         serializer = NotificationSerializer(notifications, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
