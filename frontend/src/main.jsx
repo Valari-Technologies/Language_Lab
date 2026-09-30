@@ -32,7 +32,7 @@ export const App = () => {
       // Role-based route correction
       const path = window.location.pathname;
       if (parsedUser.role === 'SUPER_ADMIN') {
-        if (!path.startsWith('/dashboard') && !path.startsWith('/content-studio')) {
+        if (!path.startsWith('/dashboard') && !path.startsWith('/content-studio') && !path.startsWith('/school-dashboard') && !path.startsWith('/teacher-dashboard')) {
           window.history.replaceState({}, '', '/dashboard/grades');
           setCurrentPath('/dashboard/grades');
         }
@@ -144,7 +144,7 @@ export const App = () => {
 
       let isAllowed = false;
       if (user.role === 'SUPER_ADMIN') {
-        isAllowed = currentPath.startsWith('/dashboard') || currentPath.startsWith('/content-studio');
+        isAllowed = currentPath.startsWith('/dashboard') || currentPath.startsWith('/content-studio') || currentPath.startsWith('/school-dashboard') || currentPath.startsWith('/teacher-dashboard');
       } else if (user.role === 'CONTENT_CREATOR') {
         isAllowed = currentPath.startsWith('/content-studio');
       } else if (user.role === 'SCHOOL_ADMIN') {
@@ -198,14 +198,14 @@ export const App = () => {
               onUpdateUser={handleUpdateUser}
             />
           )}
-          {user.role === 'SCHOOL_ADMIN' && currentPath.startsWith('/school-dashboard') && (
+          {(user.role === 'SCHOOL_ADMIN' || user.role === 'SUPER_ADMIN') && currentPath.startsWith('/school-dashboard') && (
             <SchoolDashboard
               user={user}
               onLogout={handleLogout}
               onUpdateUser={handleUpdateUser}
             />
           )}
-          {user.role === 'TEACHER' && currentPath.startsWith('/teacher-dashboard') && (
+          {(user.role === 'TEACHER' || user.role === 'SUPER_ADMIN') && currentPath.startsWith('/teacher-dashboard') && (
             <TeacherDashboard
               user={user}
               onLogout={handleLogout}
