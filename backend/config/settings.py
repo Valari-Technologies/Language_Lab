@@ -228,7 +228,4 @@ GOOGLE_CLIENT_ID = config("GOOGLE_CLIENT_ID", default="")
 GOOGLE_CLIENT_SECRET = config("GOOGLE_CLIENT_SECRET", default="")
 
 # AI Content Generator settings (Google Gemini API)
-import os
-from dotenv import load_dotenv
-load_dotenv(os.path.join(BASE_DIR, '.env'))
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_API_KEY = config("GEMINI_API_KEY", default="")

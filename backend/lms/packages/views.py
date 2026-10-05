@@ -11,7 +11,11 @@ from teacher.models import Student
 from school_admin.models import Class
 from assessments.models import ExperienceAssignment
 from content_studio.models import PublishedPackage, PublishVersion
-from .serializers import LMSPackageSerializer, LMSPackageUpdateCheckSerializer
+from .serializers import (
+    LMSPackageSerializer,
+    LMSPackageUpdateCheckSerializer,
+    CanonicalPackageSerializer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -180,3 +184,193 @@ class LMSPackageCheckUpdatesAPIView(APIView):
                 updates_available.append(dto)
 
         return Response({"updates_available": updates_available}, status=status.HTTP_200_OK)
+ 
+ 
+class CanonicalPackageListAPIView(APIView):
+    """
+    Canonical Published Package Listing API for Desktop LMS synchronization.
+    `GET /api/packages/`
+    Returns published, approved packages with version and dynamic downloadUrl.
+    """
+    permission_classes = [AllowAny]
+    serializer_class = CanonicalPackageSerializer
+
+    def get(self, request, *args, **kwargs):
+        # Query PublishedPackages with COMPLETED compression and APPROVED experience status
+        pkg_queryset = PublishedPackage.objects.filter(
+            compression_status="COMPLETED",
+            experience__status="APPROVED",
+            experience__is_deleted=False
+        ).select_related("experience")
+
+        packages_data = []
+        for pkg in pkg_queryset:
+            version_obj = (
+                PublishVersion.objects.filter(published_package=pkg)
+                .order_by("-published_at")
+                .first()
+            )
+            if not version_obj:
+                continue
+
+            # Dynamically build absolute download URL based on request host
+            download_url = request.build_absolute_uri(f"/api/packages/{pkg.id}/download/")
+
+            updated_time = version_obj.published_at or pkg.updated_at
+            iso_updated_at = updated_time.isoformat() if updated_time else ""
+
+            packages_data.append({
+                "packageId": str(pkg.id),
+                "name": pkg.experience.title or pkg.package_name,
+                "version": version_obj.version_number,
+                "updatedAt": iso_updated_at,
+                "published": True,
+                "checksum": version_obj.checksum or "",
+                "downloadUrl": download_url,
+            })
+
+        serializer = self.serializer_class(packages_data, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class CanonicalPackageDetailAPIView(APIView):
+    """
+    Canonical Published Package Detail & Runtime Hierarchy API for Desktop LMS.
+    `GET /api/packages/{package_id}/`
+    Returns detailed package metadata and full content/activity/screen runtime payload.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, package_id, *args, **kwargs):
+        from content_studio.services.runtime_payload import build_runtime_payload
+
+        # Query PublishedPackage with COMPLETED compression and APPROVED experience status
+        pkg_queryset = PublishedPackage.objects.filter(
+            compression_status="COMPLETED",
+            experience__status="APPROVED",
+            experience__is_deleted=False
+        ).select_related("experience", "experience__grade")
+
+        # Support querying by PublishedPackage ID, Experience ID, or PublishVersion ID
+        pkg = None
+        if str(package_id).isdigit():
+            pid = int(package_id)
+            pkg = pkg_queryset.filter(Q(id=pid) | Q(experience__id=pid)).first()
+            if not pkg:
+                version_match = (
+                    PublishVersion.objects.filter(id=pid)
+                    .select_related("published_package")
+                    .first()
+                )
+                if version_match:
+                    pkg = pkg_queryset.filter(id=version_match.published_package_id).first()
+        else:
+            pkg = pkg_queryset.filter(package_name__iexact=package_id).first()
+
+        if not pkg:
+            return Response(
+                {"error": "Package not found or unpublished."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        version_obj = (
+            PublishVersion.objects.filter(published_package=pkg)
+            .order_by("-published_at")
+            .first()
+        )
+        if not version_obj:
+            return Response(
+                {"error": "Package version not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        runtime_payload = build_runtime_payload(pkg.experience, request)
+        download_url = request.build_absolute_uri(f"/api/packages/{pkg.id}/download/")
+        updated_time = version_obj.published_at or pkg.updated_at
+
+        response_data = {
+            "packageId": str(pkg.id),
+            "name": pkg.experience.title or pkg.package_name,
+            "version": version_obj.version_number,
+            "buildNumber": version_obj.build_number,
+            "packageSize": version_obj.package_size or 0,
+            "checksum": version_obj.checksum or "",
+            "updatedAt": updated_time.isoformat() if updated_time else "",
+            "published": True,
+            "downloadUrl": download_url,
+            "experience": runtime_payload.get("experience", {}),
+            "activities": runtime_payload.get("activities", []),
+            "runtimePayload": runtime_payload,
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class CanonicalPackageDownloadAPIView(APIView):
+    """
+    Canonical Package File Streaming API.
+    `GET /api/packages/{package_id}/download/`
+    Streams approved .elab package file with X-Package-Checksum and X-Package-Version headers.
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request, package_id, *args, **kwargs):
+        # Query PublishedPackage with COMPLETED compression and APPROVED experience status
+        pkg_queryset = PublishedPackage.objects.filter(
+            compression_status="COMPLETED",
+            experience__status="APPROVED",
+            experience__is_deleted=False
+        ).select_related("experience")
+
+        # Support querying by PublishedPackage ID, Experience ID, or PublishVersion ID
+        pkg = None
+        if str(package_id).isdigit():
+            pid = int(package_id)
+            pkg = pkg_queryset.filter(Q(id=pid) | Q(experience__id=pid)).first()
+            if not pkg:
+                version_match = (
+                    PublishVersion.objects.filter(id=pid)
+                    .select_related("published_package")
+                    .first()
+                )
+                if version_match:
+                    pkg = pkg_queryset.filter(id=version_match.published_package_id).first()
+        else:
+            pkg = pkg_queryset.filter(package_name__iexact=package_id).first()
+
+        if not pkg:
+            return Response(
+                {"error": "Package not found or unpublished."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        version_obj = (
+            PublishVersion.objects.filter(published_package=pkg)
+            .order_by("-published_at")
+            .first()
+        )
+        if not version_obj:
+            return Response(
+                {"error": "Package version not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        file_path = version_obj.file_path
+        if not file_path or not os.path.exists(file_path) or not os.path.isfile(file_path):
+            return Response(
+                {"error": "Package archive file not available on disk."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        filename = os.path.basename(file_path)
+        response = FileResponse(open(file_path, "rb"), content_type="application/octet-stream")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        if version_obj.checksum:
+            response["X-Package-Checksum"] = version_obj.checksum
+        if version_obj.version_number:
+            response["X-Package-Version"] = version_obj.version_number
+        return response
+
+
+

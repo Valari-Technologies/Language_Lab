@@ -95,7 +95,7 @@ class AssetCollector:
                     except (Media.DoesNotExist, TypeError):
                         media_obj = None
 
-                    if media_obj and media_obj.file and media_obj.file.name:
+                    if media_obj and media_obj.file and media_obj.file.name and os.path.exists(media_obj.file.path):
                         src_path = media_obj.file.path
                         filename = os.path.basename(src_path)
                         dest_subfolder = os.path.join(assets_pkg_dir, subfolder)

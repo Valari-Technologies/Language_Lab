@@ -35,3 +35,17 @@ class LMSPackageUpdateCheckSerializer(serializers.Serializer):
         required=True,
         allow_empty=True
     )
+
+
+class CanonicalPackageSerializer(serializers.Serializer):
+    """
+    Standard Canonical Serializer for GET /api/packages/
+    """
+    packageId = serializers.CharField()
+    name = serializers.CharField()
+    version = serializers.CharField()
+    updatedAt = serializers.CharField()
+    published = serializers.BooleanField()
+    checksum = serializers.CharField(allow_blank=True, allow_null=True, required=False)
+    downloadUrl = serializers.CharField()
+
