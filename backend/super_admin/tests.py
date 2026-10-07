@@ -193,3 +193,51 @@ class LicensingSystemTests(APITestCase):
         self.assertEqual(act_res.data["status"], "success")
         self.assertEqual(act_res.data["concurrentUsersPerServer"], 40)
         self.assertEqual(act_res.data["installationId"], server_data["installationId"])
+
+    def test_lms_server_crud_and_disable_enable_toggle(self):
+        school = School.objects.create(
+            schoolId="SCH-CRUD-TEST",
+            school_name="CRUD Test School",
+            address="Test Addr",
+            email="crudtest@school.com",
+            is_active=True
+        )
+        license_obj = License.objects.create(
+            licenseId="LIC-CRUD-TEST",
+            licenseKey="KEY-CRUD-999",
+            school=school,
+            maxLmsServers=3,
+            concurrentUsersPerServer=40,
+            expiryDate=timezone.now().date() + timezone.timedelta(days=365),
+            status=License.Status.ACTIVE
+        )
+        school.licenseId = license_obj
+        school.save()
+
+        # 1. Create server
+        create_url = reverse("school-create-lms-server", kwargs={"school_id": school.school_id})
+        res = self.client.post(create_url, {"serverName": "Initial Lab", "maxUsers": 40}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        inst_id = res.data["server"]["installationId"]
+
+        # 2. Update / Rename server via PATCH
+        update_url = f"/api/cms/v1/lms-servers/{inst_id}/"
+        patch_res = self.client.patch(update_url, {"serverName": "Renamed Lab A"}, format="json")
+        self.assertEqual(patch_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(patch_res.data["server"]["serverName"], "Renamed Lab A")
+
+        # 3. Disable server via toggle-status
+        toggle_url = f"/api/cms/v1/lms-servers/{inst_id}/toggle-status/"
+        toggle_res = self.client.post(toggle_url, format="json")
+        self.assertEqual(toggle_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(toggle_res.data["server"]["status"], "DEACTIVATED")
+
+        # 4. Re-enable server via toggle-status
+        toggle_res2 = self.client.post(toggle_url, format="json")
+        self.assertEqual(toggle_res2.status_code, status.HTTP_200_OK)
+        self.assertEqual(toggle_res2.data["server"]["status"], "ACTIVE")
+
+        # 5. Delete server
+        delete_res = self.client.delete(update_url, format="json")
+        self.assertEqual(delete_res.status_code, status.HTTP_200_OK)
+        self.assertFalse(LmsServer.objects.filter(installationId=inst_id).exists())

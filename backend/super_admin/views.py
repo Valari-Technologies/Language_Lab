@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import viewsets, status
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -572,12 +573,101 @@ class DeactivateServerAPIView(APIView):
         except LmsServer.DoesNotExist:
             return Response({"error": "LMS Server installation not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        server.status = LmsServer.Status.DEACTIVATED
+        action_type = request.data.get("action", "deactivate")
+        if action_type == "activate":
+            server.status = LmsServer.Status.ACTIVE
+            msg = f"Server '{server.serverName}' has been activated successfully."
+        else:
+            server.status = LmsServer.Status.DEACTIVATED
+            msg = f"Server '{server.serverName}' has been deactivated successfully."
         server.save()
 
         return Response({
             "status": "success",
-            "message": f"Server '{server.serverName}' has been deactivated successfully."
+            "message": msg,
+            "server": LmsServerSerializer(server).data
+        }, status=status.HTTP_200_OK)
+
+
+class LmsServerViewSet(CMSBaseViewSet):
+    permission_classes = [IsAuthenticated, IsSuperAdminOrReadOnlyStaff]
+    queryset = LmsServer.objects.all().select_related("school", "license")
+    serializer_class = LmsServerSerializer
+    lookup_field = "installationId"
+    lookup_value_regex = "[^/]+"
+
+    @action(detail=True, methods=["post"], url_path="toggle-status")
+    def toggle_status(self, request, installationId=None):
+        server = self.get_object()
+        new_status = LmsServer.Status.DEACTIVATED if server.status == LmsServer.Status.ACTIVE else LmsServer.Status.ACTIVE
+        server.status = new_status
+        server.save(update_fields=["status"])
+        return Response({
+            "status": "success",
+            "message": f"Server '{server.serverName}' is now {'active' if new_status == LmsServer.Status.ACTIVE else 'disabled'}.",
+            "server": self.get_serializer(server).data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="deactivate")
+    def deactivate(self, request, installationId=None):
+        server = self.get_object()
+        server.status = LmsServer.Status.DEACTIVATED
+        server.save(update_fields=["status"])
+        return Response({
+            "status": "success",
+            "message": f"Server '{server.serverName}' has been disabled.",
+            "server": self.get_serializer(server).data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="activate")
+    def activate(self, request, installationId=None):
+        server = self.get_object()
+        if server.license and server.license.status != License.Status.ACTIVE:
+            return Response({"error": f"Cannot activate server. School license is {server.license.status}."}, status=status.HTTP_400_BAD_REQUEST)
+        server.status = LmsServer.Status.ACTIVE
+        server.save(update_fields=["status"])
+        return Response({
+            "status": "success",
+            "message": f"Server '{server.serverName}' has been enabled.",
+            "server": self.get_serializer(server).data
+        }, status=status.HTTP_200_OK)
+
+    def partial_update(self, request, *args, **kwargs):
+        server = self.get_object()
+        server_name = request.data.get("serverName") or request.data.get("server_name")
+        max_users = request.data.get("maxUsers") or request.data.get("max_users")
+        status_val = request.data.get("status")
+
+        update_fields = []
+        if server_name:
+            server.serverName = server_name.strip()
+            update_fields.append("serverName")
+        if max_users is not None:
+            try:
+                server.maxUsers = int(max_users)
+                update_fields.append("maxUsers")
+            except (ValueError, TypeError):
+                pass
+        if status_val and status_val in [LmsServer.Status.ACTIVE, LmsServer.Status.DEACTIVATED]:
+            server.status = status_val
+            update_fields.append("status")
+
+        if update_fields:
+            server.save(update_fields=update_fields)
+
+        return Response({
+            "status": "success",
+            "message": f"Server '{server.serverName}' updated successfully.",
+            "server": self.get_serializer(server).data
+        }, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        server = self.get_object()
+        server_name = server.serverName
+        server.delete()
+        return Response({
+            "status": "success",
+            "message": f"Server '{server_name}' has been deleted."
         }, status=status.HTTP_200_OK)
 
 

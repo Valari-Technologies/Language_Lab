@@ -8,6 +8,7 @@ from .views import (
     SchoolAdminViewSet,
     PublishContentViewSet,
     LmsServerCreateAPIView,
+    LmsServerViewSet,
 )
 
 
@@ -17,6 +18,7 @@ router.register(r"grades", GradeViewSet, basename="grade")
 router.register(r"schools", SchoolViewSet, basename="school")
 router.register(r"school-admins", SchoolAdminViewSet, basename="school-admin")
 router.register(r"publish-contents", PublishContentViewSet, basename="publish-contents")
+router.register(r"lms-servers", LmsServerViewSet, basename="lms-server")
 
 
 urlpatterns = [
