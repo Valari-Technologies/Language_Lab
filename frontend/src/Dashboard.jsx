@@ -4345,37 +4345,112 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         overflow: 'visible'
                       }}
                     >
-                      {activePreviewScreen.elements && activePreviewScreen.elements.length > 0 ? (
-                        <div 
-                          className="preview-canvas-viewport"
-                          style={{
-                            width: '100%',
-                            minHeight: '100%',
-                            padding: '2rem',
-                            boxSizing: 'border-box',
-                            background: '#ffffff',
-                            fontFamily: activePreviewScreen.content?.font || 'Poppins',
-                            display: 'flex',
-                            flexDirection: 'column'
-                          }}
-                        >
-                          <PreviewCanvasRenderer
-                            elements={activePreviewScreen.elements || []}
-                            activeScreenId={activePreviewScreen.id || ''}
-                            previewAnswers={previewAnswers}
-                            setPreviewAnswers={setPreviewAnswers}
-                            voiceRecordingStates={voiceRecordingStates}
-                            setVoiceRecordingStates={setVoiceRecordingStates}
-                            dragDropSelections={dragDropSelections}
-                            setDragDropSelections={setDragDropSelections}
-                            blankAnswers={blankAnswers}
-                            setBlankAnswers={setBlankAnswers}
-                            flippedCards={flippedCards}
-                            setFlippedCards={setFlippedCards}
-                            resolveUrl={resolvePreviewUrl}
-                          />
-                        </div>
-                      ) : (
+                    {(() => {
+                      const screenContent = activePreviewScreen.content || {};
+                      const scrType = (activePreviewScreen.screen_type || '').toUpperCase();
+                      
+                      let screenElements = activePreviewScreen.elements && activePreviewScreen.elements.length > 0 
+                        ? activePreviewScreen.elements 
+                        : [];
+
+                      // If elements array is empty, synthesize block for PreviewCanvasRenderer
+                      if (screenElements.length === 0) {
+                        const isMultimedia = screenContent.mediaType === 'multimedia' || 
+                          ['multimedia_reading_assessment', 'multimedia reading assessment', 'multimedia_reading', 'multimedia'].includes((screenContent.type || '').toLowerCase()) || 
+                          ((screenContent.audioUrl || screenContent.videoUrl) && Array.isArray(screenContent.questions) && screenContent.questions.length > 0);
+
+                        const isQuiz = scrType === 'QUIZ' || 
+                          scrType === 'ASSESSMENT' || 
+                          !!screenContent.quiz_question || 
+                          (Array.isArray(screenContent.questions) && screenContent.questions.length > 0 && !isMultimedia);
+
+                        if (isMultimedia) {
+                          screenElements = [{
+                            id: `block-synth-${activePreviewScreen.id}-multimedia`,
+                            type: 'multimedia_reading_assessment',
+                            content: {
+                              mediaType: screenContent.mediaType || (screenContent.videoUrl ? 'video' : 'audio'),
+                              audioUrl: screenContent.audioUrl || (screenContent.media_type === 'AUDIO' ? screenContent.media_url : ''),
+                              videoUrl: screenContent.videoUrl || (screenContent.media_type === 'VIDEO' ? screenContent.media_url : ''),
+                              scenario: screenContent.scenario || '',
+                              documentText: screenContent.documentText || '',
+                              questions: screenContent.questions || []
+                            }
+                          }];
+                        } else if (isQuiz) {
+                          screenElements = [{
+                            id: `block-synth-${activePreviewScreen.id}-quiz`,
+                            type: 'quiz',
+                            content: {
+                              question: screenContent.quiz_question || (screenContent.questions?.[0]?.question) || screenContent.question || 'Quiz question',
+                              options: screenContent.quiz_options || (screenContent.questions?.[0]?.options) || screenContent.options || ['', '', '', ''],
+                              correctAnswerIndex: screenContent.quiz_correct_index ?? (screenContent.questions?.[0]?.correctAnswerIndex) ?? 0,
+                              questions: screenContent.questions && screenContent.questions.length > 0 ? screenContent.questions : undefined
+                            }
+                          }];
+                        } else if (scrType === 'IMAGE' || (screenContent.media_url && screenContent.media_type === 'IMAGE')) {
+                          screenElements = [{
+                            id: `block-synth-${activePreviewScreen.id}-image`,
+                            type: 'image',
+                            content: {
+                              url: screenContent.media_url || '',
+                              caption: screenContent.caption || screenContent.text || '',
+                              hasQuestion: screenContent.hasQuestion,
+                              questionText: screenContent.questionText,
+                              questionOptions: screenContent.questionOptions,
+                              correctAnswer: screenContent.correctAnswer
+                            }
+                          }];
+                        } else if (scrType === 'VIDEO' || (screenContent.media_url && screenContent.media_type === 'VIDEO')) {
+                          screenElements = [{
+                            id: `block-synth-${activePreviewScreen.id}-video`,
+                            type: 'video',
+                            content: { url: screenContent.media_url || '' }
+                          }];
+                        } else if (scrType === 'SPEAKING' || (screenContent.media_url && screenContent.media_type === 'AUDIO')) {
+                          screenElements = [{
+                            id: `block-synth-${activePreviewScreen.id}-audio`,
+                            type: 'audio',
+                            content: { title: screenContent.title || 'Audio Practice', url: screenContent.media_url || '' }
+                          }];
+                        }
+                      }
+
+                      if (screenElements && screenElements.length > 0) {
+                        return (
+                          <div 
+                            className="preview-canvas-viewport"
+                            style={{
+                              width: '100%',
+                              minHeight: '100%',
+                              padding: '2rem',
+                              boxSizing: 'border-box',
+                              background: '#ffffff',
+                              fontFamily: activePreviewScreen.content?.font || 'Poppins',
+                              display: 'flex',
+                              flexDirection: 'column'
+                            }}
+                          >
+                            <PreviewCanvasRenderer
+                              elements={screenElements}
+                              activeScreenId={activePreviewScreen.id || ''}
+                              previewAnswers={previewAnswers}
+                              setPreviewAnswers={setPreviewAnswers}
+                              voiceRecordingStates={voiceRecordingStates}
+                              setVoiceRecordingStates={setVoiceRecordingStates}
+                              dragDropSelections={dragDropSelections}
+                              setDragDropSelections={setDragDropSelections}
+                              blankAnswers={blankAnswers}
+                              setBlankAnswers={setBlankAnswers}
+                              flippedCards={flippedCards}
+                              setFlippedCards={setFlippedCards}
+                              resolveUrl={resolvePreviewUrl}
+                            />
+                          </div>
+                        );
+                      }
+
+                      return (
                         <div style={{ flex: 1, padding: '2.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                           <div style={{ maxWidth: '800px', width: '100%', margin: '0 auto' }}>
                             {activePreviewScreen.screen_type === 'INFORMATION' && (
@@ -4489,7 +4564,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                               </div>
                             )}
 
-                            {activePreviewScreen.screen_type === 'QUIZ' && (
+                            {(activePreviewScreen.screen_type === 'QUIZ' || activePreviewScreen.screen_type === 'ASSESSMENT' || !!activePreviewScreen.content?.quiz_question || (Array.isArray(activePreviewScreen.content?.questions) && activePreviewScreen.content.questions.length > 0)) && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                 <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem', lineHeight: 1.5 }}>
                                   ❓ {activePreviewScreen.elements?.[0]?.content?.question || activePreviewScreen.content?.quiz_question || 'Choose the correct answer.'}
@@ -4616,7 +4691,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             )}
                           </div>
                         </div>
-                      )}
+                      );
+                    })()}
                     </div>
                     </div>
                   </div>

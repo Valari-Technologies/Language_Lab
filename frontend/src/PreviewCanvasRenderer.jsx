@@ -304,18 +304,14 @@ const MultimediaInteractiveQuizPlayer = ({
             const pauseSec = q.pauseAt !== undefined ? parseFloat(q.pauseAt) : 35;
             const isTargetTrigger = triggeredPauseIdx === qIdx;
             const isFillBlank = (q.type || 'mcq') === 'fill_blank';
-
-            // Hide question until video/audio playback reaches target timestamp (or triggered / answered)
-            const shouldShow = pauseSec === 0 || currentTime >= pauseSec || hasAnswered || isTargetTrigger;
-
-            if (!shouldShow) return null;
+            const isPlaybackReached = pauseSec === 0 || currentTime >= pauseSec;
 
             return (
               <div
                 key={q.id || qIdx}
                 style={{
                   background: isTargetTrigger ? '#f0fdf4' : '#ffffff',
-                  border: isTargetTrigger ? '2px solid #22c55e' : '1.5px solid #bae6fd',
+                  border: isTargetTrigger ? '2px solid #22c55e' : (isPlaybackReached ? '1.5px solid #0284c7' : '1.5px solid #bae6fd'),
                   borderRadius: '10px',
                   padding: '0.85rem',
                   display: 'flex',
@@ -650,8 +646,10 @@ export default function PreviewCanvasRenderer({
       normType = 'hotspot_explorer';
     } else if (['functional_reading', 'functional reading'].includes(rawType)) {
       normType = 'functional_reading';
-    } else if (['multimedia_reading_assessment', 'multimedia reading assessment', 'multimedia_reading'].includes(rawType)) {
+    } else if (['multimedia_reading_assessment', 'multimedia reading assessment', 'multimedia_reading', 'multimedia_assessment', 'multimedia reading & assessment', 'multimedia'].includes(rawType)) {
       normType = 'multimedia_reading_assessment';
+    } else if (['quiz', 'mcq', 'assessment', 'quiz_assessment', 'assessment_quiz', 'assessment_question', 'multiple_choice', 'quiz_listening'].includes(rawType)) {
+      normType = 'quiz';
     }
     switch (normType) {
       case 'heading':
@@ -819,13 +817,13 @@ export default function PreviewCanvasRenderer({
 
       case 'quiz':
         {
-          const rawQuestions = block.content?.questions;
+          const rawQuestions = block.content?.questions || block.content?.quiz_questions || block.content?.items;
           const questionsList = rawQuestions && rawQuestions.length > 0
             ? rawQuestions
             : [{
-                question: block.content?.question || 'Quiz question text label...',
-                options: block.content?.options || ['', '', '', ''],
-                correctAnswerIndex: block.content?.correctAnswerIndex ?? 0
+                question: block.content?.question || block.content?.quiz_question || block.content?.prompt || block.content?.title || block.content?.text || 'Quiz question text label...',
+                options: block.content?.options || block.content?.quiz_options || block.content?.choices || ['', '', '', ''],
+                correctAnswerIndex: block.content?.correctAnswerIndex ?? block.content?.quiz_correct_index ?? block.content?.correctAnswer ?? 0
               }];
 
           return (
@@ -834,9 +832,10 @@ export default function PreviewCanvasRenderer({
                 const blockAnswerKey = `${activeScreenId}_${block.id}_q${qIdx}`;
                 const selectedAnsIndex = previewAnswers[blockAnswerKey];
                 const hasSelected = selectedAnsIndex !== undefined;
-                const qText = qObj.question || `Question #${qIdx + 1}`;
-                const options = qObj.options || ['', '', '', ''];
-                const correctIdx = parseInt(qObj.correctAnswerIndex ?? qObj.correctAnswer) || 0;
+                const qText = qObj.question || qObj.quiz_question || qObj.prompt || qObj.text || `Question #${qIdx + 1}`;
+                const rawOpts = qObj.options || qObj.quiz_options || qObj.choices || qObj.answers || ['', '', '', ''];
+                const options = Array.isArray(rawOpts) ? rawOpts : [];
+                const correctIdx = parseInt(qObj.correctAnswerIndex ?? qObj.quiz_correct_index ?? qObj.correctAnswer) || 0;
 
                 return (
                   <div key={qIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
@@ -2444,9 +2443,12 @@ export default function PreviewCanvasRenderer({
     } else if (normType === 'matching' || normType === 'match') {
       const pairCount = (block.content?.pairs || block.content?.leftItems || []).length || 2;
       estimatedHeight = 100 + pairCount * 45;
-    } else if (normType === 'quiz') {
+    } else if (['quiz', 'mcq', 'assessment', 'quiz_assessment', 'assessment_quiz'].includes(normType)) {
       const qCount = (block.content?.questions || []).length || 1;
       estimatedHeight = 120 + qCount * 180;
+    } else if (normType === 'multimedia_reading_assessment' || normType === 'multimedia') {
+      const qCount = (block.content?.questions || []).length || 1;
+      estimatedHeight = 260 + qCount * 140;
     } else if (normType === 'roleplay_simulation' || normType === 'roleplay') {
       const turnsArr = block.content?.conversation || block.content?.steps || block.content?.dialogue_lines || block.content?.lines || block.content?.turns || block.content?.script || block.content?.items || [];
       const turnCount = Array.isArray(turnsArr) ? turnsArr.length : 2;

@@ -984,6 +984,68 @@ class ContentStudioAPITests(APITestCase):
         self.assertEqual(screens_data[0]["id"], scr1.id)
         self.assertEqual(screens_data[1]["id"], scr2.id)
 
+    def test_preview_multimedia_and_assessment_quiz_synthesis(self):
+        """Verify preview synthesizes and normalizes elements for multimedia and quiz screens."""
+        self.client.force_authenticate(user=self.content_creator)
+        from super_admin.models import Grade
+        grade = Grade.objects.first()
+        scen = Experience.objects.create(
+            title="Preview Quiz & Multimedia Experience",
+            grade=grade,
+            subject="English",
+            language="English",
+            estimated_duration=30,
+            status="DRAFT",
+            created_by=self.content_creator
+        )
+        act = Activity.objects.create(experience=scen, title="Assessment Act", activity_type="ASSESSMENT", estimated_duration=10, display_order=1)
+        scr_quiz = Screen.objects.create(
+            activity=act,
+            title="Quiz Screen",
+            screen_type="QUIZ",
+            content={
+                "quiz_question": "What is the capital of France?",
+                "quiz_options": ["London", "Paris", "Berlin", "Madrid"],
+                "quiz_correct_index": 1
+            },
+            display_order=1,
+            estimated_duration=60
+        )
+        scr_mm = Screen.objects.create(
+            activity=act,
+            title="Multimedia Screen",
+            screen_type="INFORMATION",
+            content={
+                "mediaType": "multimedia",
+                "questions": [
+                    {
+                        "question": "What happens in the video?",
+                        "options": ["A", "B"],
+                        "correctAnswerIndex": 0,
+                        "pauseAt": 10
+                    }
+                ]
+            },
+            display_order=2,
+            estimated_duration=60
+        )
+        url_preview = reverse("experience-preview", args=[scen.id])
+        response = self.client.get(url_preview)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        screens = response.data["activities"][0]["screens"]
+        self.assertEqual(len(screens), 2)
+        # Check quiz synthesized element
+        quiz_elements = screens[0]["elements"]
+        self.assertEqual(len(quiz_elements), 1)
+        self.assertEqual(quiz_elements[0]["type"], "quiz")
+        self.assertEqual(quiz_elements[0]["content"]["question"], "What is the capital of France?")
+        self.assertEqual(len(quiz_elements[0]["content"]["options"]), 4)
+        # Check multimedia synthesized element
+        mm_elements = screens[1]["elements"]
+        self.assertEqual(len(mm_elements), 1)
+        self.assertEqual(mm_elements[0]["type"], "multimedia_reading_assessment")
+        self.assertEqual(len(mm_elements[0]["content"]["questions"]), 1)
+
     def test_preview_broken_media_handling(self):
         """Verify preview resolves valid media, reports broken media, and does not 500."""
         self.client.force_authenticate(user=self.content_creator)

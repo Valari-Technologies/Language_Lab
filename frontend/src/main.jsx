@@ -1,4 +1,4 @@
-import { StrictMode, useState, useEffect } from 'react'
+import { StrictMode, useState, useEffect, Component } from 'react'
 import { createRoot } from 'react-dom/client'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import Login from './Login.jsx'
@@ -308,10 +308,91 @@ export const App = () => {
   );
 };
 
-createRoot(document.getElementById('root')).render(
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('ErrorBoundary caught error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '2rem',
+          backgroundColor: '#f8fafc',
+          fontFamily: 'Inter, system-ui, sans-serif'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            padding: '2.5rem',
+            maxWidth: '480px',
+            width: '100%',
+            textAlign: 'center',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+            border: '1px solid #e2e8f0'
+          }}>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.75rem' }}>
+              Something went wrong
+            </h2>
+            <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+              {this.state.error?.message || 'An unexpected error occurred. Please reload the page to continue.'}
+            </p>
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                window.location.reload();
+              }}
+              style={{
+                background: '#4f46e5',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.75rem 1.5rem',
+                fontSize: '0.92rem',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
+
+const rootElement = document.getElementById('root');
+if (!window.__react_root) {
+  window.__react_root = createRoot(rootElement);
+}
+
+window.__react_root.render(
   <StrictMode>
-    <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ""}>
-      <App />
-    </GoogleOAuthProvider>
+    <ErrorBoundary>
+      {googleClientId ? (
+        <GoogleOAuthProvider clientId={googleClientId}>
+          <App />
+        </GoogleOAuthProvider>
+      ) : (
+        <App />
+      )}
+    </ErrorBoundary>
   </StrictMode>,
-)
+);

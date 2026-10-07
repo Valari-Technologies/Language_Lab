@@ -132,6 +132,84 @@ def build_runtime_payload(experience, request=None):
             elements = content.get("elements", [])
             if not elements:
                 elements = []
+                scr_type = (scr.screen_type or "").upper()
+                is_multimedia = (
+                    content.get("mediaType") == "multimedia"
+                    or (content.get("questions") and (content.get("audioUrl") or content.get("videoUrl")))
+                    or (content.get("type", "").lower() in ["multimedia_reading_assessment", "multimedia reading assessment", "multimedia_reading", "multimedia"])
+                )
+                is_quiz = (
+                    scr_type in ["QUIZ", "ASSESSMENT"]
+                    or bool(content.get("quiz_question"))
+                    or (bool(content.get("questions")) and not is_multimedia)
+                )
+
+                if is_multimedia:
+                    elements.append({
+                        "id": f"block-{scr.id}-multimedia",
+                        "type": "multimedia_reading_assessment",
+                        "slot": "left",
+                        "content": {
+                            "mediaType": content.get("mediaType", "multimedia"),
+                            "audioUrl": content.get("audioUrl", "") or (content.get("media_url") if content.get("media_type") == "AUDIO" else ""),
+                            "videoUrl": content.get("videoUrl", "") or (content.get("media_url") if content.get("media_type") == "VIDEO" else ""),
+                            "scenario": content.get("scenario", ""),
+                            "documentText": content.get("documentText", ""),
+                            "questions": content.get("questions", []),
+                        }
+                    })
+                elif is_quiz:
+                    q_first = content.get("questions")[0] if (content.get("questions") and isinstance(content.get("questions"), list) and isinstance(content.get("questions")[0], dict)) else {}
+                    quiz_q = content.get("quiz_question") or q_first.get("question") or content.get("question") or "Quiz question"
+                    quiz_opts = content.get("quiz_options") or q_first.get("options") or content.get("options") or ["", "", "", ""]
+                    quiz_corr = content.get("quiz_correct_index") if content.get("quiz_correct_index") is not None else q_first.get("correctAnswerIndex", 0)
+                    elements.append({
+                        "id": f"block-{scr.id}-quiz",
+                        "type": "quiz",
+                        "slot": "left",
+                        "content": {
+                            "question": quiz_q,
+                            "options": [{"text": opt} if isinstance(opt, str) else opt for opt in quiz_opts],
+                            "correctAnswerIndex": quiz_corr,
+                            "questions": content.get("questions") or []
+                        }
+                    })
+                elif scr_type == "IMAGE" or content.get("media_type") == "IMAGE":
+                    elements.append({
+                        "id": f"block-{scr.id}-image",
+                        "type": "image",
+                        "slot": "right",
+                        "content": {
+                            "url": content.get("media_url", ""),
+                            "media_id": content.get("media_id", ""),
+                            "caption": content.get("text", "") or content.get("caption", ""),
+                            "hasQuestion": content.get("hasQuestion", False),
+                            "questionText": content.get("questionText", ""),
+                            "questionOptions": content.get("questionOptions", []),
+                            "correctAnswer": content.get("correctAnswer", "")
+                        }
+                    })
+                elif scr_type == "VIDEO" or content.get("media_type") == "VIDEO":
+                    elements.append({
+                        "id": f"block-{scr.id}-video",
+                        "type": "video",
+                        "slot": "right",
+                        "content": {
+                            "url": content.get("media_url", ""),
+                            "media_id": content.get("media_id", "")
+                        }
+                    })
+                elif scr_type == "SPEAKING" or content.get("media_type") == "AUDIO":
+                    elements.append({
+                        "id": f"block-{scr.id}-audio",
+                        "type": "audio",
+                        "slot": "right",
+                        "content": {
+                            "title": content.get("title", "Audio Clip"),
+                            "url": content.get("media_url", ""),
+                            "media_id": content.get("media_id", "")
+                        }
+                    })
 
             # Resolve absolute URLs inside the elements in-place
             import copy
@@ -150,9 +228,18 @@ def build_runtime_payload(experience, request=None):
                     el["type"] = "hotspot_explorer"
                 elif raw_type in ["functional_reading", "functional reading"]:
                     el["type"] = "functional_reading"
+                elif raw_type in ["multimedia_reading_assessment", "multimedia reading assessment", "multimedia_reading", "multimedia_assessment", "multimedia reading & assessment", "multimedia"]:
+                    el["type"] = "multimedia_reading_assessment"
+                elif raw_type in ["quiz", "mcq", "assessment", "quiz_assessment", "assessment_quiz", "assessment_question", "multiple_choice", "quiz_listening"]:
+                    el["type"] = "quiz"
 
                 el_type = el.get("type", "")
                 el_content = el.get("content", {})
+                if el_type == "multimedia_reading_assessment" and el_content:
+                    for media_key in ["audioUrl", "videoUrl", "posterUrl"]:
+                        raw_u = el_content.get(media_key)
+                        if raw_u:
+                            el_content[media_key] = resolve_absolute_url(raw_u, request)
                 if el_type == "roleplay_simulation" and el_content:
                     conv = el_content.get("conversation") or el_content.get("steps") or el_content.get("dialogue_lines") or el_content.get("lines") or el_content.get("turns") or []
                     if conv:
