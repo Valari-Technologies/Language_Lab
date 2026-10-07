@@ -22,7 +22,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 from lms.packages.views import LMSPackageListAPIView, LMSPackageDownloadAPIView
-from super_admin.views import ActivateServerAPIView, DeactivateServerAPIView
+from super_admin.views import ActivateServerAPIView, DeactivateServerAPIView, LmsServerCreateAPIView
 
 from lms.sync.views import BootstrapSyncAPIView, LessonsPackageSyncAPIView
 
@@ -46,6 +46,7 @@ urlpatterns = [
     path("api/v1/sync/lessons/package/", LessonsPackageSyncAPIView.as_view(), name="sync-lessons-package"),
     path("api/v1/licensing/activate-server", ActivateServerAPIView.as_view(), name="activate-server"),
     path("api/v1/licensing/deactivate-server", DeactivateServerAPIView.as_view(), name="deactivate-server"),
+    path("api/v1/licensing/create-server", LmsServerCreateAPIView.as_view(), name="create-server"),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
 ]

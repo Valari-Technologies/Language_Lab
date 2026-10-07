@@ -150,3 +150,46 @@ class LicensingSystemTests(APITestCase):
         # 5. Now server 3 can be activated because server 1 was deactivated
         res_3_retry = self.client.post(activation_url, payload_3, format="json")
         self.assertEqual(res_3_retry.status_code, status.HTTP_200_OK)
+
+    def test_create_lms_server_api_and_activate_with_server_license_key(self):
+        school = School.objects.create(
+            schoolId="SCH-LMS-TEST",
+            school_name="LMS Test School",
+            address="Test Addr",
+            email="lmstest@school.com",
+            is_active=True
+        )
+        license_obj = License.objects.create(
+            licenseId="LIC-LMS-TEST",
+            licenseKey="KEY-MASTER-999",
+            school=school,
+            maxLmsServers=2,
+            concurrentUsersPerServer=40,
+            expiryDate=timezone.now().date() + timezone.timedelta(days=365),
+            status=License.Status.ACTIVE
+        )
+        school.licenseId = license_obj
+        school.save()
+
+        # 1. Create LMS Server via CMS API
+        create_url = reverse("school-create-lms-server", kwargs={"school_id": school.school_id})
+        res = self.client.post(create_url, {"serverName": "Computer Lab 1", "maxUsers": 40}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertIn("server", res.data)
+        server_data = res.data["server"]
+        self.assertEqual(server_data["serverName"], "Computer Lab 1")
+        self.assertEqual(server_data["maxUsers"], 40)
+        self.assertTrue(server_data["licenseKey"].startswith("LMS-KEY-"))
+        self.assertTrue(server_data["installationId"].startswith("INST-"))
+
+        # 2. Activate using the newly generated server-specific license key
+        activation_url = reverse("activate-server")
+        act_res = self.client.post(activation_url, {
+            "licenseKey": server_data["licenseKey"],
+            "serverName": "Computer Lab 1",
+            "installationIdentity": server_data["installationId"]
+        }, format="json")
+        self.assertEqual(act_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(act_res.data["status"], "success")
+        self.assertEqual(act_res.data["concurrentUsersPerServer"], 40)
+        self.assertEqual(act_res.data["installationId"], server_data["installationId"])

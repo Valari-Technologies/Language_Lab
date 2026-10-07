@@ -642,6 +642,46 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     return `${capitalized}@${digits}!`;
   };
 
+  const [isAddingLmsServer, setIsAddingLmsServer] = useState(false);
+  const [newLmsServerName, setNewLmsServerName] = useState('');
+  const [newLmsServerLoading, setNewLmsServerLoading] = useState(false);
+
+  const handleCreateLmsServer = async (e) => {
+    e.preventDefault();
+    if (!selectedSchoolDetail) return;
+    setNewLmsServerLoading(true);
+    try {
+      const res = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/lms-servers/`, {
+        method: 'POST',
+        body: JSON.stringify({
+          serverName: newLmsServerName.trim() || undefined,
+          maxUsers: 40
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsAddingLmsServer(false);
+        setNewLmsServerName('');
+        triggerAlert("LMS Server installation license generated successfully!", "Success", "success");
+        if (data.server?.licenseKey) {
+          copyToClipboard(data.server.licenseKey, "New server license key copied to clipboard!");
+        }
+        const sRes = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/`);
+        if (sRes.ok) {
+          const updated = await sRes.json();
+          setSelectedSchoolDetail(updated);
+        }
+        await loadSchools();
+      } else {
+        triggerAlert(data.error || "Failed to generate LMS server license.", "Error", "error");
+      }
+    } catch (err) {
+      triggerAlert("Error creating LMS server: " + err.message, "Error", "error");
+    } finally {
+      setNewLmsServerLoading(false);
+    }
+  };
+
   /* ── Forms ── */
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [cropImageSrc, setCropImageSrc] = useState(null);
@@ -2386,18 +2426,45 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
                   {/* Registered LMS Servers Card */}
                   <div className="sd-card" style={{ padding: '2rem', marginTop: '1.5rem' }}>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
-                      Registered LMS Servers (Installations)
-                    </h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                      <div>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                          Registered LMS Servers (Installations)
+                        </h3>
+                        <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+                          Each LMS server has a dedicated installation license key with 40 concurrent users capacity.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const activeCount = selectedSchoolDetail.lms_servers?.filter(s => s.status === 'ACTIVE').length || 0;
+                          const maxAllowed = selectedSchoolDetail.license?.maxLmsServers || 2;
+                          if (activeCount >= maxAllowed) {
+                            triggerAlert(`Maximum server limit (${maxAllowed}) reached for this school license.`, "Limit Reached", "warning");
+                            return;
+                          }
+                          setNewLmsServerName(`LMS Server ${activeCount + 1}`);
+                          setIsAddingLmsServer(true);
+                        }}
+                        className="sd-btn-primary"
+                        style={{ padding: '6px 14px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <FiPlus /> Add LMS Server
+                      </button>
+                    </div>
+
                     <div style={{ overflowX: 'auto' }}>
                       <table className="sd-table">
                         <thead>
                           <tr>
                             <th>Server Name</th>
                             <th>Installation ID</th>
+                            <th>License Key (Installation)</th>
+                            <th>User Capacity</th>
                             <th>Status</th>
                             <th>Activation Date</th>
-                            <th>Last Sync Time</th>
+                            <th>Last Sync</th>
                             <th>Actions</th>
                           </tr>
                         </thead>
@@ -2406,7 +2473,34 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             selectedSchoolDetail.lms_servers.map(server => (
                               <tr key={server.installationId}>
                                 <td style={{ fontWeight: 600 }}>{server.serverName}</td>
-                                <td style={{ fontFamily: 'monospace' }}>{server.installationId}</td>
+                                <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{server.installationId}</td>
+                                <td>
+                                  {server.licenseKey ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      <code style={{ fontSize: '0.82rem', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', color: '#0f172a' }}>
+                                        {server.licenseKey}
+                                      </code>
+                                      <button
+                                        type="button"
+                                        onClick={() => copyToClipboard(server.licenseKey, "Server license key copied to clipboard!")}
+                                        className="sd-btn-outline"
+                                        style={{ padding: '2px 6px', fontSize: '0.72rem' }}
+                                        title="Copy installation license key"
+                                      >
+                                        Copy
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                                      {selectedSchoolDetail.license?.licenseKey || '—'}
+                                    </span>
+                                  )}
+                                </td>
+                                <td>
+                                  <span className="sd-badge sd-badge-active" style={{ fontSize: '0.75rem' }}>
+                                    {server.maxUsers || 40} Users
+                                  </span>
+                                </td>
                                 <td>
                                   <span className={`sd-badge sd-badge-${server.status?.toLowerCase()}`}>
                                     {server.status}
@@ -2454,8 +2548,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             ))
                           ) : (
                             <tr>
-                              <td colSpan="6" style={{ textAlign: 'center', color: '#64748b', padding: '2rem' }}>
-                                No LMS servers registered yet.
+                              <td colSpan="8" style={{ textAlign: 'center', color: '#64748b', padding: '2rem' }}>
+                                No LMS servers registered yet. Click "+ Add LMS Server" above to auto-generate an installation license.
                               </td>
                             </tr>
                           )}
@@ -2463,6 +2557,87 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       </table>
                     </div>
                   </div>
+
+                  {/* Add LMS Server Modal */}
+                  {isAddingLmsServer && (
+                    <div style={{
+                      position: 'fixed',
+                      top: 0, left: 0, right: 0, bottom: 0,
+                      backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                      backdropFilter: 'blur(4px)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 99999,
+                      padding: '1rem'
+                    }}>
+                      <div style={{
+                        backgroundColor: '#ffffff',
+                        borderRadius: '16px',
+                        maxWidth: '480px',
+                        width: '100%',
+                        padding: '2rem',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #e2e8f0'
+                      }}>
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.5rem 0' }}>
+                          Add LMS Server & Generate License
+                        </h3>
+                        <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 1.5rem 0', lineHeight: 1.5 }}>
+                          Create an installation entry for this school. A unique installation license key with <strong>40 user capacity</strong> will be auto-generated.
+                        </p>
+
+                        <form onSubmit={handleCreateLmsServer}>
+                          <div className="sd-form-group" style={{ marginBottom: '1.25rem' }}>
+                            <label className="sd-form-label">Server Name / Location *</label>
+                            <input
+                              type="text"
+                              className="sd-form-input"
+                              required
+                              placeholder="e.g. Computer Lab 1, English Room B"
+                              value={newLmsServerName}
+                              onChange={(e) => setNewLmsServerName(e.target.value)}
+                              disabled={newLmsServerLoading}
+                            />
+                          </div>
+
+                          <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                              <span style={{ color: '#64748b' }}>Target School:</span>
+                              <strong style={{ color: '#0f172a' }}>{selectedSchoolDetail?.school_name}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                              <span style={{ color: '#64748b' }}>User Capacity:</span>
+                              <strong style={{ color: '#16a34a' }}>40 Users (Standard Installation)</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                              <span style={{ color: '#64748b' }}>License Key:</span>
+                              <span style={{ color: '#6366f1', fontStyle: 'italic' }}>Auto-generated upon save</span>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                            <button
+                              type="button"
+                              className="sd-btn-outline"
+                              onClick={() => setIsAddingLmsServer(false)}
+                              disabled={newLmsServerLoading}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              className="sd-btn-primary"
+                              style={{ background: '#4f46e5' }}
+                              disabled={newLmsServerLoading}
+                            >
+                              {newLmsServerLoading ? 'Generating...' : 'Generate & Save License'}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : null}
             </div>

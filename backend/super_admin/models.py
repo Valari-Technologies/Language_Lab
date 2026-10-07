@@ -71,12 +71,14 @@ class LmsServer(models.Model):
 
     installationId = models.CharField(max_length=100, unique=True, primary_key=True)
     serverName = models.CharField(max_length=150)
+    licenseKey = models.CharField(max_length=100, unique=True, null=True, blank=True)
     school = models.ForeignKey('School', on_delete=models.CASCADE, related_name='lms_servers')
     license = models.ForeignKey('License', on_delete=models.CASCADE, related_name='lms_servers')
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
     activationDate = models.DateTimeField(auto_now_add=True)
     lastSyncTime = models.DateTimeField(null=True, blank=True)
     currentCapacity = models.IntegerField(default=0)
+    maxUsers = models.IntegerField(default=40)
 
     class Meta:
         db_table = "cms_lmsserver"

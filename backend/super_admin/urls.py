@@ -7,6 +7,7 @@ from .views import (
     DashboardStatsAPIView,
     SchoolAdminViewSet,
     PublishContentViewSet,
+    LmsServerCreateAPIView,
 )
 
 
@@ -20,5 +21,7 @@ router.register(r"publish-contents", PublishContentViewSet, basename="publish-co
 
 urlpatterns = [
     path("dashboard-stats/", DashboardStatsAPIView.as_view(), name="dashboard-stats"),
+    path("schools/<int:school_id>/lms-servers/", LmsServerCreateAPIView.as_view(), name="school-create-lms-server"),
+    path("lms-servers/create/", LmsServerCreateAPIView.as_view(), name="create-lms-server"),
     path("", include(router.urls)),
 ]
