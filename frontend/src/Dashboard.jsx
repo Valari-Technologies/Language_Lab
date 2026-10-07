@@ -8,7 +8,7 @@ import {
   FiAward, FiLock,
   FiChevronLeft, FiChevronRight, FiEye, FiEyeOff,
   FiCornerDownRight, FiXCircle, FiMoreVertical, FiAlertTriangle, FiInfo, FiRefreshCw, FiUpload, FiClock, FiActivity,
-  FiHome, FiUserCheck, FiLayers
+  FiHome, FiUserCheck, FiLayers, FiKey, FiCopy
 } from 'react-icons/fi';
 import PreviewCanvasRenderer from './PreviewCanvasRenderer';
 import './Dashboard.css';
@@ -1402,6 +1402,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         if (targetTab === 'schools') {
           if (modalType === 'add') {
             addRecentActivity(`School "${schoolForm.school_name}" registered`, 'School', '#dcfce7', '#15803d', <FiGrid />, '#3b82f6', '#eff6ff');
+            if (resData.data?.lms_servers?.[0]?.licenseKey) {
+              copyToClipboard(resData.data.lms_servers[0].licenseKey, "Primary LMS server installation key copied!");
+            }
           } else {
             addRecentActivity(`School "${schoolForm.school_name}" details updated`, 'School', '#dcfce7', '#15803d', <FiEdit2 />, '#3b82f6', '#eff6ff');
           }
@@ -2827,6 +2830,19 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             </div>
                           )}
                         </div>
+
+                        {/* LMS Auto Generation Notice */}
+                        <div style={{ marginTop: '1.25rem', padding: '0.85rem 1rem', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
+                          <FiCheckCircle style={{ color: '#16a34a', fontSize: '1.15rem', marginTop: '2px', flexShrink: 0 }} />
+                          <div>
+                            <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#166534' }}>
+                              Auto-Generated Installation License Key (40 Concurrent Users)
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: '#15803d', marginTop: '2px' }}>
+                              Upon saving, a Primary LMS Server installation key with <strong>40 Concurrent Users Capacity</strong> will be automatically generated and ready to copy.
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Footer Actions */}
@@ -3996,6 +4012,179 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                           </div>
                         )}
                       </div>
+
+                      {/* LMS Server Installation License Keys Section */}
+                      {modalType === 'edit' ? (() => {
+                        const currentSchool = schools.find(s => (s.school_id || s.id) === editingId);
+                        const servers = currentSchool?.lms_servers || [];
+                        const maxAllowed = parseInt(schoolForm.maxLmsServers) || 2;
+                        const canAddMore = servers.length < maxAllowed;
+
+                        return (
+                          <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px dashed #e2e8f0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>
+                                    LMS Server Installation Keys
+                                  </span>
+                                  <span className="sd-badge sd-badge-active" style={{ fontSize: '0.72rem' }}>
+                                    {servers.length} / {maxAllowed} Provisioned
+                                  </span>
+                                </div>
+                                <p style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: '#64748b' }}>
+                                  Each installation key authorizes 1 LMS server instance with 40 concurrent users capacity.
+                                </p>
+                              </div>
+                              {canAddMore && (
+                                <button
+                                  type="button"
+                                  disabled={actionLoading}
+                                  onClick={async () => {
+                                    setActionLoading(true);
+                                    try {
+                                      const res = await apiFetch(`/api/cms/v1/schools/${editingId}/lms-servers/`, {
+                                        method: 'POST',
+                                        body: JSON.stringify({
+                                          serverName: `${schoolForm.school_name || 'School'} - LMS Server ${servers.length + 1}`,
+                                          maxUsers: 40
+                                        })
+                                      });
+                                      const resData = await res.json();
+                                      if (res.ok) {
+                                        showFeedback("New LMS server installation key generated!", null);
+                                        if (resData.server?.licenseKey) {
+                                          copyToClipboard(resData.server.licenseKey, "New installation license key copied!");
+                                        }
+                                        await loadSchools();
+                                      } else {
+                                        showFeedback(null, resData.error || "Failed to generate server");
+                                      }
+                                    } catch (err) {
+                                      showFeedback(null, err.message);
+                                    } finally {
+                                      setActionLoading(false);
+                                    }
+                                  }}
+                                  className="sd-btn-primary"
+                                  style={{ padding: '5px 12px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '5px' }}
+                                >
+                                  <FiPlus /> Add LMS Server
+                                </button>
+                              )}
+                            </div>
+
+                            {servers.length > 0 ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                {servers.map((srv, idx) => (
+                                  <div
+                                    key={srv.installationId || idx}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      padding: '0.75rem 1rem',
+                                      backgroundColor: '#f8fafc',
+                                      borderRadius: '8px',
+                                      border: '1px solid #e2e8f0',
+                                      gap: '1rem',
+                                      flexWrap: 'wrap'
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '160px' }}>
+                                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>
+                                        {srv.serverName || `LMS Server ${idx + 1}`}
+                                      </span>
+                                      <span style={{ fontSize: '0.74rem', color: '#64748b', fontFamily: 'monospace' }}>
+                                        ID: {srv.installationId}
+                                      </span>
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '220px' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#ffffff', padding: '4px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', flex: 1 }}>
+                                        <FiKey style={{ color: '#6366f1', fontSize: '0.85rem', flexShrink: 0 }} />
+                                        <code style={{ fontSize: '0.82rem', fontWeight: 600, color: '#0f172a', letterSpacing: '0.5px', wordBreak: 'break-all' }}>
+                                          {srv.licenseKey || currentSchool?.license?.licenseKey || 'Auto-generated'}
+                                        </code>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => copyToClipboard(srv.licenseKey || currentSchool?.license?.licenseKey, "Server license key copied!")}
+                                        className="sd-btn-outline"
+                                        style={{ padding: '4px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+                                        title="Copy installation key"
+                                      >
+                                        <FiCopy /> Copy
+                                      </button>
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <span className="sd-badge sd-badge-active" style={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                                        {srv.maxUsers || 40} Users Capacity
+                                      </span>
+                                      <span className={`sd-badge sd-badge-${srv.status?.toLowerCase() || 'active'}`} style={{ fontSize: '0.72rem' }}>
+                                        {srv.status || 'ACTIVE'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div style={{ padding: '0.85rem 1rem', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.82rem', color: '#92400e' }}>
+                                  No installation license key provisioned for this school yet.
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={actionLoading}
+                                  onClick={async () => {
+                                    setActionLoading(true);
+                                    try {
+                                      const res = await apiFetch(`/api/cms/v1/schools/${editingId}/lms-servers/`, {
+                                        method: 'POST',
+                                        body: JSON.stringify({
+                                          serverName: `${schoolForm.school_name || 'School'} - Primary Server`,
+                                          maxUsers: 40
+                                        })
+                                      });
+                                      const resData = await res.json();
+                                      if (res.ok) {
+                                        showFeedback("Primary LMS Server installation key generated!", null);
+                                        if (resData.server?.licenseKey) {
+                                          copyToClipboard(resData.server.licenseKey, "License key copied!");
+                                        }
+                                        await loadSchools();
+                                      } else {
+                                        showFeedback(null, resData.error || "Failed to generate key");
+                                      }
+                                    } catch (err) {
+                                      showFeedback(null, err.message);
+                                    } finally {
+                                      setActionLoading(false);
+                                    }
+                                  }}
+                                  className="sd-btn-primary"
+                                  style={{ padding: '5px 12px', fontSize: '0.78rem' }}
+                                >
+                                  ⚡ Generate Primary Server Key (40 Users)
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })() : (
+                        <div style={{ marginTop: '1.25rem', padding: '0.85rem 1.1rem', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                          <FiCheckCircle style={{ color: '#16a34a', fontSize: '1.15rem', flexShrink: 0 }} />
+                          <div>
+                            <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#166534' }}>
+                              Auto-Generated Installation License Key (40 Concurrent Users)
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: '#15803d', marginTop: '2px' }}>
+                              Upon saving this school, a primary LMS Server installation key with <strong>40 Concurrent Users Capacity</strong> will be automatically generated and ready to copy.
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </>)}
 

@@ -398,6 +398,20 @@ Language Lab Team
                 if update_fields:
                     license_obj.save(update_fields=update_fields)
 
+            # Ensure at least one primary LMS server exists with licenseKey and 40 users capacity
+            if license_obj and not LmsServer.objects.filter(school=instance).exists():
+                first_inst_id = "INST-" + uuid.uuid4().hex[:8].upper()
+                first_lic_key = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
+                LmsServer.objects.create(
+                    installationId=first_inst_id,
+                    serverName=f"{instance.school_name} - Primary Server",
+                    school=instance,
+                    license=license_obj,
+                    licenseKey=first_lic_key,
+                    maxUsers=int(concurrent_users) if concurrent_users else 40,
+                    status=LmsServer.Status.ACTIVE
+                )
+
             serializer = self.get_serializer(instance)
             return Response({"message": "School updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
         return response
