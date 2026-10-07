@@ -7,6 +7,10 @@ User = get_user_model()
 
 
 class LmsServerSerializer(serializers.ModelSerializer):
+    expiryDate = serializers.DateField(source='license.expiryDate', read_only=True, allow_null=True, default=None)
+    licenseDuration = serializers.CharField(source='license.licenseDuration', read_only=True, allow_null=True, default=None)
+    createdDate = serializers.DateTimeField(source='activationDate', read_only=True)
+
     class Meta:
         model = LmsServer
         fields = '__all__'

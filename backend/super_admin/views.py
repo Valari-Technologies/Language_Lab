@@ -360,7 +360,37 @@ Language Lab Team
             duration = request.data.get("licenseDuration")
             expiry_str = request.data.get("expiryDate") or request.data.get("expiry_date")
 
-            license_obj = getattr(instance, "school_license", None) or License.objects.filter(school=instance).first()
+            license_obj = None
+            try:
+                license_obj = instance.school_license
+            except Exception:
+                license_obj = License.objects.filter(school=instance).first()
+
+            today = timezone.now().date()
+            if not license_obj and (max_servers is not None or concurrent_users is not None or duration or expiry_str):
+                first_lic_key = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
+                if duration == "2 Years":
+                    initial_exp = today + timedelta(days=730)
+                elif duration == "Custom" and expiry_str:
+                    try:
+                        initial_exp = timezone.datetime.strptime(expiry_str, "%Y-%m-%d").date()
+                    except Exception:
+                        initial_exp = today + timedelta(days=365)
+                else:
+                    initial_exp = today + timedelta(days=365)
+
+                license_obj = License.objects.create(
+                    school=instance,
+                    licenseKey=first_lic_key,
+                    maxLmsServers=int(max_servers) if max_servers else 2,
+                    concurrentUsersPerServer=int(concurrent_users) if concurrent_users else 40,
+                    licenseDuration=duration or "1 Year",
+                    expiryDate=initial_exp,
+                    status=License.Status.ACTIVE
+                )
+                instance.licenseId = license_obj
+                instance.save(update_fields=["licenseId"])
+
             if license_obj:
                 update_fields = []
                 if max_servers is not None:
@@ -371,13 +401,13 @@ Language Lab Team
                         pass
                 if concurrent_users is not None:
                     try:
-                        license_obj.concurrentUsersPerServer = int(concurrent_users)
+                        new_users = int(concurrent_users)
+                        license_obj.concurrentUsersPerServer = new_users
                         update_fields.append("concurrentUsersPerServer")
                     except (ValueError, TypeError):
                         pass
 
                 if duration or expiry_str:
-                    today = timezone.now().date()
                     if duration == "1 Year":
                         license_obj.expiryDate = today + timedelta(days=365)
                         license_obj.licenseDuration = "1 Year"
@@ -399,7 +429,15 @@ Language Lab Team
                 if update_fields:
                     license_obj.save(update_fields=update_fields)
 
-            # Ensure at least one primary LMS server exists with licenseKey and 40 users capacity
+            # Always synchronize all existing LMS servers for this school to configured capacity
+            if concurrent_users is not None:
+                try:
+                    new_users = int(concurrent_users)
+                    LmsServer.objects.filter(school=instance).update(maxUsers=new_users)
+                except (ValueError, TypeError):
+                    pass
+
+            # Ensure at least one primary LMS server exists with licenseKey and users capacity
             if license_obj and not LmsServer.objects.filter(school=instance).exists():
                 first_inst_id = "INST-" + uuid.uuid4().hex[:8].upper()
                 first_lic_key = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
@@ -409,10 +447,11 @@ Language Lab Team
                     school=instance,
                     license=license_obj,
                     licenseKey=first_lic_key,
-                    maxUsers=int(concurrent_users) if concurrent_users else 40,
+                    maxUsers=int(concurrent_users) if concurrent_users else (license_obj.concurrentUsersPerServer or 40),
                     status=LmsServer.Status.ACTIVE
                 )
 
+            instance.refresh_from_db()
             serializer = self.get_serializer(instance)
             return Response({"message": "School updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
         return response
@@ -537,7 +576,14 @@ class LmsServerCreateAPIView(APIView):
             total_servers = LmsServer.objects.filter(school=school).count()
             server_name = f"{school.school_name} - LMS Server {total_servers + 1}"
 
-        max_users = int(request.data.get("maxUsers", request.data.get("concurrentUsersPerServer", 40)))
+        req_users = request.data.get("maxUsers") or request.data.get("concurrentUsersPerServer")
+        if req_users is not None:
+            try:
+                max_users = int(req_users)
+            except (ValueError, TypeError):
+                max_users = license_obj.concurrentUsersPerServer or 40
+        else:
+            max_users = license_obj.concurrentUsersPerServer or 40
         inst_id_str = "INST-" + uuid.uuid4().hex[:8].upper()
         lic_key_str = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
 
