@@ -283,7 +283,9 @@ class SchoolViewSet(CMSBaseViewSet):
                 school=school,
                 license=license_obj,
                 status=LmsServer.Status.ACTIVE,
-                maxUsers=concurrent_users or 40
+                maxUsers=concurrent_users or 40,
+                licenseDuration=duration or "1 Year",
+                expiryDate=expiry_date
             )
             
             SchoolAdminProfile.objects.create(
@@ -429,15 +431,6 @@ Language Lab Team
                 if update_fields:
                     license_obj.save(update_fields=update_fields)
 
-            # Always synchronize all existing LMS servers for this school to configured capacity
-            if concurrent_users is not None:
-                try:
-                    new_users = int(concurrent_users)
-                    LmsServer.objects.filter(school=instance).update(maxUsers=new_users)
-                except (ValueError, TypeError):
-                    pass
-
-            # Ensure at least one primary LMS server exists with licenseKey and users capacity
             if license_obj and not LmsServer.objects.filter(school=instance).exists():
                 first_inst_id = "INST-" + uuid.uuid4().hex[:8].upper()
                 first_lic_key = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
@@ -448,6 +441,8 @@ Language Lab Team
                     license=license_obj,
                     licenseKey=first_lic_key,
                     maxUsers=int(concurrent_users) if concurrent_users else (license_obj.concurrentUsersPerServer or 40),
+                    licenseDuration=license_obj.licenseDuration or "1 Year",
+                    expiryDate=license_obj.expiryDate,
                     status=LmsServer.Status.ACTIVE
                 )
 
@@ -584,6 +579,26 @@ class LmsServerCreateAPIView(APIView):
                 max_users = license_obj.concurrentUsersPerServer or 40
         else:
             max_users = license_obj.concurrentUsersPerServer or 40
+        server_duration = request.data.get("licenseDuration") or license_obj.licenseDuration or "1 Year"
+        today = timezone.now().date()
+        if server_duration == "6 Months":
+            server_expiry = today + timedelta(days=180)
+        elif server_duration == "1 Year":
+            server_expiry = today + timedelta(days=365)
+        elif server_duration == "2 Years":
+            server_expiry = today + timedelta(days=730)
+        elif server_duration == "Custom":
+            exp_str = request.data.get("expiryDate")
+            if exp_str:
+                try:
+                    server_expiry = timezone.datetime.strptime(exp_str, "%Y-%m-%d").date()
+                except Exception:
+                    server_expiry = today + timedelta(days=365)
+            else:
+                server_expiry = today + timedelta(days=365)
+        else:
+            server_expiry = license_obj.expiryDate or (today + timedelta(days=365))
+
         inst_id_str = "INST-" + uuid.uuid4().hex[:8].upper()
         lic_key_str = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
 
@@ -595,6 +610,8 @@ class LmsServerCreateAPIView(APIView):
             license=license_obj,
             status=LmsServer.Status.ACTIVE,
             maxUsers=max_users,
+            licenseDuration=server_duration,
+            expiryDate=server_expiry,
             lastSyncTime=None
         )
 
@@ -681,8 +698,10 @@ class LmsServerViewSet(CMSBaseViewSet):
     def partial_update(self, request, *args, **kwargs):
         server = self.get_object()
         server_name = request.data.get("serverName") or request.data.get("server_name")
-        max_users = request.data.get("maxUsers") or request.data.get("max_users")
+        max_users = request.data.get("maxUsers") or request.data.get("concurrentUsersPerServer")
         status_val = request.data.get("status")
+        duration = request.data.get("licenseDuration")
+        expiry_str = request.data.get("expiryDate")
 
         update_fields = []
         if server_name:
@@ -693,6 +712,31 @@ class LmsServerViewSet(CMSBaseViewSet):
                 server.maxUsers = int(max_users)
                 update_fields.append("maxUsers")
             except (ValueError, TypeError):
+                pass
+        if duration:
+            server.licenseDuration = duration
+            update_fields.append("licenseDuration")
+            today = timezone.now().date()
+            if duration == "6 Months":
+                server.expiryDate = today + timedelta(days=180)
+                update_fields.append("expiryDate")
+            elif duration == "1 Year":
+                server.expiryDate = today + timedelta(days=365)
+                update_fields.append("expiryDate")
+            elif duration == "2 Years":
+                server.expiryDate = today + timedelta(days=730)
+                update_fields.append("expiryDate")
+            elif duration == "Custom" and expiry_str:
+                try:
+                    server.expiryDate = timezone.datetime.strptime(expiry_str, "%Y-%m-%d").date()
+                    update_fields.append("expiryDate")
+                except Exception:
+                    pass
+        elif expiry_str:
+            try:
+                server.expiryDate = timezone.datetime.strptime(expiry_str, "%Y-%m-%d").date()
+                update_fields.append("expiryDate")
+            except Exception:
                 pass
         if status_val and status_val in [LmsServer.Status.ACTIVE, LmsServer.Status.DEACTIVATED]:
             server.status = status_val

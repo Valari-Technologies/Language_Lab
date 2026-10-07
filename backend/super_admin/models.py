@@ -79,6 +79,8 @@ class LmsServer(models.Model):
     lastSyncTime = models.DateTimeField(null=True, blank=True)
     currentCapacity = models.IntegerField(default=0)
     maxUsers = models.IntegerField(default=40)
+    licenseDuration = models.CharField(max_length=50, default="1 Year", null=True, blank=True)
+    expiryDate = models.DateField(null=True, blank=True)
 
     class Meta:
         db_table = "cms_lmsserver"

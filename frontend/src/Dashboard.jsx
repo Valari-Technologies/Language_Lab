@@ -8,7 +8,7 @@ import {
   FiAward, FiLock,
   FiChevronLeft, FiChevronRight, FiEye, FiEyeOff,
   FiCornerDownRight, FiXCircle, FiMoreVertical, FiAlertTriangle, FiInfo, FiRefreshCw, FiUpload, FiClock, FiActivity,
-  FiHome, FiUserCheck, FiLayers, FiKey, FiCopy, FiSlash, FiPower, FiCheck
+  FiHome, FiUserCheck, FiLayers, FiKey, FiCopy, FiSlash, FiPower, FiCheck, FiServer
 } from 'react-icons/fi';
 import PreviewCanvasRenderer from './PreviewCanvasRenderer';
 import './Dashboard.css';
@@ -670,7 +670,31 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
   const [isAddingLmsServer, setIsAddingLmsServer] = useState(false);
   const [newLmsServerName, setNewLmsServerName] = useState('');
+  const [newLmsServerUsers, setNewLmsServerUsers] = useState(40);
+  const [newLmsServerDuration, setNewLmsServerDuration] = useState('1 Year');
+  const [newLmsServerExpiryDate, setNewLmsServerExpiryDate] = useState('');
   const [newLmsServerLoading, setNewLmsServerLoading] = useState(false);
+
+  /* Modal state for provisioning a new LMS server with custom capacity/duration */
+  const [newServerModal, setNewServerModal] = useState({
+    show: false,
+    schoolId: null,
+    serverName: '',
+    maxUsers: 40,
+    licenseDuration: '1 Year',
+    expiryDate: ''
+  });
+
+  /* Modal state for editing an existing LMS server's capacity/duration/name */
+  const [editingServerModal, setEditingServerModal] = useState({
+    show: false,
+    installationId: '',
+    serverName: '',
+    licenseKey: '',
+    maxUsers: 40,
+    licenseDuration: '1 Year',
+    expiryDate: ''
+  });
 
   const handleCreateLmsServer = async (e) => {
     e.preventDefault();
@@ -681,13 +705,18 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         method: 'POST',
         body: JSON.stringify({
           serverName: newLmsServerName.trim() || undefined,
-          maxUsers: parseInt(selectedSchoolDetail.license?.concurrentUsersPerServer, 10) || 40
+          maxUsers: parseInt(newLmsServerUsers, 10) || 40,
+          licenseDuration: newLmsServerDuration,
+          expiryDate: newLmsServerDuration === 'Custom' ? newLmsServerExpiryDate : undefined
         })
       });
       const data = await res.json();
       if (res.ok) {
         setIsAddingLmsServer(false);
         setNewLmsServerName('');
+        setNewLmsServerUsers(40);
+        setNewLmsServerDuration('1 Year');
+        setNewLmsServerExpiryDate('');
         triggerAlert("LMS Server installation license generated successfully!", "Success", "success");
         const sRes = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/`);
         if (sRes.ok) {
@@ -702,6 +731,76 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       triggerAlert("Error creating LMS server: " + err.message, "Error", "error");
     } finally {
       setNewLmsServerLoading(false);
+    }
+  };
+
+  const handleProvisionServerSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!newServerModal.schoolId) return;
+    setServerActionLoading(true);
+    try {
+      const res = await apiFetch(`/api/cms/v1/schools/${newServerModal.schoolId}/lms-servers/`, {
+        method: 'POST',
+        body: JSON.stringify({
+          serverName: newServerModal.serverName.trim() || undefined,
+          maxUsers: parseInt(newServerModal.maxUsers, 10) || 40,
+          licenseDuration: newServerModal.licenseDuration,
+          expiryDate: newServerModal.licenseDuration === 'Custom' ? newServerModal.expiryDate : undefined
+        })
+      });
+      const resData = await res.json();
+      if (res.ok) {
+        setNewServerModal({ show: false, schoolId: null, serverName: '', maxUsers: 40, licenseDuration: '1 Year', expiryDate: '' });
+        showFeedback("New LMS server license provisioned successfully!", null);
+        await loadSchools();
+        if (selectedSchoolDetail) {
+          const sRes = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/`);
+          if (sRes.ok) setSelectedSchoolDetail(await sRes.json());
+        }
+      } else {
+        showFeedback(null, resData.error || "Failed to provision server license.");
+      }
+    } catch (err) {
+      showFeedback(null, err.message);
+    } finally {
+      setServerActionLoading(false);
+    }
+  };
+
+  const handleSaveEditingServerModal = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!editingServerModal.serverName.trim()) {
+      showFeedback(null, "Server name cannot be empty.");
+      return;
+    }
+    const targetUsers = parseInt(editingServerModal.maxUsers, 10) || 40;
+    setServerActionLoading(true);
+    try {
+      const res = await apiFetch(`/api/cms/v1/lms-servers/${editingServerModal.installationId}/`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          serverName: editingServerModal.serverName.trim(),
+          maxUsers: targetUsers,
+          licenseDuration: editingServerModal.licenseDuration,
+          expiryDate: editingServerModal.licenseDuration === 'Custom' ? editingServerModal.expiryDate : undefined
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setEditingServerModal({ show: false, installationId: '', serverName: '', licenseKey: '', maxUsers: 40, licenseDuration: '1 Year', expiryDate: '' });
+        showFeedback(`Server "${editingServerModal.serverName}" license updated successfully.`, null);
+        await loadSchools();
+        if (selectedSchoolDetail) {
+          const sRes = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/`);
+          if (sRes.ok) setSelectedSchoolDetail(await sRes.json());
+        }
+      } else {
+        showFeedback(null, data.error || "Failed to update server.");
+      }
+    } catch (err) {
+      showFeedback(null, err.message);
+    } finally {
+      setServerActionLoading(false);
     }
   };
 
@@ -822,7 +921,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       if (res.ok) {
         showFeedback("Server details updated successfully.", null);
         setEditingServerId(null);
-        setSchoolForm(prev => ({ ...prev, concurrentUsersPerServer: newMaxUsers }));
         await loadSchools();
         if (selectedSchoolDetail) {
           const sRes = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/`);
@@ -2621,6 +2719,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             return;
                           }
                           setNewLmsServerName(`LMS Server ${activeCount + 1}`);
+                          setNewLmsServerUsers(selectedSchoolDetail.license?.concurrentUsersPerServer || 40);
+                          setNewLmsServerDuration(selectedSchoolDetail.license?.licenseDuration || '1 Year');
+                          setNewLmsServerExpiryDate('');
                           setIsAddingLmsServer(true);
                         }}
                         className="sd-btn-primary"
@@ -2675,7 +2776,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                 </td>
                                 <td>
                                   <span className="sd-badge sd-badge-active" style={{ fontSize: '0.75rem' }}>
-                                    {server.maxUsers || selectedSchoolDetail.license?.concurrentUsersPerServer || 40} Users
+                                    {server.maxUsers || 40} Users
                                   </span>
                                 </td>
                                 <td>
@@ -2694,12 +2795,42 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                       ? formatDisplayDate(server.expiryDate)
                                       : (selectedSchoolDetail.license?.expiryDate && formatDisplayDate(selectedSchoolDetail.license?.expiryDate) !== '—')
                                       ? formatDisplayDate(selectedSchoolDetail.license?.expiryDate)
-                                      : computeLicenseExpiry(selectedSchoolDetail.license?.licenseDuration, selectedSchoolDetail.license?.expiryDate, server.activationDate || selectedSchoolDetail.created_at)}
+                                      : computeLicenseExpiry(server.licenseDuration || selectedSchoolDetail.license?.licenseDuration, selectedSchoolDetail.license?.expiryDate, server.activationDate || selectedSchoolDetail.created_at)}
                                   </span>
                                 </td>
                                 <td>{server.lastSyncTime ? new Date(server.lastSyncTime).toLocaleString() : '—'}</td>
                                 <td>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <button
+                                      type="button"
+                                      disabled={serverActionLoading}
+                                      onClick={() => {
+                                        setEditingServerModal({
+                                          show: true,
+                                          installationId: server.installationId,
+                                          serverName: server.serverName || '',
+                                          licenseKey: server.licenseKey || selectedSchoolDetail.license?.licenseKey || '',
+                                          maxUsers: server.maxUsers || 40,
+                                          licenseDuration: server.licenseDuration || '1 Year',
+                                          expiryDate: server.expiryDate ? String(server.expiryDate).slice(0, 10) : ''
+                                        });
+                                      }}
+                                      className="sd-btn-outline"
+                                      style={{
+                                        padding: '4px 8px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 600,
+                                        borderColor: '#c7d2fe',
+                                        color: '#4338ca',
+                                        backgroundColor: '#eef2ff',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                      }}
+                                      title="Edit Server (Customize capacity or duration)"
+                                    >
+                                      <FiEdit2 /> Edit
+                                    </button>
                                     <button
                                       type="button"
                                       disabled={serverActionLoading}
@@ -2762,21 +2893,28 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       <div style={{
                         backgroundColor: '#ffffff',
                         borderRadius: '16px',
-                        maxWidth: '480px',
+                        maxWidth: '520px',
                         width: '100%',
                         padding: '2rem',
                         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
                         border: '1px solid #e2e8f0'
                       }}>
-                        <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.5rem 0' }}>
-                          Add LMS Server & Generate License
-                        </h3>
-                        <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 1.5rem 0', lineHeight: 1.5 }}>
-                          Create an installation entry for this school. A unique installation license key with <strong>40 user capacity</strong> will be auto-generated.
-                        </p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.5rem' }}>
+                          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#e0e7ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                            <FiServer />
+                          </div>
+                          <div>
+                            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                              Add LMS Server & Generate License
+                            </h3>
+                            <p style={{ fontSize: '0.82rem', color: '#64748b', margin: 0 }}>
+                              Configure separate user capacity and duration for this installation
+                            </p>
+                          </div>
+                        </div>
 
                         <form onSubmit={handleCreateLmsServer}>
-                          <div className="sd-form-group" style={{ marginBottom: '1.25rem' }}>
+                          <div className="sd-form-group" style={{ marginBottom: '1rem' }}>
                             <label className="sd-form-label">Server Name / Location *</label>
                             <input
                               type="text"
@@ -2789,17 +2927,84 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             />
                           </div>
 
-                          <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <div className="sd-form-group" style={{ marginBottom: '1rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <label className="sd-form-label" style={{ margin: 0 }}>Concurrent Users Capacity *</label>
+                              <span style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: 600 }}>Independent per server</span>
+                            </div>
+                            <input
+                              type="number"
+                              min="1"
+                              max="1000"
+                              className="sd-form-input"
+                              required
+                              value={newLmsServerUsers}
+                              onChange={(e) => setNewLmsServerUsers(e.target.value)}
+                              disabled={newLmsServerLoading}
+                            />
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                              {[10, 15, 20, 25, 30, 40, 50, 60].map(cnt => (
+                                <button
+                                  key={cnt}
+                                  type="button"
+                                  onClick={() => setNewLmsServerUsers(cnt)}
+                                  style={{
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '12px',
+                                    padding: '2px 9px',
+                                    fontSize: '0.74rem',
+                                    fontWeight: 600,
+                                    background: parseInt(newLmsServerUsers, 10) === cnt ? '#4f46e5' : '#f8fafc',
+                                    color: parseInt(newLmsServerUsers, 10) === cnt ? '#ffffff' : '#475569',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  {cnt} Users
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="sd-form-group" style={{ marginBottom: '1rem' }}>
+                            <label className="sd-form-label">License Duration *</label>
+                            <select
+                              className="sd-form-input"
+                              value={newLmsServerDuration}
+                              onChange={(e) => setNewLmsServerDuration(e.target.value)}
+                              disabled={newLmsServerLoading}
+                            >
+                              <option value="6 Months">6 Months</option>
+                              <option value="1 Year">1 Year</option>
+                              <option value="2 Years">2 Years</option>
+                              <option value="Custom">Custom Expiry Date</option>
+                            </select>
+                          </div>
+
+                          {newLmsServerDuration === 'Custom' && (
+                            <div className="sd-form-group" style={{ marginBottom: '1rem' }}>
+                              <label className="sd-form-label">Custom Expiry Date *</label>
+                              <input
+                                type="date"
+                                className="sd-form-input"
+                                required
+                                value={newLmsServerExpiryDate}
+                                onChange={(e) => setNewLmsServerExpiryDate(e.target.value)}
+                                disabled={newLmsServerLoading}
+                              />
+                            </div>
+                          )}
+
+                          <div style={{ background: '#f8fafc', padding: '0.9rem 1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '5px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                               <span style={{ color: '#64748b' }}>Target School:</span>
                               <strong style={{ color: '#0f172a' }}>{selectedSchoolDetail?.school_name}</strong>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
-                              <span style={{ color: '#64748b' }}>User Capacity:</span>
-                              <strong style={{ color: '#16a34a' }}>40 Users (Standard Installation)</strong>
+                              <span style={{ color: '#64748b' }}>Server License:</span>
+                              <strong style={{ color: '#16a34a' }}>{newLmsServerUsers || 40} Users • {newLmsServerDuration}</strong>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
-                              <span style={{ color: '#64748b' }}>License Key:</span>
+                              <span style={{ color: '#64748b' }}>Installation Key:</span>
                               <span style={{ color: '#6366f1', fontStyle: 'italic' }}>Auto-generated upon save</span>
                             </div>
                           </div>
@@ -2816,7 +3021,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             <button
                               type="submit"
                               className="sd-btn-primary"
-                              style={{ background: '#4f46e5' }}
+                              style={{ background: '#4f46e5', padding: '7px 18px' }}
                               disabled={newLmsServerLoading}
                             >
                               {newLmsServerLoading ? 'Generating...' : 'Generate & Save License'}
@@ -4253,28 +4458,43 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         const canAddMore = servers.length < maxAllowed;
                         const effectiveCapacity = schoolForm.concurrentUsersPerServer || 40;
 
-                        const proceedAddServer = async () => {
-                          setActionLoading(true);
-                          try {
-                            const res = await apiFetch(`/api/cms/v1/schools/${editingId}/lms-servers/`, {
-                              method: 'POST',
-                              body: JSON.stringify({
-                                serverName: `${schoolForm.school_name || 'School'} - LMS Server ${servers.length + 1}`,
-                                maxUsers: parseInt(schoolForm.concurrentUsersPerServer, 10) || 40
-                              })
+                        const openProvisionModal = () => {
+                          const defaultCapacity = schoolForm.concurrentUsersPerServer || 40;
+                          const defaultDuration = schoolForm.licenseDuration || '1 Year';
+                          const defaultExpiry = schoolForm.expiryDate || '';
+                          if (!canAddMore) {
+                            setServerConfirm({
+                              show: true,
+                              title: 'Server Limit Reached',
+                              message: `Limit of ${maxAllowed} servers reached. Would you like to increase Max LMS Servers to ${maxAllowed + 1} and configure another server?`,
+                              icon: <FiPlus />,
+                              iconBg: '#e0e7ff',
+                              iconColor: '#4f46e5',
+                              confirmText: 'Increase Limit & Configure',
+                              confirmBg: '#4f46e5',
+                              onConfirm: () => {
+                                setServerConfirm(prev => ({ ...prev, show: false }));
+                                setSchoolForm(prev => ({ ...prev, maxLmsServers: maxAllowed + 1 }));
+                                setNewServerModal({
+                                  show: true,
+                                  schoolId: editingId,
+                                  serverName: `${schoolForm.school_name || 'School'} - LMS Server ${servers.length + 1}`,
+                                  maxUsers: defaultCapacity,
+                                  licenseDuration: defaultDuration,
+                                  expiryDate: defaultExpiry
+                                });
+                              }
                             });
-                            const resData = await res.json();
-                            if (res.ok) {
-                              showFeedback("New LMS server key provisioned!", null);
-                              await loadSchools();
-                            } else {
-                              showFeedback(null, resData.error || "Failed to generate server");
-                            }
-                          } catch (err) {
-                            showFeedback(null, err.message);
-                          } finally {
-                            setActionLoading(false);
+                            return;
                           }
+                          setNewServerModal({
+                            show: true,
+                            schoolId: editingId,
+                            serverName: `${schoolForm.school_name || 'School'} - LMS Server ${servers.length + 1}`,
+                            maxUsers: defaultCapacity,
+                            licenseDuration: defaultDuration,
+                            expiryDate: defaultExpiry
+                          });
                         };
 
                         return (
@@ -4301,27 +4521,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                               <button
                                 type="button"
                                 disabled={serverActionLoading || actionLoading}
-                                onClick={async () => {
-                                  if (!canAddMore) {
-                                    setServerConfirm({
-                                      show: true,
-                                      title: 'Server Limit Reached',
-                                      message: `Limit of ${maxAllowed} servers reached. Would you like to increase Max LMS Servers to ${maxAllowed + 1} and provision another server?`,
-                                      icon: <FiPlus />,
-                                      iconBg: '#e0e7ff',
-                                      iconColor: '#4f46e5',
-                                      confirmText: 'Increase Limit & Provision',
-                                      confirmBg: '#4f46e5',
-                                      onConfirm: async () => {
-                                        setServerConfirm(prev => ({ ...prev, show: false }));
-                                        setSchoolForm(prev => ({ ...prev, maxLmsServers: maxAllowed + 1 }));
-                                        await proceedAddServer();
-                                      }
-                                    });
-                                    return;
-                                  }
-                                  await proceedAddServer();
-                                }}
+                                onClick={openProvisionModal}
                                 className="sd-btn-primary"
                                 style={{ padding: '6px 14px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px' }}
                               >
@@ -4330,19 +4530,31 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             </div>
 
                             <p style={{ margin: '0 0 1rem 0', fontSize: '0.78rem', color: '#64748b' }}>
-                              Each installation key authorizes 1 LMS server instance with {effectiveCapacity} concurrent users capacity.
+                              Each installation key authorizes 1 LMS server instance with customized concurrent users capacity and license duration.
                             </p>
 
                             {servers.length > 0 ? (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                 {servers.map((srv, idx) => {
-                                  const isEditingThis = editingServerId === srv.installationId;
                                   const isActive = srv.status === 'ACTIVE';
+                                  const serverCapacity = srv.maxUsers || 40;
+                                  const serverDuration = srv.licenseDuration || schoolForm.licenseDuration || '1 Year';
                                   const serverCreatedDate = formatDisplayDate(srv.activationDate || srv.createdDate || srv.created_at || currentSchool?.created_at || new Date());
                                   const serverExpiryDate = (srv.expiryDate && formatDisplayDate(srv.expiryDate) !== '—')
                                     ? formatDisplayDate(srv.expiryDate)
-                                    : computeLicenseExpiry(schoolForm.licenseDuration || currentSchool?.license?.licenseDuration, schoolForm.expiryDate || currentSchool?.license?.expiryDate, srv.activationDate || currentSchool?.created_at);
-                                  const serverCapacity = schoolForm.concurrentUsersPerServer || srv.maxUsers || 40;
+                                    : computeLicenseExpiry(serverDuration, schoolForm.expiryDate || currentSchool?.license?.expiryDate, srv.activationDate || currentSchool?.created_at);
+
+                                  const openEditModal = () => {
+                                    setEditingServerModal({
+                                      show: true,
+                                      installationId: srv.installationId,
+                                      serverName: srv.serverName || '',
+                                      licenseKey: srv.licenseKey || currentSchool?.license?.licenseKey || '',
+                                      maxUsers: serverCapacity,
+                                      licenseDuration: serverDuration,
+                                      expiryDate: srv.expiryDate ? String(srv.expiryDate).slice(0, 10) : ''
+                                    });
+                                  };
 
                                   return (
                                     <div
@@ -4362,53 +4574,19 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                     >
                                       {/* Left: Server Name & ID */}
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '180px' }}>
-                                        {isEditingThis ? (
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <input
-                                              className="sd-form-input"
-                                              type="text"
-                                              value={editingServerName}
-                                              onChange={e => setEditingServerName(e.target.value)}
-                                              style={{ padding: '3px 8px', fontSize: '0.82rem', height: '30px' }}
-                                              placeholder="Server Name"
-                                              autoFocus
-                                            />
-                                            <button
-                                              type="button"
-                                              onClick={() => handleSaveEditServer(srv.installationId)}
-                                              className="sd-btn-primary"
-                                              style={{ padding: '4px 8px', fontSize: '0.72rem', background: '#16a34a' }}
-                                            >
-                                              Save
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => setEditingServerId(null)}
-                                              className="sd-btn-outline"
-                                              style={{ padding: '4px 8px', fontSize: '0.72rem' }}
-                                            >
-                                              Cancel
-                                            </button>
-                                          </div>
-                                        ) : (
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <span style={{ fontSize: '0.9rem', fontWeight: 700, color: isActive ? '#0f172a' : '#64748b', textDecoration: isActive ? 'none' : 'line-through' }}>
-                                              {srv.serverName || `LMS Server ${idx + 1}`}
-                                            </span>
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                setEditingServerId(srv.installationId);
-                                                setEditingServerName(srv.serverName || '');
-                                                setEditingServerUsers(serverCapacity);
-                                              }}
-                                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#64748b', display: 'flex', alignItems: 'center' }}
-                                              title="Edit Server Name"
-                                            >
-                                              <FiEdit2 style={{ fontSize: '0.8rem' }} />
-                                            </button>
-                                          </div>
-                                        )}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                          <span style={{ fontSize: '0.9rem', fontWeight: 700, color: isActive ? '#0f172a' : '#64748b', textDecoration: isActive ? 'none' : 'line-through' }}>
+                                            {srv.serverName || `LMS Server ${idx + 1}`}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={openEditModal}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#4f46e5', display: 'flex', alignItems: 'center' }}
+                                            title="Edit Server Name & Customize Capacity / Duration"
+                                          >
+                                            <FiEdit2 style={{ fontSize: '0.82rem' }} />
+                                          </button>
+                                        </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.74rem', color: '#64748b' }}>
                                           <span style={{ fontFamily: 'monospace' }}>ID: {srv.installationId}</span>
                                           {serverCreatedDate && serverCreatedDate !== '—' && (
@@ -4453,6 +4631,17 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                           className="sd-badge"
                                           style={{
                                             fontSize: '0.72rem',
+                                            fontWeight: 600,
+                                            backgroundColor: '#eff6ff',
+                                            color: '#1d4ed8'
+                                          }}
+                                        >
+                                          ⏳ {serverDuration} (Expires: {serverExpiryDate})
+                                        </span>
+                                        <span
+                                          className="sd-badge"
+                                          style={{
+                                            fontSize: '0.72rem',
                                             fontWeight: 700,
                                             backgroundColor: isActive ? '#dcfce7' : '#fee2e2',
                                             color: isActive ? '#15803d' : '#b91c1c'
@@ -4460,6 +4649,28 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                         >
                                           {isActive ? '●● ACTIVE' : '●● DISABLED'}
                                         </span>
+
+                                        {/* Edit Server Button */}
+                                        <button
+                                          type="button"
+                                          disabled={serverActionLoading}
+                                          onClick={openEditModal}
+                                          className="sd-btn-outline"
+                                          style={{
+                                            padding: '4px 10px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 600,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            color: '#4338ca',
+                                            borderColor: '#c7d2fe',
+                                            backgroundColor: '#eef2ff'
+                                          }}
+                                          title="Edit server name, lessen capacity, or change duration"
+                                        >
+                                          <FiEdit2 /> Edit
+                                        </button>
 
                                         {/* Disable / Enable Button */}
                                         <button
@@ -4512,34 +4723,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                 </span>
                                 <button
                                   type="button"
-                                  disabled={actionLoading}
-                                  onClick={async () => {
-                                    setActionLoading(true);
-                                    try {
-                                      const res = await apiFetch(`/api/cms/v1/schools/${editingId}/lms-servers/`, {
-                                        method: 'POST',
-                                        body: JSON.stringify({
-                                          serverName: `${schoolForm.school_name || 'School'} - Primary Server`,
-                                          maxUsers: parseInt(schoolForm.concurrentUsersPerServer, 10) || 40
-                                        })
-                                      });
-                                      const resData = await res.json();
-                                      if (res.ok) {
-                                        showFeedback("Primary LMS Server installation key generated!", null);
-                                        await loadSchools();
-                                      } else {
-                                        showFeedback(null, resData.error || "Failed to generate key");
-                                      }
-                                    } catch (err) {
-                                      showFeedback(null, err.message);
-                                    } finally {
-                                      setActionLoading(false);
-                                    }
-                                  }}
+                                  disabled={serverActionLoading || actionLoading}
+                                  onClick={openProvisionModal}
                                   className="sd-btn-primary"
                                   style={{ padding: '5px 12px', fontSize: '0.78rem' }}
                                 >
-                                  ⚡ Generate Primary Server Key ({effectiveCapacity} Users)
+                                  ⚡ Provision Primary Server Key
                                 </button>
                               </div>
                             )}
@@ -5868,6 +6057,352 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 {serverActionLoading ? 'Processing...' : (serverConfirm.confirmText || 'OK')}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Provision New LMS Server Modal ── */}
+      {newServerModal.show && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            width: '100vw', height: '100vh',
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100000,
+            padding: '1rem'
+          }}
+          onClick={() => !serverActionLoading && setNewServerModal(prev => ({ ...prev, show: false }))}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '520px',
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              padding: '2rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              border: '1px solid #e2e8f0'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.25rem' }}>
+              <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#e0e7ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem' }}>
+                <FiServer />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: '1.22rem', fontWeight: 700, color: '#0f172a', margin: '0 0 2px 0' }}>
+                  Provision LMS Server
+                </h3>
+                <p style={{ fontSize: '0.82rem', color: '#64748b', margin: 0 }}>
+                  Configure separate user capacity and license duration for this server
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !serverActionLoading && setNewServerModal(prev => ({ ...prev, show: false }))}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.2rem', padding: '4px' }}
+              >
+                <FiX />
+              </button>
+            </div>
+
+            <form onSubmit={handleProvisionServerSubmit}>
+              <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                <label className="sd-form-label">Server Name / Identifier *</label>
+                <input
+                  type="text"
+                  className="sd-form-input"
+                  required
+                  placeholder="e.g. Science Lab 2, English Room B"
+                  value={newServerModal.serverName}
+                  onChange={e => setNewServerModal({ ...newServerModal, serverName: e.target.value })}
+                  disabled={serverActionLoading}
+                />
+              </div>
+
+              <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label className="sd-form-label" style={{ margin: 0 }}>Concurrent Users Capacity *</label>
+                  <span style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: 600 }}>Independent per server</span>
+                </div>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  className="sd-form-input"
+                  required
+                  value={newServerModal.maxUsers}
+                  onChange={e => setNewServerModal({ ...newServerModal, maxUsers: e.target.value })}
+                  disabled={serverActionLoading}
+                />
+                <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                  {[10, 15, 20, 25, 30, 40, 50, 60].map(cnt => (
+                    <button
+                      key={cnt}
+                      type="button"
+                      onClick={() => setNewServerModal(prev => ({ ...prev, maxUsers: cnt }))}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '12px',
+                        padding: '2px 9px',
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        background: parseInt(newServerModal.maxUsers, 10) === cnt ? '#4f46e5' : '#f8fafc',
+                        color: parseInt(newServerModal.maxUsers, 10) === cnt ? '#ffffff' : '#475569',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {cnt} Users
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                <label className="sd-form-label">License Duration *</label>
+                <select
+                  className="sd-form-input"
+                  value={newServerModal.licenseDuration}
+                  onChange={e => setNewServerModal({ ...newServerModal, licenseDuration: e.target.value })}
+                  disabled={serverActionLoading}
+                >
+                  <option value="6 Months">6 Months</option>
+                  <option value="1 Year">1 Year</option>
+                  <option value="2 Years">2 Years</option>
+                  <option value="Custom">Custom Expiry Date</option>
+                </select>
+              </div>
+
+              {newServerModal.licenseDuration === 'Custom' && (
+                <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                  <label className="sd-form-label">Custom Expiry Date *</label>
+                  <input
+                    type="date"
+                    className="sd-form-input"
+                    required
+                    value={newServerModal.expiryDate}
+                    onChange={e => setNewServerModal({ ...newServerModal, expiryDate: e.target.value })}
+                    disabled={serverActionLoading}
+                  />
+                </div>
+              )}
+
+              <div style={{ background: '#f8fafc', padding: '0.9rem 1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                  <span style={{ color: '#64748b' }}>Provisioned License:</span>
+                  <strong style={{ color: '#16a34a' }}>{newServerModal.maxUsers || 40} Users • {newServerModal.licenseDuration}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                  <span style={{ color: '#64748b' }}>Installation Key:</span>
+                  <span style={{ color: '#6366f1', fontStyle: 'italic' }}>Auto-generated upon save</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  className="sd-btn-outline"
+                  onClick={() => setNewServerModal(prev => ({ ...prev, show: false }))}
+                  disabled={serverActionLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="sd-btn-primary"
+                  style={{ background: '#4f46e5', padding: '7px 18px' }}
+                  disabled={serverActionLoading}
+                >
+                  {serverActionLoading ? 'Provisioning...' : 'Provision Server Key'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit LMS Server Modal (Customize / Lessen Capacity & Duration) ── */}
+      {editingServerModal.show && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            width: '100vw', height: '100vh',
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100000,
+            padding: '1rem'
+          }}
+          onClick={() => !serverActionLoading && setEditingServerModal(prev => ({ ...prev, show: false }))}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '520px',
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              padding: '2rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              border: '1px solid #e2e8f0'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.25rem' }}>
+              <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#e0e7ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem' }}>
+                <FiEdit2 />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: '1.22rem', fontWeight: 700, color: '#0f172a', margin: '0 0 2px 0' }}>
+                  Edit LMS Server License
+                </h3>
+                <p style={{ fontSize: '0.82rem', color: '#64748b', margin: 0 }}>
+                  Adjust user capacity or license duration particularly for this server
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !serverActionLoading && setEditingServerModal(prev => ({ ...prev, show: false }))}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.2rem', padding: '4px' }}
+              >
+                <FiX />
+              </button>
+            </div>
+
+            {/* Server Key & ID Info Box */}
+            <div style={{ background: '#f8fafc', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: '#64748b' }}>
+                <span>Installation ID:</span>
+                <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#334155' }}>{editingServerModal.installationId}</span>
+              </div>
+              {editingServerModal.licenseKey && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', fontSize: '0.8rem' }}>
+                  <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>License Key:</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', maxWidth: '280px' }}>
+                    <code style={{ fontSize: '0.78rem', background: '#ffffff', padding: '2px 6px', borderRadius: '4px', border: '1px solid #cbd5e1', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {editingServerModal.licenseKey}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(editingServerModal.licenseKey, "Server license key copied!")}
+                      className="sd-btn-outline"
+                      style={{ padding: '2px 6px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '3px' }}
+                    >
+                      <FiCopy />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleSaveEditingServerModal}>
+              <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                <label className="sd-form-label">Server Name *</label>
+                <input
+                  type="text"
+                  className="sd-form-input"
+                  required
+                  value={editingServerModal.serverName}
+                  onChange={e => setEditingServerModal({ ...editingServerModal, serverName: e.target.value })}
+                  disabled={serverActionLoading}
+                />
+              </div>
+
+              <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label className="sd-form-label" style={{ margin: 0 }}>Concurrent Users Capacity *</label>
+                  <span style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: 600 }}>Lessen or increase for this server</span>
+                </div>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  className="sd-form-input"
+                  required
+                  value={editingServerModal.maxUsers}
+                  onChange={e => setEditingServerModal({ ...editingServerModal, maxUsers: e.target.value })}
+                  disabled={serverActionLoading}
+                />
+                <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                  {[10, 15, 20, 25, 30, 40, 50, 60].map(cnt => (
+                    <button
+                      key={cnt}
+                      type="button"
+                      onClick={() => setEditingServerModal(prev => ({ ...prev, maxUsers: cnt }))}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '12px',
+                        padding: '2px 9px',
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        background: parseInt(editingServerModal.maxUsers, 10) === cnt ? '#4f46e5' : '#f8fafc',
+                        color: parseInt(editingServerModal.maxUsers, 10) === cnt ? '#ffffff' : '#475569',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {cnt} Users
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                <label className="sd-form-label">License Duration *</label>
+                <select
+                  className="sd-form-input"
+                  value={editingServerModal.licenseDuration}
+                  onChange={e => setEditingServerModal({ ...editingServerModal, licenseDuration: e.target.value })}
+                  disabled={serverActionLoading}
+                >
+                  <option value="6 Months">6 Months</option>
+                  <option value="1 Year">1 Year</option>
+                  <option value="2 Years">2 Years</option>
+                  <option value="Custom">Custom Expiry Date</option>
+                </select>
+              </div>
+
+              {editingServerModal.licenseDuration === 'Custom' && (
+                <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                  <label className="sd-form-label">Custom Expiry Date *</label>
+                  <input
+                    type="date"
+                    className="sd-form-input"
+                    required
+                    value={editingServerModal.expiryDate}
+                    onChange={e => setEditingServerModal({ ...editingServerModal, expiryDate: e.target.value })}
+                    disabled={serverActionLoading}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+                <button
+                  type="button"
+                  className="sd-btn-outline"
+                  onClick={() => setEditingServerModal(prev => ({ ...prev, show: false }))}
+                  disabled={serverActionLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="sd-btn-primary"
+                  style={{ background: '#16a34a', padding: '7px 18px' }}
+                  disabled={serverActionLoading}
+                >
+                  {serverActionLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

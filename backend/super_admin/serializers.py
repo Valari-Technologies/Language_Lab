@@ -7,13 +7,19 @@ User = get_user_model()
 
 
 class LmsServerSerializer(serializers.ModelSerializer):
-    expiryDate = serializers.DateField(source='license.expiryDate', read_only=True, allow_null=True, default=None)
-    licenseDuration = serializers.CharField(source='license.licenseDuration', read_only=True, allow_null=True, default=None)
     createdDate = serializers.DateTimeField(source='activationDate', read_only=True)
 
     class Meta:
         model = LmsServer
         fields = '__all__'
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        if not ret.get('expiryDate') and instance.license and instance.license.expiryDate:
+            ret['expiryDate'] = str(instance.license.expiryDate)
+        if not ret.get('licenseDuration') and instance.license and instance.license.licenseDuration:
+            ret['licenseDuration'] = instance.license.licenseDuration
+        return ret
 
 
 class LicenseSerializer(serializers.ModelSerializer):
