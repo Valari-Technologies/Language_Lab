@@ -1041,7 +1041,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         setShowModal(false);
         if (activeSubTab === 'teachers') await loadTeachers();
         else if (activeSubTab === 'students') await loadStudents();
-        else if (activeSubTab === 'classes') await loadClasses();
+        else if (activeSubTab === 'classes') { await loadClasses(); await loadExperiences(); }
         await loadDashboardData();
       } else {
         if (resData && typeof resData === 'object' && Object.keys(resData).length > 0) {
@@ -1209,6 +1209,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           showFeedback(`Successfully deleted ${count} class(es).`, null);
           setSelectedClassIds([]);
           await loadClasses();
+          await loadExperiences();
         }
         await loadDashboardData();
         setDeleteConfirm({ show: false, id: null, type: null, isBulk: false, ids: [], count: 0 });
@@ -1229,7 +1230,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         setDeleteConfirm({ show: false, id: null, type: null });
         if (activeSubTab === 'teachers') await loadTeachers();
         else if (activeSubTab === 'students') await loadStudents();
-        else if (activeSubTab === 'classes') await loadClasses();
+        else if (activeSubTab === 'classes') { await loadClasses(); await loadExperiences(); }
         await loadDashboardData();
       } else {
         setErrorMsg(resData.message || 'Delete operation failed.');
@@ -1503,6 +1504,9 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   };
 
   const getFilteredExperiences = () => {
+    if (classes.length === 0 && experiences.length === 0) {
+      return [];
+    }
     return experiences.filter(exp => {
       if (schLessonClassFilter) {
         const gradeNum = exp.grade_name ? exp.grade_name.match(/\d+/) : null;
@@ -1530,7 +1534,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const statTeachers  = teachers.length;
   const statStudents  = students.length;
   const statClasses   = classes.length;
-  const statExperiences = experiences.length;
+  const statExperiences = dashboardData?.total_lessons !== undefined ? dashboardData.total_lessons : (classes.length === 0 ? 0 : experiences.length);
   const statSchools   = schools.length;
   const statAttend    = dashboardData?.monthly_engagement_rate || '—';
 
@@ -1562,6 +1566,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     if (tab === 'classes') loadClasses();
     else if (tab === 'teachers') loadTeachers();
     else if (tab === 'students') loadStudents();
+    else if (tab === 'experiences') loadExperiences();
   };
 
   /* ── Loading screen ── */

@@ -229,11 +229,45 @@ class SchoolDashboardAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        school_classes = Class.objects.filter(school=school, is_active=True)
+        school_grade_ids = list(school_classes.exclude(grade__isnull=True).values_list("grade_id", flat=True).distinct())
+
+        from assessments.models import ExperienceAssignment
+        assignments = ExperienceAssignment.objects.filter(school=school)
+        assigned_grade_ids = list(assignments.exclude(grade__isnull=True).values_list("grade_id", flat=True).distinct())
+        assigned_refs = list(assignments.values_list("experience_ref", flat=True).distinct())
+
+        assigned_exp_ids = []
+        for ref in assigned_refs:
+            if ref and str(ref).isdigit():
+                assigned_exp_ids.append(int(ref))
+            elif ref and str(ref).startswith("EXP-") and str(ref)[4:].isdigit():
+                assigned_exp_ids.append(int(str(ref)[4:]))
+
+        all_grades = set(school_grade_ids + assigned_grade_ids)
+        if not all_grades and not assigned_exp_ids and not assigned_refs:
+            total_lessons = 0
+        else:
+            from content_studio.models import Experience
+            from django.db.models import Q
+            filter_q = Q()
+            if all_grades:
+                filter_q |= Q(grade_id__in=all_grades)
+            if assigned_exp_ids:
+                filter_q |= Q(id__in=assigned_exp_ids)
+            if assigned_refs:
+                filter_q |= Q(title__in=assigned_refs)
+            total_lessons = Experience.objects.filter(
+                is_deleted=False,
+                status__in=["APPROVED", "PUBLISHED"]
+            ).filter(filter_q).count()
+
         data = {
             "school_name": school.school_name,
             "total_teachers": Teacher.objects.filter(school=school).count(),
             "total_students": Student.objects.filter(school=school).count(),
-            "active_classes": Class.objects.filter(school=school, is_active=True).count(),
+            "active_classes": school_classes.count(),
+            "total_lessons": total_lessons,
             # No engagement-metric, activity-log, or announcement models exist yet in
             # this codebase -- returning empty/null instead of inventing fake numbers.
             "monthly_engagement_rate": None,

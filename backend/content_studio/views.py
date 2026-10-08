@@ -62,10 +62,119 @@ class ExperienceViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = Experience.objects.filter(is_deleted=False).select_related("grade", "created_by")
 
-        # Filter for school tenants (only show published experiences)
+        # Filter for school tenants (only show published experiences within tenant scope)
         role = getattr(self.request.user, "role", None)
         if role in ["SCHOOL_ADMIN", "TEACHER", "STUDENT"]:
             queryset = queryset.filter(status__in=["APPROVED", "PUBLISHED"])
+            from accounts.scoping import get_user_school
+            school = get_user_school(self.request.user)
+            if school is None:
+                return queryset.none()
+
+            from django.db.models import Q
+            from assessments.models import ExperienceAssignment
+
+            if role == "SCHOOL_ADMIN":
+                from school_admin.models import Class
+                school_classes = Class.objects.filter(school=school, is_active=True)
+                school_grade_ids = list(school_classes.exclude(grade__isnull=True).values_list("grade_id", flat=True).distinct())
+
+                assignments = ExperienceAssignment.objects.filter(school=school)
+                assigned_grade_ids = list(assignments.exclude(grade__isnull=True).values_list("grade_id", flat=True).distinct())
+                assigned_refs = list(assignments.values_list("experience_ref", flat=True).distinct())
+
+                assigned_exp_ids = []
+                for ref in assigned_refs:
+                    if ref and str(ref).isdigit():
+                        assigned_exp_ids.append(int(ref))
+                    elif ref and str(ref).startswith("EXP-") and str(ref)[4:].isdigit():
+                        assigned_exp_ids.append(int(str(ref)[4:]))
+
+                all_grades = set(school_grade_ids + assigned_grade_ids)
+                if not all_grades and not assigned_exp_ids and not assigned_refs:
+                    return queryset.none()
+
+                filter_q = Q()
+                if all_grades:
+                    filter_q |= Q(grade_id__in=all_grades)
+                if assigned_exp_ids:
+                    filter_q |= Q(id__in=assigned_exp_ids)
+                if assigned_refs:
+                    filter_q |= Q(title__in=assigned_refs)
+                queryset = queryset.filter(filter_q)
+
+            elif role == "TEACHER":
+                from school_admin.models import TeacherClass
+                teacher_classes = TeacherClass.objects.filter(teacher__user=self.request.user, class_obj__is_active=True)
+                teacher_grade_ids = list(teacher_classes.exclude(class_obj__grade__isnull=True).values_list("class_obj__grade_id", flat=True).distinct())
+
+                assignments = ExperienceAssignment.objects.filter(
+                    school=school
+                ).filter(
+                    Q(class_obj__in=teacher_classes.values_list("class_obj", flat=True)) |
+                    Q(assigned_by=self.request.user)
+                )
+                assigned_grade_ids = list(assignments.exclude(grade__isnull=True).values_list("grade_id", flat=True).distinct())
+                assigned_refs = list(assignments.values_list("experience_ref", flat=True).distinct())
+
+                assigned_exp_ids = []
+                for ref in assigned_refs:
+                    if ref and str(ref).isdigit():
+                        assigned_exp_ids.append(int(ref))
+                    elif ref and str(ref).startswith("EXP-") and str(ref)[4:].isdigit():
+                        assigned_exp_ids.append(int(str(ref)[4:]))
+
+                all_grades = set(teacher_grade_ids + assigned_grade_ids)
+                if not all_grades and not assigned_exp_ids and not assigned_refs:
+                    return queryset.none()
+
+                filter_q = Q()
+                if all_grades:
+                    filter_q |= Q(grade_id__in=all_grades)
+                if assigned_exp_ids:
+                    filter_q |= Q(id__in=assigned_exp_ids)
+                if assigned_refs:
+                    filter_q |= Q(title__in=assigned_refs)
+                queryset = queryset.filter(filter_q)
+
+            elif role == "STUDENT":
+                from teacher.models import Student
+                from super_admin.models import Grade
+                import re
+
+                student = Student.objects.filter(user=self.request.user, school=school).first()
+                student_grade_id = None
+                if student and student.grade:
+                    m = re.search(r'\d+', str(student.grade))
+                    if m:
+                        grade_num = int(m.group(0))
+                        g = Grade.objects.filter(grade_name__icontains=str(grade_num)).first()
+                        if g:
+                            student_grade_id = g.id
+
+                assignments = ExperienceAssignment.objects.filter(school=school)
+                if student_grade_id:
+                    assignments = assignments.filter(Q(grade_id=student_grade_id) | Q(grade__isnull=True))
+                assigned_refs = list(assignments.values_list("experience_ref", flat=True).distinct())
+
+                assigned_exp_ids = []
+                for ref in assigned_refs:
+                    if ref and str(ref).isdigit():
+                        assigned_exp_ids.append(int(ref))
+                    elif ref and str(ref).startswith("EXP-") and str(ref)[4:].isdigit():
+                        assigned_exp_ids.append(int(str(ref)[4:]))
+
+                if not student_grade_id and not assigned_exp_ids and not assigned_refs:
+                    return queryset.none()
+
+                filter_q = Q()
+                if student_grade_id:
+                    filter_q |= Q(grade_id=student_grade_id)
+                if assigned_exp_ids:
+                    filter_q |= Q(id__in=assigned_exp_ids)
+                if assigned_refs:
+                    filter_q |= Q(title__in=assigned_refs)
+                queryset = queryset.filter(filter_q)
         
 
         grade = self.request.query_params.get("grade")
