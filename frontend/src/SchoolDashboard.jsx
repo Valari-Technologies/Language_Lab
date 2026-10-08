@@ -152,14 +152,19 @@ const generateRollNo = (fullName, existingStudents = []) => {
   return candidate;
 };
 
-const generateLmsLoginCode = (fullName, existingStudents = []) => {
-  const cleanName = (fullName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!cleanName) return '';
-  const takenUsernames = new Set((existingStudents || []).map(s => (s.username || '').toLowerCase()));
-  let candidate = cleanName;
+const generateLmsLoginCode = (fullName, rollNo = '', existingStudents = []) => {
+  const letters = (fullName || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
+  if (!letters) return '';
+  const prefix = letters.slice(0, 3).padEnd(3, 'X');
+  const cleanRoll = String(rollNo || '').trim();
+  const baseCode = cleanRoll ? `${prefix}_${cleanRoll}` : `${prefix}_`;
+  if (!cleanRoll) return baseCode;
+
+  const takenUsernames = new Set((existingStudents || []).map(s => (s.username || '').toUpperCase()));
+  let candidate = baseCode;
   let suffix = 1;
-  while (takenUsernames.has(candidate)) {
-    candidate = `${cleanName}${suffix}`;
+  while (takenUsernames.has(candidate.toUpperCase())) {
+    candidate = `${baseCode}_${suffix}`;
     suffix += 1;
   }
   return candidate;
@@ -871,8 +876,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         const match = String(rawGrade).match(/\d+/);
         formattedGrade = match ? `Class ${match[0]}` : rawGrade;
       }
+      let initialUsername = entity?.username || '';
+      if (entity && (!initialUsername || initialUsername.toLowerCase() === (entity.full_name || '').toLowerCase().replace(/[^a-z0-9]/g, ''))) {
+        initialUsername = generateLmsLoginCode(entity.full_name, entity.roll_no, students);
+      }
       setStudentForm(entity ? {
-        username: entity.username || '', password: '', email: entity.email || '',
+        username: initialUsername, password: '', email: entity.email || '',
         full_name: entity.full_name || '',
         roll_no: entity.roll_no || '',
         grade: formattedGrade,
@@ -1018,9 +1027,11 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       } else if (activeSubTab === 'students') {
         body = { ...studentForm };
         if (modalType === 'add') {
-          if (!body.username) body.username = body.roll_no;
-          if (!body.password) body.password = body.roll_no;
-          if (!body.email) body.email = `${body.roll_no}@school.com`;
+          if (!body.username || body.username.endsWith('_')) {
+            body.username = generateLmsLoginCode(body.full_name, body.roll_no, students);
+          }
+          if (!body.password) body.password = body.username;
+          if (!body.email) body.email = `${body.username.toLowerCase()}@lingualab.com`;
         } else if (modalType === 'edit' && !body.password) {
           delete body.password;
         }
@@ -2706,7 +2717,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         </tbody>
                       </table>
                       <div style={{ padding: '0.75rem 1.25rem', background: '#fffbeb', borderTop: '1px solid #fef3c7', fontSize: '0.8rem', color: '#92400e' }}>
-                        LMS login code is auto-generated from <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>fullname</code>.
+                        LMS login code is auto-generated from <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>fullname</code> and <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>roll no</code> (e.g. <span style={{ fontWeight: 700 }}>DHA_12</span>).
                       </div>
                     </div>
 
@@ -2787,6 +2798,9 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <tbody>
                       {paginate(getFilteredStudents(), studentPage).map((s, i) => {
                         const sid = s.student_id || s.id;
+                        const displayLmsCode = (s.username && s.username.toLowerCase() === (s.full_name || '').toLowerCase().replace(/[^a-z0-9]/g, '') && s.roll_no)
+                          ? generateLmsLoginCode(s.full_name, s.roll_no, students)
+                          : (s.username || 'N/A');
                         return (
                           <tr key={sid || i}>
                             {isSelectModeStudents && (
@@ -2802,7 +2816,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               <span className="sd-name-cell-primary">{s.full_name || s.username || 'N/A'}</span>
                             </td>
                             <td>{s.roll_no || 'N/A'}</td>
-                            <td><span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>{s.username || 'N/A'}</span></td>
+                            <td><span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>{displayLmsCode}</span></td>
                             <td>{s.grade ? (String(s.grade).startsWith('Class') || String(s.grade).startsWith('Grade') ? String(s.grade).replace('Grade', 'Class') : `Class ${s.grade}`) : 'N/A'}</td>
                             <td>{s.section ? (String(s.section).startsWith('Section') ? s.section : `Section ${s.section}`) : 'N/A'}</td>
                             <td style={{ textAlign: 'center' }}>{s.academic_year || '2025 - 2026'}</td>
@@ -3841,14 +3855,21 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             setStudentForm(prev => ({
                               ...prev,
                               full_name,
-                              username: modalType === 'add' ? generateLmsLoginCode(full_name, students) : prev.username
+                              username: modalType === 'add' ? generateLmsLoginCode(full_name, prev.roll_no, students) : prev.username
                             }));
                           }} required placeholder="e.g. Arjun Sharma"/>
                       </div>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Roll No *</label>
                         <input className="sd-form-input" type="text" value={studentForm.roll_no}
-                          onChange={e => setStudentForm({...studentForm, roll_no: e.target.value})} placeholder="e.g. 12" required/>
+                          onChange={e => {
+                            const roll_no = e.target.value;
+                            setStudentForm(prev => ({
+                              ...prev,
+                              roll_no,
+                              username: modalType === 'add' ? generateLmsLoginCode(prev.full_name, roll_no, students) : prev.username
+                            }));
+                          }} placeholder="e.g. 12" required/>
                       </div>
                     </div>
 
@@ -4315,14 +4336,21 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         setStudentForm(prev => ({
                           ...prev,
                           full_name,
-                          roll_no: modalType === 'add' ? generateRollNo(full_name, students) : prev.roll_no
+                          username: modalType === 'add' ? generateLmsLoginCode(full_name, prev.roll_no, students) : prev.username
                         }));
                       }} required placeholder="e.g. Arjun Sharma"/>
                   </div>
                   <div className="sd-form-group">
                     <label className="sd-form-label">Roll No *</label>
                     <input className="sd-form-input" type="text" value={studentForm.roll_no}
-                      onChange={e => setStudentForm({...studentForm, roll_no:e.target.value})} required placeholder="Auto-generated from name"/>
+                      onChange={e => {
+                        const roll_no = e.target.value;
+                        setStudentForm(prev => ({
+                          ...prev,
+                          roll_no,
+                          username: modalType === 'add' ? generateLmsLoginCode(prev.full_name, roll_no, students) : prev.username
+                        }));
+                      }} required placeholder="e.g. 12"/>
                   </div>
                 </div>
                 <div className="sd-form-row">

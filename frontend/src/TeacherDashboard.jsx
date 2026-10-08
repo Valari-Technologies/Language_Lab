@@ -153,14 +153,19 @@ const generateRollNo = (fullName, existingStudents = []) => {
   return candidate;
 };
 
-const generateLmsLoginCode = (fullName, existingStudents = []) => {
-  const cleanName = (fullName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!cleanName) return '';
-  const takenUsernames = new Set((existingStudents || []).map(s => (s.username || '').toLowerCase()));
-  let candidate = cleanName;
+const generateLmsLoginCode = (fullName, rollNo = '', existingStudents = []) => {
+  const letters = (fullName || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
+  if (!letters) return '';
+  const prefix = letters.slice(0, 3).padEnd(3, 'X');
+  const cleanRoll = String(rollNo || '').trim();
+  const baseCode = cleanRoll ? `${prefix}_${cleanRoll}` : `${prefix}_`;
+  if (!cleanRoll) return baseCode;
+
+  const takenUsernames = new Set((existingStudents || []).map(s => (s.username || '').toUpperCase()));
+  let candidate = baseCode;
   let suffix = 1;
-  while (takenUsernames.has(candidate)) {
-    candidate = `${cleanName}${suffix}`;
+  while (takenUsernames.has(candidate.toUpperCase())) {
+    candidate = `${baseCode}_${suffix}`;
     suffix += 1;
   }
   return candidate;

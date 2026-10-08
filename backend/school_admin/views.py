@@ -537,21 +537,27 @@ class BulkUploadAPIView(APIView):
                             status_str = str(status_val).strip().lower()
                             academic_year = str(academic_year_val).strip()
 
-                            # Auto generate lms login code (username) from full name
-                            clean_name = "".join(ch for ch in full_name if ch.isalnum()).lower()
-                            if not clean_name:
-                                clean_name = "student"
-                            username = clean_name
+                            # Auto generate lms login code (username) from full name and roll no (e.g. DHA_12)
+                            clean_name = "".join(ch for ch in full_name if ch.isalpha()).upper()
+                            prefix = clean_name[:3] if len(clean_name) >= 3 else clean_name.ljust(3, "X")
+                            if not prefix:
+                                prefix = "STU"
+                            clean_roll = str(roll_no).strip()
+                            if clean_roll:
+                                username = f"{prefix}_{clean_roll}"
+                            else:
+                                username = f"{prefix}_1"
+
                             orig_username = username
                             suffix = 1
                             while User.objects.filter(username=username).exists():
-                                username = f"{orig_username}{suffix}"
+                                username = f"{orig_username}_{suffix}"
                                 suffix += 1
 
                             # Password defaults to username (or lms login code)
                             password = username
                             # Email defaults to username@lingualab.com
-                            email = f"{username}@lingualab.com"
+                            email = f"{username.lower()}@lingualab.com"
 
                             # Parse status (is_active)
                             is_active = True

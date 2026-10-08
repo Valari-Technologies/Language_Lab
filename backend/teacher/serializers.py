@@ -50,7 +50,19 @@ class StudentSerializer(serializers.ModelSerializer):
             if m:
                 ret["grade"] = f"Class {m.group(0)}"
         if instance.user:
-            ret["username"] = instance.user.username
+            username = instance.user.username
+            if username and instance.user.full_name and instance.roll_no:
+                clean_full = "".join(c for c in instance.user.full_name if c.isalnum()).lower()
+                if username.lower() == clean_full:
+                    clean_name = "".join(c for c in instance.user.full_name if c.isalpha()).upper()
+                    prefix = clean_name[:3] if len(clean_name) >= 3 else clean_name.ljust(3, "X")
+                    expected_username = f"{prefix}_{str(instance.roll_no).strip()}"
+                    if not User.objects.filter(username=expected_username).exclude(id=instance.user.id).exists():
+                        instance.user.username = expected_username
+                        instance.user.save(update_fields=["username"])
+                        username = expected_username
+
+            ret["username"] = username
             ret["email"] = instance.user.email
             ret["full_name"] = instance.user.full_name
             ret["is_active"] = instance.user.is_active
@@ -72,14 +84,18 @@ class StudentSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         request = self.context.get("request")
         if not self.instance:
-            roll_no = attrs.get("roll_no", "").strip()
+            roll_no = str(attrs.get("roll_no") or "").strip()
             username = attrs.get("username", "").strip()
-            if not username:
-                full_name = attrs.get("full_name", "")
-                clean_name = "".join(c for c in full_name if c.isalnum()).lower()
-                if not clean_name:
-                    clean_name = "student"
-                username = clean_name
+            full_name = attrs.get("full_name", "").strip()
+            if not username or username.lower() == "".join(c for c in full_name if c.isalnum()).lower() or username.endswith("_"):
+                clean_name = "".join(c for c in full_name if c.isalpha()).upper()
+                prefix = clean_name[:3] if len(clean_name) >= 3 else clean_name.ljust(3, "X")
+                if not prefix:
+                    prefix = "STU"
+                if roll_no:
+                    username = f"{prefix}_{roll_no}"
+                else:
+                    username = f"{prefix}_1"
 
             counter = 1
             base_username = username
@@ -88,7 +104,7 @@ class StudentSerializer(serializers.ModelSerializer):
                 counter += 1
             attrs["username"] = username
             attrs["password"] = username
-            attrs["email"] = f"{username}@languagelab.com"
+            attrs["email"] = f"{username.lower()}@languagelab.com"
 
             if request and request.user.role in ["SCHOOL_ADMIN", "TEACHER"]:
                 admin_school = get_user_school(request.user)
@@ -124,7 +140,7 @@ class StudentSerializer(serializers.ModelSerializer):
         email = validated_data.pop("email", None)
         full_name = validated_data.pop("full_name", None)
         is_active = validated_data.pop("is_active", None)
-        validated_data.pop("username", None)
+        username = validated_data.pop("username", None)
         validated_data.pop("password", None)
 
         user = instance.user
@@ -135,6 +151,9 @@ class StudentSerializer(serializers.ModelSerializer):
                 user.full_name = full_name
             if is_active is not None:
                 user.is_active = is_active
+            if username and username != user.username:
+                if not User.objects.filter(username=username).exclude(id=user.id).exists():
+                    user.username = username
             user.save()
 
         return super().update(instance, validated_data)
