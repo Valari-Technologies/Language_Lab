@@ -550,26 +550,44 @@ class GoogleLoginAPIView(APIView):
 
         try:
             if code:
-                # Exchange auth code for ID Token using Flow
-                from google_auth_oauthlib.flow import Flow
-                flow = Flow.from_client_config(
-                    client_config={
-                        "web": {
+                # Exchange auth code for ID Token using Flow (or fallback to HTTP request)
+                try:
+                    from google_auth_oauthlib.flow import Flow
+                    flow = Flow.from_client_config(
+                        client_config={
+                            "web": {
+                                "client_id": settings.GOOGLE_CLIENT_ID,
+                                "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                                "token_uri": "https://oauth2.googleapis.com/token",
+                            }
+                        },
+                        scopes=[
+                            "https://www.googleapis.com/auth/userinfo.profile",
+                            "https://www.googleapis.com/auth/userinfo.email",
+                            "openid"
+                        ],
+                        redirect_uri="postmessage"
+                    )
+                    flow.fetch_token(code=code)
+                    id_token_jwt = flow.credentials.id_token
+                except ImportError:
+                    import requests
+                    token_resp = requests.post(
+                        "https://oauth2.googleapis.com/token",
+                        data={
+                            "code": code,
                             "client_id": settings.GOOGLE_CLIENT_ID,
                             "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                            "token_uri": "https://oauth2.googleapis.com/token",
-                        }
-                    },
-                    scopes=[
-                        "https://www.googleapis.com/auth/userinfo.profile",
-                        "https://www.googleapis.com/auth/userinfo.email",
-                        "openid"
-                    ],
-                    redirect_uri="postmessage"
-                )
-                flow.fetch_token(code=code)
-                id_token_jwt = flow.credentials.id_token
+                            "redirect_uri": "postmessage",
+                            "grant_type": "authorization_code",
+                        },
+                        timeout=10
+                    )
+                    if not token_resp.ok:
+                        err_msg = token_resp.json().get("error_description", "Failed to exchange authorization code")
+                        return Response({"error": f"Google auth error: {err_msg}"}, status=status.HTTP_400_BAD_REQUEST)
+                    id_token_jwt = token_resp.json().get("id_token")
             else:
                 id_token_jwt = token
 
