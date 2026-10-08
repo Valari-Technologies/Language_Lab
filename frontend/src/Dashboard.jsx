@@ -2638,23 +2638,10 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     </div>
 
                     {selectedSchoolDetail.license ? (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.55rem', fontSize: '0.85rem', color: '#334155' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.55rem', fontSize: '0.85rem', color: '#334155' }}>
                         <div>
                           <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>License ID</span>
                           <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.license.licenseId}</strong>
-                        </div>
-                        <div>
-                          <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>License Key</span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <strong style={{ fontSize: '0.9rem', color: '#0f172a', fontFamily: 'monospace' }}>{selectedSchoolDetail.license.licenseKey}</strong>
-                            <button
-                              onClick={() => copyToClipboard(selectedSchoolDetail.license.licenseKey, "License key copied to clipboard!")}
-                              className="sd-btn-outline"
-                              style={{ padding: '2px 8px', fontSize: '0.75rem' }}
-                            >
-                              Copy
-                            </button>
-                          </div>
                         </div>
                         <div>
                           <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Issue Date</span>
@@ -2666,29 +2653,21 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         </div>
 
                         {/* Quota Progress Indicators */}
-                        <div style={{ gridColumn: 'span 2', marginTop: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                        <div style={{ gridColumn: 'span 3', marginTop: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                           <span style={{ display: 'block', color: '#0f172a', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.75rem' }}>Quota Usage</span>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                            <div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#475569', marginBottom: '4px' }}>
-                                <span>Registered LMS Servers:</span>
-                                <strong>
-                                  {(selectedSchoolDetail.lms_servers?.filter(s => s.status === 'ACTIVE').length || 0)} / {selectedSchoolDetail.license.maxLmsServers} Servers Used
-                                </strong>
-                              </div>
-                              <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
-                                <div style={{
-                                  height: '100%',
-                                  backgroundColor: '#3b82f6',
-                                  width: `${Math.min(100, ((selectedSchoolDetail.lms_servers?.filter(s => s.status === 'ACTIVE').length || 0) / selectedSchoolDetail.license.maxLmsServers) * 100)}%`
-                                }} />
-                              </div>
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#475569', marginBottom: '4px' }}>
+                              <span>Registered LMS Servers:</span>
+                              <strong>
+                                {(selectedSchoolDetail.lms_servers?.filter(s => s.status === 'ACTIVE').length || 0)} / {selectedSchoolDetail.license.maxLmsServers} Servers Used
+                              </strong>
                             </div>
-                            <div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#475569', marginBottom: '4px' }}>
-                                <span>Concurrent Users:</span>
-                                <strong>{selectedSchoolDetail.license.concurrentUsersPerServer} Users Per Server</strong>
-                              </div>
+                            <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                              <div style={{
+                                height: '100%',
+                                backgroundColor: '#3b82f6',
+                                width: `${Math.min(100, ((selectedSchoolDetail.lms_servers?.filter(s => s.status === 'ACTIVE').length || 0) / selectedSchoolDetail.license.maxLmsServers) * 100)}%`
+                              }} />
                             </div>
                           </div>
                         </div>
