@@ -1819,15 +1819,38 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setErrorMsg('');
-    if (profileForm.phone_no && profileForm.phone_no.replace(/\D/g, '').length !== 10) {
+
+    const trimmedFullName = (profileForm.full_name || '').trim();
+    const trimmedEmail = (profileForm.email || '').trim();
+    const cleanedPhone = (profileForm.phone_no || '').replace(/\D/g, '');
+
+    if (!trimmedFullName) {
+      setErrorMsg('Full Name is required.');
+      return;
+    }
+    if (!trimmedEmail) {
+      setErrorMsg('Email Address is required.');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+    if (!cleanedPhone) {
+      setErrorMsg('Phone number is required.');
+      return;
+    }
+    if (cleanedPhone.length !== 10) {
       setErrorMsg('Phone number must be exactly 10 numeric digits.');
       return;
     }
+
     setActionLoading(true);
     try {
       const res = await apiFetch('/api/users/profile/', {
         method: 'PATCH',
-        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no })
+        body: JSON.stringify({ full_name: trimmedFullName, email: trimmedEmail, phone_no: cleanedPhone })
       });
       let resData = {};
       try { resData = await res.json(); } catch { resData = {}; }
@@ -1845,8 +1868,10 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setErrorMsg(msg);
         return;
       }
-      const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
+      const updatedUser = resData.user || { ...user, full_name: trimmedFullName, email: trimmedEmail, phone_no: cleanedPhone };
       if (onUpdateUser) onUpdateUser(updatedUser);
+      setUser(updatedUser);
+      setProfileForm(prev => ({ ...prev, full_name: trimmedFullName, email: trimmedEmail, phone_no: cleanedPhone }));
       showFeedback('Profile updated successfully', null);
       addRecentActivity("Super Admin profile settings updated", 'Profile', '#f3e8ff', '#6b21a8', <FiUser />, '#8b5cf6', '#f5f3ff');
     } catch (err) {
@@ -4160,7 +4185,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
                         <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Full Name</label>
+                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                            Full Name <span style={{ color: '#ef4444' }}>*</span>
+                          </label>
                           <input className="sd-form-input" type="text"
                             value={profileForm.full_name}
                             onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
@@ -4171,11 +4198,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                           />
                         </div>
                         <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Email Address</label>
+                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                            Email Address <span style={{ color: '#ef4444' }}>*</span>
+                          </label>
                           <input className="sd-form-input" type="email"
                             value={profileForm.email}
                             onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
-                            placeholder="your@email.com"
+                            placeholder="your@email.com" required
                             style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                             onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
                             onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
@@ -4185,12 +4214,14 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
                         <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Username</label>
+                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Username (Read-Only)</label>
                           <input className="sd-form-input" type="text" value={profileForm.username || user?.username} disabled
                             style={{ width: '100%', height: '42px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} />
                         </div>
                         <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Phone Number</label>
+                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                            Phone Number <span style={{ color: '#ef4444' }}>*</span>
+                          </label>
                           <input className="sd-form-input" type="tel"
                             maxLength={10}
                             value={profileForm.phone_no || ''}
@@ -4198,7 +4229,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                               const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
                               setProfileForm({ ...profileForm, phone_no: cleaned });
                             }}
-                            placeholder="+91 98765 43210"
+                            placeholder="Enter 10 digit phone number" required
                             style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                             onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
                             onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}

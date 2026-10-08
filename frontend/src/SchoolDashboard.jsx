@@ -444,6 +444,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [showModal,   setShowModal]   = useState(false);
   const [modalType,   setModalType]   = useState('add');
   const [editingId,   setEditingId]   = useState(null);
+  const [selectedEntity, setSelectedEntity] = useState(null);
   const [showPwModal, setShowPwModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, type: null });
   const [showRecentActivityModal, setShowRecentActivityModal] = useState(false);
@@ -690,6 +691,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           email: data.email || '',
           full_name: data.full_name || '',
           phone_no: data.phone_no || '',
+          school_name: data.school_name || localStorage.getItem('school_admin_school_name') || '',
           current_password: '',
           password: ''
         });
@@ -898,10 +900,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     }
   };
 
-  const handleOpenAdd = () => { setModalType('add'); setEditingId(null); initForm(activeSubTab); setShowModal(true); };
+  const handleOpenAdd = () => { setModalType('add'); setEditingId(null); setSelectedEntity(null); initForm(activeSubTab); setShowModal(true); };
   const handleOpenEdit = (entity) => {
     setModalType('edit');
-    setEditingId(entity.student_id || entity.teacher_id || entity.class_id || entity.id);
+    const id = entity.student_id || entity.teacher_id || entity.class_id || entity.id;
+    setEditingId(id);
+    setSelectedEntity(entity);
     initForm(activeSubTab, entity);
     setShowModal(true);
   };
@@ -951,9 +955,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
           if (existingClass) {
             if (existingClass.teacher_name) {
-              const editingTeacherId = modalType === 'edit' && selectedEntity ? (selectedEntity.teacher_id || selectedEntity.id) : null;
+              const editingTeacherId = modalType === 'edit' ? (editingId || selectedEntity?.teacher_id || selectedEntity?.id) : null;
               const assignedTeacherIds = existingClass.assigned_teacher_ids || [];
-              if (!editingTeacherId || !assignedTeacherIds.includes(editingTeacherId)) {
+              const isAssignedToThisTeacher = editingTeacherId && assignedTeacherIds.some(id => String(id) === String(editingTeacherId));
+              if (!editingTeacherId || !isAssignedToThisTeacher) {
                 setErrorMsg(`${targetClassName} is already assigned to teacher '${existingClass.teacher_name}'. A class & section can only be assigned to one teacher.`);
                 setActionLoading(false);
                 return;
@@ -1025,7 +1030,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
       const method = modalType === 'add' ? 'POST' : 'PUT';
       const res = await apiFetch(url, { method, body: JSON.stringify(body) });
-      const resData = await res.json();
+      let resData = {};
+      try {
+        resData = await res.json();
+      } catch {
+        resData = {};
+      }
       if (res.ok) {
         showFeedback(resData.message || 'Operation successful', null);
         setShowModal(false);
@@ -1034,7 +1044,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         else if (activeSubTab === 'classes') await loadClasses();
         await loadDashboardData();
       } else {
-        if (resData && typeof resData === 'object') {
+        if (resData && typeof resData === 'object' && Object.keys(resData).length > 0) {
           const errs = Object.entries(resData).map(([k, v]) => {
             const field = k.charAt(0).toUpperCase() + k.slice(1);
             const msg = Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v);
@@ -1042,11 +1052,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           });
           setErrorMsg(errs.join(' | ') || 'Operation failed.');
         } else {
-          setErrorMsg(resData.message || 'Operation failed.');
+          setErrorMsg(resData.message || resData.detail || resData.error || 'Operation failed.');
         }
       }
     } catch (err) {
-      setErrorMsg('Failed to process request. Check connections.');
+      console.error('Error submitting form:', err);
+      setErrorMsg(err.message || 'Failed to process request. Check connections.');
     } finally {
       setActionLoading(false);
     }
@@ -1307,15 +1318,48 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setErrorMsg('');
-    if (profileForm.phone_no && profileForm.phone_no.replace(/\D/g, '').length !== 10) {
+
+    const trimmedFullName = (profileForm.full_name || '').trim();
+    const trimmedEmail = (profileForm.email || '').trim();
+    const cleanedPhone = (profileForm.phone_no || '').replace(/\D/g, '');
+    const trimmedSchoolName = (profileForm.school_name || '').trim();
+
+    if (!trimmedFullName) {
+      setErrorMsg('Admin Name is required.');
+      return;
+    }
+    if (!trimmedEmail) {
+      setErrorMsg('Email Address is required.');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+    if (!cleanedPhone) {
+      setErrorMsg('Phone number is required.');
+      return;
+    }
+    if (cleanedPhone.length !== 10) {
       setErrorMsg('Phone number must be exactly 10 numeric digits.');
       return;
     }
+    if (!trimmedSchoolName) {
+      setErrorMsg('School Name is required.');
+      return;
+    }
+
     setActionLoading(true);
     try {
       const res = await apiFetch('/api/users/profile/', {
         method: 'PATCH',
-        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no })
+        body: JSON.stringify({
+          full_name: trimmedFullName,
+          email: trimmedEmail,
+          phone_no: cleanedPhone,
+          school_name: trimmedSchoolName
+        })
       });
       let resData = {};
       try { resData = await res.json(); } catch { resData = {}; }
@@ -1324,6 +1368,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         if (resData.email) msg = Array.isArray(resData.email) ? resData.email.join(' ') : resData.email;
         else if (resData.phone_no) msg = Array.isArray(resData.phone_no) ? resData.phone_no.join(' ') : resData.phone_no;
         else if (resData.full_name) msg = Array.isArray(resData.full_name) ? resData.full_name.join(' ') : resData.full_name;
+        else if (resData.school_name) msg = Array.isArray(resData.school_name) ? resData.school_name.join(' ') : resData.school_name;
         else if (resData.detail) msg = String(resData.detail);
         else if (resData.error) msg = String(resData.error);
         else if (typeof resData === 'object' && Object.keys(resData).length > 0) {
@@ -1333,8 +1378,26 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         setErrorMsg(msg);
         return;
       }
-      const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
+      const updatedUser = resData.user || {
+        ...user,
+        full_name: trimmedFullName,
+        email: trimmedEmail,
+        phone_no: cleanedPhone,
+        school_name: trimmedSchoolName
+      };
       if (onUpdateUser) onUpdateUser(updatedUser);
+      setUser(updatedUser);
+      setProfileForm(prev => ({
+        ...prev,
+        full_name: trimmedFullName,
+        email: trimmedEmail,
+        phone_no: cleanedPhone,
+        school_name: trimmedSchoolName
+      }));
+      try {
+        localStorage.setItem('school_admin_school_name', trimmedSchoolName);
+      } catch {}
+      setDashboardData(prev => ({ ...prev, school_name: trimmedSchoolName }));
       showFeedback('Profile updated successfully', null);
     } catch (err) {
       console.error('Profile update error:', err);
@@ -3451,22 +3514,26 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Full Name</label>
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                          Admin Name <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
                         <input className="sd-form-input" type="text"
                           value={profileForm.full_name}
                           onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
-                          placeholder="Your full name" required 
+                          placeholder="Your full name (Admin Name)" required 
                           style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                           onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
                           onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
                         />
                       </div>
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Email Address</label>
-                        <input className="sd-form-input" type="email"
-                          value={profileForm.email}
-                          onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
-                          placeholder="your@email.com" 
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                          School Name <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        <input className="sd-form-input" type="text"
+                          value={profileForm.school_name || ''}
+                          onChange={e => setProfileForm({ ...profileForm, school_name: e.target.value })}
+                          placeholder="Enter school name" required 
                           style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                           onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
                           onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
@@ -3476,12 +3543,22 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Username</label>
-                        <input className="sd-form-input" type="text" value={profileForm.username || user?.username} disabled
-                          style={{ width: '100%', height: '42px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} />
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                          Email Address <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        <input className="sd-form-input" type="email"
+                          value={profileForm.email}
+                          onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
+                          placeholder="your@email.com" required 
+                          style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
+                          onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
+                          onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
+                        />
                       </div>
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Phone Number</label>
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                          Phone Number <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
                         <input className="sd-form-input" type="tel"
                           maxLength={10}
                           value={profileForm.phone_no || ''}
@@ -3489,7 +3566,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
                             setProfileForm({ ...profileForm, phone_no: cleaned });
                           }}
-                          placeholder="Enter 10 digit phone number" 
+                          placeholder="Enter 10 digit phone number" required 
                           style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                           onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
                           onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
@@ -3497,13 +3574,13 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </div>
                     </div>
 
-                    {(profileForm.school_name || user?.school_name) && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>School Tenant</label>
-                        <input className="sd-form-input" type="text" value={profileForm.school_name || user?.school_name} disabled
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Username (Read-Only)</label>
+                        <input className="sd-form-input" type="text" value={profileForm.username || user?.username} disabled
                           style={{ width: '100%', height: '42px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} />
                       </div>
-                    )}
+                    </div>
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '1.5rem', marginTop: '1.5rem' }}>
                       <button type="submit" className="sd-btn-primary" disabled={actionLoading} style={{ padding: '0.75rem 2rem', background: '#0b75b3', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', transition: 'background 0.2s', boxShadow: '0 4px 6px -1px rgba(11, 117, 179, 0.2)' }}>
@@ -3610,9 +3687,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               );
 
                               if (existingClass && existingClass.teacher_name) {
-                                const editingTeacherId = modalType === 'edit' && selectedEntity ? (selectedEntity.teacher_id || selectedEntity.id) : null;
+                                const editingTeacherId = modalType === 'edit' ? (editingId || selectedEntity?.teacher_id || selectedEntity?.id) : null;
                                 const assignedTeacherIds = existingClass.assigned_teacher_ids || [];
-                                if (!editingTeacherId || !assignedTeacherIds.includes(editingTeacherId)) {
+                                const isAssignedToThisTeacher = editingTeacherId && assignedTeacherIds.some(id => String(id) === String(editingTeacherId));
+                                if (!editingTeacherId || !isAssignedToThisTeacher) {
                                   setErrorMsg(`${targetClassName} is already assigned to teacher '${existingClass.teacher_name}'. A class & section can only be assigned to one teacher.`);
                                   return;
                                 }

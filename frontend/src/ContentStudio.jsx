@@ -1592,15 +1592,38 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
-    if (profileForm.phone_no && profileForm.phone_no.replace(/\D/g, '').length !== 10) {
+
+    const trimmedFullName = (profileForm.full_name || '').trim();
+    const trimmedEmail = (profileForm.email || '').trim();
+    const cleanedPhone = (profileForm.phone_no || '').replace(/\D/g, '');
+
+    if (!trimmedFullName) {
+      showFeedback('Full Name is required.', 'error');
+      return;
+    }
+    if (!trimmedEmail) {
+      showFeedback('Email Address is required.', 'error');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      showFeedback('Please enter a valid email address.', 'error');
+      return;
+    }
+    if (!cleanedPhone) {
+      showFeedback('Phone number is required.', 'error');
+      return;
+    }
+    if (cleanedPhone.length !== 10) {
       showFeedback('Phone number must be exactly 10 numeric digits.', 'error');
       return;
     }
+
     setActionLoading(true);
     try {
       const res = await apiFetch('/api/users/profile/', {
         method: 'PATCH',
-        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no })
+        body: JSON.stringify({ full_name: trimmedFullName, email: trimmedEmail, phone_no: cleanedPhone })
       });
       let resData = {};
       try { resData = await res.json(); } catch { resData = {}; }
@@ -1618,9 +1641,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         showFeedback(msg, 'error');
         return;
       }
-      const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
+      const updatedUser = resData.user || { ...user, full_name: trimmedFullName, email: trimmedEmail, phone_no: cleanedPhone };
       if (onUpdateUser) onUpdateUser(updatedUser);
       setCurrentUserState(updatedUser);
+      setProfileForm(prev => ({ ...prev, full_name: trimmedFullName, email: trimmedEmail, phone_no: cleanedPhone }));
       showFeedback('Profile updated successfully');
     } catch (err) {
       console.error('Profile update error:', err);

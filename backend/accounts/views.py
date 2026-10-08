@@ -37,7 +37,7 @@ class LoginAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        username_input = serializer.validated_data["username"]
+        username_input = serializer.validated_data["username"].strip()
         password = serializer.validated_data["password"]
 
         # Support logging in by email or username
@@ -46,8 +46,21 @@ class LoginAPIView(APIView):
         user_by_email = User.objects.filter(email__iexact=username_input).first()
         if user_by_email:
             username = user_by_email.username
+            candidate_user = user_by_email
         else:
             username = username_input
+            candidate_user = User.objects.filter(username__iexact=username_input).first()
+
+        # If the account exists but has been deactivated, reject with Access Denied
+        if candidate_user and not candidate_user.is_active:
+            if candidate_user.role == User.Role.TEACHER:
+                msg = "Access denied. Your account has been deactivated. Please contact your school administrator."
+            else:
+                msg = "Access denied. This account has been deactivated. Please contact your administrator."
+            return Response(
+                {"message": msg},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         user = authenticate(username=username, password=password)
 
@@ -58,8 +71,13 @@ class LoginAPIView(APIView):
             )
 
         if not user.is_active:
+            msg = (
+                "Access denied. Your account has been deactivated. Please contact your school administrator."
+                if user.role == User.Role.TEACHER
+                else "Access denied. This account has been deactivated. Please contact your administrator."
+            )
             return Response(
-                {"message": "This account has been deactivated."},
+                {"message": msg},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -605,8 +623,13 @@ class GoogleLoginAPIView(APIView):
             )
 
         if not user.is_active:
+            msg = (
+                "Access denied. Your account has been deactivated. Please contact your school administrator."
+                if user.role == User.Role.TEACHER
+                else "Access denied. This account has been deactivated. Please contact your administrator."
+            )
             return Response(
-                {"message": "This account has been deactivated."},
+                {"message": msg},
                 status=status.HTTP_403_FORBIDDEN
             )
 

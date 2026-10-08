@@ -45,13 +45,39 @@ class GradeDetailSerializer(serializers.ModelSerializer):
 class SchoolSerializer(serializers.ModelSerializer):
     license = LicenseSerializer(source='school_license', read_only=True)
     lms_servers = LmsServerSerializer(many=True, read_only=True)
-    admin_name = serializers.CharField(source='schoolAdminId.full_name', read_only=True)
-    admin_username = serializers.CharField(source='schoolAdminId.username', read_only=True)
-    admin_email = serializers.CharField(source='schoolAdminId.email', read_only=True)
+    admin_name = serializers.SerializerMethodField()
+    admin_username = serializers.SerializerMethodField()
+    admin_email = serializers.SerializerMethodField()
 
     class Meta:
         model = School
         fields = '__all__'
+
+    def get_admin_user(self, obj):
+        if obj.schoolAdminId:
+            return obj.schoolAdminId
+        profile = SchoolAdminProfile.objects.filter(school=obj).select_related('user').first()
+        if profile and profile.user:
+            return profile.user
+        return None
+
+    def get_admin_name(self, obj):
+        admin = self.get_admin_user(obj)
+        if admin:
+            return admin.full_name or admin.username or ""
+        return ""
+
+    def get_admin_username(self, obj):
+        admin = self.get_admin_user(obj)
+        if admin:
+            return admin.username or ""
+        return ""
+
+    def get_admin_email(self, obj):
+        admin = self.get_admin_user(obj)
+        if admin:
+            return admin.email or ""
+        return ""
 
     def validate(self, attrs):
         email = attrs.get('email')
