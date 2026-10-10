@@ -45,6 +45,9 @@ urlpatterns = [
          name="publish-history"),
 
     # Package metadata / download / regenerate
+    path("content/packages/bulk-download/",
+         PackageViewSet.as_view({"post": "bulk_download"}),
+         name="package-bulk-download"),
     path("content/packages/<int:pk>/",
          PackageViewSet.as_view({"get": "retrieve"}),
          name="package-detail"),

@@ -565,25 +565,48 @@ class LMSStudentRollNoAuthAPIView(APIView):
 
 
 class BootstrapSyncAPIView(APIView):
+    """
+    School-Scoped Student & User Synchronization API.
+    Strictly enforces licensed school isolation:
+    SELECT student_id FROM cms_student WHERE school_id = :licensed_school_id;
+    Never permits global/unfiltered student queries.
+    """
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        school_id_param = request.query_params.get("school_id") or request.query_params.get("schoolId")
+        school_id_param = (
+            request.GET.get('school_id') or 
+            request.GET.get('schoolId') or 
+            request.headers.get('X-School-ID') or 
+            request.headers.get('x-school-id')
+        )
         
-        # Resolve active school
-        if school_id_param:
-            school = School.objects.filter(Q(schoolId=school_id_param) | Q(school_id=school_id_param)).first()
-        else:
-            school = School.objects.filter(is_active=True).first()
-            
-        if not school:
-            return Response({"error": "No active school found"}, status=status.HTTP_400_BAD_REQUEST)
-            
+        # Strictly require school_id - NEVER fall back to fetching all CMS students
+        if not school_id_param or not str(school_id_param).strip():
+            return Response(
+                {"error": "school_id parameter or X-School-ID header is required for school synchronization. Global student fetching is prohibited."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        school_id_clean = str(school_id_param).strip()
+        school_query = Q(schoolId=school_id_clean) | Q(schoolId__iexact=school_id_clean)
+        if school_id_clean.isdigit():
+            school_query |= Q(school_id=int(school_id_clean))
+
+        target_school = School.objects.filter(school_query, is_active=True).first()
+        if not target_school:
+            return Response(
+                {"error": f"School '{school_id_clean}' not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        school = target_school
         users_list = []
-        
-        # Get active teachers
+        students_list = []
+
+        # Get active teachers strictly for this school
         from school_admin.models import Teacher
-        teachers = Teacher.objects.filter(school=school, user__is_active=True)
+        teachers = Teacher.objects.filter(school=school, user__is_active=True).select_related('user')
         for t in teachers:
             users_list.append({
                 "id": t.user.id,
@@ -595,28 +618,71 @@ class BootstrapSyncAPIView(APIView):
                 "section": "",
                 "role": "teacher"
             })
-            
-        # Get active students
-        students = Student.objects.filter(school=school, user__is_active=True)
+
+        # Get active students strictly for this school:
+        # SELECT student_id, user_id, roll_no FROM cms_student WHERE school_id = :school_id
+        students = Student.objects.filter(school=school, user__is_active=True).select_related('user')
         for s in students:
             grade_val = s.grade
             if grade_val and grade_val.isdigit():
                 g_obj = Grade.objects.filter(id=int(grade_val)).first()
                 if g_obj:
                     grade_val = g_obj.grade_name
+
+            code = s.user.username
+            roll = s.roll_no or code
+            name = s.user.full_name or s.user.first_name or code
+
+            students_list.append({
+                "id": s.student_id,
+                "student_id": s.student_id,
+                "user_id": s.user.id,
+                "school_id": school.schoolId or str(school.school_id),
+                "login_code": code,
+                "roll_no": roll,
+                "student_name": name,
+                "grade": grade_val or "",
+                "section": s.section or "",
+                "status": "active"
+            })
+
             users_list.append({
                 "id": s.user.id,
-                "lms_code": s.user.username,
-                "username": s.user.username,
-                "name": s.user.full_name or s.user.username,
-                "roll_no": s.roll_no or s.user.username,
+                "student_id": s.student_id,
+                "lms_code": code,
+                "username": code,
+                "name": name,
+                "roll_no": roll,
                 "grade": grade_val or "",
                 "section": s.section or "",
                 "role": "student"
             })
-            
+
         payload = {
+            "success": True,
             "school_id": school.schoolId or str(school.school_id),
+            "schoolId": school.schoolId or str(school.school_id),
+            "school_name": school.school_name,
+            "schoolName": school.school_name,
+            "school_code": school.school_code or school.schoolId or "",
+            "schoolCode": school.school_code or school.schoolId or "",
+            "address": school.address or "",
+            "phone": school.phone or "",
+            "email": school.email or "",
+            "academic_year": school.academic_year or "2026-2027",
+            "school": {
+                "school_id": school.schoolId or str(school.school_id),
+                "schoolId": school.schoolId or str(school.school_id),
+                "school_name": school.school_name,
+                "schoolName": school.school_name,
+                "school_code": school.school_code or school.schoolId or "",
+                "schoolCode": school.school_code or school.schoolId or "",
+                "address": school.address or "",
+                "phone": school.phone or "",
+                "email": school.email or "",
+                "academic_year": school.academic_year or "2026-2027",
+            },
+            "students": students_list,
             "users": users_list
         }
         return Response(payload, status=status.HTTP_200_OK)

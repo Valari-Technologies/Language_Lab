@@ -631,6 +631,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [totalCount, setTotalCount] = useState(0);
   const [publishPage, setPublishPage] = useState(1);
   const [publishSearch, setPublishSearch] = useState('');
+  const [selectedPublishHistoryIds, setSelectedPublishHistoryIds] = useState([]);
+  const [bulkDownloadLoading, setBulkDownloadLoading] = useState(false);
 
   // Multi-select and View Details states for Experiences
   const [selectedExperienceIds, setSelectedExperienceIds] = useState([]);
@@ -5289,6 +5291,60 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
   };
 
+  const handleBulkDownloadPackages = async (idsToDownload = null) => {
+    const targetIds = idsToDownload || selectedPublishHistoryIds;
+    if (!targetIds || targetIds.length === 0) {
+      showFeedback('Please select at least one package to download.', 'warning');
+      return;
+    }
+
+    if (targetIds.length === 1) {
+      const singleItem = publishHistory.find(p => p.id === targetIds[0]);
+      const lessonTitle = singleItem?.experience_title || selectedExperience?.title || 'Experience';
+      const zipFilename = `${lessonTitle.replace(/\s+/g, '_')}_v${singleItem?.version_number || '1.0.0'}.zip`;
+      return handleDownloadPackageElab(targetIds[0], zipFilename);
+    }
+
+    setBulkDownloadLoading(true);
+    try {
+      const res = await apiFetch('/api/v1/content/packages/bulk-download/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version_ids: targetIds })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        showFeedback(errData.error || 'Failed to download selected packages.', 'error');
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+
+      const contentDisp = res.headers.get('content-disposition');
+      let filename = `englishlab_packages_bulk_${targetIds.length}.zip`;
+      if (contentDisp && contentDisp.includes('filename=')) {
+        const match = contentDisp.match(/filename="?([^"]+)"?/);
+        if (match && match[1]) filename = match[1];
+      }
+
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showFeedback(`Successfully downloaded ${targetIds.length} packages in bundle!`, 'success');
+    } catch (err) {
+      console.error(err);
+      showFeedback('Bulk download error occurred.', 'error');
+    } finally {
+      setBulkDownloadLoading(false);
+    }
+  };
+
   const handleDeleteMedia = (id) => {
     const asset = mediaAssets.find(m => m.id === id);
     setDeleteConfirm({
@@ -5302,6 +5358,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   const loadPublishData = async (experienceId) => {
     setPublishPage(1);
+    setSelectedPublishHistoryIds([]);
     try {
       if (experienceId) {
         const resStatus = await apiFetch(`/api/v1/content/publish/${experienceId}/`);
@@ -12397,11 +12454,95 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
                   {/* Card 2: Published Packages Build Table */}
                   <div className="cs-card" style={{ padding: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '1rem', flexWrap: 'wrap' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                         <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>Published Build History</h3>
                         {publishHistory.length > 0 && (
                           <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{publishHistory.length} build{publishHistory.length !== 1 ? 's' : ''} total</span>
+                        )}
+
+                        {/* Bulk & Select Download Action Controls */}
+                        {selectedPublishHistoryIds.length > 0 ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#eff6ff', padding: '3px 10px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1d4ed8' }}>
+                              ✓ {selectedPublishHistoryIds.length} selected
+                            </span>
+                            <button
+                              type="button"
+                              className="cs-btn-primary"
+                              disabled={bulkDownloadLoading}
+                              onClick={() => handleBulkDownloadPackages()}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                padding: '4px 10px',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                borderRadius: '6px',
+                                background: '#2563eb',
+                                color: '#ffffff',
+                                border: 'none',
+                                cursor: bulkDownloadLoading ? 'wait' : 'pointer'
+                              }}
+                            >
+                              <FiDownload style={{ fontSize: '0.78rem' }} />
+                              {bulkDownloadLoading ? 'Downloading...' : `Download Selected (${selectedPublishHistoryIds.length})`}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPublishHistoryIds([])}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#64748b',
+                                fontSize: '0.7rem',
+                                cursor: 'pointer',
+                                textDecoration: 'underline'
+                              }}
+                            >
+                              Deselect
+                            </button>
+                          </div>
+                        ) : (
+                          publishHistory.length > 0 && (
+                            <button
+                              type="button"
+                              disabled={bulkDownloadLoading}
+                              onClick={() => {
+                                const allFilteredIds = publishHistory.filter(pkg => {
+                                  if (!publishSearch.trim()) return true;
+                                  const query = publishSearch.toLowerCase();
+                                  const title = (pkg.experience_title || selectedExperience?.title || '').toLowerCase();
+                                  const ver = `v${pkg.version_number || ''}`.toLowerCase();
+                                  const zip = `${title.replace(/\s+/g, '_')}_v${pkg.version_number || '1.0.0'}.zip`.toLowerCase();
+                                  return title.includes(query) || ver.includes(query) || zip.includes(query);
+                                }).map(p => p.id);
+                                if (allFilteredIds.length === 0) {
+                                  showFeedback('No builds found to download.', 'warning');
+                                  return;
+                                }
+                                handleBulkDownloadPackages(allFilteredIds);
+                              }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                padding: '4px 10px',
+                                fontSize: '0.72rem',
+                                fontWeight: 600,
+                                borderRadius: '6px',
+                                background: '#f8fafc',
+                                color: '#334155',
+                                border: '1px solid #cbd5e1',
+                                cursor: bulkDownloadLoading ? 'wait' : 'pointer'
+                              }}
+                              title="Bulk download all builds matching the current view"
+                            >
+                              <FiDownload style={{ fontSize: '0.78rem', color: '#0284c7' }} />
+                              {bulkDownloadLoading ? 'Downloading...' : 'Bulk Download All'}
+                            </button>
+                          )
                         )}
                       </div>
 
@@ -12452,92 +12593,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         )}
                       </div>
                     </div>
-                    <div className="cs-table-wrap">
-                      <table className="cs-table">
-                        <thead>
-                          <tr>
-                            <th>L.No</th>
-                            <th>LESSON</th>
-                            <th>VERSION</th>
-                            <th>PACKAGE FILE</th>
-                            <th>SIZE</th>
-                            <th>PUBLISHED ON</th>
-                            <th>STATUS</th>
-                            <th>DOWNLOAD</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(() => {
-                            const PUBLISH_PER_PAGE = 5;
-                            const filteredHistory = publishHistory.filter(pkg => {
-                              if (!publishSearch.trim()) return true;
-                              const query = publishSearch.toLowerCase();
-                              const title = (pkg.experience_title || selectedExperience?.title || '').toLowerCase();
-                              const ver = `v${pkg.version_number || ''}`.toLowerCase();
-                              const zip = `${title.replace(/\s+/g, '_')}_v${pkg.version_number || '1.0.0'}.zip`.toLowerCase();
-                              return title.includes(query) || ver.includes(query) || zip.includes(query);
-                            });
-                            const paginatedHistory = filteredHistory.slice((publishPage - 1) * PUBLISH_PER_PAGE, publishPage * PUBLISH_PER_PAGE);
-                            if (filteredHistory.length === 0) {
-                              return (
-                                <tr>
-                                  <td colSpan="8" style={{ textAlign: 'center', color: '#64748b', padding: '1.5rem', fontSize: '0.82rem' }}>
-                                    {publishSearch.trim() ? `No builds found matching "${publishSearch}".` : 'No builds published yet. Specify a version above to compile.'}
-                                  </td>
-                                </tr>
-                              );
-                            }
-                            return paginatedHistory.map((pkg, idx) => {
-                              const lessonTitle = pkg.experience_title || selectedExperience?.title || 'Experience';
-                              const zipFilename = `${lessonTitle.replace(/\s+/g, '_')}_v${pkg.version_number || '1.0.0'}.zip`;
-                              // The actual overall list index for the current item
-                              const overallIdx = (publishPage - 1) * PUBLISH_PER_PAGE + idx;
-                              const isLatest = publishHistory.findIndex(p => p.id === pkg.id) === 0;
-                              return (
-                                <tr key={pkg.id}>
-                                  <td style={{ fontWeight: 700, color: '#475569', width: '36px', textAlign: 'center' }}>{overallIdx + 1}</td>
-                                  <td
-                                    style={{ fontWeight: 700, color: '#0f172a', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                                    title={lessonTitle}
-                                  >
-                                    {lessonTitle}
-                                  </td>
-                                  <td style={{ fontWeight: 700, color: '#0284c7', whiteSpace: 'nowrap' }}>v{pkg.version_number || '—'}</td>
-                                  <td style={{ color: '#475569', fontSize: '0.68rem', fontFamily: 'monospace', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={zipFilename}>{zipFilename}</td>
-                                  <td style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}>{pkg.package_size ? formatBytes(pkg.package_size) : '—'}</td>
-                                  <td style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}>{pkg.published_at ? new Date(pkg.published_at).toLocaleDateString() + ', ' + new Date(pkg.published_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
-                                  <td style={{ whiteSpace: 'nowrap' }}>
-                                    <span className={`cs-badge ${isLatest ? 'cs-badge-published' : ''}`}
-                                      style={isLatest ? { fontSize: '0.62rem', padding: '2px 6px' } : { background: '#f1f5f9', color: '#64748b', fontSize: '0.62rem', padding: '2px 6px' }}>
-                                      {isLatest ? 'LATEST' : `BUILD ${pkg.build_number}`}
-                                    </span>
-                                  </td>
-                                  <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
-                                    <div style={{ display: 'inline-flex' }}>
-                                      <button
-                                        title="Download package (.zip)"
-                                        data-testid="download-elab-btn"
-                                        onClick={() => handleDownloadPackageElab(pkg.id, zipFilename)}
-                                        style={{
-                                          background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe',
-                                          borderRadius: 5, padding: '3px 7px', fontSize: '0.68rem',
-                                          fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap'
-                                        }}
-                                      >
-                                        ⬇ .zip
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            });
-                          })()}
-                        </tbody>
-                      </table>
-                    </div>
 
-                    {/* Pagination Footer */}
                     {(() => {
+                      const PUBLISH_PER_PAGE = 5;
                       const filteredHistory = publishHistory.filter(pkg => {
                         if (!publishSearch.trim()) return true;
                         const query = publishSearch.toLowerCase();
@@ -12546,47 +12604,162 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         const zip = `${title.replace(/\s+/g, '_')}_v${pkg.version_number || '1.0.0'}.zip`.toLowerCase();
                         return title.includes(query) || ver.includes(query) || zip.includes(query);
                       });
-                      const totalFiltered = filteredHistory.length;
-                      const maxPage = Math.max(1, Math.ceil(totalFiltered / 5));
-
-                      if (totalFiltered <= 5 && !publishSearch.trim()) return null;
+                      const paginatedHistory = filteredHistory.slice((publishPage - 1) * PUBLISH_PER_PAGE, publishPage * PUBLISH_PER_PAGE);
+                      const isAllPageSelected = paginatedHistory.length > 0 && paginatedHistory.every(p => selectedPublishHistoryIds.includes(p.id));
 
                       return (
-                        <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #f1f5f9' }}>
-                          <div className="cs-pagination-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                              Showing {totalFiltered > 0 ? (publishPage - 1) * 5 + 1 : 0} to {Math.min(publishPage * 5, totalFiltered)} of {totalFiltered} builds
-                            </span>
-                            <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                              <button
-                                className="cs-page-link"
-                                disabled={publishPage === 1}
-                                onClick={() => setPublishPage(publishPage - 1)}
-                                style={{ cursor: publishPage === 1 ? 'not-allowed' : 'pointer', opacity: publishPage === 1 ? 0.5 : 1 }}
-                              >
-                                &lt;
-                              </button>
-                              {Array.from({ length: maxPage }, (_, i) => i + 1).map(pageNum => (
-                                <button
-                                  key={pageNum}
-                                  className={`cs-page-link ${publishPage === pageNum ? 'active' : ''}`}
-                                  onClick={() => setPublishPage(pageNum)}
-                                  style={{ cursor: 'pointer' }}
-                                >
-                                  {pageNum}
-                                </button>
-                              ))}
-                              <button
-                                className="cs-page-link"
-                                disabled={publishPage >= maxPage}
-                                onClick={() => setPublishPage(publishPage + 1)}
-                                style={{ cursor: publishPage >= maxPage ? 'not-allowed' : 'pointer', opacity: publishPage >= maxPage ? 0.5 : 1 }}
-                              >
-                                &gt;
-                              </button>
-                            </div>
+                        <>
+                          <div className="cs-table-wrap">
+                            <table className="cs-table">
+                              <thead>
+                                <tr>
+                                  <th style={{ width: '38px', textAlign: 'center', padding: '0.5rem 0.25rem' }}>
+                                    <input
+                                      type="checkbox"
+                                      title={isAllPageSelected ? "Deselect page" : "Select all on this page"}
+                                      checked={isAllPageSelected}
+                                      onChange={() => {
+                                        const pageIds = paginatedHistory.map(p => p.id);
+                                        if (isAllPageSelected) {
+                                          setSelectedPublishHistoryIds(prev => prev.filter(id => !pageIds.includes(id)));
+                                        } else {
+                                          setSelectedPublishHistoryIds(prev => Array.from(new Set([...prev, ...pageIds])));
+                                        }
+                                      }}
+                                      style={{ cursor: 'pointer' }}
+                                    />
+                                  </th>
+                                  <th>L.No</th>
+                                  <th>LESSON</th>
+                                  <th>VERSION</th>
+                                  <th>PACKAGE FILE</th>
+                                  <th>SIZE</th>
+                                  <th>PUBLISHED ON</th>
+                                  <th>STATUS</th>
+                                  <th>DOWNLOAD</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredHistory.length === 0 ? (
+                                  <tr>
+                                    <td colSpan="9" style={{ textAlign: 'center', color: '#64748b', padding: '1.5rem', fontSize: '0.82rem' }}>
+                                      {publishSearch.trim() ? `No builds found matching "${publishSearch}".` : 'No builds published yet. Specify a version above to compile.'}
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  paginatedHistory.map((pkg, idx) => {
+                                    const lessonTitle = pkg.experience_title || selectedExperience?.title || 'Experience';
+                                    const zipFilename = `${lessonTitle.replace(/\s+/g, '_')}_v${pkg.version_number || '1.0.0'}.zip`;
+                                    const overallIdx = (publishPage - 1) * PUBLISH_PER_PAGE + idx;
+                                    const isLatest = publishHistory.findIndex(p => p.id === pkg.id) === 0;
+                                    const isSelected = selectedPublishHistoryIds.includes(pkg.id);
+                                    return (
+                                      <tr key={pkg.id} style={{ background: isSelected ? '#f0f9ff' : undefined }}>
+                                        <td style={{ textAlign: 'center', width: '38px', padding: '0.5rem 0.25rem' }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            onChange={() => {
+                                              setSelectedPublishHistoryIds(prev =>
+                                                prev.includes(pkg.id) ? prev.filter(id => id !== pkg.id) : [...prev, pkg.id]
+                                              );
+                                            }}
+                                            style={{ cursor: 'pointer' }}
+                                            title={`Select ${lessonTitle} v${pkg.version_number}`}
+                                          />
+                                        </td>
+                                        <td style={{ fontWeight: 700, color: '#475569', width: '36px', textAlign: 'center' }}>{overallIdx + 1}</td>
+                                        <td
+                                          style={{ fontWeight: 700, color: '#0f172a', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                          title={lessonTitle}
+                                        >
+                                          {lessonTitle}
+                                        </td>
+                                        <td style={{ fontWeight: 700, color: '#0284c7', whiteSpace: 'nowrap' }}>v{pkg.version_number || '—'}</td>
+                                        <td style={{ color: '#475569', fontSize: '0.68rem', fontFamily: 'monospace', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={zipFilename}>{zipFilename}</td>
+                                        <td style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}>{pkg.package_size ? formatBytes(pkg.package_size) : '—'}</td>
+                                        <td style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}>{pkg.published_at ? new Date(pkg.published_at).toLocaleDateString() + ', ' + new Date(pkg.published_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                                        <td style={{ whiteSpace: 'nowrap' }}>
+                                          <span className={`cs-badge ${isLatest ? 'cs-badge-published' : ''}`}
+                                            style={isLatest ? { fontSize: '0.62rem', padding: '2px 6px' } : { background: '#f1f5f9', color: '#64748b', fontSize: '0.62rem', padding: '2px 6px' }}>
+                                            {isLatest ? 'LATEST' : `BUILD ${pkg.build_number}`}
+                                          </span>
+                                        </td>
+                                        <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
+                                          <div style={{ display: 'inline-flex' }}>
+                                            <button
+                                              title="Download package (.zip)"
+                                              data-testid="download-elab-btn"
+                                              onClick={() => handleDownloadPackageElab(pkg.id, zipFilename)}
+                                              style={{
+                                                background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe',
+                                                borderRadius: 5, padding: '3px 7px', fontSize: '0.68rem',
+                                                fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap'
+                                              }}
+                                            >
+                                              ⬇ .zip
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
+                                )}
+                              </tbody>
+                            </table>
                           </div>
-                        </div>
+
+                          {/* Pagination Footer */}
+                          {(() => {
+                            const totalFiltered = filteredHistory.length;
+                            const maxPage = Math.max(1, Math.ceil(totalFiltered / PUBLISH_PER_PAGE));
+                            if (totalFiltered <= PUBLISH_PER_PAGE && !publishSearch.trim()) return null;
+                            return (
+                              <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #f1f5f9' }}>
+                                <div className="cs-pagination-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                      Showing {totalFiltered > 0 ? (publishPage - 1) * PUBLISH_PER_PAGE + 1 : 0} to {Math.min(publishPage * PUBLISH_PER_PAGE, totalFiltered)} of {totalFiltered} builds
+                                    </span>
+                                    {selectedPublishHistoryIds.length > 0 && (
+                                      <span style={{ fontSize: '0.75rem', color: '#0284c7', fontWeight: 600 }}>
+                                        • {selectedPublishHistoryIds.length} selected
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                                    <button
+                                      className="cs-page-link"
+                                      disabled={publishPage === 1}
+                                      onClick={() => setPublishPage(publishPage - 1)}
+                                      style={{ cursor: publishPage === 1 ? 'not-allowed' : 'pointer', opacity: publishPage === 1 ? 0.5 : 1 }}
+                                    >
+                                      &lt;
+                                    </button>
+                                    {Array.from({ length: maxPage }, (_, i) => i + 1).map(pageNum => (
+                                      <button
+                                        key={pageNum}
+                                        className={`cs-page-link ${publishPage === pageNum ? 'active' : ''}`}
+                                        onClick={() => setPublishPage(pageNum)}
+                                        style={{ cursor: 'pointer' }}
+                                      >
+                                        {pageNum}
+                                      </button>
+                                    ))}
+                                    <button
+                                      className="cs-page-link"
+                                      disabled={publishPage >= maxPage}
+                                      onClick={() => setPublishPage(publishPage + 1)}
+                                      style={{ cursor: publishPage >= maxPage ? 'not-allowed' : 'pointer', opacity: publishPage >= maxPage ? 0.5 : 1 }}
+                                    >
+                                      &gt;
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </>
                       );
                     })()}
                   </div>

@@ -112,6 +112,12 @@ class LicensingSystemTests(APITestCase):
         self.assertEqual(res_1.status_code, status.HTTP_200_OK)
         self.assertEqual(res_1.data["status"], "success")
         self.assertEqual(res_1.data["installationId"], "INSTALL-001")
+        self.assertEqual(res_1.data["school_id"], "SCH-SETUP")
+        self.assertEqual(res_1.data["schoolId"], "SCH-SETUP")
+        self.assertEqual(res_1.data["school_name"], "Setup School")
+        self.assertEqual(res_1.data["license_id"], "LIC-SETUP")
+        self.assertEqual(res_1.data["licenseKey"], "KEY-SETUP-123")
+        self.assertEqual(res_1.data["expiryDate"], str(license_obj.expiryDate))
 
         # Verify server created in DB
         server_1 = LmsServer.objects.get(installationId="INSTALL-001")

@@ -1,6 +1,9 @@
+import logging
 from rest_framework import viewsets, status, filters
 from rest_framework.views import APIView
 from rest_framework.response import Response
+
+logger = logging.getLogger(__name__)
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
@@ -1231,7 +1234,7 @@ class PackageViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated, IsContentCreatorOrSuperAdmin]
 
     def get_permissions(self):
-        if self.action in ["download"]:
+        if self.action in ["download", "bulk_download"]:
             from accounts.permissions import IsAuthenticatedOrLMSClient
             return [IsAuthenticatedOrLMSClient()]
         return super().get_permissions()
@@ -1288,6 +1291,89 @@ class PackageViewSet(viewsets.ViewSet):
         )
         response["Content-Disposition"] = f'attachment; filename="{zip_filename}"'
         response["X-Checksum-SHA256"] = version.checksum or ""
+        return response
+
+    def bulk_download(self, request):
+        """
+        POST /api/v1/content/packages/bulk-download/
+        Takes JSON: {"version_ids": [id1, id2, ...]} or {"package_ids": [...]}
+        Bundles approved packages into a single .zip file.
+        """
+        import io
+        import os
+        import zipfile
+        from datetime import datetime
+        from django.http import FileResponse
+
+        version_ids = request.data.get("version_ids") or request.data.get("package_ids") or []
+        if not isinstance(version_ids, list) or len(version_ids) == 0:
+            return Response(
+                {"error": "Please specify a list of package or version IDs to download."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Allow querying either by PublishVersion id or PublishedPackage id
+        versions = list(
+            PublishVersion.objects.filter(
+                id__in=version_ids,
+                published_package__experience__is_deleted=False
+            ).select_related("published_package__experience")
+        )
+
+        if not versions:
+            versions = list(
+                PublishVersion.objects.filter(
+                    published_package_id__in=version_ids,
+                    published_package__experience__is_deleted=False
+                ).select_related("published_package__experience")
+            )
+
+        if not versions:
+            return Response({"error": "No matching package versions found."}, status=status.HTTP_404_NOT_FOUND)
+
+        valid_versions = [v for v in versions if v.published_package.experience.status == "APPROVED"]
+        if not valid_versions:
+            return Response(
+                {"error": "Only approved experience packages can be downloaded."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        missing_files = []
+        available_files = []
+        for v in valid_versions:
+            if v.file_path and os.path.exists(v.file_path):
+                available_files.append(v)
+            else:
+                missing_files.append(v)
+
+        if not available_files:
+            return Response(
+                {"error": "None of the selected package files are available on disk."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as bundle_zip:
+            added_names = set()
+            for v in available_files:
+                file_path = v.file_path
+                elab_filename = os.path.basename(file_path)
+                zip_filename = elab_filename.replace('.elab', '.zip') if elab_filename.endswith('.elab') else f"{elab_filename}.zip"
+                target_arcname = zip_filename
+                idx = 1
+                while target_arcname in added_names:
+                    name_base, ext = os.path.splitext(zip_filename)
+                    target_arcname = f"{name_base}_{idx}{ext}"
+                    idx += 1
+                added_names.add(target_arcname)
+                bundle_zip.write(file_path, arcname=target_arcname)
+
+        buffer.seek(0)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        bundle_filename = f"englishlab_packages_bulk_{timestamp}.zip"
+        response = FileResponse(buffer, content_type="application/zip")
+        response["Content-Disposition"] = f'attachment; filename="{bundle_filename}"'
+        response["X-Packages-Count"] = str(len(available_files))
         return response
 
     def preview_json(self, request, pk=None):

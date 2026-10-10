@@ -482,6 +482,16 @@ class ActivateServerAPIView(APIView):
             license_obj.save()
             return Response({"error": "License has expired."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Resolve authoritative School record linked to the validated License
+        target_school = getattr(license_obj, 'school', None)
+        if not target_school and hasattr(license_obj, 'schools_linked'):
+            target_school = license_obj.schools_linked.first()
+        if not target_school and server_obj and getattr(server_obj, 'school', None):
+            target_school = server_obj.school
+
+        if not target_school:
+            return Response({"error": "No school associated with this license."}, status=status.HTTP_400_BAD_REQUEST)
+
         if server_obj:
             server_obj.serverName = server_name
             if installation_identity and server_obj.installationId != installation_identity:
@@ -503,7 +513,7 @@ class ActivateServerAPIView(APIView):
                     installationId=installation_identity,
                     serverName=server_name,
                     licenseKey=auto_key,
-                    school=license_obj.school,
+                    school=target_school,
                     license=license_obj,
                     status=LmsServer.Status.ACTIVE,
                     lastSyncTime=timezone.now(),
@@ -517,14 +527,45 @@ class ActivateServerAPIView(APIView):
                 existing_server.save()
                 server_obj = existing_server
 
+        resolved_school_id = target_school.schoolId or str(target_school.school_id)
+        resolved_school_name = target_school.school_name
+
         return Response({
             "status": "success",
+            "valid": True,
             "message": "Server activated successfully.",
             "installationId": server_obj.installationId,
-            "licenseKey": server_obj.licenseKey or license_obj.licenseKey,
+            "licenseKey": license_obj.licenseKey,
+            "license_key": license_obj.licenseKey,
+            "serverLicenseKey": server_obj.licenseKey,
+            "licenseId": license_obj.licenseId,
+            "license_id": license_obj.licenseId,
+            "school_id": resolved_school_id,
+            "schoolId": resolved_school_id,
+            "school_name": resolved_school_name,
+            "schoolName": resolved_school_name,
+            "school_code": target_school.school_code or target_school.schoolId or "",
+            "schoolCode": target_school.school_code or target_school.schoolId or "",
+            "address": target_school.address or "",
+            "phone": target_school.phone or "",
+            "email": target_school.email or "",
+            "academic_year": target_school.academic_year or "2026-2027",
+            "school": {
+                "school_id": resolved_school_id,
+                "schoolId": resolved_school_id,
+                "school_name": resolved_school_name,
+                "schoolName": resolved_school_name,
+                "school_code": target_school.school_code or target_school.schoolId or "",
+                "schoolCode": target_school.school_code or target_school.schoolId or "",
+                "address": target_school.address or "",
+                "phone": target_school.phone or "",
+                "email": target_school.email or "",
+                "academic_year": target_school.academic_year or "2026-2027",
+            },
             "maxLmsServers": license_obj.maxLmsServers,
             "concurrentUsersPerServer": server_obj.maxUsers or license_obj.concurrentUsersPerServer or 40,
-            "expiryDate": str(license_obj.expiryDate)
+            "expiryDate": str(license_obj.expiryDate),
+            "expires_at": str(license_obj.expiryDate)
         }, status=status.HTTP_200_OK)
 
 
