@@ -53,10 +53,15 @@ class StudentSerializer(serializers.ModelSerializer):
             username = instance.user.username
             if username and instance.user.full_name and instance.roll_no:
                 clean_full = "".join(c for c in instance.user.full_name if c.isalnum()).lower()
-                if username.lower() == clean_full:
-                    clean_name = "".join(c for c in instance.user.full_name if c.isalpha()).upper()
-                    prefix = clean_name[:3] if len(clean_name) >= 3 else clean_name.ljust(3, "X")
-                    expected_username = f"{prefix}_{str(instance.roll_no).strip()}"
+                clean_roll = str(instance.roll_no).strip()
+                formatted_roll = clean_roll.zfill(2) if (clean_roll.isdigit() and len(clean_roll) == 1) else clean_roll
+                clean_name = "".join(c for c in instance.user.full_name if c.isalpha()).upper()
+                prefix = clean_name[:3] if len(clean_name) >= 3 else clean_name.ljust(3, "X")
+                if not prefix:
+                    prefix = "STU"
+                expected_username = f"{prefix}_{formatted_roll}"
+                legacy_username = f"{prefix}_{clean_roll}"
+                if (username.lower() == clean_full or username == legacy_username) and username != expected_username:
                     if not User.objects.filter(username=expected_username).exclude(id=instance.user.id).exists():
                         instance.user.username = expected_username
                         instance.user.save(update_fields=["username"])
@@ -85,17 +90,19 @@ class StudentSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if not self.instance:
             roll_no = str(attrs.get("roll_no") or "").strip()
+            formatted_roll = roll_no.zfill(2) if (roll_no.isdigit() and len(roll_no) == 1) else roll_no
             username = attrs.get("username", "").strip()
             full_name = attrs.get("full_name", "").strip()
-            if not username or username.lower() == "".join(c for c in full_name if c.isalnum()).lower() or username.endswith("_"):
-                clean_name = "".join(c for c in full_name if c.isalpha()).upper()
-                prefix = clean_name[:3] if len(clean_name) >= 3 else clean_name.ljust(3, "X")
-                if not prefix:
-                    prefix = "STU"
-                if roll_no:
-                    username = f"{prefix}_{roll_no}"
+            clean_name = "".join(c for c in full_name if c.isalpha()).upper()
+            prefix = clean_name[:3] if len(clean_name) >= 3 else clean_name.ljust(3, "X")
+            if not prefix:
+                prefix = "STU"
+
+            if not username or username.lower() == "".join(c for c in full_name if c.isalnum()).lower() or username.endswith("_") or (roll_no and username == f"{prefix}_{roll_no}"):
+                if formatted_roll:
+                    username = f"{prefix}_{formatted_roll}"
                 else:
-                    username = f"{prefix}_1"
+                    username = f"{prefix}_01"
 
             counter = 1
             base_username = username

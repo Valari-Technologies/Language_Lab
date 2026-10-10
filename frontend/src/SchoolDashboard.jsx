@@ -157,8 +157,9 @@ const generateLmsLoginCode = (fullName, rollNo = '', existingStudents = []) => {
   if (!letters) return '';
   const prefix = letters.slice(0, 3).padEnd(3, 'X');
   const cleanRoll = String(rollNo || '').trim();
-  const baseCode = cleanRoll ? `${prefix}_${cleanRoll}` : `${prefix}_`;
-  if (!cleanRoll) return baseCode;
+  const formattedRoll = /^\d$/.test(cleanRoll) ? `0${cleanRoll}` : cleanRoll;
+  const baseCode = formattedRoll ? `${prefix}_${formattedRoll}` : `${prefix}_`;
+  if (!formattedRoll) return baseCode;
 
   const takenUsernames = new Set((existingStudents || []).map(s => (s.username || '').toUpperCase()));
   let candidate = baseCode;
@@ -1469,7 +1470,9 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     const rows = list.map(s => {
       const fullName = s.full_name || s.username || 'N/A';
       const rollNo = s.roll_no || 'N/A';
-      const loginCode = s.username || 'N/A';
+      const loginCode = (s.username && /^([A-Z]{3})_(\d)$/.test(s.username))
+        ? s.username.replace(/^([A-Z]{3})_(\d)$/, '$1_0$2')
+        : (s.username || 'N/A');
       const className = s.grade ? (String(s.grade).startsWith('Class') || String(s.grade).startsWith('Grade') ? String(s.grade).replace('Grade', 'Class') : `Class ${s.grade}`) : 'N/A';
       const section = s.section ? (String(s.section).startsWith('Section') ? s.section : `Section ${s.section}`) : 'N/A';
       const academicYear = s.academic_year || '2025 - 2026';
@@ -2717,7 +2720,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         </tbody>
                       </table>
                       <div style={{ padding: '0.75rem 1.25rem', background: '#fffbeb', borderTop: '1px solid #fef3c7', fontSize: '0.8rem', color: '#92400e' }}>
-                        LMS login code is auto-generated from <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>fullname</code> and <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>roll no</code> (e.g. <span style={{ fontWeight: 700 }}>DHA_12</span>).
+                        LMS login code is auto-generated from <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>fullname</code> and <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>roll no</code> (e.g. <span style={{ fontWeight: 700 }}>ABU_07</span> or <span style={{ fontWeight: 700 }}>DHA_12</span>).
                       </div>
                     </div>
 
@@ -2798,9 +2801,18 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <tbody>
                       {paginate(getFilteredStudents(), studentPage).map((s, i) => {
                         const sid = s.student_id || s.id;
-                        const displayLmsCode = (s.username && s.username.toLowerCase() === (s.full_name || '').toLowerCase().replace(/[^a-z0-9]/g, '') && s.roll_no)
-                          ? generateLmsLoginCode(s.full_name, s.roll_no, students)
-                          : (s.username || 'N/A');
+                        const displayLmsCode = (() => {
+                          if (s.username && s.username.toLowerCase() === (s.full_name || '').toLowerCase().replace(/[^a-z0-9]/g, '') && s.roll_no) {
+                            return generateLmsLoginCode(s.full_name, s.roll_no, students);
+                          }
+                          if (s.username) {
+                            if (/^([A-Z]{3})_(\d)$/.test(s.username)) {
+                              return s.username.replace(/^([A-Z]{3})_(\d)$/, '$1_0$2');
+                            }
+                            return s.username;
+                          }
+                          return 'N/A';
+                        })();
                         return (
                           <tr key={sid || i}>
                             {isSelectModeStudents && (

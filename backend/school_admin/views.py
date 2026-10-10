@@ -544,9 +544,10 @@ class BulkUploadAPIView(APIView):
                                 prefix = "STU"
                             clean_roll = str(roll_no).strip()
                             if clean_roll:
-                                username = f"{prefix}_{clean_roll}"
+                                formatted_roll = clean_roll.zfill(2) if (clean_roll.isdigit() and len(clean_roll) == 1) else clean_roll
+                                username = f"{prefix}_{formatted_roll}"
                             else:
-                                username = f"{prefix}_1"
+                                username = f"{prefix}_01"
 
                             orig_username = username
                             suffix = 1

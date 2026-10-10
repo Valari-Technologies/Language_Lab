@@ -2684,14 +2684,14 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#475569', marginBottom: '4px' }}>
                               <span>Registered LMS Servers:</span>
                               <strong>
-                                {(selectedSchoolDetail.lms_servers?.filter(s => s.status === 'ACTIVE').length || 0)} / {selectedSchoolDetail.license.maxLmsServers} Servers Used
+                                {(selectedSchoolDetail.lms_servers?.filter(s => s.status === 'ACTIVE' && s.lastSyncTime).length || 0)} / {selectedSchoolDetail.license.maxLmsServers} Servers Used
                               </strong>
                             </div>
                             <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
                               <div style={{
                                 height: '100%',
                                 backgroundColor: '#3b82f6',
-                                width: `${Math.min(100, ((selectedSchoolDetail.lms_servers?.filter(s => s.status === 'ACTIVE').length || 0) / selectedSchoolDetail.license.maxLmsServers) * 100)}%`
+                                width: `${Math.min(100, (((selectedSchoolDetail.lms_servers?.filter(s => s.status === 'ACTIVE' && s.lastSyncTime).length || 0)) / selectedSchoolDetail.license.maxLmsServers) * 100)}%`
                               }} />
                             </div>
                           </div>
@@ -2784,9 +2784,15 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                   </span>
                                 </td>
                                 <td>
-                                  <span className={`sd-badge sd-badge-${server.status?.toLowerCase()}`}>
-                                    {server.status}
-                                  </span>
+                                  {server.status === 'ACTIVE' && !server.lastSyncTime ? (
+                                    <span className="sd-badge" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
+                                      Not Installed
+                                    </span>
+                                  ) : (
+                                    <span className={`sd-badge sd-badge-${server.status?.toLowerCase()}`}>
+                                      {server.status === 'ACTIVE' ? 'Active' : server.status}
+                                    </span>
+                                  )}
                                 </td>
                                 <td>
                                   <span style={{ fontSize: '0.8rem', color: '#334155', whiteSpace: 'nowrap' }}>
@@ -2802,7 +2808,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                       : computeLicenseExpiry(server.licenseDuration || selectedSchoolDetail.license?.licenseDuration, selectedSchoolDetail.license?.expiryDate, server.activationDate || selectedSchoolDetail.created_at)}
                                   </span>
                                 </td>
-                                <td>{server.lastSyncTime ? new Date(server.lastSyncTime).toLocaleString() : '—'}</td>
+                                <td>{server.lastSyncTime ? new Date(server.lastSyncTime).toLocaleString() : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Not yet used</span>}</td>
                                 <td>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <button
