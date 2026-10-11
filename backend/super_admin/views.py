@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.views import APIView
+import logging
 import uuid
 from datetime import timedelta
 from django.db import transaction
@@ -453,10 +454,23 @@ Language Lab Team
 
 
 
+logger = logging.getLogger(__name__)
+
+
 class ActivateServerAPIView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        try:
+            return self._activate(request)
+        except Exception:
+            logger.exception("Unexpected error during LMS server activation")
+            return Response(
+                {"error": "Internal error while activating server. Please contact support."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def _activate(self, request):
         license_key = request.data.get("licenseKey")
         server_name = request.data.get("serverName")
         installation_identity = request.data.get("installationIdentity")
@@ -474,12 +488,18 @@ class ActivateServerAPIView(APIView):
             except License.DoesNotExist:
                 return Response({"error": "Invalid License Key."}, status=status.HTTP_400_BAD_REQUEST)
 
+        if license_obj is None:
+            return Response({"error": "No license associated with this server."}, status=status.HTTP_400_BAD_REQUEST)
+
         if license_obj.status != License.Status.ACTIVE:
             return Response({"error": f"License is not active. Status: {license_obj.status}"}, status=status.HTTP_400_BAD_REQUEST)
 
+        if license_obj.expiryDate is None:
+            return Response({"error": "License has no expiry date configured."}, status=status.HTTP_400_BAD_REQUEST)
+
         if license_obj.expiryDate < timezone.now().date():
             license_obj.status = License.Status.EXPIRED
-            license_obj.save()
+            license_obj.save(update_fields=["status"])
             return Response({"error": "License has expired."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Resolve authoritative School record linked to the validated License
@@ -492,40 +512,41 @@ class ActivateServerAPIView(APIView):
         if not target_school:
             return Response({"error": "No school associated with this license."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if server_obj:
-            server_obj.serverName = server_name
-            if installation_identity and server_obj.installationId != installation_identity:
-                conflict = LmsServer.objects.filter(installationId=installation_identity).exclude(pk=server_obj.pk).exists()
-                if not conflict:
-                    server_obj.installationId = installation_identity
-            server_obj.lastSyncTime = timezone.now()
-            server_obj.status = LmsServer.Status.ACTIVE
-            server_obj.save()
-        else:
-            active_servers = LmsServer.objects.filter(license=license_obj, status=LmsServer.Status.ACTIVE)
-            existing_server = active_servers.filter(installationId=installation_identity).first()
-            if not existing_server:
-                if active_servers.count() >= license_obj.maxLmsServers:
-                    return Response({"error": "Maximum registered LMS servers capacity reached for this license."}, status=status.HTTP_400_BAD_REQUEST)
-                
-                auto_key = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
-                server_obj = LmsServer.objects.create(
-                    installationId=installation_identity,
-                    serverName=server_name,
-                    licenseKey=auto_key,
-                    school=target_school,
-                    license=license_obj,
-                    status=LmsServer.Status.ACTIVE,
-                    lastSyncTime=timezone.now(),
-                    maxUsers=40
-                )
+        with transaction.atomic():
+            if server_obj:
+                # installationId is the primary key: never reassign it and save(), since
+                # Django would INSERT a new row and violate the unique licenseKey.
+                # The server keeps its registered installationId, which is echoed back
+                # in the response for the client to store.
+                server_obj.serverName = server_name
+                server_obj.lastSyncTime = timezone.now()
+                server_obj.status = LmsServer.Status.ACTIVE
+                server_obj.save(update_fields=["serverName", "lastSyncTime", "status"])
             else:
-                existing_server.serverName = server_name
-                existing_server.lastSyncTime = timezone.now()
-                if not existing_server.licenseKey:
-                    existing_server.licenseKey = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
-                existing_server.save()
-                server_obj = existing_server
+                active_servers = LmsServer.objects.filter(license=license_obj, status=LmsServer.Status.ACTIVE)
+                existing_server = active_servers.filter(installationId=installation_identity).first()
+                if not existing_server:
+                    if active_servers.count() >= license_obj.maxLmsServers:
+                        return Response({"error": "Maximum registered LMS servers capacity reached for this license."}, status=status.HTTP_400_BAD_REQUEST)
+
+                    auto_key = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
+                    server_obj = LmsServer.objects.create(
+                        installationId=installation_identity,
+                        serverName=server_name,
+                        licenseKey=auto_key,
+                        school=target_school,
+                        license=license_obj,
+                        status=LmsServer.Status.ACTIVE,
+                        lastSyncTime=timezone.now(),
+                        maxUsers=40
+                    )
+                else:
+                    existing_server.serverName = server_name
+                    existing_server.lastSyncTime = timezone.now()
+                    if not existing_server.licenseKey:
+                        existing_server.licenseKey = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
+                    existing_server.save()
+                    server_obj = existing_server
 
         resolved_school_id = target_school.schoolId or str(target_school.school_id)
         resolved_school_name = target_school.school_name

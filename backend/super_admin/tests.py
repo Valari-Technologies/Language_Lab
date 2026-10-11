@@ -247,3 +247,91 @@ class LicensingSystemTests(APITestCase):
         delete_res = self.client.delete(update_url, format="json")
         self.assertEqual(delete_res.status_code, status.HTTP_200_OK)
         self.assertFalse(LmsServer.objects.filter(installationId=inst_id).exists())
+
+
+class ActivateServerRegressionTests(APITestCase):
+    """Regression tests for POST activate-server (HTTP 500 on pre-generated server keys)."""
+
+    def setUp(self):
+        self.url = reverse("activate-server")
+        self.school = School.objects.create(
+            schoolId="SCH-REG", school_name="Reg School", address="Addr",
+            phone="123", email="reg@school.com", is_active=True,
+        )
+        self.license = License.objects.create(
+            licenseId="LIC-REG", licenseKey="KEY-REG-1", school=self.school,
+            maxLmsServers=2, concurrentUsersPerServer=40,
+            expiryDate=timezone.now().date() + timezone.timedelta(days=100),
+            status=License.Status.ACTIVE,
+        )
+        self.school.licenseId = self.license
+        self.school.save()
+        self.server = LmsServer.objects.create(
+            installationId="INST-1D34E819", serverName="Lab",
+            licenseKey="LMS-KEY-A3CF36CC1519426A",
+            school=self.school, license=self.license,
+        )
+
+    def _post(self, key, inst, name="Lab PC"):
+        return self.client.post(self.url, {
+            "licenseKey": key, "serverName": name,
+            "installationIdentity": inst, "installationId": inst,
+        }, format="json")
+
+    def test_pregenerated_key_with_different_installation_id(self):
+        res = self._post("LMS-KEY-A3CF36CC1519426A", "INST-BD155C75")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data["valid"])
+        # Registered identity is kept; no duplicate row is created.
+        self.assertEqual(res.data["installationId"], "INST-1D34E819")
+        self.assertEqual(LmsServer.objects.count(), 1)
+        self.server.refresh_from_db()
+        self.assertEqual(self.server.serverName, "Lab PC")
+        self.assertEqual(self.server.licenseKey, "LMS-KEY-A3CF36CC1519426A")
+
+    def test_repeat_activation_is_idempotent(self):
+        first = self._post("LMS-KEY-A3CF36CC1519426A", "INST-BD155C75")
+        second = self._post("LMS-KEY-A3CF36CC1519426A", "INST-XYZ")
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(first.data["installationId"], second.data["installationId"])
+        self.assertEqual(LmsServer.objects.count(), 1)
+
+    def test_invalid_key(self):
+        res = self._post("LMS-KEY-TEST", "INST-1")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.data["error"], "Invalid License Key.")
+
+    def test_expired_license(self):
+        self.license.expiryDate = timezone.now().date() - timezone.timedelta(days=1)
+        self.license.save()
+        res = self._post("LMS-KEY-A3CF36CC1519426A", "INST-1D34E819")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("expired", res.data["error"])
+        self.license.refresh_from_db()
+        self.assertEqual(self.license.status, License.Status.EXPIRED)
+
+    def test_max_servers_limit_with_master_key(self):
+        LmsServer.objects.create(
+            installationId="INST-2", serverName="Two", licenseKey="LMS-KEY-2",
+            school=self.school, license=self.license,
+        )
+        res = self._post("KEY-REG-1", "INST-NEW")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Maximum registered LMS servers", res.data["error"])
+
+    def test_response_contains_client_fields(self):
+        res = self._post("LMS-KEY-A3CF36CC1519426A", "INST-1D34E819")
+        for field in ("status", "valid", "installationId", "licenseKey", "school_id",
+                      "school_code", "school_name", "address", "phone", "email",
+                      "academic_year", "expires_at", "maxLmsServers",
+                      "concurrentUsersPerServer"):
+            self.assertIn(field, res.data)
+
+    def test_unexpected_error_returns_json_500(self):
+        from unittest import mock
+        with mock.patch("super_admin.views.LmsServer.objects.select_related", side_effect=RuntimeError("boom")):
+            with self.assertLogs("super_admin.views", level="ERROR"):
+                res = self._post("LMS-KEY-A3CF36CC1519426A", "INST-1")
+        self.assertEqual(res.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertIn("error", res.data)
