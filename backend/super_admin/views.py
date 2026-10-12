@@ -513,11 +513,21 @@ class ActivateServerAPIView(APIView):
             return Response({"error": "No school associated with this license."}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
+            # A server key belongs to one machine. It is bound on first use (lastSyncTime
+            # is empty); a different machine using an already-bound key gets its own
+            # server slot, counted against maxLmsServers.
+            use_key_row = False
             if server_obj:
-                # installationId is the primary key: never reassign it and save(), since
-                # Django would INSERT a new row and violate the unique licenseKey.
-                # The server keeps its registered installationId, which is echoed back
-                # in the response for the client to store.
+                if server_obj.installationId == installation_identity:
+                    use_key_row = True
+                elif server_obj.lastSyncTime is None and not LmsServer.objects.filter(pk=installation_identity).exists():
+                    # installationId is the primary key: rebind with a queryset update(),
+                    # never by assigning it and calling save() (that would INSERT a duplicate).
+                    LmsServer.objects.filter(pk=server_obj.pk).update(installationId=installation_identity)
+                    server_obj.installationId = installation_identity
+                    use_key_row = True
+
+            if use_key_row:
                 server_obj.serverName = server_name
                 server_obj.lastSyncTime = timezone.now()
                 server_obj.status = LmsServer.Status.ACTIVE

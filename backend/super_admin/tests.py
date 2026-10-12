@@ -282,20 +282,32 @@ class ActivateServerRegressionTests(APITestCase):
         res = self._post("LMS-KEY-A3CF36CC1519426A", "INST-BD155C75")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertTrue(res.data["valid"])
-        # Registered identity is kept; no duplicate row is created.
-        self.assertEqual(res.data["installationId"], "INST-1D34E819")
+        # First use binds the key to this machine; no duplicate row is created.
+        self.assertEqual(res.data["installationId"], "INST-BD155C75")
         self.assertEqual(LmsServer.objects.count(), 1)
-        self.server.refresh_from_db()
-        self.assertEqual(self.server.serverName, "Lab PC")
-        self.assertEqual(self.server.licenseKey, "LMS-KEY-A3CF36CC1519426A")
+        server = LmsServer.objects.get(installationId="INST-BD155C75")
+        self.assertEqual(server.serverName, "Lab PC")
+        self.assertEqual(server.licenseKey, "LMS-KEY-A3CF36CC1519426A")
 
     def test_repeat_activation_is_idempotent(self):
         first = self._post("LMS-KEY-A3CF36CC1519426A", "INST-BD155C75")
-        second = self._post("LMS-KEY-A3CF36CC1519426A", "INST-XYZ")
+        second = self._post("LMS-KEY-A3CF36CC1519426A", "INST-BD155C75")
         self.assertEqual(first.status_code, status.HTTP_200_OK)
         self.assertEqual(second.status_code, status.HTTP_200_OK)
         self.assertEqual(first.data["installationId"], second.data["installationId"])
         self.assertEqual(LmsServer.objects.count(), 1)
+
+    def test_second_machine_with_same_key_gets_own_slot(self):
+        a = self._post("LMS-KEY-A3CF36CC1519426A", "INST-A")
+        b = self._post("LMS-KEY-A3CF36CC1519426A", "INST-B")
+        self.assertEqual(a.status_code, status.HTTP_200_OK)
+        self.assertEqual(b.status_code, status.HTTP_200_OK)
+        self.assertEqual(b.data["installationId"], "INST-B")
+        self.assertEqual(LmsServer.objects.filter(lastSyncTime__isnull=False).count(), 2)
+        # License allows 2 servers: a third machine is rejected.
+        c = self._post("LMS-KEY-A3CF36CC1519426A", "INST-C")
+        self.assertEqual(c.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Maximum registered LMS servers", c.data["error"])
 
     def test_invalid_key(self):
         res = self._post("LMS-KEY-TEST", "INST-1")
