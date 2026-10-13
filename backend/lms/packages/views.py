@@ -1,7 +1,9 @@
 import os
+import re
 import logging
-from django.db.models import Q
+from django.db.models import Q, Exists, OuterRef
 from django.http import FileResponse, Http404
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -9,6 +11,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 
 from teacher.models import Student
 from school_admin.models import Class
+from super_admin.models import Grade, School
 from assessments.models import ExperienceAssignment
 from content_studio.models import PublishedPackage, PublishVersion
 from .serializers import (
@@ -320,7 +323,8 @@ class CanonicalPackageDownloadAPIView(APIView):
         pkg_queryset = PublishedPackage.objects.filter(
             compression_status="COMPLETED",
             experience__status="APPROVED",
-            experience__is_deleted=False
+        ).exclude(
+            experience__is_deleted=True
         ).select_related("experience")
 
         # Support querying by PublishedPackage ID, Experience ID, or PublishVersion ID
@@ -347,7 +351,7 @@ class CanonicalPackageDownloadAPIView(APIView):
 
         version_obj = (
             PublishVersion.objects.filter(published_package=pkg)
-            .order_by("-published_at")
+            .order_by("-published_at", "-id")
             .first()
         )
         if not version_obj:
@@ -371,6 +375,153 @@ class CanonicalPackageDownloadAPIView(APIView):
         if version_obj.version_number:
             response["X-Package-Version"] = version_obj.version_number
         return response
+
+
+def _grade_number(text):
+    """Return the first whole number in a grade label ("Class 5" -> 5), or None."""
+    match = re.search(r"\d+", str(text or ""))
+    return int(match.group(0)) if match else None
+
+
+def resolve_grade(student):
+    """
+    Map the free-text Student.grade ("Class 5", "5", "Grade 5" or a Grade id)
+    to a super_admin.Grade. A number match on grade_name wins; a digit-only
+    value that matches no grade number is tried as a Grade primary key.
+    Returns None when nothing matches.
+    """
+    raw = (student.grade or "").strip()
+    number = _grade_number(raw)
+    if number is None:
+        return None
+    for grade in Grade.objects.order_by("sort_order", "id"):
+        if _grade_number(grade.grade_name) == number:
+            return grade
+    if raw.isdigit():
+        return Grade.objects.filter(id=int(raw)).first()
+    return None
+
+
+def _level_map_entry(pkg, slot, zone):
+    """Build one level-map slot from a package and its latest PublishVersion."""
+    experience = pkg.experience
+    version_obj = (
+        PublishVersion.objects.filter(published_package=pkg)
+        .order_by("-published_at", "-id")
+        .first()
+    )
+    return {
+        "slot": slot,
+        "zone": zone,
+        "packageId": str(pkg.id),
+        "experienceId": experience.id,
+        "title": experience.title,
+        "type": experience.experience_type,
+        "version": version_obj.version_number,
+        "checksum": version_obj.checksum or "",
+        "packageSize": version_obj.package_size or 0,
+        "createdAt": experience.created_at.isoformat(),
+        "downloadUrl": f"/api/packages/{pkg.id}/download/",
+    }
+
+
+class LevelMapAPIView(APIView):
+    """
+    Grade-scoped level map for the desktop LMS.
+    `GET /api/packages/level-map/?login_code=<code>&school_id=<school id>`
+    Returns 30 lesson slots and 6 boss slots (null where no package exists),
+    filled with approved packages of the student's grade, oldest first.
+    School check mirrors BootstrapSyncAPIView (school_id / schoolId / X-School-ID).
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    LESSON_SLOTS = 30
+    BOSS_SLOTS = 6
+    LESSONS_PER_ZONE = 5
+
+    def get(self, request, *args, **kwargs):
+        school_id_param = (
+            request.GET.get("school_id")
+            or request.GET.get("schoolId")
+            or request.headers.get("X-School-ID")
+        )
+        if not school_id_param or not str(school_id_param).strip():
+            return Response({"error": "school_id_required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        school_id_clean = str(school_id_param).strip()
+        school_query = Q(schoolId__iexact=school_id_clean)
+        if school_id_clean.isdigit():
+            school_query |= Q(school_id=int(school_id_clean))
+        school = School.objects.filter(school_query, is_active=True).first()
+        if not school:
+            return Response({"error": "school_not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        login_code = str(request.GET.get("login_code") or "").strip()
+        if not login_code:
+            return Response({"error": "login_code_required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        student = (
+            Student.objects.select_related("user")
+            .filter(school=school, user__username__iexact=login_code, user__is_active=True)
+            .order_by("student_id")
+            .first()
+        )
+        if not student:
+            return Response({"error": "student_not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        grade = resolve_grade(student)
+        if not grade:
+            return Response(
+                {"error": "grade_not_found", "raw": student.grade or ""},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        has_version = PublishVersion.objects.filter(published_package=OuterRef("pk"))
+        packages = (
+            PublishedPackage.objects.filter(
+                compression_status="COMPLETED",
+                experience__status="APPROVED",
+                experience__grade=grade,
+            )
+            .exclude(experience__is_deleted=True)
+            .filter(Exists(has_version))
+            .select_related("experience")
+            .order_by("experience__created_at", "experience__id")
+        )
+        lesson_pkgs = list(packages.filter(experience__experience_type="LESSON")[: self.LESSON_SLOTS])
+        boss_pkgs = list(packages.filter(experience__experience_type="ASSESSMENT")[: self.BOSS_SLOTS])
+
+        lessons = [None] * self.LESSON_SLOTS
+        for index, pkg in enumerate(lesson_pkgs):
+            slot = index + 1
+            lessons[index] = _level_map_entry(pkg, slot, (slot - 1) // self.LESSONS_PER_ZONE + 1)
+
+        bosses = [None] * self.BOSS_SLOTS
+        for index, pkg in enumerate(boss_pkgs):
+            slot = index + 1
+            bosses[index] = _level_map_entry(pkg, slot, slot)
+
+        user = student.user
+        return Response(
+            {
+                "student": {
+                    "id": student.student_id,
+                    "login_code": user.username,
+                    "name": user.full_name or user.username,
+                },
+                "grade": {
+                    "id": grade.id,
+                    "name": grade.grade_name,
+                    "number": _grade_number(grade.grade_name),
+                },
+                "generated_at": timezone.now().isoformat(),
+                "counts": {"lessons": len(lesson_pkgs), "assessments": len(boss_pkgs)},
+                "lessons": lessons,
+                "bosses": bosses,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 
