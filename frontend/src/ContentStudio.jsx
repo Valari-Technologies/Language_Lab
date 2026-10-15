@@ -2509,11 +2509,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         words: [],
         gridSize: 8
       };
-    } else if (type.toLowerCase() === 'pronunciation') {
+    } else if (['pronunciation', 'listen_repeat', 'listen and repeat', 'listen & repeat'].includes(type.toLowerCase())) {
       newBlock.type = 'pronunciation';
       newBlock.content = {
-        question: 'Practice pronouncing words correctly',
-        items: [{ id: 'item-1', word: '', phonetic: '' }]
+        question: 'Listen to each word, then say it into the recorder.',
+        mode: 'listen',
+        showPhonetic: true,
+        maxDuration: 5,
+        attempts: 3,
+        items: [{ id: 'item-1', word: '', phonetic: '', audioUrl: '' }]
       };
 
     } else if (type.toLowerCase() === 'input') {
@@ -3592,7 +3596,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         {block.type === 'pronunciation' && (
           <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiMic /> Pronunciation: {block.content?.question || 'Practice pronouncing words correctly'}
+              <FiMic /> Listen & Repeat ({block.content?.mode === 'listen' ? 'listen first' : 'read aloud'}): {block.content?.question || 'Listen to each word, then say it into the recorder.'}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {(() => {
@@ -3610,6 +3614,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     }}>
                       <span style={{ color: '#b45309', fontWeight: 800 }}>{itemIdx + 1}.</span>
                       <span>{item.word || `Word ${itemIdx + 1}`}</span>
+                      {block.content?.mode === 'listen' && (item.audioUrl || item.audio) && (
+                        <FiVolume2 style={{ color: '#b45309', fontSize: '0.8rem' }} title="Model audio attached" />
+                      )}
                     </div>
                     <div style={{
                       width: '26px',
@@ -8273,7 +8280,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                       { type: 'Match_Items', desc: 'Pair items in Column A & B', icon: <FiGitCommit style={{ color: '#7c3aed' }} />, bg: '#f3e8ff' },
                                       { type: 'Sequence', desc: 'Reorder items sequentially', icon: <FiList style={{ color: '#b45309' }} />, bg: '#fef3c7' },
                                       { type: 'True_False', desc: 'True or False question', icon: <FiCheckCircle style={{ color: '#ea580c' }} />, bg: '#ffedd5' },
-                                      { type: 'Pronunciation', desc: 'Practice pronouncing words correctly', icon: <FiMic style={{ color: '#d97706' }} />, bg: '#fef3c7' },
+                                      { type: 'Pronunciation', label: 'Listen & Repeat', desc: 'Listen to or read words, then record them', icon: <FiMic style={{ color: '#d97706' }} />, bg: '#fef3c7' },
                                       { type: 'Input', desc: 'Free text typing input area', icon: <FiType style={{ color: '#0ea5e9' }} />, bg: '#e0f9ff' },
                                       { type: 'Roleplay_Simulation', desc: 'Ordered npc-student conversation roleplay', icon: <FiUsers style={{ color: '#3b82f6' }} />, bg: '#dbeafe' },
                                       { type: 'Hotspot_Explorer', desc: 'Click/explore hotspots on a target image', icon: <FiGrid style={{ color: '#ea580c' }} />, bg: '#ffedd5' },
@@ -8382,7 +8389,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         >
                                           <div style={{ background: tmpl.bg, padding: '0.3rem', borderRadius: '6px', display: 'flex', flexShrink: 0 }}>{tmpl.icon}</div>
                                           <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e293b' }}>{tmpl.type.replace('_', ' ')}</div>
+                                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e293b' }}>{tmpl.label || tmpl.type.replace('_', ' ')}</div>
                                             <div style={{ fontSize: '0.58rem', color: '#64748b', marginTop: '1px', lineHeight: 1.3 }}>{tmpl.desc}</div>
                                           </div>
                                         </div>
@@ -10992,14 +10999,14 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                       {(['pronunciation', 'pronunciation_block'].includes((selectedBlock.type || '').toLowerCase())) && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Pronunciation Words Config</span>
+                                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Listen & Repeat Words</span>
                                             <button
                                               type="button"
                                               className="cs-btn-outline"
                                               style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
                                               onClick={() => {
                                                 const items = [...(selectedBlock.content?.items || [{ id: `item-1`, word: selectedBlock.content?.word || '', phonetic: selectedBlock.content?.phonetic || '' }])];
-                                                items.push({ id: `item-${Date.now()}`, word: '', phonetic: '' });
+                                                items.push({ id: `item-${Date.now()}`, word: '', phonetic: '', audioUrl: '' });
                                                 handleUpdateBlockContent('items', items);
                                               }}
                                             >
@@ -11017,6 +11024,55 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                               placeholder="e.g. Listen and practice pronouncing the target words correctly."
                                             />
                                           </div>
+
+                                          <div className="cs-form-group">
+                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>How students get the word</label>
+                                            <select
+                                              className="cs-form-input"
+                                              style={{ height: '28px', fontSize: '0.72rem' }}
+                                              value={selectedBlock.content?.mode || 'read'}
+                                              onChange={e => handleUpdateBlockContent('mode', e.target.value)}
+                                            >
+                                              <option value="listen">Listen to the model audio, then repeat</option>
+                                              <option value="read">Read the word, then repeat</option>
+                                            </select>
+                                          </div>
+
+                                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            <div className="cs-form-group" style={{ flex: 1, marginBottom: 0 }}>
+                                              <label className="cs-form-label" style={{ fontSize: '0.62rem' }}>Seconds per recording</label>
+                                              <input
+                                                className="cs-form-input"
+                                                style={{ height: '26px', fontSize: '0.72rem' }}
+                                                type="number"
+                                                min={1}
+                                                max={60}
+                                                value={selectedBlock.content?.maxDuration ?? 5}
+                                                onChange={e => handleUpdateBlockContent('maxDuration', Math.max(1, Math.min(60, parseInt(e.target.value, 10) || 5)))}
+                                              />
+                                            </div>
+                                            <div className="cs-form-group" style={{ flex: 1, marginBottom: 0 }}>
+                                              <label className="cs-form-label" style={{ fontSize: '0.62rem' }}>Tries per word</label>
+                                              <input
+                                                className="cs-form-input"
+                                                style={{ height: '26px', fontSize: '0.72rem' }}
+                                                type="number"
+                                                min={1}
+                                                max={10}
+                                                value={selectedBlock.content?.attempts ?? 3}
+                                                onChange={e => handleUpdateBlockContent('attempts', Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 3)))}
+                                              />
+                                            </div>
+                                          </div>
+
+                                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.68rem', color: '#334155' }}>
+                                            <input
+                                              type="checkbox"
+                                              checked={selectedBlock.content?.showPhonetic !== false}
+                                              onChange={e => handleUpdateBlockContent('showPhonetic', e.target.checked)}
+                                            />
+                                            Show phonetic guide to students
+                                          </label>
 
                                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '350px', overflowY: 'auto' }}>
                                             {(() => {
@@ -11078,7 +11134,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                   </div>
 
                                                   <MediaUploadField
-                                                    label="Target Audio Sample (Optional)"
+                                                    label={selectedBlock.content?.mode === 'listen' ? 'Model Audio (students hear this first)' : 'Model Audio (optional)'}
                                                     value={item.audioUrl || item.audio || ''}
                                                     mediaType="audio"
                                                     onChange={url => {
@@ -11090,6 +11146,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                     setActionLoading={setActionLoading}
                                                     showFeedback={showFeedback}
                                                   />
+                                                  {selectedBlock.content?.mode === 'listen' && !(item.audioUrl || item.audio) && (
+                                                    <span style={{ fontSize: '0.6rem', color: '#b45309' }}>No model audio yet. Students will see the word instead.</span>
+                                                  )}
                                                 </div>
                                               ));
                                             })()}
@@ -11419,10 +11478,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                             how: 'Provide the list of target words to hide and set the grid dimension size (e.g. 8x8 or 10x10).'
                                           };
                                         case 'pronunciation':
+                                        case 'listen_repeat':
                                           return {
-                                            what: 'Speaking pronunciation trainer.',
-                                            does: 'Renders target words with phonetic spelling and records student speaking attempt to check accuracy.',
-                                            how: 'Input words/sentences, write the phonetic hint guide (e.g. /həˈloʊ/), and configure voice settings.'
+                                            what: 'Listen & Repeat speaking practice.',
+                                            does: 'Students hear a model recording (Listen mode) or read the word (Read mode), then record themselves saying it.',
+                                            how: 'Choose the mode, add each word with an optional phonetic guide, upload model audio for Listen mode, and set seconds per recording and tries per word.'
                                           };
                                         case 'role_play':
                                           return {
