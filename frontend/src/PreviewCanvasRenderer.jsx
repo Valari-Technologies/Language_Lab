@@ -650,6 +650,8 @@ export default function PreviewCanvasRenderer({
       normType = 'multimedia_reading_assessment';
     } else if (['quiz', 'mcq', 'assessment', 'quiz_assessment', 'assessment_quiz', 'assessment_question', 'multiple_choice', 'quiz_listening'].includes(rawType)) {
       normType = 'quiz';
+    } else if (['listen_repeat', 'listen and repeat', 'listen & repeat'].includes(rawType)) {
+      normType = 'pronunciation';
     }
     switch (normType) {
       case 'heading':
@@ -1731,41 +1733,60 @@ export default function PreviewCanvasRenderer({
 
       case 'pronunciation':
         {
-          const pronQuestion = block.content?.question || 'Practice pronouncing words correctly';
+          const pronQuestion = block.content?.question || 'Listen to each word, then say it into the recorder.';
           const pronItems = block.content?.items || (block.content?.word ? [{ id: 'migrated', word: block.content.word, phonetic: block.content.phonetic }] : []);
+          const pronMode = block.content?.mode === 'listen' ? 'listen' : 'read';
+          const showPhonetic = block.content?.showPhonetic !== false;
+          const maxDuration = block.content?.maxDuration || 5;
+          const attempts = block.content?.attempts || 3;
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem', marginTop: '0.5rem' }}>
               <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FiMic /> Pronunciation: {pronQuestion}
+                <FiMic /> Listen & Repeat: {pronQuestion}
+              </div>
+              <div style={{ fontSize: '0.68rem', color: '#92400e' }}>
+                {pronMode === 'listen' ? 'Play the model, then record yourself.' : 'Read the word aloud and record yourself.'} Up to {maxDuration}s per recording, {attempts} {attempts === 1 ? 'try' : 'tries'} per word.
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {pronItems.map((item, itemIdx) => (
-                  <div key={item.id || itemIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '6px', padding: '0.45rem 0.65rem' }}>
-                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span style={{ color: '#b45309', fontWeight: 800 }}>{itemIdx + 1}.</span>
-                      <span>{item.word || `Word ${itemIdx + 1}`}</span>
+                {pronItems.map((item, itemIdx) => {
+                  const recordKey = `${activeScreenId}_${block.id}_${item.id || itemIdx}`;
+                  const isRec = voiceRecordingStates[recordKey];
+                  const modelAudio = item.audioUrl || item.audio;
+                  const canListen = pronMode === 'listen' && modelAudio;
+                  return (
+                    <div key={item.id || itemIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '6px', padding: '0.45rem 0.65rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span style={{ color: '#b45309', fontWeight: 800 }}>{itemIdx + 1}.</span>
+                          <span>{item.word || `Word ${itemIdx + 1}`}</span>
+                        </div>
+                        {showPhonetic && item.phonetic && (
+                          <span style={{ fontSize: '0.7rem', color: '#92400e', paddingLeft: '1.1rem' }}>{item.phonetic}</span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.35rem', flexShrink: 0 }}>
+                        {canListen && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              try { new Audio(resolveUrl(modelAudio)).play().catch(() => {}); } catch (e) { /* unsupported source */ }
+                            }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#ffffff', color: '#b45309', border: '1px solid #f59e0b', borderRadius: '16px', padding: '4px 10px', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            <FiPlay style={{ fontSize: '0.8rem' }} /> Listen
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setVoiceRecordingStates(prev => ({ ...prev, [recordKey]: !isRec }))}
+                          style={{ display: 'flex', alignItems: 'center', gap: '4px', background: isRec ? '#ef4444' : '#f59e0b', color: '#ffffff', border: 'none', borderRadius: '16px', padding: '4px 10px', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 3px rgba(245, 158, 11, 0.3)' }}
+                        >
+                          <FiMic style={{ fontSize: '0.8rem' }} /> {isRec ? 'Stop' : 'Record'}
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        background: '#f59e0b',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: '16px',
-                        padding: '4px 10px',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        boxShadow: '0 1px 3px rgba(245, 158, 11, 0.3)'
-                      }}
-                    >
-                      <FiMic style={{ fontSize: '0.8rem' }} /> Record
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
