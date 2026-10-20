@@ -11,7 +11,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 
 from teacher.models import Student
 from school_admin.models import Class
-from super_admin.models import Grade, School, License, LmsServer
+from super_admin.models import Grade, School
+from lms.hub.auth import get_registered_hub
 from assessments.models import ExperienceAssignment
 from content_studio.models import PublishedPackage, PublishVersion
 from .serializers import (
@@ -549,44 +550,8 @@ class SchoolLevelMapAPIView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
-    def _registered_hub(self, request):
-        """Return (school, server) for a registered hub, or (None, None)."""
-        school_id = str(request.headers.get("X-School-ID") or "").strip()
-        license_id = str(request.headers.get("X-License-ID") or "").strip()
-        installation_id = str(request.headers.get("X-Installation-ID") or "").strip()
-        if not (school_id and license_id and installation_id):
-            return None, None
-
-        school_query = Q(schoolId__iexact=school_id)
-        if school_id.isdigit():
-            school_query |= Q(school_id=int(school_id))
-        school = School.objects.filter(school_query, is_active=True).first()
-        if not school:
-            return None, None
-
-        server = (
-            LmsServer.objects.select_related("license")
-            .filter(
-                installationId=installation_id,
-                school=school,
-                status=LmsServer.Status.ACTIVE,
-                license__licenseId=license_id,
-                license__school=school,
-            )
-            .first()
-        )
-        if not server:
-            return None, None
-
-        license_obj = server.license
-        if license_obj.status != License.Status.ACTIVE:
-            return None, None
-        if license_obj.expiryDate is None or license_obj.expiryDate < timezone.now().date():
-            return None, None
-        return school, server
-
     def get(self, request, *args, **kwargs):
-        school, server = self._registered_hub(request)
+        school, server = get_registered_hub(request)
         if not school:
             return Response({"error": "hub_not_registered"}, status=status.HTTP_403_FORBIDDEN)
 

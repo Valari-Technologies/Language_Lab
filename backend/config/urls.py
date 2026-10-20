@@ -37,6 +37,7 @@ urlpatterns = [
     path("api/v1/", include("content_studio.urls")),
     path("api/v1/", include("assessments.urls")),
     path("api/lms/", include("lms.urls")),
+    path("api/hub/", include("lms.hub.urls")),
     path("api/v1/lms/packages/", LMSPackageListAPIView.as_view(), name="lms-v1-packages"),
     path("api/v1/lms/packages/<int:pk>/download/", LMSPackageDownloadAPIView.as_view(), name="lms-v1-package-download"),
     path("api/v1/lms/published-packages/", LMSPackageListAPIView.as_view(), name="lms-published-packages"),
