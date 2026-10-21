@@ -12,6 +12,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from teacher.models import Student
 from school_admin.models import Class
 from super_admin.models import Grade, School
+from lms.hub.auth import get_registered_hub
 from assessments.models import ExperienceAssignment
 from content_studio.models import PublishedPackage, PublishVersion
 from .serializers import (
@@ -377,6 +378,11 @@ class CanonicalPackageDownloadAPIView(APIView):
         return response
 
 
+LEVEL_MAP_LESSON_SLOTS = 30
+LEVEL_MAP_BOSS_SLOTS = 6
+LEVEL_MAP_LESSONS_PER_ZONE = 5
+
+
 def _grade_number(text):
     """Return the first whole number in a grade label ("Class 5" -> 5), or None."""
     match = re.search(r"\d+", str(text or ""))
@@ -425,6 +431,51 @@ def _level_map_entry(pkg, slot, zone):
     }
 
 
+def _grade_payload(grade):
+    return {
+        "id": grade.id,
+        "name": grade.grade_name,
+        "number": _grade_number(grade.grade_name),
+    }
+
+
+def build_level_map(grade):
+    """
+    Level map for one grade: approved, built packages of that grade, oldest first.
+    Returns counts plus 30 lesson slots and 6 boss slots (None where no package exists).
+    """
+    has_version = PublishVersion.objects.filter(published_package=OuterRef("pk"))
+    packages = (
+        PublishedPackage.objects.filter(
+            compression_status="COMPLETED",
+            experience__status="APPROVED",
+            experience__grade=grade,
+        )
+        .exclude(experience__is_deleted=True)
+        .filter(Exists(has_version))
+        .select_related("experience")
+        .order_by("experience__created_at", "experience__id")
+    )
+    lesson_pkgs = list(packages.filter(experience__experience_type="LESSON")[:LEVEL_MAP_LESSON_SLOTS])
+    boss_pkgs = list(packages.filter(experience__experience_type="ASSESSMENT")[:LEVEL_MAP_BOSS_SLOTS])
+
+    lessons = [None] * LEVEL_MAP_LESSON_SLOTS
+    for index, pkg in enumerate(lesson_pkgs):
+        slot = index + 1
+        lessons[index] = _level_map_entry(pkg, slot, (slot - 1) // LEVEL_MAP_LESSONS_PER_ZONE + 1)
+
+    bosses = [None] * LEVEL_MAP_BOSS_SLOTS
+    for index, pkg in enumerate(boss_pkgs):
+        slot = index + 1
+        bosses[index] = _level_map_entry(pkg, slot, slot)
+
+    return {
+        "counts": {"lessons": len(lesson_pkgs), "assessments": len(boss_pkgs)},
+        "lessons": lessons,
+        "bosses": bosses,
+    }
+
+
 class LevelMapAPIView(APIView):
     """
     Grade-scoped level map for the desktop LMS.
@@ -435,10 +486,6 @@ class LevelMapAPIView(APIView):
     """
     authentication_classes = []
     permission_classes = [AllowAny]
-
-    LESSON_SLOTS = 30
-    BOSS_SLOTS = 6
-    LESSONS_PER_ZONE = 5
 
     def get(self, request, *args, **kwargs):
         school_id_param = (
@@ -477,31 +524,6 @@ class LevelMapAPIView(APIView):
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
-        has_version = PublishVersion.objects.filter(published_package=OuterRef("pk"))
-        packages = (
-            PublishedPackage.objects.filter(
-                compression_status="COMPLETED",
-                experience__status="APPROVED",
-                experience__grade=grade,
-            )
-            .exclude(experience__is_deleted=True)
-            .filter(Exists(has_version))
-            .select_related("experience")
-            .order_by("experience__created_at", "experience__id")
-        )
-        lesson_pkgs = list(packages.filter(experience__experience_type="LESSON")[: self.LESSON_SLOTS])
-        boss_pkgs = list(packages.filter(experience__experience_type="ASSESSMENT")[: self.BOSS_SLOTS])
-
-        lessons = [None] * self.LESSON_SLOTS
-        for index, pkg in enumerate(lesson_pkgs):
-            slot = index + 1
-            lessons[index] = _level_map_entry(pkg, slot, (slot - 1) // self.LESSONS_PER_ZONE + 1)
-
-        bosses = [None] * self.BOSS_SLOTS
-        for index, pkg in enumerate(boss_pkgs):
-            slot = index + 1
-            bosses[index] = _level_map_entry(pkg, slot, slot)
-
         user = student.user
         return Response(
             {
@@ -510,15 +532,58 @@ class LevelMapAPIView(APIView):
                     "login_code": user.username,
                     "name": user.full_name or user.username,
                 },
-                "grade": {
-                    "id": grade.id,
-                    "name": grade.grade_name,
-                    "number": _grade_number(grade.grade_name),
+                "grade": _grade_payload(grade),
+                "generated_at": timezone.now().isoformat(),
+                **build_level_map(grade),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class SchoolLevelMapAPIView(APIView):
+    """
+    Level maps for every grade of a school's active students, for the school hub.
+    `GET /api/packages/level-map/school/`
+    Headers sent by the LMS at sync: X-School-ID, X-License-ID, X-Installation-ID.
+    Only an ACTIVE LmsServer of the school's ACTIVE, non-expired licence is allowed.
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        school, server = get_registered_hub(request)
+        if not school:
+            return Response({"error": "hub_not_registered"}, status=status.HTTP_403_FORBIDDEN)
+
+        grades = {}
+        unresolved = []
+        students = Student.objects.filter(school=school, user__is_active=True).order_by("student_id")
+        for student in students:
+            grade = resolve_grade(student)
+            if grade:
+                grades[grade.id] = grade
+            else:
+                raw = (student.grade or "").strip()
+                if raw not in unresolved:
+                    unresolved.append(raw)
+
+        ordered_grades = sorted(grades.values(), key=lambda g: (g.sort_order, g.id))
+        return Response(
+            {
+                "school": {
+                    "id": school.school_id,
+                    "schoolId": school.schoolId,
+                    "name": school.school_name,
+                },
+                "license": {
+                    "concurrentUsersPerServer": server.maxUsers or server.license.concurrentUsersPerServer or 40,
                 },
                 "generated_at": timezone.now().isoformat(),
-                "counts": {"lessons": len(lesson_pkgs), "assessments": len(boss_pkgs)},
-                "lessons": lessons,
-                "bosses": bosses,
+                "grades": [
+                    {"grade": _grade_payload(grade), **build_level_map(grade)}
+                    for grade in ordered_grades
+                ],
+                "unresolved_grades": unresolved,
             },
             status=status.HTTP_200_OK,
         )

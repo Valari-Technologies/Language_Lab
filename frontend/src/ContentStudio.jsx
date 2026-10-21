@@ -11029,7 +11029,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                             <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>How students get the word</label>
                                             <select
                                               className="cs-form-input"
-                                              style={{ height: '28px', fontSize: '0.72rem' }}
+                                              style={{ height: 'auto', minHeight: '36px', padding: '6px 10px', fontSize: '0.75rem', lineHeight: 1.4 }}
                                               value={selectedBlock.content?.mode || 'read'}
                                               onChange={e => handleUpdateBlockContent('mode', e.target.value)}
                                             >
