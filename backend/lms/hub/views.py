@@ -1,8 +1,11 @@
 import re
+import time
 import uuid
 import logging
 from decimal import Decimal, InvalidOperation
 
+from django.contrib.auth import authenticate, get_user_model
+from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -12,11 +15,13 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.scoping import get_user_school
 from assessments.models import ExperienceAssignment, StudentAttempt, ScreenResponse
 from content_studio.models import Experience, PublishedPackage
 from lms.models import StudentProgress
 from lms.packages.views import resolve_grade
 from school_admin.models import Class
+from super_admin.models import SchoolAdminProfile
 from teacher.models import Student
 from .auth import get_registered_hub
 
@@ -29,6 +34,11 @@ LEVEL_KEY_RE = re.compile(r"^(L([1-9]|[12][0-9]|30)|B[1-6])$")
 # server_time, and so fall outside the next `since` window. The hub must re-read from
 # (last since - OVERLAP_SECONDS) and ignore event_ids it already has.
 OVERLAP_SECONDS = 300
+
+# Failed admin checks allowed per hub installation in one window.
+VERIFY_MAX_FAILURES = 10
+VERIFY_WINDOW_SECONDS = 15 * 60
+MAX_PASSWORD_LENGTH = 256
 
 
 def _hub_forbidden():
@@ -406,6 +416,104 @@ class HubProgressAPIView(APIView):
                 "overlap_seconds": OVERLAP_SECONDS,
                 "attempts": attempts,
                 "next": next_cursor,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+def _verify_fail_key(installation_id):
+    return f"hub_admin_verify_fail:{installation_id}"
+
+
+def _record_verify_failure(installation_id):
+    """Count a failed admin check; the window starts at the first failure."""
+    key = _verify_fail_key(installation_id)
+    now = time.time()
+    entry = cache.get(key)
+    if not entry or entry["reset_at"] <= now:
+        entry = {"count": 0, "reset_at": now + VERIFY_WINDOW_SECONDS}
+    entry["count"] += 1
+    cache.set(key, entry, timeout=max(1, int(entry["reset_at"] - now)))
+
+
+class HubAdminVerifyAPIView(APIView):
+    """
+    School admin check before the hub window opens.
+    `POST /api/hub/admin/verify/` {"email": "<email or username>", "password": "..."}
+    Auth: registered hub headers. Returns no tokens; the hub keeps only a password hash.
+    Never log the request body: it carries a password.
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        school, _server = get_registered_hub(request)
+        if not school:
+            return _hub_forbidden()
+        installation_id = str(request.headers.get("X-Installation-ID") or "").strip()
+
+        data = request.data if isinstance(request.data, dict) else {}
+        identifier = data.get("email")
+        password = data.get("password")
+        if (
+            not isinstance(identifier, str) or not identifier.strip()
+            or not isinstance(password, str) or not password
+            or len(password) > MAX_PASSWORD_LENGTH
+        ):
+            return Response({"error": "invalid_body"}, status=status.HTTP_400_BAD_REQUEST)
+        identifier = identifier.strip()
+
+        key = _verify_fail_key(installation_id)
+        now = time.time()
+        entry = cache.get(key)
+        if entry and entry["reset_at"] > now and entry["count"] >= VERIFY_MAX_FAILURES:
+            return Response(
+                {"error": "too_many_attempts", "retry_after": max(1, int(entry["reset_at"] - now))},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        def fail(error, http_status):
+            _record_verify_failure(installation_id)
+            return Response({"error": error}, status=http_status)
+
+        User = get_user_model()
+        candidate = (
+            User.objects.filter(email__iexact=identifier).first()
+            or User.objects.filter(username__iexact=identifier).first()
+        )
+        # Always run authenticate() so unknown users cost the same hashing time as known ones.
+        user = authenticate(
+            request=request,
+            username=candidate.username if candidate else identifier,
+            password=password,
+        )
+        if user is None and candidate is not None and not candidate.is_active and candidate.check_password(password):
+            # ModelBackend refuses inactive users; with the right password, report the role problem instead.
+            user = candidate
+        if user is None:
+            return fail("invalid_credentials", status.HTTP_401_UNAUTHORIZED)
+
+        if (
+            not user.is_active
+            or user.role != "SCHOOL_ADMIN"
+            or not SchoolAdminProfile.objects.filter(user=user).exists()
+        ):
+            return fail("not_school_admin", status.HTTP_403_FORBIDDEN)
+
+        admin_school = get_user_school(user)
+        if admin_school is None or admin_school.pk != school.pk or not admin_school.is_active:
+            return fail("wrong_school", status.HTTP_403_FORBIDDEN)
+
+        cache.delete(key)
+        return Response(
+            {
+                "ok": True,
+                "admin": {
+                    "username": user.username,
+                    "email": user.email or "",
+                    "full_name": user.full_name or "",
+                },
+                "school": {"schoolId": school.schoolId, "name": school.school_name},
             },
             status=status.HTTP_200_OK,
         )
