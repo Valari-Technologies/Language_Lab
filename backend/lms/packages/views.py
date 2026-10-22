@@ -259,7 +259,10 @@ class CanonicalPackageDetailAPIView(APIView):
         pkg = None
         if str(package_id).isdigit():
             pid = int(package_id)
-            pkg = pkg_queryset.filter(Q(id=pid) | Q(experience__id=pid)).first()
+            # Same order as the download view: package id first, then the fallbacks.
+            pkg = pkg_queryset.filter(id=pid).first()
+            if not pkg:
+                pkg = pkg_queryset.filter(experience__id=pid).first()
             if not pkg:
                 version_match = (
                     PublishVersion.objects.filter(id=pid)
@@ -279,7 +282,7 @@ class CanonicalPackageDetailAPIView(APIView):
 
         version_obj = (
             PublishVersion.objects.filter(published_package=pkg)
-            .order_by("-published_at")
+            .order_by("-published_at", "-id")
             .first()
         )
         if not version_obj:

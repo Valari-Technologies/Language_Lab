@@ -96,6 +96,17 @@ class PackageDownloadTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["X-Package-Checksum"], self.sum_b)
 
+    def test_detail_package_id_wins_over_experience_id(self):
+        response = self.client.get(f"/api/packages/{self.pkg_a.id}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["packageId"], str(self.pkg_a.id))
+        self.assertEqual(response.data["checksum"], self.sum_a)
+
+    def test_detail_experience_id_fallback_still_works(self):
+        response = self.client.get("/api/packages/900001/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["packageId"], str(self.pkg_a.id))
+
     def test_check_command_reports_bad_checksum(self):
         PublishVersion.objects.filter(published_package=self.pkg_b).update(checksum="0" * 64)
         out = StringIO()
