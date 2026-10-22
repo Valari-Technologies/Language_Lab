@@ -332,7 +332,12 @@ class CanonicalPackageDownloadAPIView(APIView):
         pkg = None
         if str(package_id).isdigit():
             pid = int(package_id)
-            pkg = pkg_queryset.filter(Q(id=pid) | Q(experience__id=pid)).first()
+            # A number is a PublishedPackage id first (the level map's downloadUrl). Matching
+            # "package id OR experience id" in one query let another package win; experience id
+            # and PublishVersion id are only fallbacks for older LMS clients, in that order.
+            pkg = pkg_queryset.filter(id=pid).first()
+            if not pkg:
+                pkg = pkg_queryset.filter(experience__id=pid).first()
             if not pkg:
                 version_match = (
                     PublishVersion.objects.filter(id=pid)
