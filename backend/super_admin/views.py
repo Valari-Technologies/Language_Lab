@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.views import APIView
+import ipaddress
 import logging
 import uuid
 from datetime import timedelta
@@ -13,7 +14,7 @@ from django.db import transaction
 
 from accounts.permissions import IsSuperAdmin, IsSuperAdminOrReadOnlyStaff
 from accounts.scoping import filter_queryset_by_school
-from .models import Grade, School, SchoolAdminProfile, PublishContent, License, LmsServer
+from .models import Grade, School, SchoolAdminProfile, PublishContent, License, LmsServer, RemovedInstallation
 from .serializers import (
     GradeDetailSerializer,
     GradeSerializer,
@@ -457,6 +458,19 @@ Language Lab Team
 logger = logging.getLogger(__name__)
 
 
+def _valid_ip(value):
+    try:
+        return str(ipaddress.ip_address(str(value).strip()))
+    except ValueError:
+        return None
+
+
+def _client_ip(request):
+    """Caller's public IP: nginx sets X-Real-IP in production; fall back to the socket address."""
+    raw = request.META.get("HTTP_X_REAL_IP") or request.META.get("REMOTE_ADDR") or ""
+    return _valid_ip(raw)
+
+
 class ActivateServerAPIView(APIView):
     permission_classes = [AllowAny]
 
@@ -512,6 +526,13 @@ class ActivateServerAPIView(APIView):
         if not target_school:
             return Response({"error": "No school associated with this license."}, status=status.HTTP_400_BAD_REQUEST)
 
+        if RemovedInstallation.objects.filter(installationId=installation_identity, license=license_obj).exists():
+            return Response(
+                {"error": "device_removed",
+                 "message": "This computer was removed from the school licence. Ask the CMS administrator to allow it again."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         with transaction.atomic():
             # A server key belongs to one machine. It is bound on first use (lastSyncTime
             # is empty); a different machine using an already-bound key gets its own
@@ -528,13 +549,25 @@ class ActivateServerAPIView(APIView):
                     use_key_row = True
 
             if use_key_row:
+                if server_obj.status != LmsServer.Status.ACTIVE:
+                    active_count = LmsServer.objects.filter(license=license_obj, status=LmsServer.Status.ACTIVE).count()
+                    if active_count >= license_obj.maxLmsServers:
+                        return Response({"error": "Maximum registered LMS servers capacity reached for this license."}, status=status.HTTP_400_BAD_REQUEST)
                 server_obj.serverName = server_name
                 server_obj.lastSyncTime = timezone.now()
                 server_obj.status = LmsServer.Status.ACTIVE
                 server_obj.save(update_fields=["serverName", "lastSyncTime", "status"])
             else:
                 active_servers = LmsServer.objects.filter(license=license_obj, status=LmsServer.Status.ACTIVE)
-                existing_server = active_servers.filter(installationId=installation_identity).first()
+                # installationId is the primary key, so look it up in any status: a disabled
+                # or re-allowed PC must be switched back on, never inserted a second time.
+                existing_server = LmsServer.objects.filter(pk=installation_identity).first()
+                if existing_server and existing_server.license_id != license_obj.pk:
+                    return Response({"error": "This computer is registered to another licence."}, status=status.HTTP_400_BAD_REQUEST)
+                if existing_server and existing_server.status != LmsServer.Status.ACTIVE:
+                    if active_servers.count() >= license_obj.maxLmsServers:
+                        return Response({"error": "Maximum registered LMS servers capacity reached for this license."}, status=status.HTTP_400_BAD_REQUEST)
+                    existing_server.status = LmsServer.Status.ACTIVE
                 if not existing_server:
                     if active_servers.count() >= license_obj.maxLmsServers:
                         return Response({"error": "Maximum registered LMS servers capacity reached for this license."}, status=status.HTTP_400_BAD_REQUEST)
@@ -557,6 +590,14 @@ class ActivateServerAPIView(APIView):
                         existing_server.licenseKey = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
                     existing_server.save()
                     server_obj = existing_server
+
+        device_name = str(request.data.get("deviceName") or server_name or "").strip()[:150] or None
+        LmsServer.objects.filter(pk=server_obj.pk).update(
+            deviceName=device_name,
+            publicIp=_client_ip(request),
+            localIp=_valid_ip(request.data.get("localIp")),
+            lastSeenAt=timezone.now(),
+        )
 
         resolved_school_id = target_school.schoolId or str(target_school.school_id)
         resolved_school_name = target_school.school_name
@@ -724,6 +765,45 @@ class DeactivateServerAPIView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class LicenseStatusAPIView(APIView):
+    """
+    Licence status for one LMS installation; the LMS calls it at start and every few minutes.
+    `POST /api/v1/licensing/status` {"installationId": "...", "licenseId": "LIC-..."}
+    -> {"status": "ACTIVE" | "REMOVED" | "EXPIRED" | "SUSPENDED" | "UNKNOWN", "message": "..."}
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        installation_id = str(request.data.get("installationId") or "").strip()
+        license_id = str(request.data.get("licenseId") or "").strip()
+        if not installation_id or not license_id:
+            return Response({"error": "invalid_body"}, status=status.HTTP_400_BAD_REQUEST)
+
+        def answer(state, message):
+            return Response({"status": state, "message": message}, status=status.HTTP_200_OK)
+
+        license_obj = License.objects.filter(licenseId=license_id).first()
+        if not license_obj:
+            return answer("UNKNOWN", "Licence not found.")
+        if RemovedInstallation.objects.filter(installationId=installation_id, license=license_obj).exists():
+            return answer("REMOVED", "This computer was removed from the school licence.")
+        server = LmsServer.objects.filter(installationId=installation_id, license=license_obj).first()
+        if not server:
+            return answer("UNKNOWN", "This computer is not registered on the licence.")
+        if license_obj.status == License.Status.EXPIRED or (
+            license_obj.expiryDate and license_obj.expiryDate < timezone.now().date()
+        ):
+            return answer("EXPIRED", "The school licence has expired.")
+        if license_obj.status != License.Status.ACTIVE:
+            return answer("SUSPENDED", f"The school licence is {license_obj.status.lower()}.")
+        if server.status != LmsServer.Status.ACTIVE:
+            return answer("SUSPENDED", "This computer is disabled in the CMS.")
+
+        LmsServer.objects.filter(pk=server.pk).update(lastSeenAt=timezone.now(), publicIp=_client_ip(request))
+        return answer("ACTIVE", "Licence is active.")
+
+
 class LmsServerViewSet(CMSBaseViewSet):
     permission_classes = [IsAuthenticated, IsSuperAdminOrReadOnlyStaff]
     queryset = LmsServer.objects.all().select_related("school", "license")
@@ -764,6 +844,36 @@ class LmsServerViewSet(CMSBaseViewSet):
         return Response({
             "status": "success",
             "message": f"Server '{server.serverName}' has been enabled.",
+            "server": self.get_serializer(server).data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="remove")
+    def remove_device(self, request, installationId=None):
+        server = self.get_object()
+        with transaction.atomic():
+            server.status = LmsServer.Status.DEACTIVATED
+            server.removedAt = timezone.now()
+            server.save(update_fields=["status", "removedAt"])
+            RemovedInstallation.objects.get_or_create(
+                installationId=server.installationId, license=server.license,
+                defaults={"removedBy": request.user},
+            )
+        return Response({
+            "status": "success",
+            "message": f"Computer '{server.deviceName or server.serverName}' was removed. Its licence slot is free.",
+            "server": self.get_serializer(server).data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="allow")
+    def allow_device(self, request, installationId=None):
+        server = self.get_object()
+        with transaction.atomic():
+            RemovedInstallation.objects.filter(installationId=server.installationId, license=server.license).delete()
+            server.removedAt = None
+            server.save(update_fields=["removedAt"])
+        return Response({
+            "status": "success",
+            "message": f"Computer '{server.deviceName or server.serverName}' can activate again if the licence has a free slot.",
             "server": self.get_serializer(server).data
         }, status=status.HTTP_200_OK)
 
