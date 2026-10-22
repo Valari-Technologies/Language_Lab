@@ -902,6 +902,49 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     });
   };
 
+  const refreshSelectedSchool = async () => {
+    await loadSchools();
+    if (selectedSchoolDetail) {
+      const sRes = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/`);
+      if (sRes.ok) setSelectedSchoolDetail(await sRes.json());
+    }
+  };
+
+  const handlePairedDeviceAction = (srv, action) => {
+    const isRemove = action === 'remove';
+    const name = srv.deviceName || srv.serverName;
+    setServerConfirm({
+      show: true,
+      title: isRemove ? 'Remove this computer?' : 'Allow this computer again?',
+      message: isRemove
+        ? `"${name}" will stop working with this licence and its slot becomes free for another computer. It stays blocked until you allow it again.`
+        : `"${name}" will be able to activate this licence again if a slot is free.`,
+      icon: isRemove ? <FiTrash2 /> : <FiCheck />,
+      iconBg: isRemove ? '#fee2e2' : '#dcfce7',
+      iconColor: isRemove ? '#dc2626' : '#16a34a',
+      confirmText: isRemove ? 'Remove Computer' : 'Allow Again',
+      confirmBg: isRemove ? '#dc2626' : '#16a34a',
+      onConfirm: async () => {
+        setServerConfirm(prev => ({ ...prev, show: false }));
+        setServerActionLoading(true);
+        try {
+          const res = await apiFetch(`/api/cms/v1/lms-servers/${srv.installationId}/${isRemove ? 'remove' : 'allow'}/`, { method: 'POST' });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) {
+            showFeedback(data.message || (isRemove ? 'Computer removed.' : 'Computer allowed again.'), null);
+            await refreshSelectedSchool();
+          } else {
+            showFeedback(null, data.error || data.detail || 'Action failed.');
+          }
+        } catch (err) {
+          showFeedback(null, err.message);
+        } finally {
+          setServerActionLoading(false);
+        }
+      }
+    });
+  };
+
   const handleSaveEditServer = async (installationId) => {
     if (!editingServerName.trim()) {
       showFeedback(null, "Server name cannot be empty.");
@@ -2696,6 +2739,68 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             </div>
                           </div>
                         </div>
+
+                        {/* Paired computers: PCs that have activated this licence */}
+                        {(() => {
+                          const paired = (selectedSchoolDetail.lms_servers || []).filter(s => s.lastSyncTime);
+                          return (
+                            <div style={{ gridColumn: 'span 3', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                              <span style={{ display: 'block', color: '#0f172a', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.75rem' }}>
+                                Paired computers ({paired.filter(s => !s.removedAt).length})
+                              </span>
+                              {paired.length === 0 ? (
+                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>
+                                  No computer has activated this licence yet. Computers appear here after they activate with the licence key.
+                                </p>
+                              ) : (
+                                <div style={{ overflowX: 'auto' }}>
+                                  <table className="sd-table">
+                                    <thead>
+                                      <tr>
+                                        <th>Computer</th>
+                                        <th>PC id</th>
+                                        <th>IP (public / local)</th>
+                                        <th>Activated</th>
+                                        <th>Last seen</th>
+                                        <th>Status</th>
+                                        <th>Action</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {paired.map(s => (
+                                        <tr key={s.installationId} style={s.removedAt ? { opacity: 0.6 } : undefined}>
+                                          <td style={{ fontWeight: 600 }}>{s.deviceName || s.serverName}</td>
+                                          <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{s.installationId}</td>
+                                          <td style={{ fontSize: '0.8rem' }}>{s.publicIp || '—'} / {s.localIp || '—'}</td>
+                                          <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{new Date(s.lastSyncTime).toLocaleString()}</td>
+                                          <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{new Date(s.lastSeenAt || s.lastSyncTime).toLocaleString()}</td>
+                                          <td>
+                                            {s.removedAt ? (
+                                              <span className="sd-badge sd-badge-inactive">Removed</span>
+                                            ) : (
+                                              <span className={`sd-badge sd-badge-${s.status?.toLowerCase()}`}>{s.status === 'ACTIVE' ? 'Active' : 'Disabled'}</span>
+                                            )}
+                                          </td>
+                                          <td>
+                                            <button
+                                              type="button"
+                                              disabled={serverActionLoading}
+                                              onClick={() => handlePairedDeviceAction(s, s.removedAt ? 'allow' : 'remove')}
+                                              className="sd-btn-outline"
+                                              style={{ padding: '4px 10px', fontSize: '0.75rem', color: s.removedAt ? '#16a34a' : '#dc2626', borderColor: s.removedAt ? '#16a34a' : '#dc2626' }}
+                                            >
+                                              {s.removedAt ? 'Allow again' : 'Remove'}
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ) : (
                       <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>No license details available.</p>
