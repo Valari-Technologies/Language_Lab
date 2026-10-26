@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FiMonitor, FiRefreshCw, FiTrash2, FiUsers, FiBookOpen, FiAlertTriangle, FiKey } from 'react-icons/fi';
+import { FiRefreshCw, FiTrash2, FiUsers, FiBookOpen, FiAlertTriangle, FiKey } from 'react-icons/fi';
 import { apiFetch } from './api';
 
 // "LMS Hub" page (School Admin portal only): student PCs of the English Adventure LMS connect to the CMS
@@ -112,49 +112,31 @@ const LmsHubPanel = () => {
             {data.sessions.length === 0 ? <p style={muted}>No student is logged in right now.</p> : (
               <div style={{ overflowX: 'auto' }}>
                 <table className="sd-table">
-                  <thead><tr><th>Student</th><th>Login code</th><th>Computer</th><th>Since</th></tr></thead>
+                  <thead><tr><th>Student</th><th>Login code</th><th>Computer</th><th>Since</th><th>Action</th></tr></thead>
                   <tbody>
                     {data.sessions.map(s => (
-                      <tr key={`${s.loginCode}-${s.since}`}><td>{s.student}</td><td>{s.loginCode}</td><td>{s.computer}</td><td>{fmt(s.since)}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* Paired computers */}
-          <div style={card}>
-            <h3 style={cardTitle}><FiMonitor /> Paired computers ({data.devices.filter(d => !d.revoked).length})</h3>
-            {data.devices.length === 0 ? <p style={muted}>No computer is paired yet.</p> : (
-              <div style={{ overflowX: 'auto' }}>
-                <table className="sd-table">
-                  <thead><tr><th>Name</th><th>PC id</th><th>Last IP</th><th>Last seen</th><th>Status</th><th>Action</th></tr></thead>
-                  <tbody>
-                    {data.devices.map(d => (
-                      <tr key={d.id} style={d.revoked ? { opacity: 0.55 } : undefined}>
-                        <td style={{ fontWeight: 600 }}>{d.pcName}</td>
-                        <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }} title={d.pcId}>{d.pcId.slice(0, 8)}</td>
-                        <td>{d.lastIp || '—'}</td>
-                        <td>{fmt(d.lastSeen)}</td>
-                        <td>{d.revoked ? 'Removed' : (d.inUse ? 'In use' : 'Paired')}</td>
+                      <tr key={`${s.loginCode}-${s.since}`}>
+                        <td>{s.student}</td>
+                        <td>{s.loginCode}</td>
+                        <td>{s.computer}</td>
+                        <td>{fmt(s.since)}</td>
                         <td>
-                          {!d.revoked && (confirmId === d.id ? (
+                          {confirmId === s.deviceId ? (
                             <span style={{ display: 'inline-flex', gap: '6px' }}>
-                              <button type="button" className="sd-btn-outline" style={{ padding: '3px 8px', fontSize: '0.75rem', color: '#dc2626', borderColor: '#dc2626' }} onClick={() => removeDevice(d)}>Remove now</button>
+                              <button type="button" className="sd-btn-outline" style={{ padding: '3px 8px', fontSize: '0.75rem', color: '#dc2626', borderColor: '#dc2626' }} onClick={() => removeDevice({ id: s.deviceId })}>Remove now</button>
                               <button type="button" className="sd-btn-outline" style={{ padding: '3px 8px', fontSize: '0.75rem' }} onClick={() => setConfirmId(null)}>Cancel</button>
                             </span>
                           ) : (
-                            <button type="button" className="sd-btn-outline" style={{ padding: '3px 8px', fontSize: '0.75rem', color: '#dc2626', borderColor: '#dc2626' }} onClick={() => setConfirmId(d.id)}>
+                            <button type="button" className="sd-btn-outline" style={{ padding: '3px 8px', fontSize: '0.75rem', color: '#dc2626', borderColor: '#dc2626' }} onClick={() => setConfirmId(s.deviceId)}>
                               <FiTrash2 /> Remove
                             </button>
-                          ))}
+                          )}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <p style={muted}>Removing a computer logs its student out. It can be paired again with a new pairing code.</p>
+                <p style={muted}>Remove unpairs that computer and logs its student out. The computer can be paired again with a new pairing code.</p>
               </div>
             )}
           </div>

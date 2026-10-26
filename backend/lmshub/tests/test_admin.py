@@ -38,6 +38,7 @@ class AdminPageTests(HubTestBase):
         self.assertEqual(data["devices"][0]["pcName"], "Lab PC 1")
         self.assertTrue(data["devices"][0]["inUse"])
         self.assertEqual(data["sessions"][0]["loginCode"], "DIY_1002")
+        self.assertEqual(data["sessions"][0]["deviceId"], LmsDevice.objects.get().id)
         self.assertEqual([p["grade"]["id"] for p in data["plans"]], [self.grade3.id, self.grade4.id])
         self.assertEqual(data["progress"]["attemptsToday"], 1)
         self.assertEqual(data["progress"]["noClass"][0]["loginCode"], "DIY_1002")
