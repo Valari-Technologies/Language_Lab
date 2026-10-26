@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from lmshub.models import LmsSession
+from lmshub.models import LmsSession, LmsThrottle
 from super_admin.models import License
 from .base import HubTestBase
 
@@ -31,9 +31,15 @@ class LoginTests(HubTestBase):
             self.assertEqual((response.status_code, response.json()["attemptsRemaining"]), (404, remaining))
         locked = self.login(token, "NOBODY")
         self.assertEqual((locked.status_code, locked.json()["error"]), (429, "locked"))
-        self.assertEqual(self.login(token, "AAR_1001").json()["error"], "locked")
+        self.assertEqual(locked.json()["retryAfterSec"], 10)
+        still_locked = self.login(token, "AAR_1001").json()
+        self.assertEqual(still_locked["error"], "locked")
+        self.assertTrue(1 <= still_locked["retryAfterSec"] <= 10)
         other_pc = self.pair()
         self.assertEqual(self.login(other_pc, "AAR_1001").status_code, 200)
+        # after the 10 s lock the same PC can log in again
+        LmsThrottle.objects.filter(key__startswith="login:").update(locked_until=timezone.now() - timedelta(seconds=1))
+        self.assertEqual(self.login(token, "AAR_1001").status_code, 200)
 
     def test_only_this_school_and_active_students(self):
         token = self.pair()

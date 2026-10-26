@@ -3432,7 +3432,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             </>
           )}
 
-          {activeSubTab === 'lms-hub' && !isAnyOverlayOpen && <LmsHubPanel user={user} />}
+          {activeSubTab === 'lms-hub' && !isAnyOverlayOpen && <LmsHubPanel />}
 
           {activeSubTab === 'profile' && !isAnyOverlayOpen && (
             <div style={{ padding: '0.5rem', width: '100%', maxWidth: '1100px', margin: '0 auto' }}>

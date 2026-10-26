@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { FiMonitor, FiRefreshCw, FiTrash2, FiUsers, FiBookOpen, FiAlertTriangle, FiKey } from 'react-icons/fi';
 import { apiFetch } from './api';
 
-// "LMS Hub" page: student PCs of the English Adventure LMS connect to the CMS instead of a hub PC in the school.
-// School admins see their own school; the super admin picks a school first.
+// "LMS Hub" page (School Admin portal only): student PCs of the English Adventure LMS connect to the CMS
+// instead of a hub PC in the school. The CMS decides the school from the login: always the admin's own school.
 
 const card = { background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', padding: '1.25rem 1.5rem' };
 const cardTitle = { display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, color: '#0f172a', fontSize: '1rem', margin: '0 0 0.9rem 0' };
@@ -12,10 +12,7 @@ const muted = { color: '#64748b', fontSize: '0.8rem' };
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString() : '—');
 const clock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
-const LmsHubPanel = ({ user }) => {
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-  const [schools, setSchools] = useState([]);
-  const [schoolId, setSchoolId] = useState('');
+const LmsHubPanel = () => {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,34 +20,27 @@ const LmsHubPanel = ({ user }) => {
   const [confirmId, setConfirmId] = useState(null);
   const [message, setMessage] = useState('');
 
-  useEffect(() => {
-    if (!isSuperAdmin) return;
-    apiFetch('/api/cms/v1/schools/?page_size=500')
-      .then(r => (r.ok ? r.json() : []))
-      .then(d => setSchools(Array.isArray(d) ? d : (d.results || [])))
-      .catch(() => setSchools([]));
-  }, [isSuperAdmin]);
-
   const load = useCallback(async () => {
-    if (isSuperAdmin && !schoolId) return;
     setLoading(true);
     try {
-      const query = isSuperAdmin ? `?school_id=${schoolId}` : '';
-      const res = await apiFetch(`/api/cms/v1/lms-hub/overview/${query}`);
+      const res = await apiFetch('/api/cms/v1/lms-hub/overview/');
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
         setData(body);
         setSecondsLeft(body.pairing?.secondsLeft || 0);
         setError('');
       } else {
-        setError(body.error || 'Could not load the LMS hub.');
+        setData(null);
+        setError(res.status === 400
+          ? 'This login is not linked to a school. Log in as the school admin to use the LMS Hub.'
+          : (body.error || 'Could not load the LMS hub.'));
       }
     } catch (e) {
       setError('Could not reach the CMS.');
     } finally {
       setLoading(false);
     }
-  }, [isSuperAdmin, schoolId]);
+  }, []);
 
   // Refresh every 15 s; the pairing countdown runs every second and reloads when the code expires
   useEffect(() => {
@@ -79,18 +69,6 @@ const LmsHubPanel = ({ user }) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', width: '100%', maxWidth: '1200px', margin: '0 auto' }}>
-      {isSuperAdmin && (
-        <div style={{ ...card, display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <label htmlFor="lmshub-school" style={{ fontWeight: 700, color: '#0f172a' }}>School</label>
-          <select id="lmshub-school" className="sd-form-input" value={schoolId} onChange={e => setSchoolId(e.target.value)}
-            style={{ minWidth: '260px', height: '38px' }}>
-            <option value="">Choose a school…</option>
-            {schools.map(s => <option key={s.school_id} value={s.school_id}>{s.school_name} ({s.schoolId || s.school_code})</option>)}
-          </select>
-        </div>
-      )}
-
-      {isSuperAdmin && !schoolId && <p style={muted}>Choose a school to see its LMS hub.</p>}
       {error && <div style={{ ...card, color: '#b91c1c', borderColor: '#fecaca', background: '#fef2f2' }}>{error}</div>}
       {message && <div style={{ ...card, color: '#166534', borderColor: '#bbf7d0', background: '#f0fdf4' }} onClick={() => setMessage('')}>{message}</div>}
 
