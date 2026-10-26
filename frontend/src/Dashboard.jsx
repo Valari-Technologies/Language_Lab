@@ -8,9 +8,10 @@ import {
   FiAward, FiLock,
   FiChevronLeft, FiChevronRight, FiEye, FiEyeOff,
   FiCornerDownRight, FiXCircle, FiMoreVertical, FiAlertTriangle, FiInfo, FiRefreshCw, FiUpload, FiClock, FiActivity,
-  FiHome, FiUserCheck, FiLayers, FiKey, FiCopy, FiSlash, FiPower, FiCheck, FiServer
+  FiHome, FiUserCheck, FiLayers, FiKey, FiCopy, FiSlash, FiPower, FiCheck, FiServer, FiMonitor
 } from 'react-icons/fi';
 import PreviewCanvasRenderer from './PreviewCanvasRenderer';
+import LmsHubPanel from './LmsHubPanel';
 import './Dashboard.css';
 import { apiFetch } from './api';
 import { API_BASE_URL } from './config';
@@ -2158,6 +2159,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           <button className={`sd-nav-item${activeTab === 'experiences' ? ' active' : ''}`} onClick={() => goTo('experiences')} title={navCollapsed ? 'Manage Lessons' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
             <FiFileText />{!navCollapsed && <span>Manage Lessons</span>}
           </button>
+          <button className={`sd-nav-item${activeTab === 'lms-hub' ? ' active' : ''}`} onClick={() => goTo('lms-hub')} title={navCollapsed ? 'LMS Hub' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
+            <FiMonitor />{!navCollapsed && <span>LMS Hub</span>}
+          </button>
           <button className={`sd-nav-item${activeTab === 'profile' ? ' active' : ''}`} onClick={() => goTo('profile')} title={navCollapsed ? 'Profile Settings' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
             <FiUser />{!navCollapsed && <span>Profile Settings</span>}
           </button>
@@ -2328,6 +2332,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     activeTab === 'subscriptions' ? (subPage === 'create-plan' ? 'Create New Plan' : 'Subscriptions & Plans') :
 
                       activeTab === 'reports' ? 'Reports & Releases' :
+                        activeTab === 'lms-hub' ? 'LMS Hub' :
                         activeTab === 'profile' ? 'Profile Settings' : 'Super Admin Portal'}
             </h2>
           </div>
@@ -4070,6 +4075,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               </div>
             </>
           )}
+
+          {activeTab === 'lms-hub' && !isAnyOverlayOpen && <LmsHubPanel user={user} />}
 
           {/* ══════════ SYSTEM SETTINGS / PROFILE TAB ══════════ */}
           {activeTab === 'profile' && !isAnyOverlayOpen && (

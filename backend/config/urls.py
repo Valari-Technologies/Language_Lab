@@ -28,6 +28,8 @@ from lms.sync.views import BootstrapSyncAPIView, LessonsPackageSyncAPIView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path("api/lms-hub/", include("lmshub.urls")),
+    path("api/cms/v1/lms-hub/", include("lmshub.admin_urls")),
     path("api/", include("accounts.urls")),
     path("api/packages/", include("lms.packages.canonical_urls")),
     path("api/progress/", include("lms.sync.canonical_urls")),
