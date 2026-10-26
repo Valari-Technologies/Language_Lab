@@ -106,7 +106,7 @@ class LmsHubOverviewAPIView(APIView):
             "devices": devices,
             "sessions": [
                 {"student": _student_name(s.student), "loginCode": s.student.user.username,
-                 "computer": s.device.pc_name, "since": iso(s.created_at)}
+                 "computer": s.device.pc_name, "deviceId": s.device.id, "since": iso(s.created_at)}
                 for s in sessions
             ],
             "plans": grade_plans,
