@@ -6,9 +6,10 @@ import {
   FiChevronDown, FiBell,
   FiCheckCircle, FiFileText,
   FiActivity, FiTrendingUp, FiAward, FiLock, FiChevronLeft, FiChevronRight,
-  FiEye, FiEyeOff, FiAlertTriangle, FiInfo, FiUpload, FiDownload, FiRefreshCw, FiMoreVertical, FiClock
+  FiEye, FiEyeOff, FiAlertTriangle, FiInfo, FiUpload, FiDownload, FiRefreshCw, FiMoreVertical, FiClock, FiMonitor
 } from 'react-icons/fi';
 import './SchoolDashboard.css';
+import LmsHubPanel from './LmsHubPanel';
 import { apiFetch } from './api';
 import { API_BASE_URL } from './config';
 
@@ -1853,6 +1854,9 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           <button className={`sd-nav-item${activeSubTab==='experiences' ? ' active' : ''}`} onClick={() => goTo('experiences')} title={navCollapsed ? 'Lessons' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
             <FiFileText/>{!navCollapsed && <span>Lessons</span>}
           </button>
+          <button className={`sd-nav-item${activeSubTab==='lms-hub' ? ' active' : ''}`} onClick={() => goTo('lms-hub')} title={navCollapsed ? 'LMS Hub' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
+            <FiMonitor/>{!navCollapsed && <span>LMS Hub</span>}
+          </button>
           <button className={`sd-nav-item${activeSubTab==='reports' ? ' active' : ''}`} onClick={() => goTo('reports')} title={navCollapsed ? 'Reports' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
             <FiBarChart2/>{!navCollapsed && <span>Reports</span>}
           </button>
@@ -1979,6 +1983,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                activeSubTab === 'classes' ? 'Class Management' :
                activeSubTab === 'experiences' ? 'Lesson Library' :
                activeSubTab === 'reports' ? 'Reports & Analytics' :
+               activeSubTab === 'lms-hub' ? 'LMS Hub' :
                activeSubTab === 'profile' ? 'Profile Settings' : 'Dashboard Overview'
                }
             </h2>
@@ -3426,6 +3431,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               )}
             </>
           )}
+
+          {activeSubTab === 'lms-hub' && !isAnyOverlayOpen && <LmsHubPanel user={user} />}
 
           {activeSubTab === 'profile' && !isAnyOverlayOpen && (
             <div style={{ padding: '0.5rem', width: '100%', maxWidth: '1100px', margin: '0 auto' }}>

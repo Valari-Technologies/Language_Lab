@@ -196,6 +196,72 @@ def _clean_event(raw):
     }
 
 
+def save_attempt(school, student, experience, ev, class_obj):
+    """
+    Save one cleaned progress event (see _clean_event) as a StudentAttempt with its screen responses,
+    and update StudentProgress. Used by /api/hub/progress/ and the CMS LMS hub (lmshub).
+    Raises IntegrityError when lms_attempt_id (the event id) already exists.
+    """
+    with transaction.atomic():
+        assignment = (
+            ExperienceAssignment.objects.filter(
+                school=school, experience_ref=str(experience.id), class_obj=class_obj
+            ).order_by("id").first()
+        )
+        if assignment is None:
+            assignment = ExperienceAssignment.objects.create(
+                school=school,
+                experience_ref=str(experience.id),
+                experience_title=experience.title,
+                grade=experience.grade,
+                class_obj=class_obj,
+                assigned_at=ev["started_at"],
+            )
+
+        attempt = StudentAttempt.objects.create(
+            lms_attempt_id=ev["event_id"],
+            assignment=assignment,
+            student=student.user,
+            school=school,
+            started_at=ev["started_at"],
+            completed_at=ev["completed_at"],
+            status="COMPLETED" if ev["completed"] else "IN_PROGRESS",
+            total_score=ev["score"],
+            max_score=ev["max_score"],
+            percentage=ev["percentage"],
+            time_spent_seconds=ev["time_spent_seconds"],
+            stars=ev["stars"],
+            level_key=ev["level_key"],
+        )
+
+        for index, screen in enumerate(ev["screens"]):
+            if not isinstance(screen, dict):
+                continue
+            ScreenResponse.objects.create(
+                attempt=attempt,
+                school=school,
+                screen_ref=str(screen.get("screen_id") or screen.get("screen_ref") or index),
+                screen_title=str(screen.get("screen_title") or "")[:255],
+                screen_type=str(screen.get("screen_type") or "")[:100],
+                response_data=screen.get("details") if isinstance(screen.get("details"), dict) else {},
+                score=_decimal(screen.get("score"), "screen score"),
+                max_score=_decimal(screen.get("max_score"), "screen max_score"),
+                is_correct=screen.get("is_correct") if isinstance(screen.get("is_correct"), bool) else None,
+                time_spent_seconds=screen.get("time_spent_seconds") if isinstance(screen.get("time_spent_seconds"), int) else None,
+            )
+
+        progress, created = StudentProgress.objects.get_or_create(
+            student=student,
+            scenario_id=str(experience.id),
+            defaults={"completed": ev["completed"], "total_time_spent": ev["time_spent_seconds"] or 0},
+        )
+        if not created:
+            progress.completed = progress.completed or ev["completed"]
+            progress.total_time_spent += ev["time_spent_seconds"] or 0
+            progress.save()
+    return attempt
+
+
 class HubProgressAPIView(APIView):
     """
     School hub progress sync.
@@ -262,63 +328,7 @@ class HubProgressAPIView(APIView):
             class_obj = class_cache[student.student_id]
 
             try:
-                with transaction.atomic():
-                    assignment = (
-                        ExperienceAssignment.objects.filter(
-                            school=school, experience_ref=str(experience.id), class_obj=class_obj
-                        ).order_by("id").first()
-                    )
-                    if assignment is None:
-                        assignment = ExperienceAssignment.objects.create(
-                            school=school,
-                            experience_ref=str(experience.id),
-                            experience_title=experience.title,
-                            grade=experience.grade,
-                            class_obj=class_obj,
-                            assigned_at=ev["started_at"],
-                        )
-
-                    attempt = StudentAttempt.objects.create(
-                        lms_attempt_id=ev["event_id"],
-                        assignment=assignment,
-                        student=student.user,
-                        school=school,
-                        started_at=ev["started_at"],
-                        completed_at=ev["completed_at"],
-                        status="COMPLETED" if ev["completed"] else "IN_PROGRESS",
-                        total_score=ev["score"],
-                        max_score=ev["max_score"],
-                        percentage=ev["percentage"],
-                        time_spent_seconds=ev["time_spent_seconds"],
-                        stars=ev["stars"],
-                        level_key=ev["level_key"],
-                    )
-
-                    for index, screen in enumerate(ev["screens"]):
-                        if not isinstance(screen, dict):
-                            continue
-                        ScreenResponse.objects.create(
-                            attempt=attempt,
-                            school=school,
-                            screen_ref=str(screen.get("screen_id") or screen.get("screen_ref") or index),
-                            screen_title=str(screen.get("screen_title") or "")[:255],
-                            screen_type=str(screen.get("screen_type") or "")[:100],
-                            response_data=screen.get("details") if isinstance(screen.get("details"), dict) else {},
-                            score=_decimal(screen.get("score"), "screen score"),
-                            max_score=_decimal(screen.get("max_score"), "screen max_score"),
-                            is_correct=screen.get("is_correct") if isinstance(screen.get("is_correct"), bool) else None,
-                            time_spent_seconds=screen.get("time_spent_seconds") if isinstance(screen.get("time_spent_seconds"), int) else None,
-                        )
-
-                    progress, created = StudentProgress.objects.get_or_create(
-                        student=student,
-                        scenario_id=str(experience.id),
-                        defaults={"completed": ev["completed"], "total_time_spent": ev["time_spent_seconds"] or 0},
-                    )
-                    if not created:
-                        progress.completed = progress.completed or ev["completed"]
-                        progress.total_time_spent += ev["time_spent_seconds"] or 0
-                        progress.save()
+                save_attempt(school, student, experience, ev, class_obj)
             except IntegrityError:
                 if StudentAttempt.objects.filter(lms_attempt_id=ev["event_id"]).exists():
                     duplicates.append(ev["event_id"])

@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'content_studio',
     'assessments',
     'lms',
+    'lmshub',
     'drf_spectacular',
 ]
 
