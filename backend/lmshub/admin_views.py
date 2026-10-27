@@ -78,6 +78,28 @@ def _student_name(student):
     return student.user.full_name or student.user.username
 
 
+def _mask_key(key):
+    key = str(key or "")
+    return f"{key[:8]}…{key[-4:]}" if len(key) > 12 else key
+
+
+def _lms_servers(school, lic):
+    """The school's LMS servers: key activation, activation time, expiry and user capacity."""
+    rows = []
+    for s in LmsServer.objects.filter(school=school).order_by("status", "activationDate"):
+        expiry = s.expiryDate or (lic.expiryDate if lic else None)
+        rows.append({
+            "name": s.deviceName or s.serverName,
+            "licenseKey": _mask_key(s.licenseKey),
+            "status": s.status,
+            "activated": s.lastSyncTime is not None,
+            "activatedAt": iso(s.lastSyncTime),
+            "expiryDate": expiry.isoformat() if expiry else None,
+            "userCapacity": s.maxUsers,
+        })
+    return rows
+
+
 class LmsHubOverviewAPIView(APIView):
     """GET /api/cms/v1/lms-hub/overview/ (super admin: ?school_id=)."""
     permission_classes = [IsAuthenticated]
@@ -148,6 +170,7 @@ class LmsHubOverviewAPIView(APIView):
             "cmsAddress": request.build_absolute_uri("/").rstrip("/"),
             "licenseActive": state["active"],
             "seats": {"used": seats_used(school), "total": seat_total(state)},
+            "lmsServers": _lms_servers(school, state["license"]),
             "devices": devices,
             "sessions": [
                 {"student": _student_name(s.student), "loginCode": s.student.user.username,

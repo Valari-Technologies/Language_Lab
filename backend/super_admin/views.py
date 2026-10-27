@@ -313,7 +313,17 @@ Username: {admin_username}
 Password: {admin_password}
 --------------------------------------------
 
+LMS Installation License Key:
+--------------------------------------------
+License Key: {first_lic_key}
+User Capacity: {concurrent_users or 40} concurrent users
+Valid Until: {expiry_date.strftime('%d %b %Y')}
+--------------------------------------------
+
 Please use these credentials to sign in to the Language Lab CMS portal.
+Use the LMS Installation License Key to activate the LMS on your school's computer,
+and to unlock the "LMS Hub" page in your School Admin portal the first time you open it.
+Keep this key private.
 
 Best regards,
 Language Lab Team

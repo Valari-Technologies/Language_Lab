@@ -14,7 +14,7 @@ from django.utils import timezone
 
 from django.db import IntegrityError
 
-from super_admin.models import License
+from super_admin.models import License, LmsServer
 from .models import LmsDevice, LmsPairingCode, LmsSession, LmsThrottle
 
 PAIRING_CODE_LIFETIME = timedelta(minutes=10)
@@ -190,8 +190,12 @@ def license_state(school):
 
 
 def seat_total(state):
+    """Sum of the user capacity of the licence's ACTIVE LMS servers; the licence capacity when it has none."""
     lic = state["license"]
-    total = lic.concurrentUsersPerServer if lic else None
+    if not lic:
+        return None
+    capacities = list(lic.lms_servers.filter(status=LmsServer.Status.ACTIVE).values_list("maxUsers", flat=True))
+    total = sum(c for c in capacities if c and c > 0) if capacities else lic.concurrentUsersPerServer
     return total if total and total > 0 else None
 
 
