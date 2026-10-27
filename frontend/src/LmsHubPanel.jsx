@@ -63,7 +63,7 @@ const LmsHubPanel = () => {
   const unlock = async (e) => {
     e.preventDefault();
     if (!keyInput.trim()) {
-      setKeyError('Enter the LMS licence key.');
+      setKeyError('Enter the LMS key.');
       return;
     }
     setUnlocking(true);
@@ -76,7 +76,7 @@ const LmsHubPanel = () => {
         setLocked(false);
         load();
       } else {
-        setKeyError(body.message || 'This is not the LMS licence key of your school.');
+        setKeyError(body.message || 'This is not an LMS key of your school.');
       }
     } catch (err) {
       setKeyError('Could not reach the CMS.');
@@ -113,10 +113,11 @@ const LmsHubPanel = () => {
         <form onSubmit={unlock} style={{ ...card, maxWidth: '520px', margin: '2rem auto 0', width: '100%' }}>
           <h3 style={cardTitle}><FiKey /> Unlock the LMS Hub</h3>
           <p style={{ ...muted, fontSize: '0.85rem', margin: '0 0 1rem 0' }}>
-            Enter your school's LMS licence key to open the LMS Hub. You only need to do this once for your school.
-            Ask your CMS administrator if you don't have the key.
+            Enter your school's LMS key to open the LMS Hub: the school licence key (KEY-…) or the key of one of
+            your school's LMS servers (LMS-KEY-…). You only need to do this once for your school.
+            Ask your CMS administrator if you don't have a key.
           </p>
-          <label htmlFor="lmshub-key" style={{ display: 'block', fontWeight: 700, color: '#0f172a', marginBottom: '0.4rem' }}>LMS licence key</label>
+          <label htmlFor="lmshub-key" style={{ display: 'block', fontWeight: 700, color: '#0f172a', marginBottom: '0.4rem' }}>LMS key</label>
           <input
             id="lmshub-key"
             className="sd-form-input"
@@ -124,7 +125,7 @@ const LmsHubPanel = () => {
             autoComplete="off"
             value={keyInput}
             onChange={e => setKeyInput(e.target.value)}
-            placeholder="e.g. KEY-XXXXXXXXXXXXXXXX"
+            placeholder="e.g. LMS-KEY-XXXXXXXXXXXXXXXX"
             style={{ width: '100%', height: '42px', marginBottom: '0.6rem' }}
           />
           {keyError && <div style={{ color: '#b91c1c', fontSize: '0.85rem', marginBottom: '0.6rem' }}>{keyError}</div>}

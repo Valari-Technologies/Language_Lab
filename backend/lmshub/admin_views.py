@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.scoping import get_user_school
-from super_admin.models import School
+from super_admin.models import LmsServer, School
 from . import plans
 from .core import (
     current_pairing_code, end_sessions_for_device, iso, license_state, open_sessions, seat_total, seats_used, sha256_hex,
@@ -20,13 +20,28 @@ def _normalize_key(key):
     return str(key or "").strip().upper()
 
 
-def is_unlocked(school):
-    """The LMS Hub page was opened once with the school's current licence key."""
-    access = LmsHubAccess.objects.filter(school=school).first()
+def _valid_key_hashes(school):
+    """Hashes of the keys that open the school's LMS Hub: its licence key and the keys of its ACTIVE LMS servers."""
+    keys = []
     lic = license_state(school)["license"]
-    if not access or not lic or not lic.licenseKey:
-        return False
-    return hmac.compare_digest(access.license_key_hash, sha256_hex(_normalize_key(lic.licenseKey)))
+    if lic and lic.licenseKey:
+        keys.append(lic.licenseKey)
+    keys += list(
+        LmsServer.objects.filter(school=school, status=LmsServer.Status.ACTIVE)
+        .exclude(licenseKey__isnull=True).exclude(licenseKey="")
+        .values_list("licenseKey", flat=True)
+    )
+    return {sha256_hex(_normalize_key(k)) for k in keys if _normalize_key(k)}
+
+
+def _matches(key_hash, hashes):
+    return any(hmac.compare_digest(key_hash, h) for h in hashes)
+
+
+def is_unlocked(school):
+    """The LMS Hub page was opened once with a key that is still valid for the school."""
+    access = LmsHubAccess.objects.filter(school=school).first()
+    return bool(access) and _matches(access.license_key_hash, _valid_key_hashes(school))
 
 
 def _key_required_response():
@@ -172,8 +187,9 @@ class LmsHubRemoveDeviceAPIView(APIView):
 
 class LmsHubUnlockAPIView(APIView):
     """
-    POST /api/cms/v1/lms-hub/unlock/ {"key": "<school licence key>"}: opens the LMS Hub page for the school
-    (once per school; a new licence key locks it again). School admins only, for their own school.
+    POST /api/cms/v1/lms-hub/unlock/ {"key": "<school licence key or an ACTIVE LMS server key>"}: opens the
+    LMS Hub page for the school, once per school. When the key used stops being valid (licence key changed,
+    server deactivated or deleted), the page is locked again. School admins only, for their own school.
     """
     permission_classes = [IsAuthenticated]
 
@@ -183,18 +199,16 @@ class LmsHubUnlockAPIView(APIView):
         school, failure = _school_for(request)
         if failure:
             return failure
-        lic = license_state(school)["license"]
         typed = _normalize_key(request.data.get("key") if isinstance(request.data, dict) else "")
         if not typed:
             return Response({"error": "key_required", "message": "Enter the LMS licence key."},
                             status=status.HTTP_400_BAD_REQUEST)
-        expected = _normalize_key(lic.licenseKey) if lic and lic.licenseKey else ""
-        if not expected or not hmac.compare_digest(typed.encode(), expected.encode()):
-            return Response({"error": "wrong_key", "message": "This is not the LMS licence key of your school."},
+        typed_hash = sha256_hex(typed)
+        if not _matches(typed_hash, _valid_key_hashes(school)):
+            return Response({"error": "wrong_key", "message": "This is not an LMS key of your school."},
                             status=status.HTTP_400_BAD_REQUEST)
         LmsHubAccess.objects.update_or_create(
             school=school,
-            defaults={"license_key_hash": sha256_hex(expected), "unlocked_at": timezone.now(),
-                      "unlocked_by": request.user},
+            defaults={"license_key_hash": typed_hash, "unlocked_at": timezone.now(), "unlocked_by": request.user},
         )
         return Response({"ok": True, "message": "The LMS Hub is unlocked for your school."})
