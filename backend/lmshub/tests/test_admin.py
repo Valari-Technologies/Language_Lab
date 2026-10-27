@@ -23,6 +23,11 @@ class AdminPageTests(HubTestBase):
         self.super_admin = User.objects.create_user(username="root", password="x", role=User.Role.SUPER_ADMIN)
         self.teacher = User.objects.create_user(username="teach", password="x", role=User.Role.TEACHER)
         Teacher.objects.create(user=self.teacher, school=self.school_a)
+        # Both schools have opened the LMS Hub with their licence key (see test_unlock.py)
+        for admin, key in ((self.admin_a, "KEY-A"), (self.admin_b, "KEY-B")):
+            self.api.force_authenticate(admin)
+            self.assertEqual(self.api.post("/api/cms/v1/lms-hub/unlock/", {"key": key}, format="json").status_code, 200)
+        self.api.force_authenticate(None)
 
     def test_overview_for_school_admin(self):
         token = self.pair(pc_name="Lab PC 1")

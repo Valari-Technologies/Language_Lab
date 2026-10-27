@@ -19,6 +19,10 @@ const LmsHubPanel = () => {
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [confirmId, setConfirmId] = useState(null);
   const [message, setMessage] = useState('');
+  const [locked, setLocked] = useState(false);
+  const [keyInput, setKeyInput] = useState('');
+  const [keyError, setKeyError] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -29,6 +33,12 @@ const LmsHubPanel = () => {
         setData(body);
         setSecondsLeft(body.pairing?.secondsLeft || 0);
         setError('');
+        setLocked(false);
+      } else if (res.status === 403 && body.error === 'lms_key_required') {
+        // Opened once per school with the school's LMS licence key
+        setData(null);
+        setError('');
+        setLocked(true);
       } else {
         setData(null);
         setError(res.status === 400
@@ -45,11 +55,38 @@ const LmsHubPanel = () => {
   // Refresh every 15 s; the pairing countdown runs every second and reloads when the code expires
   useEffect(() => {
     load();
+    if (locked) return undefined;
     const timer = setInterval(load, 15000);
     return () => clearInterval(timer);
-  }, [load]);
+  }, [load, locked]);
+
+  const unlock = async (e) => {
+    e.preventDefault();
+    if (!keyInput.trim()) {
+      setKeyError('Enter the LMS licence key.');
+      return;
+    }
+    setUnlocking(true);
+    setKeyError('');
+    try {
+      const res = await apiFetch('/api/cms/v1/lms-hub/unlock/', { method: 'POST', body: JSON.stringify({ key: keyInput }) });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setKeyInput('');
+        setLocked(false);
+        load();
+      } else {
+        setKeyError(body.message || 'This is not the LMS licence key of your school.');
+      }
+    } catch (err) {
+      setKeyError('Could not reach the CMS.');
+    } finally {
+      setUnlocking(false);
+    }
+  };
 
   useEffect(() => {
+    if (locked) return undefined;
     const tick = setInterval(() => {
       setSecondsLeft(s => {
         if (s <= 1) { load(); return 0; }
@@ -57,7 +94,7 @@ const LmsHubPanel = () => {
       });
     }, 1000);
     return () => clearInterval(tick);
-  }, [load]);
+  }, [load, locked]);
 
   const removeDevice = async (device) => {
     setConfirmId(null);
@@ -71,6 +108,32 @@ const LmsHubPanel = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', width: '100%', maxWidth: '1200px', margin: '0 auto' }}>
       {error && <div style={{ ...card, color: '#b91c1c', borderColor: '#fecaca', background: '#fef2f2' }}>{error}</div>}
       {message && <div style={{ ...card, color: '#166534', borderColor: '#bbf7d0', background: '#f0fdf4' }} onClick={() => setMessage('')}>{message}</div>}
+
+      {locked && (
+        <form onSubmit={unlock} style={{ ...card, maxWidth: '520px', margin: '2rem auto 0', width: '100%' }}>
+          <h3 style={cardTitle}><FiKey /> Unlock the LMS Hub</h3>
+          <p style={{ ...muted, fontSize: '0.85rem', margin: '0 0 1rem 0' }}>
+            Enter your school's LMS licence key to open the LMS Hub. You only need to do this once for your school.
+            Ask your CMS administrator if you don't have the key.
+          </p>
+          <label htmlFor="lmshub-key" style={{ display: 'block', fontWeight: 700, color: '#0f172a', marginBottom: '0.4rem' }}>LMS licence key</label>
+          <input
+            id="lmshub-key"
+            className="sd-form-input"
+            type="password"
+            autoComplete="off"
+            value={keyInput}
+            onChange={e => setKeyInput(e.target.value)}
+            placeholder="e.g. KEY-XXXXXXXXXXXXXXXX"
+            style={{ width: '100%', height: '42px', marginBottom: '0.6rem' }}
+          />
+          {keyError && <div style={{ color: '#b91c1c', fontSize: '0.85rem', marginBottom: '0.6rem' }}>{keyError}</div>}
+          <button type="submit" className="sd-btn-primary" disabled={unlocking}
+            style={{ padding: '0.6rem 1.4rem', background: '#0b75b3', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}>
+            {unlocking ? 'Checking…' : 'Unlock'}
+          </button>
+        </form>
+      )}
 
       {data && (
         <>
