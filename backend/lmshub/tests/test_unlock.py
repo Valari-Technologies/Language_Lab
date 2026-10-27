@@ -3,7 +3,7 @@ from rest_framework.test import APIClient
 
 from lmshub.models import LmsDevice, LmsHubAccess
 from school_admin.models import Teacher
-from super_admin.models import License, SchoolAdminProfile
+from super_admin.models import License, LmsServer, SchoolAdminProfile
 from .base import HubTestBase
 
 User = get_user_model()
@@ -60,6 +60,30 @@ class UnlockTests(HubTestBase):
         self.assertEqual(self.api.get(OVERVIEW).json()["error"], "lms_key_required")
         self.assertEqual(self.api.post(UNLOCK, {"key": "KEY-A-NEW"}, format="json").status_code, 200)
         self.assertEqual(self.api.get(OVERVIEW).status_code, 200)
+
+    def _server(self, school, key, status=LmsServer.Status.ACTIVE):
+        lic = License.objects.get(school=school)
+        return LmsServer.objects.create(installationId=f"INST-{key}", serverName="Server", licenseKey=key,
+                                        school=school, license=lic, status=status)
+
+    def test_active_lms_server_key_unlocks(self):
+        server = self._server(self.school_a, "LMS-KEY-6B4513FFC4EA4E89")
+        api = self._as(self.admin_a)
+        self.assertEqual(api.post(UNLOCK, {"key": " lms-key-6b4513ffc4ea4e89 "}, format="json").status_code, 200)
+        self.assertEqual(api.get(OVERVIEW).status_code, 200)
+        # the server is deactivated -> its key no longer opens the page
+        LmsServer.objects.filter(pk=server.pk).update(status=LmsServer.Status.DEACTIVATED)
+        self.assertEqual(api.get(OVERVIEW).json()["error"], "lms_key_required")
+        self.assertEqual(api.post(UNLOCK, {"key": "LMS-KEY-6B4513FFC4EA4E89"}, format="json").json()["error"], "wrong_key")
+        self.assertEqual(api.post(UNLOCK, {"key": "KEY-A"}, format="json").status_code, 200)
+
+    def test_other_schools_server_key_refused(self):
+        self._server(self.school_b, "LMS-KEY-SCHOOLB")
+        self._server(self.school_a, "LMS-KEY-OFF", status=LmsServer.Status.DEACTIVATED)
+        api = self._as(self.admin_a)
+        self.assertEqual(api.post(UNLOCK, {"key": "LMS-KEY-SCHOOLB"}, format="json").json()["error"], "wrong_key")
+        self.assertEqual(api.post(UNLOCK, {"key": "LMS-KEY-OFF"}, format="json").json()["error"], "wrong_key")
+        self.assertEqual(api.get(OVERVIEW).status_code, 403)
 
     def test_remove_computer_needs_unlock(self):
         self.pair()
