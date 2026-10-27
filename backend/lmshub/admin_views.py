@@ -1,4 +1,6 @@
 """CMS page "LMS Hub": pairing code, paired computers, seats, active students, plans and progress problems."""
+import hmac
+
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -8,8 +10,34 @@ from rest_framework.views import APIView
 from accounts.scoping import get_user_school
 from super_admin.models import School
 from . import plans
-from .core import current_pairing_code, end_sessions_for_device, iso, license_state, open_sessions, seat_total, seats_used
-from .models import LmsDevice, LmsProgressEvent
+from .core import (
+    current_pairing_code, end_sessions_for_device, iso, license_state, open_sessions, seat_total, seats_used, sha256_hex,
+)
+from .models import LmsDevice, LmsHubAccess, LmsProgressEvent
+
+
+def _normalize_key(key):
+    return str(key or "").strip().upper()
+
+
+def is_unlocked(school):
+    """The LMS Hub page was opened once with the school's current licence key."""
+    access = LmsHubAccess.objects.filter(school=school).first()
+    lic = license_state(school)["license"]
+    if not access or not lic or not lic.licenseKey:
+        return False
+    return hmac.compare_digest(access.license_key_hash, sha256_hex(_normalize_key(lic.licenseKey)))
+
+
+def _key_required_response():
+    return Response(
+        {"error": "lms_key_required", "message": "Enter the school's LMS licence key to open the LMS Hub."},
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
+def _is_super_admin(user):
+    return user.role == "SUPER_ADMIN" or user.is_superuser
 
 
 def _school_for(request):
@@ -43,6 +71,8 @@ class LmsHubOverviewAPIView(APIView):
         school, failure = _school_for(request)
         if failure:
             return failure
+        if not _is_super_admin(request.user) and not is_unlocked(school):
+            return _key_required_response()
         now = timezone.now()
         code = current_pairing_code(school)
         state = license_state(school)
@@ -133,6 +163,38 @@ class LmsHubRemoveDeviceAPIView(APIView):
                             status=status.HTTP_403_FORBIDDEN)
         if not device:
             return Response({"error": "Computer not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not _is_super_admin(user) and not is_unlocked(device.school):
+            return _key_required_response()
         LmsDevice.objects.filter(pk=device.pk).update(revoked=True)
         end_sessions_for_device(device, "pc_removed")
         return Response({"ok": True, "message": f"Computer '{device.pc_name}' was removed."})
+
+
+class LmsHubUnlockAPIView(APIView):
+    """
+    POST /api/cms/v1/lms-hub/unlock/ {"key": "<school licence key>"}: opens the LMS Hub page for the school
+    (once per school; a new licence key locks it again). School admins only, for their own school.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.role != "SCHOOL_ADMIN":
+            return Response({"error": "Only school admins unlock the LMS Hub."}, status=status.HTTP_403_FORBIDDEN)
+        school, failure = _school_for(request)
+        if failure:
+            return failure
+        lic = license_state(school)["license"]
+        typed = _normalize_key(request.data.get("key") if isinstance(request.data, dict) else "")
+        if not typed:
+            return Response({"error": "key_required", "message": "Enter the LMS licence key."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        expected = _normalize_key(lic.licenseKey) if lic and lic.licenseKey else ""
+        if not expected or not hmac.compare_digest(typed.encode(), expected.encode()):
+            return Response({"error": "wrong_key", "message": "This is not the LMS licence key of your school."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        LmsHubAccess.objects.update_or_create(
+            school=school,
+            defaults={"license_key_hash": sha256_hex(expected), "unlocked_at": timezone.now(),
+                      "unlocked_by": request.user},
+        )
+        return Response({"ok": True, "message": "The LMS Hub is unlocked for your school."})

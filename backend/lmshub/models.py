@@ -4,6 +4,7 @@ LMS Hub in the CMS: what the school hub PC used to keep for the student PCs of a
 """
 import uuid
 
+from django.conf import settings
 from django.db import models
 
 
@@ -113,6 +114,22 @@ class LmsResumePosition(models.Model):
     class Meta:
         db_table = "lmshub_resume_position"
         constraints = [models.UniqueConstraint(fields=["student", "package_id"], name="lmshub_unique_resume_per_package")]
+
+
+class LmsHubAccess(models.Model):
+    """
+    The school's LMS Hub page was unlocked with the school licence key (once per school).
+    Only a hash of that key is kept: when the school gets a new licence key, the page is locked again.
+    """
+    school = models.OneToOneField("super_admin.School", on_delete=models.CASCADE, related_name="lms_hub_access")
+    license_key_hash = models.CharField(max_length=64)
+    unlocked_at = models.DateTimeField()
+    unlocked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta:
+        db_table = "lmshub_access"
 
 
 class LmsThrottle(models.Model):
