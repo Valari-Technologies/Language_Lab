@@ -1,11 +1,12 @@
 import uuid
 
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from lmshub.models import LmsDevice, LmsProgressEvent, LmsSession
 from school_admin.models import Teacher
-from super_admin.models import SchoolAdminProfile
+from super_admin.models import License, LmsServer, SchoolAdminProfile
 from .base import HubTestBase
 
 User = get_user_model()
@@ -47,6 +48,34 @@ class AdminPageTests(HubTestBase):
         self.assertEqual([p["grade"]["id"] for p in data["plans"]], [self.grade3.id, self.grade4.id])
         self.assertEqual(data["progress"]["attemptsToday"], 1)
         self.assertEqual(data["progress"]["noClass"][0]["loginCode"], "DIY_1002")
+
+    def test_lms_servers_card_and_seats_from_server_capacity(self):
+        lic = License.objects.get(school=self.school_a)
+        LmsServer.objects.create(installationId="INST-1", serverName="Lab server", licenseKey="LMS-KEY-1111222233334444",
+                                 school=self.school_a, license=lic, maxUsers=30, lastSyncTime=timezone.now(),
+                                 deviceName="LAB-PC")
+        LmsServer.objects.create(installationId="INST-2", serverName="Spare", licenseKey="LMS-KEY-5555666677778888",
+                                 school=self.school_a, license=lic, maxUsers=25)
+        LmsServer.objects.create(installationId="INST-3", serverName="Old", licenseKey="LMS-KEY-9999000011112222",
+                                 school=self.school_a, license=lic, maxUsers=50, status=LmsServer.Status.DEACTIVATED)
+        LmsServer.objects.create(installationId="INST-B", serverName="Other", licenseKey="LMS-KEY-BBBB",
+                                 school=self.school_b, license=License.objects.get(school=self.school_b), maxUsers=99)
+        self.api.force_authenticate(self.admin_a)
+        data = self.api.get(OVERVIEW).json()
+        # seats = capacity of the ACTIVE servers (30 + 25), not the deactivated one or another school's
+        self.assertEqual(data["seats"]["total"], 55)
+        servers = data["lmsServers"]
+        self.assertEqual(len(servers), 3)
+        first = servers[0]
+        self.assertEqual(first["name"], "LAB-PC")
+        self.assertEqual(first["licenseKey"], "LMS-KEY-…4444")
+        self.assertTrue(first["activated"])
+        self.assertIsNotNone(first["activatedAt"])
+        self.assertEqual(first["expiryDate"], lic.expiryDate.isoformat())
+        self.assertEqual(first["userCapacity"], 30)
+        self.assertFalse(servers[1]["activated"])
+        self.assertIsNone(servers[1]["activatedAt"])
+        self.assertEqual(servers[2]["status"], "DEACTIVATED")
 
     def test_super_admin_needs_school_and_teacher_is_refused(self):
         self.api.force_authenticate(self.super_admin)

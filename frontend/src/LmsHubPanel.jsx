@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FiRefreshCw, FiTrash2, FiUsers, FiBookOpen, FiAlertTriangle, FiKey } from 'react-icons/fi';
+import { FiRefreshCw, FiTrash2, FiUsers, FiBookOpen, FiAlertTriangle, FiKey, FiServer } from 'react-icons/fi';
 import { apiFetch } from './api';
 
 // "LMS Hub" page (School Admin portal only): student PCs of the English Adventure LMS connect to the CMS
@@ -138,6 +138,7 @@ const LmsHubPanel = () => {
 
       {data && (
         <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem', alignItems: 'start' }}>
           {/* Pairing */}
           <div style={card}>
             <h3 style={cardTitle}><FiKey /> Pair a student computer</h3>
@@ -163,6 +164,33 @@ const LmsHubPanel = () => {
               </div>
             </div>
             <p style={{ ...muted, marginTop: '0.75rem' }}>On the student PC, choose "Connect to the CMS", then type the CMS address, the school code and this pairing code.</p>
+          </div>
+
+          {/* LMS servers: key activation, expiry and user capacity */}
+          <div style={card}>
+            <h3 style={cardTitle}><FiServer /> LMS Servers</h3>
+            {data.lmsServers.length === 0 ? <p style={muted}>No LMS server key for this school yet.</p> : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {data.lmsServers.map((s, i) => {
+                  const off = s.status !== 'ACTIVE';
+                  const badge = off ? ['Deactivated', '#b91c1c', '#fef2f2'] : s.activated ? ['Activated', '#166534', '#f0fdf4'] : ['Not activated yet', '#b45309', '#fffbeb'];
+                  return (
+                    <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.75rem 0.9rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                        <span style={{ fontWeight: 700, color: '#0f172a', wordBreak: 'break-all' }}>{s.licenseKey || s.name}</span>
+                        <span style={{ marginLeft: 'auto', padding: '2px 8px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 700, color: badge[1], background: badge[2], whiteSpace: 'nowrap' }}>{badge[0]}</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.5rem' }}>
+                        <div><div style={muted}>Activated on</div><div style={{ fontSize: '0.85rem', color: '#0f172a' }}>{s.activated ? fmt(s.activatedAt) : '—'}</div></div>
+                        <div><div style={muted}>Expires on</div><div style={{ fontSize: '0.85rem', color: '#0f172a' }}>{s.expiryDate ? new Date(`${s.expiryDate}T00:00:00`).toLocaleDateString() : '—'}</div></div>
+                        <div><div style={muted}>User capacity</div><div style={{ fontSize: '0.85rem', color: '#0f172a' }}>{s.userCapacity} users</div></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           </div>
 
           {/* Seats and active students */}
