@@ -10,6 +10,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 
 from accounts.permissions import IsContentCreatorOrSuperAdmin, IsSuperAdmin, IsContentCreator
+from .levels import level_taken_by, parse_level
 from .models import (
     Experience,
     LearningOutcome,
@@ -1073,33 +1074,12 @@ class PreviewViewSet(viewsets.ViewSet):
 # ---------------------------------------------------------------------------
 # Phase 7: Publish Center
 # ---------------------------------------------------------------------------
-LEVEL_LIMITS = {"LESSON": 30, "ASSESSMENT": 6}
-
-
 def _parse_level(experience, raw):
-    """(level, error) for the Publish Center "Level" box: empty -> (None, None); else a slot of the LMS level map."""
-    if raw is None or str(raw).strip() == "":
-        return None, None
-    limit = LEVEL_LIMITS.get(experience.experience_type, 30)
-    kind = "assessment" if experience.experience_type == "ASSESSMENT" else "lesson"
-    try:
-        level = int(str(raw).strip())
-    except ValueError:
-        level = 0
-    if not 1 <= level <= limit:
-        return None, f"Level must be a whole number from 1 to {limit} for a {kind}."
-    return level, None
+    return parse_level(experience.experience_type, raw)
 
 
 def _level_taken_by(experience, level):
-    """Another lesson of the same grade and type that already has (or is waiting for) this LMS level, or None."""
-    others = Experience.objects.filter(
-        grade=experience.grade, experience_type=experience.experience_type
-    ).exclude(is_deleted=True).exclude(pk=experience.pk)
-    return (
-        others.filter(level=level).first()
-        or others.filter(status="PENDING_APPROVAL", pending_level=level).first()
-    )
+    return level_taken_by(experience.grade, experience.experience_type, level, exclude_pk=experience.pk)
 
 
 class PublishViewSet(viewsets.ViewSet):
@@ -1125,7 +1105,9 @@ class PublishViewSet(viewsets.ViewSet):
         version = request.data.get("version")  # optional
         release_notes = request.data.get("release_notes", "")
 
-        level, level_error = _parse_level(experience, request.data.get("level"))
+        # The level is normally set in the Lesson Builder (pending_level); a "level" in the request overrides it
+        raw_level = request.data.get("level") if "level" in request.data else experience.pending_level
+        level, level_error = _parse_level(experience, raw_level)
         if level_error:
             return Response({"error": level_error}, status=status.HTTP_400_BAD_REQUEST)
         if level is not None:
@@ -1255,7 +1237,7 @@ class PublishViewSet(viewsets.ViewSet):
         all_versions = (
             PublishVersion.objects
             .filter(published_package__experience__is_deleted=False)
-            .select_related("published_package__experience", "published_by")
+            .select_related("published_package__experience__grade", "published_by")
             .order_by("-published_at")
         )
         data = []
@@ -1264,6 +1246,8 @@ class PublishViewSet(viewsets.ViewSet):
             entry = PublishVersionSerializer(v).data
             entry["experience_title"] = exp.title if exp else "—"
             entry["experience_id"] = exp.id if exp else None
+            entry["experience_type"] = exp.experience_type if exp else None
+            entry["grade_name"] = exp.grade.grade_name if exp and exp.grade else None
             data.append(entry)
         return Response({"versions": data}, status=status.HTTP_200_OK)
 
@@ -1692,8 +1676,7 @@ class SuperAdminExperienceViewSet(viewsets.ViewSet):
         experience.review_remark = remark
         experience.pending_version = None
         experience.pending_release_notes = None
-        experience.pending_level = None
-        experience.save(update_fields=["status", "review_remark", "pending_version", "pending_release_notes", "pending_level"])
+        experience.save(update_fields=["status", "review_remark", "pending_version", "pending_release_notes"])
 
         # Notify Content Creator
         if experience.created_by:
