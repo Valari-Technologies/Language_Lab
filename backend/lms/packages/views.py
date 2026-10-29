@@ -456,7 +456,9 @@ def build_level_map(grade):
     packages = (
         PublishedPackage.objects.filter(
             compression_status="COMPLETED",
-            experience__status="APPROVED",
+            # A lesson waiting for approval of a new version keeps serving its last built package
+            # A lesson waiting for approval of a new version keeps serving its last built package
+            experience__status__in=["APPROVED", "PENDING_APPROVAL"],
             experience__grade=grade,
         )
         .exclude(experience__is_deleted=True)
@@ -464,24 +466,39 @@ def build_level_map(grade):
         .select_related("experience")
         .order_by("experience__created_at", "experience__id")
     )
-    lesson_pkgs = list(packages.filter(experience__experience_type="LESSON")[:LEVEL_MAP_LESSON_SLOTS])
-    boss_pkgs = list(packages.filter(experience__experience_type="ASSESSMENT")[:LEVEL_MAP_BOSS_SLOTS])
+    lesson_slots = _fill_slots(list(packages.filter(experience__experience_type="LESSON")), LEVEL_MAP_LESSON_SLOTS)
+    boss_slots = _fill_slots(list(packages.filter(experience__experience_type="ASSESSMENT")), LEVEL_MAP_BOSS_SLOTS)
 
-    lessons = [None] * LEVEL_MAP_LESSON_SLOTS
-    for index, pkg in enumerate(lesson_pkgs):
-        slot = index + 1
-        lessons[index] = _level_map_entry(pkg, slot, (slot - 1) // LEVEL_MAP_LESSONS_PER_ZONE + 1)
-
-    bosses = [None] * LEVEL_MAP_BOSS_SLOTS
-    for index, pkg in enumerate(boss_pkgs):
-        slot = index + 1
-        bosses[index] = _level_map_entry(pkg, slot, slot)
+    lessons = [
+        _level_map_entry(pkg, index + 1, index // LEVEL_MAP_LESSONS_PER_ZONE + 1) if pkg else None
+        for index, pkg in enumerate(lesson_slots)
+    ]
+    bosses = [_level_map_entry(pkg, index + 1, index + 1) if pkg else None for index, pkg in enumerate(boss_slots)]
 
     return {
-        "counts": {"lessons": len(lesson_pkgs), "assessments": len(boss_pkgs)},
+        "counts": {"lessons": sum(1 for p in lesson_slots if p), "assessments": sum(1 for p in boss_slots if p)},
         "lessons": lessons,
         "bosses": bosses,
     }
+
+
+def _fill_slots(packages, size):
+    """
+    Packages (oldest first) placed into `size` slots: a package whose experience has a level goes to that slot;
+    the others fill the free slots in order. Packages that do not fit are left out.
+    """
+    slots = [None] * size
+    rest = []
+    for pkg in packages:
+        level = pkg.experience.level
+        if level and 1 <= level <= size and slots[level - 1] is None:
+            slots[level - 1] = pkg
+        else:
+            rest.append(pkg)
+    free = [i for i, p in enumerate(slots) if p is None]
+    for index, pkg in zip(free, rest):
+        slots[index] = pkg
+    return slots
 
 
 class LevelMapAPIView(APIView):
