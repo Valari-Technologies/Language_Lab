@@ -26,6 +26,7 @@ import logoIcon from './assets/icon.png';
 import roundLogo from './assets/favicon.png';
 import AvatarCropperModal from './AvatarCropperModal';
 import HelpSupportModal from './HelpSupportModal';
+import TeacherReportsPanel from './TeacherReportsPanel';
 
 const sortClasses = (classesList) => {
   if (!Array.isArray(classesList)) return [];
@@ -2501,20 +2502,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
           {/* ══════════ REPORTS TAB ══════════ */}
           {activeSubTab === 'reports' && !isAnyOverlayOpen && (
-            <>
-              <div className="sd-page-header">
-                <h1 className="sd-page-title">Student Performance Reports</h1>
-                <p className="sd-page-sub">Monitor evaluation metrics and student progression.</p>
-              </div>
-
-              <div className="sd-card" style={{ padding: '3rem 1.5rem', textAlign: 'center' }}>
-                <FiBarChart2 style={{ fontSize: '3rem', color: '#94a3b8', marginBottom: '1rem' }} />
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#1e293b', marginBottom: '0.5rem' }}>No Reports Available</h3>
-                <p style={{ color: '#64748b', maxWidth: '450px', margin: '0 auto' }}>
-                  Student progression and evaluation reports will appear here once assignments are completed and submitted.
-                </p>
-              </div>
-            </>
+            <TeacherReportsPanel />
           )}
 
 {/* ══════════ PROFILE TAB ══════════ */}
