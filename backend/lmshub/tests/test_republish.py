@@ -106,6 +106,49 @@ class RepublishTests(HubTestBase):
         plan = self.get("level-plan", token=self.token, session=self.session_token).json()
         self.assertEqual(plan["lessons"][4]["version"], "1.1")
 
+    def _builder_save(self, exp, **fields):
+        self.api.force_authenticate(self.creator)
+        return self.api.patch(reverse("experience-detail", args=[exp.id]), fields, format="json")
+
+    def test_lesson_builder_level_is_saved_validated_and_published(self):
+        # lesson: 1-30
+        for bad in (0, 31, -1):
+            self.assertEqual(self._builder_save(self.exp, pending_level=bad).status_code, 400, bad)
+        # assessment: 1-6
+        self.assertEqual(self._builder_save(self.exp, experience_type="ASSESSMENT", pending_level=7).status_code, 400)
+        self.assertEqual(self._builder_save(self.exp, experience_type="ASSESSMENT", pending_level=6).status_code, 200)
+        self.assertEqual(self._builder_save(self.exp, experience_type="LESSON", pending_level=12).status_code, 200)
+        response = self._builder_save(self.exp, pending_level=5)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual((response.json()["pending_level"], response.json()["level"]), (5, None))
+        self.assertEqual(self._builder_save(self.exp, level=9).status_code, 400)  # the live level is not writable
+
+        # the Publish Center sends no level: the one saved in the builder is used
+        self.api.force_authenticate(self.creator)
+        self.assertEqual(self.api.post(reverse("publish-experience", kwargs={"experience_id": self.exp.id}),
+                                       {"version": "1.0"}, format="json").status_code, 200)
+        self._approve()
+        plan = self.get("level-plan", token=self.token, session=self.session_token).json()
+        self.assertEqual(plan["lessons"][4]["title"], "Republish Lesson")
+        detail = self.api.get(reverse("experience-detail", args=[self.exp.id])).json()
+        self.assertEqual((detail["level"], detail["pending_level"]), (5, None))
+
+        # another lesson of the grade cannot take level 5 either
+        other = Experience.objects.create(
+            title="Other", description="d", grade=self.grade3, subject="English", language="English",
+            difficulty="BEGINNER", estimated_duration=30, status="DRAFT", created_by=self.creator)
+        response = self._builder_save(other, pending_level=5)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Republish Lesson", str(response.json()))
+
+    def test_publish_history_has_grade_and_type(self):
+        self._submit("1.0")
+        self._approve()
+        self.api.force_authenticate(self.creator)
+        rows = self.api.get(reverse("publish-history-all")).json()["versions"]
+        row = [r for r in rows if r["experience_id"] == self.exp.id][0]
+        self.assertEqual((row["grade_name"], row["experience_type"]), ("Grade 3", "LESSON"))
+
     def test_level_already_used_is_refused(self):
         self._submit_level(self.exp, "1.0", 5)
         self._approve()

@@ -1885,6 +1885,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           tags: data.tags || [],
           thumbnail: data.thumbnail || '',
           experience_type: data.experience_type || 'LESSON',
+          level: (data.pending_level ?? data.level) ?? '',
           mastery_threshold: data.mastery_threshold !== undefined ? data.mastery_threshold : 70
         });
         setActivities(data.activities || []);
@@ -1940,6 +1941,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         tags: experienceForm.tags || [],
         thumbnail: experienceForm.thumbnail || '',
         experience_type: experienceForm.experience_type || 'LESSON',
+        // LMS level (lesson 1-30, assessment 1-6); empty keeps the automatic position
+        pending_level: /^\d+$/.test(String(experienceForm.level ?? '').trim()) ? parseInt(experienceForm.level, 10) : null,
         mastery_threshold: parseInt(experienceForm.mastery_threshold) || 70
       };
 
@@ -2003,7 +2006,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     setCustomAlert({ show: true, title, message, type });
   };
   const [publishVersion, setPublishVersion] = useState('');
-  const [publishLevel, setPublishLevel] = useState('');
 
   useEffect(() => {
     if (view === 'publish') {
@@ -5374,15 +5376,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           setPublishStatus(statusData);
           // Clear defaults — user must enter the version manually
           setPublishVersion('');
-          setPublishLevel('');
         } else {
           setPublishVersion('');
-          setPublishLevel('');
         }
       } else {
         setPublishStatus(null);
         setPublishVersion('');
-        setPublishLevel('');
       }
 
       // Fetch GLOBAL history (all lessons) for the build history table
@@ -5418,22 +5417,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       triggerAlert('Please enter a valid version number (e.g. 1.0.0).', 'Version Required', 'warning');
       return;
     }
-    const levelText = String(publishLevel || '').trim();
-    if (levelText && !/^\d+$/.test(levelText)) {
-      triggerAlert('Level must be a whole number (e.g. 5), or leave it empty.', 'Invalid Level', 'warning');
-      return;
-    }
-
     setActionLoading(true);
     try {
+      // The LMS level is the one saved in the Lesson Builder
       const res = await apiFetch(`/api/v1/content/publish/${selectedExperience.id}/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version: publishVersion.trim(), level: levelText ? parseInt(levelText, 10) : null })
+        body: JSON.stringify({ version: publishVersion.trim() })
       });
       if (res.status === 200 || res.status === 201) {
         showFeedback('Experience submitted to Super Admin for approval.');
-        setPublishLevel('');
         setPublishVersion('');
         loadPublishData(selectedExperience.id);
         loadExperiencesData();
@@ -7194,14 +7187,45 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           onChange={e => setExperienceForm({ ...experienceForm, title: e.target.value })} />
                       </div>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '1rem' }}>
                         <div className="cs-form-group">
                           <label className="cs-form-label">Experience Type <span style={{ color: '#ef4444' }}>*</span></label>
                           <select className="cs-form-input" value={experienceForm.experience_type || 'LESSON'}
-                            onChange={e => setExperienceForm({ ...experienceForm, experience_type: e.target.value })}>
+                            onChange={e => {
+                              const type = e.target.value;
+                              const max = type === 'ASSESSMENT' ? 6 : 30;
+                              const current = parseInt(experienceForm.level, 10);
+                              // a level that does not fit the new type is cleared
+                              setExperienceForm({
+                                ...experienceForm,
+                                experience_type: type,
+                                level: current > max ? '' : experienceForm.level
+                              });
+                            }}>
                             <option value="LESSON">Lesson</option>
                             <option value="ASSESSMENT">Assessment</option>
                           </select>
+                        </div>
+                        <div className="cs-form-group">
+                          <label className="cs-form-label">
+                            Level {experienceForm.experience_type === 'ASSESSMENT' ? '(1-6)' : '(1-30)'}
+                          </label>
+                          <input
+                            className="cs-form-input"
+                            data-testid="lesson-level-input"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder={experienceForm.experience_type === 'ASSESSMENT' ? 'LMS boss 1-6' : 'LMS level 1-30'}
+                            value={experienceForm.level ?? ''}
+                            onChange={e => {
+                              const max = experienceForm.experience_type === 'ASSESSMENT' ? 6 : 30;
+                              const digits = e.target.value.replace(/\D/g, '').slice(0, 2);
+                              if (digits === '') { setExperienceForm({ ...experienceForm, level: '' }); return; }
+                              const n = parseInt(digits, 10);
+                              // only 1..max can be typed
+                              if (n >= 1 && n <= max) setExperienceForm({ ...experienceForm, level: String(n) });
+                            }}
+                          />
                         </div>
                         <div className="cs-form-group">
                           <label className="cs-form-label">Grade <span style={{ color: '#ef4444' }}>*</span></label>
@@ -12480,20 +12504,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           onChange={e => setPublishVersion(e.target.value)}
                         />
                       </div>
-                      <div className="cs-form-group">
-                        <label className="cs-form-label" style={{ fontSize: '0.75rem' }}>Level</label>
-                        <input
-                          className="cs-form-input"
-                          data-testid="publish-level-input"
-                          style={{ fontSize: '0.8rem', padding: '0.4rem 0.6rem' }}
-                          type="number"
-                          min="1"
-                          max={selectedExperience?.experience_type === 'ASSESSMENT' ? 6 : 30}
-                          placeholder={selectedExperience?.experience_type === 'ASSESSMENT' ? 'LMS boss 1-6 (optional)' : 'LMS level 1-30 (optional)'}
-                          value={publishLevel}
-                          onChange={e => setPublishLevel(e.target.value)}
-                        />
-                      </div>
                     </div>
 
                     <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
@@ -12694,9 +12704,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                     />
                                   </th>
                                   <th>L.No</th>
+                                  <th>GRADE</th>
+                                  <th>PACKAGE TYPE</th>
                                   <th>LESSON</th>
                                   <th>VERSION</th>
-                                  <th>PACKAGE FILE</th>
                                   <th>SIZE</th>
                                   <th>PUBLISHED ON</th>
                                   <th>STATUS</th>
@@ -12706,7 +12717,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               <tbody>
                                 {filteredHistory.length === 0 ? (
                                   <tr>
-                                    <td colSpan="9" style={{ textAlign: 'center', color: '#64748b', padding: '1.5rem', fontSize: '0.82rem' }}>
+                                    <td colSpan="10" style={{ textAlign: 'center', color: '#64748b', padding: '1.5rem', fontSize: '0.82rem' }}>
                                       {publishSearch.trim() ? `No builds found matching "${publishSearch}".` : 'No builds published yet. Specify a version above to compile.'}
                                     </td>
                                   </tr>
@@ -12733,6 +12744,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                           />
                                         </td>
                                         <td style={{ fontWeight: 700, color: '#475569', width: '36px', textAlign: 'center' }}>{overallIdx + 1}</td>
+                                        <td style={{ whiteSpace: 'nowrap', fontSize: '0.75rem' }}>{pkg.grade_name || '—'}</td>
+                                        <td style={{ whiteSpace: 'nowrap' }}>
+                                          <span style={{
+                                            padding: '2px 8px', borderRadius: 999, fontSize: '0.65rem', fontWeight: 700,
+                                            background: pkg.experience_type === 'ASSESSMENT' ? '#f3e8ff' : '#e0f2fe',
+                                            color: pkg.experience_type === 'ASSESSMENT' ? '#7c3aed' : '#0284c7'
+                                          }}>
+                                            {pkg.experience_type === 'ASSESSMENT' ? 'Assessment' : pkg.experience_type === 'LESSON' ? 'Lesson' : '—'}
+                                          </span>
+                                        </td>
                                         <td
                                           style={{ fontWeight: 700, color: '#0f172a', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                                           title={lessonTitle}
@@ -12740,7 +12761,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                           {lessonTitle}
                                         </td>
                                         <td style={{ fontWeight: 700, color: '#0284c7', whiteSpace: 'nowrap' }}>v{pkg.version_number || '—'}</td>
-                                        <td style={{ color: '#475569', fontSize: '0.68rem', fontFamily: 'monospace', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={zipFilename}>{zipFilename}</td>
                                         <td style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}>{pkg.package_size ? formatBytes(pkg.package_size) : '—'}</td>
                                         <td style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}>{pkg.published_at ? new Date(pkg.published_at).toLocaleDateString() + ', ' + new Date(pkg.published_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
                                         <td style={{ whiteSpace: 'nowrap' }}>
