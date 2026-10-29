@@ -90,6 +90,17 @@ class Experience(models.Model):
         null=True,
         verbose_name=_("Pending Release Notes")
     )
+    level = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("LMS Level"),
+        help_text=_("Slot in the LMS level map of its grade (lessons 1-30, assessments 1-6). Empty = automatic.")
+    )
+    pending_level = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Pending LMS Level")
+    )
     review_remark = models.TextField(
         blank=True,
         null=True,

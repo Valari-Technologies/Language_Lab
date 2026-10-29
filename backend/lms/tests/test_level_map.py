@@ -101,12 +101,37 @@ class LevelMapAPITestCase(TestCase):
 
     def test_excludes_unapproved_unbuilt_and_deleted(self):
         self._make_package("Draft", status_value="DRAFT")
-        self._make_package("Pending", status_value="PENDING_APPROVAL")
+        self._make_package("Rejected", status_value="REJECTED")
         self._make_package("Not built", compression="PENDING")
         self._make_package("Deleted", deleted=True)
         response = self._get()
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["counts"], {"lessons": 0, "assessments": 0})
+
+    def test_level_sets_the_slot_and_others_fill_free_slots(self):
+        first = self._make_package("First")
+        second = self._make_package("Second")
+        third = self._make_package("Third")
+        fifth = self._make_package("Placed at 5")
+        Experience.objects.filter(pk=fifth.experience_id).update(level=5)
+        clash = self._make_package("Same level 5")  # data clash: level 5 is taken, so it fills a free slot
+        Experience.objects.filter(pk=clash.experience_id).update(level=5)
+        boss = self._make_package("Boss", experience_type="ASSESSMENT")
+        Experience.objects.filter(pk=boss.experience_id).update(level=3)
+        response = self._get()
+        ids = [e["packageId"] if e else None for e in response.data["lessons"]]
+        self.assertEqual(ids[:6], [str(first.id), str(second.id), str(third.id), str(clash.id), str(fifth.id), None])
+        self.assertEqual(response.data["lessons"][4]["slot"], 5)
+        self.assertEqual(response.data["counts"], {"lessons": 5, "assessments": 1})
+        self.assertEqual(response.data["bosses"][2]["packageId"], str(boss.id))
+        self.assertEqual(response.data["bosses"][2]["slot"], 3)
+
+    def test_pending_approval_keeps_serving_its_built_package(self):
+        # A new version waiting for approval must not remove the lesson the LMS already has
+        pkg = self._make_package("Pending", status_value="PENDING_APPROVAL")
+        response = self._get()
+        self.assertEqual(response.data["counts"], {"lessons": 1, "assessments": 0})
+        self.assertEqual(response.data["lessons"][0]["packageId"], str(pkg.id))
 
     def test_null_is_deleted_lesson_appears_and_downloads(self):
         pkg = self._make_package("Legacy lesson")

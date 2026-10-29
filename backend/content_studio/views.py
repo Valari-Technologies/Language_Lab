@@ -1073,6 +1073,35 @@ class PreviewViewSet(viewsets.ViewSet):
 # ---------------------------------------------------------------------------
 # Phase 7: Publish Center
 # ---------------------------------------------------------------------------
+LEVEL_LIMITS = {"LESSON": 30, "ASSESSMENT": 6}
+
+
+def _parse_level(experience, raw):
+    """(level, error) for the Publish Center "Level" box: empty -> (None, None); else a slot of the LMS level map."""
+    if raw is None or str(raw).strip() == "":
+        return None, None
+    limit = LEVEL_LIMITS.get(experience.experience_type, 30)
+    kind = "assessment" if experience.experience_type == "ASSESSMENT" else "lesson"
+    try:
+        level = int(str(raw).strip())
+    except ValueError:
+        level = 0
+    if not 1 <= level <= limit:
+        return None, f"Level must be a whole number from 1 to {limit} for a {kind}."
+    return level, None
+
+
+def _level_taken_by(experience, level):
+    """Another lesson of the same grade and type that already has (or is waiting for) this LMS level, or None."""
+    others = Experience.objects.filter(
+        grade=experience.grade, experience_type=experience.experience_type
+    ).exclude(is_deleted=True).exclude(pk=experience.pk)
+    return (
+        others.filter(level=level).first()
+        or others.filter(status="PENDING_APPROVAL", pending_level=level).first()
+    )
+
+
 class PublishViewSet(viewsets.ViewSet):
     """
     POST /api/v1/content/publish/{experienceId}/   — run the pipeline
@@ -1095,6 +1124,17 @@ class PublishViewSet(viewsets.ViewSet):
 
         version = request.data.get("version")  # optional
         release_notes = request.data.get("release_notes", "")
+
+        level, level_error = _parse_level(experience, request.data.get("level"))
+        if level_error:
+            return Response({"error": level_error}, status=status.HTTP_400_BAD_REQUEST)
+        if level is not None:
+            taken = _level_taken_by(experience, level)
+            if taken:
+                return Response(
+                    {"error": f"Level {level} is already used by '{taken.title}'. Choose another level."},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
         from content_studio.validation_engine import run_validation_engine
         report_data = run_validation_engine(experience)
@@ -1138,7 +1178,8 @@ class PublishViewSet(viewsets.ViewSet):
         experience.status = "PENDING_APPROVAL"
         experience.pending_version = version or "1.0"
         experience.pending_release_notes = release_notes
-        experience.save(update_fields=["status", "pending_version", "pending_release_notes"])
+        experience.pending_level = level
+        experience.save(update_fields=["status", "pending_version", "pending_release_notes", "pending_level"])
 
         # Alert Super Admins via Notification models
         try:
@@ -1160,7 +1201,8 @@ class PublishViewSet(viewsets.ViewSet):
                 "message": "Experience submitted to Super Admin for approval.",
                 "status": experience.status,
                 "pending_version": experience.pending_version,
-                "pending_release_notes": experience.pending_release_notes
+                "pending_release_notes": experience.pending_release_notes,
+                "pending_level": experience.pending_level,
             },
             status=status.HTTP_200_OK
         )
@@ -1561,6 +1603,16 @@ class SuperAdminExperienceViewSet(viewsets.ViewSet):
         except Experience.DoesNotExist:
             return Response({"error": "Experience not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        # The level may have been taken by another lesson since this one was submitted
+        if experience.pending_level is not None:
+            taken = _level_taken_by(experience, experience.pending_level)
+            if taken:
+                return Response(
+                    {"error": f"Level {experience.pending_level} is already used by '{taken.title}'. "
+                              "Ask the creator to submit again with another level."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
         # Generate the final .elab package zip file
         from content_studio.publish.publish_service import build_elab_package
         try:
@@ -1591,7 +1643,12 @@ class SuperAdminExperienceViewSet(viewsets.ViewSet):
         experience.pending_version = None
         experience.pending_release_notes = None
         experience.review_remark = None
-        experience.save(update_fields=["pending_version", "pending_release_notes", "review_remark"])
+        update_fields = ["pending_version", "pending_release_notes", "review_remark", "pending_level"]
+        if experience.pending_level is not None:
+            experience.level = experience.pending_level
+            update_fields.append("level")
+        experience.pending_level = None
+        experience.save(update_fields=update_fields)
 
         # Notify Content Creator
         if experience.created_by:
@@ -1635,7 +1692,8 @@ class SuperAdminExperienceViewSet(viewsets.ViewSet):
         experience.review_remark = remark
         experience.pending_version = None
         experience.pending_release_notes = None
-        experience.save(update_fields=["status", "review_remark", "pending_version", "pending_release_notes"])
+        experience.pending_level = None
+        experience.save(update_fields=["status", "review_remark", "pending_version", "pending_release_notes", "pending_level"])
 
         # Notify Content Creator
         if experience.created_by:

@@ -2003,7 +2003,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     setCustomAlert({ show: true, title, message, type });
   };
   const [publishVersion, setPublishVersion] = useState('');
-  const [publishNotes, setPublishNotes] = useState('');
+  const [publishLevel, setPublishLevel] = useState('');
 
   useEffect(() => {
     if (view === 'publish') {
@@ -5372,17 +5372,17 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         if (resStatus.ok) {
           const statusData = await resStatus.json();
           setPublishStatus(statusData);
-          // Clear defaults — user must enter version/notes manually
+          // Clear defaults — user must enter the version manually
           setPublishVersion('');
-          setPublishNotes('');
+          setPublishLevel('');
         } else {
           setPublishVersion('');
-          setPublishNotes('');
+          setPublishLevel('');
         }
       } else {
         setPublishStatus(null);
         setPublishVersion('');
-        setPublishNotes('');
+        setPublishLevel('');
       }
 
       // Fetch GLOBAL history (all lessons) for the build history table
@@ -5418,8 +5418,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       triggerAlert('Please enter a valid version number (e.g. 1.0.0).', 'Version Required', 'warning');
       return;
     }
-    if (!publishNotes || !publishNotes.trim()) {
-      triggerAlert('Please enter release notes describing what changed in this build.', 'Release Notes Required', 'warning');
+    const levelText = String(publishLevel || '').trim();
+    if (levelText && !/^\d+$/.test(levelText)) {
+      triggerAlert('Level must be a whole number (e.g. 5), or leave it empty.', 'Invalid Level', 'warning');
       return;
     }
 
@@ -5428,11 +5429,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       const res = await apiFetch(`/api/v1/content/publish/${selectedExperience.id}/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version: publishVersion.trim(), release_notes: publishNotes })
+        body: JSON.stringify({ version: publishVersion.trim(), level: levelText ? parseInt(levelText, 10) : null })
       });
       if (res.status === 200 || res.status === 201) {
         showFeedback('Experience submitted to Super Admin for approval.');
-        setPublishNotes('');
+        setPublishLevel('');
         setPublishVersion('');
         loadPublishData(selectedExperience.id);
         loadExperiencesData();
@@ -12480,14 +12481,17 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         />
                       </div>
                       <div className="cs-form-group">
-                        <label className="cs-form-label" style={{ fontSize: '0.75rem' }}>Release Notes <span style={{ color: '#ef4444' }}>*</span></label>
+                        <label className="cs-form-label" style={{ fontSize: '0.75rem' }}>Level</label>
                         <input
                           className="cs-form-input"
+                          data-testid="publish-level-input"
                           style={{ fontSize: '0.8rem', padding: '0.4rem 0.6rem' }}
-                          type="text"
-                          placeholder="Describe build updates..."
-                          value={publishNotes}
-                          onChange={e => setPublishNotes(e.target.value)}
+                          type="number"
+                          min="1"
+                          max={selectedExperience?.experience_type === 'ASSESSMENT' ? 6 : 30}
+                          placeholder={selectedExperience?.experience_type === 'ASSESSMENT' ? 'LMS boss 1-6 (optional)' : 'LMS level 1-30 (optional)'}
+                          value={publishLevel}
+                          onChange={e => setPublishLevel(e.target.value)}
                         />
                       </div>
                     </div>
