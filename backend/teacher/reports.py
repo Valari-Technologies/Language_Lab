@@ -11,8 +11,8 @@ from rest_framework.views import APIView
 from accounts.permissions import IsTeacher
 from accounts.scoping import get_user_school
 from assessments.models import StudentAttempt
+from lms.packages.views import _grade_number, build_level_map, resolve_grade
 from lmshub.models import LmsSession
-from lms.packages.views import _grade_number
 from school_admin.models import Class
 from .models import Student
 
@@ -136,16 +136,36 @@ class TeacherStudentDayReportAPIView(APIView):
         if not student or _grade_key(student.grade) not in keys:
             return Response({"error": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        lessons, lesson_seconds = set(), 0
+        grade = resolve_grade(student)
+        level_map = build_level_map(grade) if grade else {"lessons": [], "bosses": []}
+        map_lessons = {str(e["experienceId"]): e["title"] for e in level_map["lessons"] if e}
+        map_bosses = {str(e["experienceId"]) for e in level_map["bosses"] if e}
+
+        lessons, lesson_seconds, assessments, done = set(), 0, [], set()
         for a in StudentAttempt.objects.filter(student=student.user, school=school, status="COMPLETED").select_related("assignment"):
             finished = a.completed_at or a.started_at
+            ref = a.assignment.experience_ref
+            is_assessment = ref in map_bosses or str(a.level_key or "").upper().startswith("B")
+            if finished < end and not is_assessment:
+                done.add(ref)  # completed up to the end of the chosen day
             if not start <= finished < end:
                 continue
-            lessons.add(a.assignment.experience_ref)
+            if is_assessment:
+                assessments.append({
+                    "title": a.assignment.experience_title,
+                    "score": float(a.total_score) if a.total_score is not None else None,
+                    "maxScore": float(a.max_score) if a.max_score is not None else None,
+                    "percentage": float(a.percentage) if a.percentage is not None else None,
+                    "completedAt": finished.isoformat(),
+                })
+                continue
+            lessons.add(ref)
             if a.time_spent_seconds is not None:
                 lesson_seconds += max(a.time_spent_seconds, 0)
             elif a.completed_at:
                 lesson_seconds += max(int((a.completed_at - a.started_at).total_seconds()), 0)
+        assessments.sort(key=lambda x: x["completedAt"])
+        remaining = [title for ref, title in map_lessons.items() if ref not in done]
 
         now = timezone.now()
         spans = []
@@ -161,6 +181,10 @@ class TeacherStudentDayReportAPIView(APIView):
             "name": student.user.full_name or student.user.username,
             "completedLessons": len(lessons),
             "lessonSeconds": lesson_seconds,
+            "remainingLessons": len(remaining),
+            "totalLessons": len(map_lessons),
+            "remainingTitles": remaining,
+            "assessments": assessments,
             "loginAt": spans[0][0].created_at.isoformat() if spans else None,
             "logoutAt": last[1].isoformat() if last and not last[2] else None,
             "stillOnline": bool(last and last[2]),

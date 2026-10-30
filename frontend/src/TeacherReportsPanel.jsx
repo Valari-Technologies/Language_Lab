@@ -49,6 +49,8 @@ const hms = (seconds) => {
   const s = Math.max(Math.round(seconds || 0), 0);
   return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map(n => String(n).padStart(2, '0')).join(':');
 };
+// Marks as the LMS issued them: score out of the maximum, else the percentage.
+const marks = (a) => (a.score !== null && a.maxScore !== null ? `${a.score} / ${a.maxScore}` : (a.percentage !== null ? `${a.percentage}%` : '—'));
 const clock = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—');
 const dateValue = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const tabBtn = (active) => ({ padding: '6px 14px', borderRadius: '999px', border: '1px solid #cbd5e1', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
@@ -96,6 +98,8 @@ const StudentDayReport = ({ student, onClose }) => {
     ['Time taken for completed lessons', hms(report.lessonSeconds)],
     ['Time for login', clock(report.loginAt)],
     ['Time for logout', report.stillOnline ? 'Still online' : clock(report.logoutAt)],
+    ['Remaining lessons', report.totalLessons ? `${report.remainingLessons} of ${report.totalLessons}` : '—'],
+    ['Completed assessments', report.assessments.length],
   ] : [];
 
   const download = () => {
@@ -103,6 +107,9 @@ const StudentDayReport = ({ student, onClose }) => {
     const lines = [
       ['Student', 'Roll No', 'Class', 'Date', ...cards.map(([label]) => label), 'Time online'],
       [student.name, student.rollNo, classLabel(student), dayKey, ...cards.map(([, value]) => value), hms(report.onlineSeconds)],
+      [],
+      ['Assessment', 'Marks', 'Percentage'],
+      ...report.assessments.map(a => [a.title, marks(a), a.percentage === null ? '' : `${a.percentage}%`]),
     ].map(row => row.map(cell).join(','));
     const url = URL.createObjectURL(new Blob([`﻿${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
@@ -145,6 +152,24 @@ const StudentDayReport = ({ student, onClose }) => {
                 </div>
               ))}
             </div>
+            {report.assessments.length > 0 && (
+              <div style={{ marginTop: '0.75rem' }}>
+                <div style={{ ...muted, fontWeight: 700, marginBottom: '0.3rem' }}>Assessment marks</div>
+                <table className="sd-table">
+                  <thead><tr><th>Assessment</th><th>Marks</th><th>Percentage</th></tr></thead>
+                  <tbody>
+                    {report.assessments.map((a, i) => (
+                      <tr key={i}><td>{a.title}</td><td>{marks(a)}</td><td>{percent(a.percentage)}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {report.remainingTitles.length > 0 && (
+              <p style={{ ...muted, marginTop: '0.75rem' }}>
+                Remaining: {report.remainingTitles.slice(0, 8).join(', ')}{report.remainingTitles.length > 8 ? ` and ${report.remainingTitles.length - 8} more` : ''}.
+              </p>
+            )}
             <p style={{ ...muted, marginTop: '0.75rem' }}>
               {report.sessions === 0
                 ? 'Not online on this day.'
@@ -231,9 +256,6 @@ const TeacherReportsPanel = () => {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
             <Stat label="Students" value={data.summary.students} />
-            <Stat label="Attempts" value={data.summary.attempts} />
-            <Stat label="Average score" value={percent(data.summary.averagePercent)} />
-            <Stat label="Lessons completed" value={data.summary.completedLessons} />
           </div>
 
           <div className="sd-card" style={{ padding: '1rem 1.25rem' }}>
