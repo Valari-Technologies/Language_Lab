@@ -11801,6 +11801,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                       {screens.map((scr, idx) => {
                         const elementsCount = scr.content?.elements?.length || 0;
+                        const markedBlocks = (scr.content?.elements || []).filter(needsMarks);
+                        const screenMarks = markedBlocks.reduce((sum, el) => sum + (Number(el.content?.marks) || 0), 0);
                         return (
                           <div
                             key={scr.id}
@@ -11853,6 +11855,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                 </h3>
                                 <div style={{ display: 'flex', gap: '8px', fontSize: '0.72rem', color: '#64748b', marginTop: '2px', alignItems: 'center' }}>
                                   <span>🧱 {elementsCount} {elementsCount === 1 ? 'Block' : 'Blocks'}</span>
+                                  {markedBlocks.length > 0 && (
+                                    <span data-testid="screen-marks" style={{ color: '#7c3aed', fontWeight: 700 }}>🎯 {screenMarks} {screenMarks === 1 ? 'Mark' : 'Marks'}</span>
+                                  )}
                                 </div>
                               </div>
                             </div>
