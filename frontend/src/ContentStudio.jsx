@@ -1830,6 +1830,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   const [selectedBlockId, setSelectedBlockId] = useState(null);
   const [pendingBlock, setPendingBlock] = useState(null);
+  const [marksPrompt, setMarksPrompt] = useState(null); // { block, value } while an Assessment block asks for its marks
   const [propertiesTab, setPropertiesTab] = useState('content'); // 'content' | 'style' | 'advanced'
   const [remedialOpen, setRemedialOpen] = useState(false);
 
@@ -2690,12 +2691,41 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     setRightPanelCollapsed(false);
   };
 
-  const handleAddPendingBlock = () => {
-    if (!pendingBlock) return;
-    appendBlockToCanvas(pendingBlock);
-    const addedId = pendingBlock.id;
+  // Blocks of "Assessment & Module Blocks": in an Assessment each one carries the marks it is worth.
+  const MARKED_BLOCK_TYPES = [
+    'quiz', 'voice_recorder', 'dictation', 'grammar_correction', 'writing_prompt', 'drag_drop', 'fill_blank', 'match',
+    'sequence', 'true_false', 'pronunciation', 'input', 'roleplay_simulation', 'hotspot_explorer', 'functional_reading',
+    'multimedia_reading_assessment',
+  ];
+  const needsMarks = (block) => selectedExperience?.experience_type === 'ASSESSMENT'
+    && MARKED_BLOCK_TYPES.includes(String(block?.type || '').toLowerCase());
+  const parseMarks = (raw) => {
+    const n = Number(raw);
+    return raw !== '' && Number.isInteger(n) && n >= 0 && n <= 1000 ? n : null;
+  };
+
+  const addPendingBlockNow = (block) => {
+    appendBlockToCanvas(block);
+    const addedId = block.id;
     setPendingBlock(null);
     setSelectedBlockId(addedId);
+  };
+
+  const handleAddPendingBlock = () => {
+    if (!pendingBlock) return;
+    if (needsMarks(pendingBlock)) {
+      setMarksPrompt({ block: pendingBlock, value: String(pendingBlock.content?.marks ?? 1) });
+      return;
+    }
+    addPendingBlockNow(pendingBlock);
+  };
+
+  const confirmMarksPrompt = () => {
+    const marks = parseMarks(marksPrompt?.value ?? '');
+    if (marks === null) return;
+    const block = { ...marksPrompt.block, content: { ...marksPrompt.block.content, marks } };
+    setMarksPrompt(null);
+    addPendingBlockNow(block);
   };
 
   const handleCancelPendingBlock = () => {
@@ -8510,6 +8540,36 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       const isCollapsed = rightPanelCollapsed || !hasActiveSelection;
                       return (
                         <div className={`fss-right ${isCollapsed ? 'collapsed' : 'expanded'}`}>
+                          {marksPrompt && (
+                            <div role="dialog" aria-modal="true" data-testid="marks-prompt"
+                              style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000, padding: '1rem' }}>
+                              <div style={{ background: '#ffffff', borderRadius: '14px', padding: '1.25rem 1.5rem', width: '100%', maxWidth: '360px', boxShadow: '0 20px 40px rgba(15,23,42,0.25)' }}>
+                                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.25rem' }}>Set marks</h3>
+                                <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0 0 0.9rem' }}>
+                                  How many marks is this {String(marksPrompt.block.type).replace(/_/g, ' ')} worth?
+                                </p>
+                                <input
+                                  autoFocus
+                                  data-testid="marks-input"
+                                  className="cs-form-input"
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={marksPrompt.value}
+                                  onChange={e => setMarksPrompt(prev => ({ ...prev, value: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                                  onKeyDown={e => { if (e.key === 'Enter') confirmMarksPrompt(); }}
+                                  style={{ height: '36px', width: '100%' }}
+                                />
+                                {parseMarks(marksPrompt.value) === null && (
+                                  <div style={{ fontSize: '0.72rem', color: '#b91c1c', marginTop: '0.3rem' }}>Enter a whole number from 0 to 1000.</div>
+                                )}
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
+                                  <button type="button" className="cs-btn-outline" onClick={() => setMarksPrompt(null)} style={{ padding: '0.4rem 0.9rem', fontSize: '0.8rem' }}>Cancel</button>
+                                  <button type="button" onClick={confirmMarksPrompt} disabled={parseMarks(marksPrompt.value) === null}
+                                    style={{ padding: '0.4rem 0.9rem', fontSize: '0.8rem', fontWeight: 600, borderRadius: '6px', border: 'none', background: '#2563eb', color: '#ffffff', cursor: 'pointer' }}>Add</button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                           <div className="fss-right-header" style={{ paddingBottom: '0.4rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <div>
@@ -8605,6 +8665,28 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', paddingTop: '0.75rem' }}>
                                   {propertiesTab === 'content' && (
                                     <>
+                                      {/* MARKS: only blocks already on the screen of an Assessment */}
+                                      {!pendingBlock && needsMarks(selectedBlock) && (
+                                        <div className="cs-form-group" style={{ paddingBottom: '0.6rem', borderBottom: '1px solid #e2e8f0' }}>
+                                          <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Marks</label>
+                                          <input
+                                            className="cs-form-input"
+                                            data-testid="block-marks-input"
+                                            style={{ height: '28px', fontSize: '0.78rem' }}
+                                            type="text"
+                                            inputMode="numeric"
+                                            value={selectedBlock.content?.marks ?? ''}
+                                            onChange={e => {
+                                              const digits = e.target.value.replace(/\D/g, '').slice(0, 4);
+                                              handleUpdateBlockContent('marks', digits === '' ? '' : Number(digits));
+                                            }}
+                                            placeholder="Marks for this block"
+                                          />
+                                          <span style={{ fontSize: '0.62rem', color: '#64748b' }}>
+                                            Marks on this screen: {(screenForm.elements || []).reduce((sum, el) => sum + (needsMarks(el) ? (Number(el.content?.marks) || 0) : 0), 0)}
+                                          </span>
+                                        </div>
+                                      )}
 
                                       {/* BLOCK TYPE 1: HEADING */}
                                       {['heading'].includes((selectedBlock.type || '').toLowerCase()) && (
