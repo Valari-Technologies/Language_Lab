@@ -23,20 +23,47 @@ const reportRows = (s) => [
   ['Last activity', fmt(s.lastActivity)],
 ];
 
-// One student's report as a CSV file, built in the browser from the data already on screen.
-const downloadReport = (s) => {
-  const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const lines = [
-    ['Student', 'Login code', 'Roll No', 'Class', ...reportRows(s).map(([label]) => label)],
-    [s.name, s.loginCode, s.rollNo, classLabel(s), ...reportRows(s).map(([, value]) => value)],
-  ].map(row => row.map(cell).join(','));
-  const url = URL.createObjectURL(new Blob([`﻿${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `report_${s.loginCode || s.id}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+// A report as a PDF with tables, built in the browser from the data already on screen.
+// tables: [{ heading, head: [..], body: [[..]] }]. The PDF library is loaded only when someone downloads.
+const savePdf = async ({ file, title, subtitle, tables }) => {
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  doc.setFontSize(16);
+  doc.text(title, 40, 50);
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text(subtitle, 40, 68);
+  let y = 90;
+  tables.forEach(({ heading, head, body }) => {
+    if (heading) {
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text(heading, 40, y);
+      y += 8;
+    }
+    autoTable(doc, {
+      startY: y,
+      head: [head],
+      body: body.map(row => row.map(v => String(v ?? '')).map(v => (v === '' ? '—' : v))),
+      theme: 'grid',
+      headStyles: { fillColor: [37, 99, 235], textColor: 255 },
+      styles: { fontSize: 9, cellPadding: 5 },
+      margin: { left: 40, right: 40 },
+    });
+    y = doc.lastAutoTable.finalY + 24;
+  });
+  doc.save(file);
 };
+
+const downloadReport = (s) => savePdf({
+  file: `report_${s.loginCode || s.id}.pdf`,
+  title: 'Student Report',
+  subtitle: `${s.name} · Class ${classLabel(s)}`,
+  tables: [
+    { head: ['Student', 'Login code', 'Roll No', 'Class'], body: [[s.name, s.loginCode, s.rollNo, classLabel(s)]] },
+    { heading: 'Performance', head: reportRows(s).map(([label]) => label), body: [reportRows(s).map(([, value]) => value)] },
+  ],
+});
 
 const Stat = ({ label, value }) => (
   <div style={{ ...card, padding: '0.9rem 1.1rem' }}>
@@ -102,22 +129,24 @@ const StudentDayReport = ({ student, onClose }) => {
     ['Completed assessments', report.assessments.length],
   ] : [];
 
-  const download = () => {
-    const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const lines = [
-      ['Student', 'Roll No', 'Class', 'Date', ...cards.map(([label]) => label), 'Time online'],
-      [student.name, student.rollNo, classLabel(student), dayKey, ...cards.map(([, value]) => value), hms(report.onlineSeconds)],
-      [],
-      ['Assessment', 'Marks', 'Percentage'],
-      ...report.assessments.map(a => [a.title, marks(a), a.percentage === null ? '' : `${a.percentage}%`]),
-    ].map(row => row.map(cell).join(','));
-    const url = URL.createObjectURL(new Blob([`﻿${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `report_${student.loginCode || student.id}_${dayKey}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+  const download = () => savePdf({
+    file: `report_${student.loginCode || student.id}_${dayKey}.pdf`,
+    title: 'Student Day Report',
+    subtitle: `${student.name} · Roll No ${student.rollNo || '—'} · Class ${classLabel(student)} · ${dayKey}`,
+    tables: [
+      { head: ['Item', 'Value'], body: [...cards, ['Time online', hms(report.onlineSeconds)]] },
+      ...(report.assessments.length > 0 ? [{
+        heading: 'Assessment marks',
+        head: ['Assessment', 'Marks', 'Percentage'],
+        body: report.assessments.map(a => [a.title, marks(a), a.percentage === null ? '' : `${a.percentage}%`]),
+      }] : []),
+      ...(report.remainingTitles.length > 0 ? [{
+        heading: 'Remaining lessons',
+        head: ['Lesson'],
+        body: report.remainingTitles.map(t => [t]),
+      }] : []),
+    ],
+  });
 
   return (
     <div role="dialog" aria-modal="true" onClick={onClose}
