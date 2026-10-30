@@ -131,6 +131,39 @@ class TeacherReportsTests(TestCase):
         self.assertEqual(data["logoutAt"], (day + timedelta(hours=14, minutes=31)).isoformat())
         self.assertEqual((data["onlineSeconds"], data["sessions"], data["stillOnline"]), (45 * 60 + 31 * 60, 2, False))
 
+    def test_student_day_remaining_lessons_and_assessment_marks(self):
+        from content_studio.models import Experience, PublishedPackage, PublishVersion
+
+        def package(title, kind):
+            exp = Experience.objects.create(title=title, grade=self.grade3, subject="English", language="English",
+                                            estimated_duration=10, experience_type=kind, status="APPROVED", created_by=self.teacher)
+            pkg = PublishedPackage.objects.create(experience=exp, package_name=title, compression_status="COMPLETED")
+            PublishVersion.objects.create(published_package=pkg, version_number="1.0", build_number=1, package_size=1,
+                                          checksum="c", published_by=self.teacher)
+            return exp
+
+        one, two, three = package("L-one", "LESSON"), package("L-two", "LESSON"), package("L-three", "LESSON")
+        boss = package("Boss", "ASSESSMENT")
+        day = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        end = day + timedelta(days=1)
+
+        def finish(exp, when, level_key, score=None, maximum=None, percentage=None):
+            attempt = self._attempt(self.s_a, str(exp.id), percentage or 100, 2, level_key)
+            attempt.completed_at, attempt.started_at, attempt.time_spent_seconds = when, when - timedelta(minutes=2), 120
+            attempt.total_score, attempt.max_score = score, maximum
+            attempt.save()
+            ExperienceAssignment.objects.filter(school=self.school, experience_ref=str(exp.id)).update(experience_title=exp.title)
+
+        finish(one, day + timedelta(hours=10), "L1")
+        finish(two, day - timedelta(days=1, hours=-10), "L2")  # an earlier day: still counted as done, not in today's total
+        finish(boss, day + timedelta(hours=11), "B1", score=8, maximum=10, percentage=80)
+        self.api.force_authenticate(self.teacher)
+        data = self.api.get(self._day_url(self.s_a, day, end)).json()
+        self.assertEqual((data["completedLessons"], data["lessonSeconds"]), (1, 120))  # the assessment is not a lesson
+        self.assertEqual((data["remainingLessons"], data["totalLessons"], data["remainingTitles"]), (1, 3, ["L-three"]))
+        self.assertEqual([(a["title"], a["score"], a["maxScore"], a["percentage"]) for a in data["assessments"]],
+                         [("Boss", 8.0, 10.0, 80.0)])
+
     def test_student_day_report_rules(self):
         day = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
         end = day + timedelta(days=1)
