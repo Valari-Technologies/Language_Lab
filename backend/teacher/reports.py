@@ -74,6 +74,7 @@ class TeacherReportsAPIView(APIView):
                 "id": student.student_id,
                 "name": student.user.full_name or student.user.username,
                 "loginCode": student.user.username,
+                "rollNo": student.roll_no,
                 "grade": student.grade,
                 "section": student.section,
                 "attempts": len(attempts),
