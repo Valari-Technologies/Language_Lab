@@ -45,6 +45,121 @@ const Stat = ({ label, value }) => (
   </div>
 );
 
+const hms = (seconds) => {
+  const s = Math.max(Math.round(seconds || 0), 0);
+  return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map(n => String(n).padStart(2, '0')).join(':');
+};
+const clock = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—');
+const dateValue = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const tabBtn = (active) => ({ padding: '6px 14px', borderRadius: '999px', border: '1px solid #cbd5e1', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
+  background: active ? '#2563eb' : '#ffffff', color: active ? '#ffffff' : '#334155' });
+
+// One student's day: Today, Yesterday or a picked date. The day is the browser's local midnight to midnight.
+const StudentDayReport = ({ student, onClose }) => {
+  const [tab, setTab] = useState('today');
+  const [picked, setPicked] = useState(dateValue(new Date()));
+  const [report, setReport] = useState(null);
+  const [error, setError] = useState('');
+
+  const day = (() => {
+    const d = new Date();
+    if (tab === 'yesterday') d.setDate(d.getDate() - 1);
+    if (tab === 'date') {
+      const [y, m, dd] = picked.split('-').map(Number);
+      return new Date(y, (m || 1) - 1, dd || 1);
+    }
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  })();
+  const dayKey = dateValue(day);
+
+  useEffect(() => {
+    let cancelled = false;
+    const start = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+    const end = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
+    setReport(null);
+    setError('');
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/cms/v1/teacher/reports/students/${student.id}/day/?start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}`);
+        const body = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok) setReport(body); else setError(body.error || 'Could not load this day.');
+      } catch (e) {
+        if (!cancelled) setError('Could not reach the CMS.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [student.id, dayKey]);
+
+  const cards = report ? [
+    ['Total completed lessons', report.completedLessons],
+    ['Time taken for completed lessons', hms(report.lessonSeconds)],
+    ['Time for login', clock(report.loginAt)],
+    ['Time for logout', report.stillOnline ? 'Still online' : clock(report.logoutAt)],
+  ] : [];
+
+  const download = () => {
+    const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines = [
+      ['Student', 'Roll No', 'Class', 'Date', ...cards.map(([label]) => label), 'Time online'],
+      [student.name, student.rollNo, classLabel(student), dayKey, ...cards.map(([, value]) => value), hms(report.onlineSeconds)],
+    ].map(row => row.map(cell).join(','));
+    const url = URL.createObjectURL(new Blob([`﻿${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `report_${student.loginCode || student.id}_${dayKey}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div role="dialog" aria-modal="true" onClick={onClose}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+      <div onClick={e => e.stopPropagation()} style={{ ...card, width: '100%', maxWidth: '520px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', marginBottom: '1rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>{student.name}</h3>
+            <div style={muted}>{student.loginCode} · Roll No {student.rollNo || '—'} · {classLabel(student)}</div>
+          </div>
+          <button type="button" className="sd-btn-outline" onClick={onClose} aria-label="Close" style={{ ...iconBtn, marginLeft: 'auto' }}><FiX /></button>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
+          <button type="button" style={tabBtn(tab === 'today')} onClick={() => setTab('today')}>Today</button>
+          <button type="button" style={tabBtn(tab === 'yesterday')} onClick={() => setTab('yesterday')}>Yesterday</button>
+          <input type="date" className="sd-form-input" value={picked} max={dateValue(new Date())} aria-label="Pick a date"
+            onChange={e => { if (e.target.value) { setPicked(e.target.value); setTab('date'); } }}
+            style={{ height: '34px', width: 'auto', ...(tab === 'date' ? { borderColor: '#2563eb' } : {}) }} />
+        </div>
+        <div style={{ ...muted, marginBottom: '0.75rem' }}>{day.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
+
+        {error && <div style={{ color: '#b91c1c', fontSize: '0.9rem' }}>{error}</div>}
+        {!report && !error && <div style={muted}>Loading…</div>}
+        {report && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              {cards.map(([label, value]) => (
+                <div key={label} style={{ ...card, padding: '0.7rem 0.9rem' }}>
+                  <div style={muted}>{label}</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>{value}</div>
+                </div>
+              ))}
+            </div>
+            <p style={{ ...muted, marginTop: '0.75rem' }}>
+              {report.sessions === 0
+                ? 'Not online on this day.'
+                : `Time online: ${hms(report.onlineSeconds)} · ${report.sessions} login${report.sessions === 1 ? '' : 's'} (first login, last logout shown).`}
+            </p>
+            <div style={{ marginTop: '0.5rem', textAlign: 'right' }}>
+              <button type="button" className="sd-btn-outline" onClick={download}><FiDownload /> Download</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const TeacherReportsPanel = () => {
   const [data, setData] = useState(null);
   const [gradeId, setGradeId] = useState('');
@@ -180,31 +295,7 @@ const TeacherReportsPanel = () => {
         </>
       )}
 
-      {viewing && (
-        <div role="dialog" aria-modal="true" onClick={() => setViewing(null)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-          <div onClick={e => e.stopPropagation()} style={{ ...card, width: '100%', maxWidth: '440px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', marginBottom: '1rem' }}>
-              <div>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>{viewing.name}</h3>
-                <div style={muted}>{viewing.loginCode} · Roll No {viewing.rollNo || '—'} · {classLabel(viewing)}</div>
-              </div>
-              <button type="button" className="sd-btn-outline" onClick={() => setViewing(null)} aria-label="Close" style={{ ...iconBtn, marginLeft: 'auto' }}><FiX /></button>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-              {reportRows(viewing).map(([label, value]) => (
-                <div key={label} style={{ ...card, padding: '0.7rem 0.9rem' }}>
-                  <div style={muted}>{label}</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>{value}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop: '1rem', textAlign: 'right' }}>
-              <button type="button" className="sd-btn-outline" onClick={() => downloadReport(viewing)}><FiDownload /> Download</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {viewing && <StudentDayReport student={viewing} onClose={() => setViewing(null)} />}
     </>
   );
 };

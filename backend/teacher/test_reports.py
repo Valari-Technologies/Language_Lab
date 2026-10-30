@@ -1,9 +1,13 @@
+﻿import uuid
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from assessments.models import ExperienceAssignment, StudentAttempt
+from lmshub.models import LmsDevice, LmsSession
 from school_admin.models import Class, Teacher, TeacherClass
 from super_admin.models import Grade, School
 from teacher.models import Student
@@ -94,6 +98,51 @@ class TeacherReportsTests(TestCase):
         self.api.force_authenticate(user)
         data = self.api.get(URL).json()
         self.assertEqual((data["students"], data["grades"], data["summary"]["students"]), ([], [], 0))
+
+    def _day_url(self, student, start, end):
+        return f"{URL}students/{student.student_id}/day/?start={start.isoformat()}&end={end.isoformat()}".replace("+", "%2B")
+
+    def test_student_day_report(self):
+        day = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        end = day + timedelta(days=1)
+        device = LmsDevice.objects.create(school=self.school, pc_id=uuid.uuid4(), pc_name="PC1", token_hash="d" * 64, paired_at=day)
+        LmsSession.objects.create(token_hash="a" * 64, student=self.s_a, device=device, created_at=day + timedelta(hours=9),
+                                  last_heartbeat=day + timedelta(hours=9, minutes=40), ended_at=day + timedelta(hours=9, minutes=45),
+                                  end_reason="logout")
+        LmsSession.objects.create(token_hash="b" * 64, student=self.s_a, device=device, created_at=day + timedelta(hours=14),
+                                  last_heartbeat=day + timedelta(hours=14, minutes=30), ended_at=day + timedelta(hours=14, minutes=31),
+                                  end_reason="expired")
+        done = self._attempt(self.s_a, "1", 80, 2, "L1")
+        done.completed_at = day + timedelta(hours=9, minutes=20)
+        done.time_spent_seconds = 600
+        done.save()
+        same_lesson = self._attempt(self.s_a, "1", 90, 3, "L1")
+        same_lesson.completed_at = day + timedelta(hours=14, minutes=10)
+        same_lesson.time_spent_seconds = None
+        same_lesson.started_at = day + timedelta(hours=14, minutes=5)
+        same_lesson.save()
+        yesterday = self._attempt(self.s_a, "2", 70, 2, "L2")
+        yesterday.completed_at = day - timedelta(hours=3)
+        yesterday.save()
+        self.api.force_authenticate(self.teacher)
+        data = self.api.get(self._day_url(self.s_a, day, end)).json()
+        self.assertEqual((data["completedLessons"], data["lessonSeconds"]), (1, 600 + 300))
+        self.assertEqual(data["loginAt"], (day + timedelta(hours=9)).isoformat())
+        self.assertEqual(data["logoutAt"], (day + timedelta(hours=14, minutes=31)).isoformat())
+        self.assertEqual((data["onlineSeconds"], data["sessions"], data["stillOnline"]), (45 * 60 + 31 * 60, 2, False))
+
+    def test_student_day_report_rules(self):
+        day = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        end = day + timedelta(days=1)
+        self.api.force_authenticate(self.teacher)
+        empty = self.api.get(self._day_url(self.s_a, day, end)).json()
+        self.assertEqual((empty["completedLessons"], empty["lessonSeconds"], empty["loginAt"], empty["logoutAt"]), (0, 0, None, None))
+        self.assertEqual(self.api.get(self._day_url(self.s_g4, day, end)).status_code, 404)  # not the teacher's grade
+        self.assertEqual(self.api.get(self._day_url(self.s_other, day, end)).status_code, 404)  # other school
+        self.assertEqual(self.api.get(f"{URL}students/{self.s_a.student_id}/day/").status_code, 400)
+        self.assertEqual(self.api.get(self._day_url(self.s_a, day, day + timedelta(days=9))).status_code, 400)
+        self.api.force_authenticate(self.s_a.user)
+        self.assertEqual(self.api.get(self._day_url(self.s_a, day, end)).status_code, 403)
 
     def test_only_teachers(self):
         admin = User.objects.create_user(username="adm", password="x", role=User.Role.SCHOOL_ADMIN)
