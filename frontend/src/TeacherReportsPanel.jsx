@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FiBarChart2, FiDownload, FiEye, FiRefreshCw, FiX } from 'react-icons/fi';
+import { FiBarChart2, FiDownload, FiEye, FiMoreVertical, FiRefreshCw, FiX } from 'react-icons/fi';
 import { apiFetch } from './api';
 
 // Teacher portal "Reports": results of the students of the grade(s) the teacher teaches.
@@ -12,6 +12,7 @@ const fmt = (iso) => (iso ? new Date(iso).toLocaleString() : '—');
 const percent = (value) => (value === null || value === undefined ? '—' : `${value}%`);
 
 const iconBtn = { padding: '6px 9px', display: 'inline-flex', alignItems: 'center' };
+const menuItem = { display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', padding: '0.5rem 1rem', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 };
 const classLabel = (s) => [s.grade, s.section].filter(Boolean).join(' · ') || '—';
 
 const reportRows = (s) => [
@@ -50,6 +51,7 @@ const TeacherReportsPanel = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [viewing, setViewing] = useState(null);
+  const [menu, setMenu] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -143,12 +145,14 @@ const TeacherReportsPanel = () => {
                         <td>{s.rollNo || '—'}</td>
                         <td>{classLabel(s)}</td>
                         <td>
-                          <div style={{ display: 'flex', gap: '0.4rem' }}>
-                            <button type="button" className="sd-btn-outline" title="View report" aria-label={`View report of ${s.name}`}
-                              onClick={() => setViewing(s)} style={iconBtn}><FiEye /></button>
-                            <button type="button" className="sd-btn-outline" title="Download report" aria-label={`Download report of ${s.name}`}
-                              onClick={() => downloadReport(s)} style={iconBtn}><FiDownload /></button>
-                          </div>
+                          <button type="button" title="Actions" aria-label={`Actions for ${s.name}`}
+                            onClick={(e) => {
+                              const box = e.currentTarget.getBoundingClientRect();
+                              setMenu(menu && menu.student.id === s.id ? null : { student: s, top: box.bottom + 4, right: window.innerWidth - box.right });
+                            }}
+                            style={{ background: 'none', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: '4px', color: '#64748b', display: 'inline-flex' }}>
+                            <FiMoreVertical style={{ fontSize: '1.1rem' }} />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -159,6 +163,19 @@ const TeacherReportsPanel = () => {
                 )}
               </div>
             )}
+          </div>
+        </>
+      )}
+
+      {menu && (
+        <>
+          <div onClick={() => setMenu(null)} style={{ position: 'fixed', inset: 0, zIndex: 900 }} />
+          <div style={{ position: 'fixed', top: menu.top, right: menu.right, zIndex: 901, background: '#ffffff', border: '1px solid #e2e8f0',
+            borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)', minWidth: '140px', padding: '0.3rem 0' }}>
+            <button type="button" style={{ ...menuItem, color: '#2563eb' }}
+              onClick={() => { setViewing(menu.student); setMenu(null); }}><FiEye /> View</button>
+            <button type="button" style={{ ...menuItem, color: '#0f172a' }}
+              onClick={() => { downloadReport(menu.student); setMenu(null); }}><FiDownload /> Download</button>
           </div>
         </>
       )}
