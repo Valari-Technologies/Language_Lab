@@ -3260,7 +3260,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <table className="sd-table">
                         <thead>
                           <tr>
-                            <th>Lesson Title</th><th>Lesson Ref</th><th>Attempts</th>
+                            <th>Lesson Title</th><th>Attempts</th>
                             <th>Completed</th><th>Avg Score</th><th>Pass Rate</th>
                             <th>High / Low</th><th>Avg Time</th>
                           </tr>
@@ -3269,7 +3269,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           {experiencesReport.map((s, i) => (
                             <tr key={i} onClick={() => handleFetchExperienceDetail(s.experience_ref)} style={{ cursor:'pointer' }}>
                               <td><span className="sd-name-cell-primary">{s.experience_title}</span></td>
-                              <td style={{ color:'#6b7280' }}>{s.experience_ref}</td>
                               <td>{s.total_attempts}</td>
                               <td>{s.completed}</td>
                               <td style={{ fontWeight:700, color:'#7c3aed' }}>{s.average_score}%</td>
