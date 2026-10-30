@@ -250,7 +250,7 @@ const TeacherReportsPanel = () => {
                 <table className="sd-table">
                   <thead>
                     <tr>
-                      <th>Student</th><th>Roll No</th><th>Class</th><th>Actions</th>
+                      <th>Student</th><th>Roll No</th><th>Class</th><th style={{ width: '90px', textAlign: 'center' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -259,7 +259,7 @@ const TeacherReportsPanel = () => {
                         <td>{s.name}<div style={muted}>{s.loginCode}</div></td>
                         <td>{s.rollNo || '—'}</td>
                         <td>{classLabel(s)}</td>
-                        <td>
+                        <td style={{ width: '90px', textAlign: 'center' }}>
                           <button type="button" title="Actions" aria-label={`Actions for ${s.name}`}
                             onClick={(e) => {
                               const box = e.currentTarget.getBoundingClientRect();
