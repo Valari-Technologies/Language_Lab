@@ -63,6 +63,7 @@ class TeacherReportsTests(TestCase):
         self.assertEqual((row["attempts"], row["completedLessons"], row["stars"]), (3, 2, 4))  # best stars per level 3 + 1
         self.assertEqual(row["averagePercent"], 80.0)
         self.assertIsNotNone(row["lastActivity"])
+        self.assertEqual(row["rollNo"], "1")
         self.assertEqual(data["summary"], {"students": 2, "attempts": 4, "averagePercent": 77.5, "completedLessons": 3})
         self.assertEqual(data["grades"], [{"id": self.grade3.id, "name": "Class 3"}])
 

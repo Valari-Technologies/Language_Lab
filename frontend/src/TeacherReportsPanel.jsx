@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FiBarChart2, FiRefreshCw } from 'react-icons/fi';
+import { FiBarChart2, FiDownload, FiEye, FiRefreshCw, FiX } from 'react-icons/fi';
 import { apiFetch } from './api';
 
 // Teacher portal "Reports": results of the students of the grade(s) the teacher teaches.
@@ -10,6 +10,32 @@ const muted = { color: '#64748b', fontSize: '0.8rem' };
 
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString() : '—');
 const percent = (value) => (value === null || value === undefined ? '—' : `${value}%`);
+
+const iconBtn = { padding: '6px 9px', display: 'inline-flex', alignItems: 'center' };
+const classLabel = (s) => [s.grade, s.section].filter(Boolean).join(' · ') || '—';
+
+const reportRows = (s) => [
+  ['Lessons completed', s.completedLessons],
+  ['Attempts', s.attempts],
+  ['Average score', percent(s.averagePercent)],
+  ['Stars', s.stars],
+  ['Last activity', fmt(s.lastActivity)],
+];
+
+// One student's report as a CSV file, built in the browser from the data already on screen.
+const downloadReport = (s) => {
+  const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [
+    ['Student', 'Login code', 'Roll No', 'Class', ...reportRows(s).map(([label]) => label)],
+    [s.name, s.loginCode, s.rollNo, classLabel(s), ...reportRows(s).map(([, value]) => value)],
+  ].map(row => row.map(cell).join(','));
+  const url = URL.createObjectURL(new Blob([`﻿${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `report_${s.loginCode || s.id}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
 
 const Stat = ({ label, value }) => (
   <div style={{ ...card, padding: '0.9rem 1.1rem' }}>
@@ -23,32 +49,10 @@ const TeacherReportsPanel = () => {
   const [gradeId, setGradeId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const [classesReport, setClassesReport] = useState([]);
-  const [studentsReport, setStudentsReport] = useState([]);
-  const [completionReport, setCompletionReport] = useState([]);
-
-  // The same report endpoints the School Admin uses; for a teacher the CMS limits them to the teacher's own classes.
-  const loadAnalysis = useCallback(async () => {
-    const get = async (path, set) => {
-      try {
-        const res = await apiFetch(path);
-        const body = await res.json().catch(() => []);
-        set(res.ok ? (body.results || body) : []);
-      } catch (e) {
-        set([]);
-      }
-    };
-    await Promise.all([
-      get('/api/v1/reports/classes/', setClassesReport),
-      get('/api/v1/reports/students/', setStudentsReport),
-      get('/api/v1/reports/student-completion/', setCompletionReport),
-    ]);
-  }, []);
+  const [viewing, setViewing] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    loadAnalysis();
     try {
       const res = await apiFetch(`/api/cms/v1/teacher/reports/${gradeId ? `?grade_id=${gradeId}` : ''}`);
       const body = await res.json().catch(() => ({}));
@@ -64,7 +68,7 @@ const TeacherReportsPanel = () => {
     } finally {
       setLoading(false);
     }
-  }, [gradeId, loadAnalysis]);
+  }, [gradeId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -129,20 +133,23 @@ const TeacherReportsPanel = () => {
                 <table className="sd-table">
                   <thead>
                     <tr>
-                      <th>Student</th><th>Class</th><th>Lessons completed</th><th>Attempts</th>
-                      <th>Average score</th><th>Stars</th><th>Last activity</th>
+                      <th>Student</th><th>Roll No</th><th>Class</th><th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.students.map(s => (
                       <tr key={s.id}>
                         <td>{s.name}<div style={muted}>{s.loginCode}</div></td>
-                        <td>{[s.grade, s.section].filter(Boolean).join(' · ') || '—'}</td>
-                        <td>{s.completedLessons}</td>
-                        <td>{s.attempts}</td>
-                        <td>{percent(s.averagePercent)}</td>
-                        <td>{s.stars}</td>
-                        <td>{fmt(s.lastActivity)}</td>
+                        <td>{s.rollNo || '—'}</td>
+                        <td>{classLabel(s)}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.4rem' }}>
+                            <button type="button" className="sd-btn-outline" title="View report" aria-label={`View report of ${s.name}`}
+                              onClick={() => setViewing(s)} style={iconBtn}><FiEye /></button>
+                            <button type="button" className="sd-btn-outline" title="Download report" aria-label={`Download report of ${s.name}`}
+                              onClick={() => downloadReport(s)} style={iconBtn}><FiDownload /></button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -153,90 +160,33 @@ const TeacherReportsPanel = () => {
               </div>
             )}
           </div>
-
-          <div className="sd-card" style={{ padding: '1rem 1.25rem', marginTop: '1rem' }}>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.75rem' }}>Class Performance Analysis</h3>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="sd-table">
-                <thead>
-                  <tr>
-                    <th>Class Name</th><th>Students</th><th>Completed</th>
-                    <th>Avg Score</th><th>Pass Rate</th><th>Top Student</th><th>Weakest</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {classesReport.length === 0 && <tr><td colSpan={7} style={muted}>No class results yet.</td></tr>}
-                  {classesReport.map((c, i) => (
-                    <tr key={i}>
-                      <td>{c.class_name}</td>
-                      <td>{c.total_students}</td>
-                      <td>{c.completed}</td>
-                      <td>{percent(c.average_score)}</td>
-                      <td>{percent(c.pass_rate)}</td>
-                      <td>{c.top_student}</td>
-                      <td>{c.weakest_student}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="sd-card" style={{ padding: '1rem 1.25rem', marginTop: '1rem' }}>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.75rem' }}>Student Performance Analysis</h3>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="sd-table">
-                <thead>
-                  <tr>
-                    <th>Student</th><th>Class</th><th>Attempts</th><th>Completed</th>
-                    <th>Avg Score</th><th>Best Lesson</th><th>Worst Lesson</th><th>Last Attempt</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {studentsReport.length === 0 && <tr><td colSpan={8} style={muted}>No student results yet.</td></tr>}
-                  {studentsReport.map((st, i) => (
-                    <tr key={i}>
-                      <td>{st.student_name}</td>
-                      <td>{st.class_name}</td>
-                      <td>{st.total_attempts}</td>
-                      <td>{st.completed}</td>
-                      <td>{percent(st.average_score)}</td>
-                      <td>{st.best_experience}</td>
-                      <td>{st.worst_experience}</td>
-                      <td>{st.last_attempt_date ? new Date(st.last_attempt_date).toLocaleDateString() : 'N/A'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="sd-card" style={{ padding: '1rem 1.25rem', marginTop: '1rem' }}>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.75rem' }}>Student Lesson Completion</h3>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="sd-table">
-                <thead>
-                  <tr><th>Student Profile</th><th>Assigned Lessons</th><th>Completed</th><th>Completion Progress</th></tr>
-                </thead>
-                <tbody>
-                  {completionReport.length === 0 && <tr><td colSpan={4} style={muted}>No lesson assignments yet.</td></tr>}
-                  {completionReport.map((row) => {
-                    const pct = row.total_assigned_experiences > 0
-                      ? Math.round((row.completed_experiences_count / row.total_assigned_experiences) * 100) : 0;
-                    return (
-                      <tr key={row.student_id}>
-                        <td>{row.student_name}</td>
-                        <td>{row.total_assigned_experiences}</td>
-                        <td>{row.completed_experiences_count}</td>
-                        <td>{pct}%</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </>
+      )}
+
+      {viewing && (
+        <div role="dialog" aria-modal="true" onClick={() => setViewing(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...card, width: '100%', maxWidth: '440px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>{viewing.name}</h3>
+                <div style={muted}>{viewing.loginCode} · Roll No {viewing.rollNo || '—'} · {classLabel(viewing)}</div>
+              </div>
+              <button type="button" className="sd-btn-outline" onClick={() => setViewing(null)} aria-label="Close" style={{ ...iconBtn, marginLeft: 'auto' }}><FiX /></button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              {reportRows(viewing).map(([label, value]) => (
+                <div key={label} style={{ ...card, padding: '0.7rem 0.9rem' }}>
+                  <div style={muted}>{label}</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>{value}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: '1rem', textAlign: 'right' }}>
+              <button type="button" className="sd-btn-outline" onClick={() => downloadReport(viewing)}><FiDownload /> Download</button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
