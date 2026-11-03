@@ -47,7 +47,10 @@ class StudentDetailReportTests(TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual((rows[0]["student_name"], rows[0]["class_name"], rows[0]["teacher_name"]),
                          ("Ravi", "Class 5-A", "Dhanais"))
+        self.assertEqual((rows[0]["roll_no"], rows[0]["grade_name"], rows[0]["section"]), ("1", "Class 5", "A"))
         self.assertEqual(len(self.api.get(f"/api/v1/reports/students/{self.student.user_id}/").json()["attempts"]), 4)
+        classes = self.api.get("/api/v1/reports/classes/").json()
+        self.assertEqual([(c["class_name"], c["teacher_name"]) for c in classes], [("Class 5-A", "Dhanais")])
 
     def test_class_report_counts_the_students_of_the_class_and_ranks_the_top_one(self):
         from school_admin.models import Class
@@ -67,6 +70,7 @@ class StudentDetailReportTests(TestCase):
         rows = {r["class_name"]: r for r in self.api.get("/api/v1/reports/classes/").json()}
         five, eight = rows["Class 5-A"], rows["Class 8-A"]
         self.assertEqual((five["grade_name"], five["section"], five["total_students"]), ("Class 5", "A", 2))
+        self.assertEqual((five["teacher_name"], eight["teacher_name"]), ("N/A", "N/A"))  # no teacher is assigned in this test
         self.assertEqual((five["top_student"], five["top_student_score"], five["weakest_student"]), ("Arj", 90.0, "Ravi"))
         self.assertEqual((eight["total_students"], eight["top_student"], eight["top_student_score"]), (0, "N/A", None))
         detail = self.api.get(f"/api/v1/reports/classes/{klass.class_id}/").json()

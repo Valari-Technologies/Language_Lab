@@ -1550,9 +1550,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     title: 'Student Performance Report',
     subtitle: `${studentsReport.length} student${studentsReport.length === 1 ? '' : 's'} · ${new Date().toLocaleDateString()}`,
     tables: [{
-      head: ['Student', 'Class', 'Teacher Name', 'Attempts', 'Completed', 'Avg Score', 'Last Attempt'],
+      head: ['Student', 'Roll No', 'Class', 'Section', 'Attempts', 'Completed', 'Avg Score', 'Last Attempt'],
       body: studentsReport.map(st => [
-        titleName(st.student_name), st.class_name, st.teacher_name || 'N/A', st.total_attempts, st.completed,
+        titleName(st.student_name), formatRollNo(st.roll_no) || 'N/A', st.grade_name || st.class_name, st.section || 'N/A',
+        st.total_attempts, st.completed,
         `${st.average_score}%`, st.last_attempt_date ? new Date(st.last_attempt_date).toLocaleDateString() : 'N/A',
       ]),
     }],
@@ -3271,7 +3272,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <table className="sd-table">
                         <thead>
                           <tr>
-                            <th>Class Name</th><th>Section</th><th>Students</th><th>Top Rank</th>
+                            <th>Class Name</th><th>Section</th><th>Teacher Name</th><th>Students</th><th>Top Rank</th>
                             <th style={{ width:'90px', textAlign:'center' }}>Action</th>
                           </tr>
                         </thead>
@@ -3280,6 +3281,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             <tr key={i} onClick={() => handleFetchClassDetail(c.class_id)} style={{ cursor:'pointer' }}>
                               <td><span className="sd-name-cell-primary">{String(c.grade_name || c.class_name).replace('Grade', 'Class')}</span></td>
                               <td>{c.section || 'N/A'}</td>
+                              <td>{c.teacher_name || 'N/A'}</td>
                               <td>{c.total_students}</td>
                               <td style={{ color:'#047857', fontWeight:600 }}>
                                 {c.top_student && c.top_student !== 'N/A'
@@ -3293,7 +3295,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               </td>
                             </tr>
                           ))}
-                          {classesReport.length === 0 && <tr><td colSpan="5" className="sd-empty-state">No classes found.</td></tr>}
+                          {classesReport.length === 0 && <tr><td colSpan="6" className="sd-empty-state">No classes found.</td></tr>}
                         </tbody>
                       </table>
                     </div>
@@ -3323,15 +3325,16 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <table className="sd-table">
                         <thead>
                           <tr>
-                            <th>Student</th><th>Class</th><th>Teacher Name</th><th style={{ width:'90px', textAlign:'center' }}>Action</th>
+                            <th>Student</th><th>Roll No</th><th>Class</th><th>Section</th><th style={{ width:'90px', textAlign:'center' }}>Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           {visibleStudentRows.map((st, i) => (
                             <tr key={i} onClick={() => handleFetchStudentDetail(st.student_id)} style={{ cursor:'pointer' }}>
                               <td><span className="sd-name-cell-primary">{titleName(st.student_name)}</span></td>
-                              <td>{st.class_name}</td>
-                              <td>{st.teacher_name || 'N/A'}</td>
+                              <td>{formatRollNo(st.roll_no) || 'N/A'}</td>
+                              <td>{st.grade_name || st.class_name}</td>
+                              <td>{st.section || 'N/A'}</td>
                               <td style={{ textAlign:'center' }}>
                                 <button className="sd-btn-outline" title="View student report" aria-label={`View report of ${st.student_name}`}
                                   onClick={(e) => { e.stopPropagation(); handleFetchStudentDetail(st.student_id); }}
@@ -3339,7 +3342,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               </td>
                             </tr>
                           ))}
-                          {filteredStudentRows.length === 0 && <tr><td colSpan="4" className="sd-empty-state">No students found.</td></tr>}
+                          {filteredStudentRows.length === 0 && <tr><td colSpan="5" className="sd-empty-state">No students found.</td></tr>}
                         </tbody>
                       </table>
                     </div>

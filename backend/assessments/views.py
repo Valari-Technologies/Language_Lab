@@ -482,10 +482,15 @@ class ReportsClassesAPIView(APIView):
         # Deduplicate classes by normalized name and academic year to prevent duplicates in report
         seen = set()
         classes = []
+        teacher_names = {}  # class key -> teachers of every class sharing that name and year
         for c in classes_queryset:
             norm_name = (c.class_name or "").strip().upper()
             norm_year = (c.academic_year or "").replace(" ", "").strip()
             key = (norm_name, norm_year)
+            teacher_names.setdefault(key, set()).update(
+                (tc.teacher.user.full_name or tc.teacher.user.username)
+                for tc in TeacherClass.objects.filter(class_obj=c).select_related("teacher__user")
+            )
             if key not in seen:
                 seen.add(key)
                 classes.append(c)
@@ -528,6 +533,8 @@ class ReportsClassesAPIView(APIView):
                 "class_name": c.class_name,
                 "grade_name": c.grade.grade_name if c.grade_id else "",
                 "section": class_section(c),
+                "teacher_name": ", ".join(sorted(teacher_names.get(
+                    ((c.class_name or "").strip().upper(), (c.academic_year or "").replace(" ", "").strip()), []))) or "N/A",
                 "total_students": len(members),
                 "attempted": attempted,
                 "completed": completed,
@@ -671,11 +678,15 @@ class ReportsStudentsAPIView(APIView):
             
             profile = Student.objects.filter(user=student_user).select_related("school").first()
             class_name, teacher_name = class_and_teachers(profile) if profile else ("N/A", "N/A")
+            grade_number = _grade_number(profile.grade) if profile else None
 
             results.append({
                 "student_id": student_user.id,
                 "student_name": student_user.full_name or student_user.username,
                 "class_name": class_name,
+                "grade_name": f"Class {grade_number}" if grade_number is not None else ((profile.grade if profile else "") or ""),
+                "section": ((_section_letter(profile.section) or profile.section or "") if profile else ""),
+                "roll_no": (profile.roll_no or "") if profile else "",
                 "teacher_name": teacher_name,
                 "total_attempts": total_attempts,
                 "completed": completed,
