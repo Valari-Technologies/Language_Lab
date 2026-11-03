@@ -13,6 +13,7 @@ import LmsHubPanel from './LmsHubPanel';
 import { apiFetch } from './api';
 import { API_BASE_URL } from './config';
 import { formatRollNo, titleName } from './format';
+import { savePdf } from './pdf';
 
 const resolveMediaUrl = (url) => {
   if (!url) return '';
@@ -1540,6 +1541,20 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   };
 
   const paginate = (list, page) => list.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  // Download symbol of Student Performance Analysis: every student (not only the filtered page) as a PDF table
+  const downloadStudentsPdf = () => savePdf({
+    file: `student_performance_report_${new Date().toISOString().slice(0, 10)}.pdf`,
+    title: 'Student Performance Report',
+    subtitle: `${studentsReport.length} student${studentsReport.length === 1 ? '' : 's'} · ${new Date().toLocaleDateString()}`,
+    tables: [{
+      head: ['Student', 'Class', 'Teacher Name', 'Attempts', 'Completed', 'Avg Score', 'Last Attempt'],
+      body: studentsReport.map(st => [
+        titleName(st.student_name), st.class_name, st.teacher_name || 'N/A', st.total_attempts, st.completed,
+        `${st.average_score}%`, st.last_attempt_date ? new Date(st.last_attempt_date).toLocaleDateString() : 'N/A',
+      ]),
+    }],
+  });
 
   // Student Performance Analysis: five students a page, filtered by grade ("Class 5-A" belongs to grade 5)
   const STUDENT_REPORT_PER_PAGE = 5;
@@ -3301,7 +3316,9 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           <option value="">All Grades</option>
                           {[3, 4, 5, 6, 7, 8].map(n => <option key={n} value={String(n)}>Class {n}</option>)}
                         </select>
-                        <button className="sd-btn-outline" onClick={() => handleExportCSV('students')}>Export CSV</button>
+                        <button className="sd-btn-outline" title="Download all students report (PDF)" aria-label="Download all students report as PDF"
+                          onClick={downloadStudentsPdf} disabled={studentsReport.length === 0}
+                          style={{ height:'36px', padding:'0 0.7rem', display:'inline-flex', alignItems:'center' }}><FiDownload /></button>
                       </div>
                     </div>
                     <div className="sd-table-wrap">
@@ -4084,17 +4101,16 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Lessons</div>
                         <div className="sd-table-wrap">
                           <table className="sd-table">
-                            <thead><tr><th>Lesson</th><th>Class</th><th>Status</th><th>Started At</th></tr></thead>
+                            <thead><tr><th>Lesson</th><th>Status</th><th>Started At</th></tr></thead>
                             <tbody>
                               {lessonAttempts.map((att, i) => (
                                 <tr key={i}>
                                   <td style={{ fontWeight:600 }}>{att.experience_title}</td>
-                                  <td>{att.class_name}</td>
                                   <td>{att.status}</td>
                                   <td>{new Date(att.started_at).toLocaleDateString()}</td>
                                 </tr>
                               ))}
-                              {lessonAttempts.length === 0 && <tr><td colSpan="4" className="sd-empty-state">No lessons played yet.</td></tr>}
+                              {lessonAttempts.length === 0 && <tr><td colSpan="3" className="sd-empty-state">No lessons played yet.</td></tr>}
                             </tbody>
                           </table>
                         </div>
@@ -4104,19 +4120,18 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Assessments</div>
                         <div className="sd-table-wrap">
                           <table className="sd-table">
-                            <thead><tr><th>Assessment</th><th>Class</th><th>Marks</th><th>Score</th><th>Status</th><th>Started At</th></tr></thead>
+                            <thead><tr><th>Assessment</th><th>Marks</th><th>Score</th><th>Status</th><th>Started At</th></tr></thead>
                             <tbody>
                               {assessmentAttempts.map((att, i) => (
                                 <tr key={i}>
                                   <td style={{ fontWeight:600 }}>{att.experience_title}</td>
-                                  <td>{att.class_name}</td>
                                   <td>{marks(att)}</td>
                                   <td style={{ fontWeight:700, color:'#3b82f6' }}>{att.percentage != null ? att.percentage+'%' : 'N/A'}</td>
                                   <td>{att.status}</td>
                                   <td>{new Date(att.started_at).toLocaleDateString()}</td>
                                 </tr>
                               ))}
-                              {assessmentAttempts.length === 0 && <tr><td colSpan="6" className="sd-empty-state">No assessments taken yet.</td></tr>}
+                              {assessmentAttempts.length === 0 && <tr><td colSpan="5" className="sd-empty-state">No assessments taken yet.</td></tr>}
                             </tbody>
                           </table>
                         </div>
