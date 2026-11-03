@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FiBarChart2, FiDownload, FiEye, FiMoreVertical, FiRefreshCw, FiX } from 'react-icons/fi';
+import { FiBarChart2, FiDownload, FiEye, FiMoreVertical, FiX } from 'react-icons/fi';
 import { apiFetch } from './api';
 import { formatRollNo, titleName } from './format';
 
@@ -215,16 +215,50 @@ const StudentDayReport = ({ student, onClose }) => {
   );
 };
 
+const LIST_SIZE = 3;
+
+// Best and least performing students by average score; students with no completed work are left out of both lists.
+// The two lists never share a student: the best take the top, the least are the lowest of the rest.
+const rankStudents = (students) => {
+  const ranked = students
+    .filter(s => s.averagePercent !== null && s.averagePercent !== undefined)
+    .sort((a, b) => b.averagePercent - a.averagePercent || b.completedLessons - a.completedLessons || a.name.localeCompare(b.name));
+  return {
+    best: ranked.slice(0, LIST_SIZE),
+    least: ranked.slice(LIST_SIZE).slice(-LIST_SIZE).reverse(),
+  };
+};
+
+const PerformanceList = ({ title, accent, students }) => (
+  <div style={{ ...card, padding: '1rem 1.25rem', borderTop: `4px solid ${accent}` }}>
+    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.6rem' }}>{title}</div>
+    {students.length === 0 ? (
+      <div style={muted}>Not enough results yet.</div>
+    ) : (
+      <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        {students.map((s, i) => (
+          <li key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '0.7rem' }}>
+            <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: accent, color: '#ffffff', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
+              <div style={muted}>{classLabel(s)} · {s.completedLessons} {s.completedLessons === 1 ? 'lesson' : 'lessons'} completed</div>
+            </div>
+            <span style={{ fontSize: '0.95rem', fontWeight: 800, color: accent }}>{percent(s.averagePercent)}</span>
+          </li>
+        ))}
+      </ol>
+    )}
+  </div>
+);
+
 const TeacherReportsPanel = () => {
   const [data, setData] = useState(null);
   const [gradeId, setGradeId] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const [viewing, setViewing] = useState(null);
   const [menu, setMenu] = useState(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
     try {
       const res = await apiFetch(`/api/cms/v1/teacher/reports/${gradeId ? `?grade_id=${gradeId}` : ''}`);
       const body = await res.json().catch(() => ({}));
@@ -238,14 +272,13 @@ const TeacherReportsPanel = () => {
       }
     } catch (e) {
       setError('Could not reach the CMS.');
-    } finally {
-      setLoading(false);
     }
   }, [gradeId]);
 
   useEffect(() => { load(); }, [load]);
 
   const noGrade = data && data.grades.length === 0;
+  const performance = rankStudents(data ? data.students : []);
 
   return (
     <>
@@ -266,9 +299,6 @@ const TeacherReportsPanel = () => {
               {data.grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
           )}
-          <button type="button" className="sd-btn-outline" onClick={load} disabled={loading} style={{ padding: '6px 12px' }}>
-            <FiRefreshCw /> Refresh
-          </button>
         </div>
       </div>
 
@@ -288,6 +318,11 @@ const TeacherReportsPanel = () => {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
             <Stat label="Students" value={data.summary.students} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+            <PerformanceList title="Best performing students" accent="#16a34a" students={performance.best} />
+            <PerformanceList title="Least performing students" accent="#dc2626" students={performance.least} />
           </div>
 
           <div className="sd-card" style={{ padding: '1rem 1.25rem' }}>
