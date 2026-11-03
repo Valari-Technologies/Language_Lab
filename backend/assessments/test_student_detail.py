@@ -49,6 +49,29 @@ class StudentDetailReportTests(TestCase):
                          ("Ravi", "Class 5-A", "Dhanais"))
         self.assertEqual(len(self.api.get(f"/api/v1/reports/students/{self.student.user_id}/").json()["attempts"]), 4)
 
+    def test_class_report_counts_the_students_of_the_class_and_ranks_the_top_one(self):
+        from school_admin.models import Class
+        klass = Class.objects.create(school=self.school, class_name="Class 5-A", grade=self.grade, academic_year="2026-2027")
+        empty = Class.objects.create(school=self.school, class_name="Class 8-A",
+                                     grade=Grade.objects.create(grade_name="Class 8", sort_order=8), academic_year="2026-2027")
+        second_user = User.objects.create_user(username="ARJ_01", password="x", role=User.Role.STUDENT, full_name="Arj")
+        second = Student.objects.create(user=second_user, school=self.school, roll_no="2", grade="Class 5", section="A")
+        other_section = User.objects.create_user(username="MAN_01", password="x", role=User.Role.STUDENT, full_name="Mani")
+        Student.objects.create(user=other_section, school=self.school, roll_no="1", grade="Class 5", section="D")
+        # results that arrived with no class link still count for the student's own class
+        self._attempt("L1", "LESSON", score=4, maximum=10, percentage=40, level_key="L1")
+        mine = self.student.user
+        self.student.user = second_user
+        self._attempt("L2", "LESSON", score=9, maximum=10, percentage=90, level_key="L2")
+        self.student.user = mine
+        rows = {r["class_name"]: r for r in self.api.get("/api/v1/reports/classes/").json()}
+        five, eight = rows["Class 5-A"], rows["Class 8-A"]
+        self.assertEqual((five["grade_name"], five["section"], five["total_students"]), ("Class 5", "A", 2))
+        self.assertEqual((five["top_student"], five["top_student_score"], five["weakest_student"]), ("Arj", 90.0, "Ravi"))
+        self.assertEqual((eight["total_students"], eight["top_student"], eight["top_student_score"]), (0, "N/A", None))
+        detail = self.api.get(f"/api/v1/reports/classes/{klass.class_id}/").json()
+        self.assertEqual([s["student_name"] for s in detail["students"]], ["Arj", "Ravi"])  # also the ones with no attempts
+
     def test_attempts_carry_their_type_and_a_zero_score_is_kept(self):
         self._attempt("A lesson", "LESSON", level_key="L1")
         self._attempt("An assessment", "ASSESSMENT", score=0, maximum=10, percentage=0, level_key="B1")

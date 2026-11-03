@@ -429,6 +429,30 @@ class ReportsExperienceDetailAPIView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+def class_section(c):
+    from lms.hub.views import _section_letter
+    return _section_letter(c.class_name)
+
+
+def class_members(c):
+    """The active students of a class: same school, same grade number and same section letter as the class.
+
+    A class whose name has no section letter ("Class 5") takes every section of its grade."""
+    from lms.hub.views import _section_letter
+    from lms.packages.views import _grade_number
+    grade = _grade_number(c.grade.grade_name) if c.grade_id else None
+    section = _section_letter(c.class_name)
+    if grade is None:
+        return []
+    students = Student.objects.filter(school_id=c.school_id, user__is_active=True).select_related("user")
+    if not getattr(settings, "SHOW_DEMO_DATA_IN_REPORTS", False):
+        students = students.exclude(user__username__startswith="DEMO")
+    return sorted(
+        (s for s in students if _grade_number(s.grade) == grade and (not section or _section_letter(s.section) == section)),
+        key=lambda s: (s.user.full_name or s.user.username).lower(),
+    )
+
+
 class ReportsClassesAPIView(APIView):
     permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
     serializer_class = ClassReportSerializer
@@ -454,42 +478,53 @@ class ReportsClassesAPIView(APIView):
                 classes.append(c)
         
         attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user)
-        
+
         results = []
         for c in classes:
-            class_attempts = attempts.filter(assignment__class_obj=c)
-            
-            total_students = class_attempts.values("student").distinct().count()
+            # The class is its students (their own grade and section), not only the attempts that arrived linked to it
+            members = class_members(c)
+            class_attempts = attempts.filter(student_id__in=[m.user_id for m in members])
+
+            attempted = class_attempts.values("student").order_by().distinct().count()
             completed = class_attempts.filter(status="COMPLETED").count()
-            
+
             completed_attempts = class_attempts.filter(status="COMPLETED", percentage__isnull=False)
             average_score = completed_attempts.aggregate(avg=models.Avg("percentage"))["avg"] or 0.0
-            
+
             passed = completed_attempts.filter(percentage__gte=60.0).count()
             pass_rate = (passed / completed * 100) if completed > 0 else 0.0
-            
-            student_averages = class_attempts.filter(percentage__isnull=False).values("student__full_name", "student__username").annotate(avg_pct=models.Avg("percentage")).order_by("-avg_pct")
-            
+
+            student_averages = list(
+                class_attempts.filter(percentage__isnull=False)
+                .values("student_id", "student__full_name", "student__username")
+                .annotate(avg_pct=models.Avg("percentage"))
+                .order_by("-avg_pct", "student__full_name")
+            )
+
             top_student = "N/A"
+            top_student_score = None
             weakest_student = "N/A"
-            if student_averages.exists():
-                top = student_averages.first()
+            if student_averages:
+                top, weak = student_averages[0], student_averages[-1]
                 top_student = top["student__full_name"] or top["student__username"]
-                weak = student_averages.last()
+                top_student_score = round(float(top["avg_pct"]), 2)
                 weakest_student = weak["student__full_name"] or weak["student__username"]
-                
+
             results.append({
                 "class_id": c.class_id,
                 "class_name": c.class_name,
-                "total_students": total_students,
-                "attempted": total_students,
+                "grade_name": c.grade.grade_name if c.grade_id else "",
+                "section": class_section(c),
+                "total_students": len(members),
+                "attempted": attempted,
                 "completed": completed,
                 "average_score": round(float(average_score), 2),
                 "pass_rate": round(float(pass_rate), 2),
                 "top_student": top_student,
+                "top_student_score": top_student_score,
                 "weakest_student": weakest_student
             })
-            
+
         return Response(results, status=status.HTTP_200_OK)
 
 
@@ -509,20 +544,21 @@ class ReportsClassDetailAPIView(APIView):
         if not c:
             return Response({"message": "Class not found or access denied."}, status=status.HTTP_404_NOT_FOUND)
         
-        attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user).filter(assignment__class_obj=c)
-        total_students = attempts.values("student").distinct().count()
+        members = class_members(c)
+        attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user).filter(
+            student_id__in=[m.user_id for m in members])
+        total_students = len(members)
         completed = attempts.filter(status="COMPLETED").count()
-        
+
         completed_attempts = attempts.filter(status="COMPLETED", percentage__isnull=False)
         average_score = completed_attempts.aggregate(avg=models.Avg("percentage"))["avg"] or 0.0
-        
+
         passed = completed_attempts.filter(percentage__gte=60.0).count()
         pass_rate = (passed / completed * 100) if completed > 0 else 0.0
-        
+
         students_list = []
-        student_ids = attempts.values_list("student", flat=True).order_by().distinct()
-        for sid in student_ids:
-            student_user = User.objects.get(id=sid)
+        for member in members:  # every student of the class, also those who have not played yet
+            student_user = member.user
             student_attempts = attempts.filter(student=student_user)
             std_completed = student_attempts.filter(status="COMPLETED").count()
             std_completed_attempts = student_attempts.filter(status="COMPLETED", percentage__isnull=False)
@@ -541,8 +577,10 @@ class ReportsClassDetailAPIView(APIView):
         return Response({
             "class_id": c.class_id,
             "class_name": c.class_name,
+            "grade_name": c.grade.grade_name if c.grade_id else "",
+            "section": class_section(c),
             "total_students": total_students,
-            "attempted": total_students,
+            "attempted": attempts.values("student").order_by().distinct().count(),
             "completed": completed,
             "average_score": round(float(average_score), 2),
             "pass_rate": round(float(pass_rate), 2),

@@ -3280,22 +3280,29 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <table className="sd-table">
                         <thead>
                           <tr>
-                            <th>Class Name</th><th>Students</th><th>Completed</th>
-                            <th>Avg Score</th><th>Pass Rate</th><th>Top Student</th><th>Weakest</th>
+                            <th>Class Name</th><th>Section</th><th>Students</th><th>Top Rank</th>
+                            <th style={{ width:'90px', textAlign:'center' }}>Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           {classesReport.map((c, i) => (
                             <tr key={i} onClick={() => handleFetchClassDetail(c.class_id)} style={{ cursor:'pointer' }}>
-                              <td><span className="sd-name-cell-primary">{c.class_name}</span></td>
+                              <td><span className="sd-name-cell-primary">{String(c.grade_name || c.class_name).replace('Grade', 'Class')}</span></td>
+                              <td>{c.section || 'N/A'}</td>
                               <td>{c.total_students}</td>
-                              <td>{c.completed}</td>
-                              <td style={{ fontWeight:700, color:'#10b981' }}>{c.average_score}%</td>
-                              <td>{c.pass_rate}%</td>
-                              <td style={{ color:'#047857', fontWeight:600 }}>{c.top_student}</td>
-                              <td style={{ color:'#b91c1c' }}>{c.weakest_student}</td>
+                              <td style={{ color:'#047857', fontWeight:600 }}>
+                                {c.top_student && c.top_student !== 'N/A'
+                                  ? <>{titleName(c.top_student)}{c.top_student_score != null && <span style={{ color:'#64748b', fontWeight:500 }}> · {c.top_student_score}%</span>}</>
+                                  : <span style={{ color:'#64748b', fontWeight:500 }}>N/A</span>}
+                              </td>
+                              <td style={{ textAlign:'center' }}>
+                                <button className="sd-btn-outline" title="View class report" aria-label={`View report of ${c.class_name}`}
+                                  onClick={(e) => { e.stopPropagation(); handleFetchClassDetail(c.class_id); }}
+                                  style={{ padding:'5px 9px', display:'inline-flex', alignItems:'center' }}><FiEye /></button>
+                              </td>
                             </tr>
                           ))}
+                          {classesReport.length === 0 && <tr><td colSpan="5" className="sd-empty-state">No classes found.</td></tr>}
                         </tbody>
                       </table>
                     </div>
