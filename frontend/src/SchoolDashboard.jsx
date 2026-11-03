@@ -484,6 +484,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [experiencesReport,         setExperiencesReport]         = useState([]);
   const [classesReport,           setClassesReport]           = useState([]);
   const [studentsReport,          setStudentsReport]          = useState([]);
+  const [lessonReportPage,        setLessonReportPage]        = useState(1);
+  const [lessonReportGrade,       setLessonReportGrade]       = useState('');
   const [studentReportPage,       setStudentReportPage]       = useState(1);
   const [studentReportGrade,      setStudentReportGrade]      = useState('');
 
@@ -1555,6 +1557,15 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       ]),
     }],
   });
+
+  // Lesson Performance Analysis: ten lessons a page, filtered by the lesson's grade
+  const LESSON_REPORT_PER_PAGE = 10;
+  const filteredLessonRows = experiencesReport.filter(s => (
+    !lessonReportGrade || (String(s.grade_name || '').match(/\d+/) || [])[0] === lessonReportGrade
+  ));
+  const lessonReportPageNow = Math.min(lessonReportPage, Math.max(1, Math.ceil(filteredLessonRows.length / LESSON_REPORT_PER_PAGE)));
+  const visibleLessonRows = filteredLessonRows.slice(
+    (lessonReportPageNow - 1) * LESSON_REPORT_PER_PAGE, lessonReportPageNow * LESSON_REPORT_PER_PAGE);
 
   // Student Performance Analysis: five students a page, filtered by grade ("Class 5-A" belongs to grade 5)
   const STUDENT_REPORT_PER_PAGE = 5;
@@ -3348,7 +3359,16 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                   <div className="sd-card">
                     <div className="sd-card-header">
                       <div className="sd-card-title">Lesson Performance Analysis</div>
-                      <button className="sd-btn-outline" onClick={() => handleExportCSV('experiences')}>Export CSV</button>
+                      <select
+                        className="sd-form-input"
+                        aria-label="Grade"
+                        style={{ width:'auto', minWidth:'130px', height:'36px', padding:'0 2rem 0 0.8rem', borderRadius:'8px', border:'1px solid #cbd5e1', fontSize:'0.82rem' }}
+                        value={lessonReportGrade}
+                        onChange={e => { setLessonReportGrade(e.target.value); setLessonReportPage(1); }}
+                      >
+                        <option value="">All Grades</option>
+                        {[3, 4, 5, 6, 7, 8].map(n => <option key={n} value={String(n)}>Class {n}</option>)}
+                      </select>
                     </div>
                     <div className="sd-table-wrap">
                       <table className="sd-table">
@@ -3360,7 +3380,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           </tr>
                         </thead>
                         <tbody>
-                          {experiencesReport.map((s, i) => (
+                          {visibleLessonRows.map((s, i) => (
                             <tr key={i} onClick={() => handleFetchExperienceDetail(s.experience_ref)} style={{ cursor:'pointer' }}>
                               <td><span className="sd-name-cell-primary">{s.experience_title}</span></td>
                               <td>{s.total_attempts}</td>
@@ -3371,9 +3391,20 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               <td>{Math.round(s.average_time_seconds/60)}m {s.average_time_seconds%60}s</td>
                             </tr>
                           ))}
+                          {filteredLessonRows.length === 0 && <tr><td colSpan="7" className="sd-empty-state">No lessons found.</td></tr>}
                         </tbody>
                       </table>
                     </div>
+                    {filteredLessonRows.length > LESSON_REPORT_PER_PAGE && (
+                      <div style={{ marginTop:'1rem', borderTop:'1px solid #f1f5f9', paddingTop:'1rem' }}>
+                        <Pagination
+                          total={filteredLessonRows.length}
+                          perPage={LESSON_REPORT_PER_PAGE}
+                          page={lessonReportPageNow}
+                          onPage={setLessonReportPage}
+                        />
+                      </div>
+                    )}
                   </div>
                 </>
               )}

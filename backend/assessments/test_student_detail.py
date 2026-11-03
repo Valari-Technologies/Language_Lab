@@ -99,6 +99,21 @@ class StudentDetailReportTests(TestCase):
         row = detail["students"][0]
         self.assertEqual((row["completed_lessons"], row["remaining_lessons"]), (2, 1))
 
+    def test_lesson_report_lists_each_lesson_once_with_its_grade(self):
+        exp = Experience.objects.create(title="Shared", grade=self.grade, subject="English", language="English",
+                                        difficulty="BEGINNER", estimated_duration=10, experience_type="LESSON",
+                                        status="APPROVED", created_by=self.author)
+        assignment = ExperienceAssignment.objects.create(school=self.school, experience_ref=str(exp.id),
+                                                         experience_title="Shared", assigned_at=timezone.now())
+        other = User.objects.create_user(username="ARJ_01", password="x", role=User.Role.STUDENT, full_name="Arj")
+        for n, who in enumerate((self.student.user, other, self.student.user)):  # three attempts on one lesson
+            StudentAttempt.objects.create(assignment=assignment, student=who, school=self.school, started_at=timezone.now(),
+                                          completed_at=timezone.now(), status="COMPLETED", percentage=50 + n,
+                                          level_key="L1", lms_attempt_id=f"s-{n}")
+        rows = self.api.get("/api/v1/reports/experiences/").json()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0]["experience_title"], rows[0]["grade_name"], rows[0]["total_attempts"]), ("Shared", "Class 5", 3))
+
     def test_attempts_carry_their_type_and_a_zero_score_is_kept(self):
         self._attempt("A lesson", "LESSON", level_key="L1")
         self._attempt("An assessment", "ASSESSMENT", score=0, maximum=10, percentage=0, level_key="B1")

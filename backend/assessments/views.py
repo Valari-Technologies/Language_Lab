@@ -339,13 +339,25 @@ class ReportsExperiencesAPIView(APIView):
     def get(self, request):
         attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user)
         
-        experience_refs = attempts.values_list("assignment__experience_ref", flat=True).distinct()
-        
+        # order_by() first: the model's default ordering would otherwise make distinct() repeat a lesson per attempt
+        experience_refs = list(attempts.values_list("assignment__experience_ref", flat=True).order_by().distinct())
+
+        # The grade of each lesson (the report page filters by it): its Content Studio grade, else the assignment's
+        from content_studio.models import Experience
+
+        def ref_id(ref):
+            tail = str(ref or "").upper().replace("EXP-", "", 1)
+            return int(tail) if tail.isdigit() else None
+
+        experiences = Experience.objects.select_related("grade").in_bulk([i for i in map(ref_id, experience_refs) if i])
+
         results = []
         for ref in experience_refs:
             experience_attempts = attempts.filter(assignment__experience_ref=ref)
-            first_att = experience_attempts.first()
+            first_att = experience_attempts.select_related("assignment__grade").first()
             experience_title = first_att.assignment.experience_title if first_att else ref
+            source = experiences.get(ref_id(ref))
+            grade = source.grade if source and source.grade_id else (first_att.assignment.grade if first_att else None)
             
             total_attempts = experience_attempts.count()
             completed = experience_attempts.filter(status="COMPLETED").count()
@@ -364,6 +376,7 @@ class ReportsExperiencesAPIView(APIView):
             results.append({
                 "experience_ref": ref,
                 "experience_title": experience_title,
+                "grade_name": grade.grade_name if grade else "",
                 "total_attempts": total_attempts,
                 "completed": completed,
                 "average_score": round(float(average_score), 2),
