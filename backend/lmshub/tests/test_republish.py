@@ -76,6 +76,27 @@ class RepublishTests(HubTestBase):
         return self.api.post(reverse("publish-experience", kwargs={"experience_id": exp.id}),
                              {"version": version, "level": level}, format="json")
 
+    def test_a_version_name_already_used_by_the_lesson_is_refused(self):
+        message = "This version name already exists. Please enter a different name."
+        self._submit("Version 1")
+        self._approve()
+        for same in ("Version 1", "  version 1 ", "VERSION 1"):  # same name: trimmed, upper or lower case
+            response = self._submit_level(self.exp, same, "")
+            self.assertEqual((response.status_code, response.data["error"]), (409, message), same)
+        self.assertEqual(self._submit_level(self.exp, "Version 2", "").status_code, 200)  # a new name is fine
+        self.exp.refresh_from_db()
+        self.assertEqual(self.exp.pending_version, "Version 2")
+
+        # another lesson may use the same name
+        other = Experience.objects.create(
+            title="Other", description="d", grade=self.grade3, subject="English", language="English",
+            difficulty="BEGINNER", estimated_duration=30, status="DRAFT", created_by=self.creator)
+        activity = Activity.objects.create(experience=other, title="A", learning_objective="L", estimated_duration=15,
+                                           mastery_threshold=80, display_order=1)
+        Screen.objects.create(activity=activity, title="S", screen_type="INFORMATION", display_order=1,
+                              estimated_duration=30, content={"elements": [{"id": "1", "type": "text", "props": {"value": "x"}}]})
+        self.assertEqual(self._submit_level(other, "Version 1", "").status_code, 200)
+
     def test_level_places_the_lesson_in_that_lms_slot(self):
         for bad in (0, 31, "abc", -2):
             response = self._submit_level(self.exp, "1.0", bad)

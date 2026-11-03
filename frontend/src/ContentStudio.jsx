@@ -5438,9 +5438,18 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
   };
 
+  // The typed version name is already used by a build of this lesson (spaces and capitals are ignored); the server checks it too
+  const versionNameTaken = !!(selectedExperience && publishVersion.trim()
+    && publishHistory.some(v => v.experience_id === selectedExperience.id
+      && String(v.version_number || '').trim().toLowerCase() === publishVersion.trim().toLowerCase()));
+
   const handlePublishExperience = async () => {
     if (!selectedExperience || !selectedExperience.id) {
       triggerAlert('No active experience selected.', 'No Experience Selected', 'warning');
+      return;
+    }
+    if (versionNameTaken) {
+      showFeedback('This version name already exists. Please enter a different name.', 'error');
       return;
     }
     if (!publishVersion || !publishVersion.trim()) {
@@ -12590,6 +12599,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           value={publishVersion}
                           onChange={e => setPublishVersion(e.target.value)}
                         />
+                        {versionNameTaken && (
+                          <span data-testid="publish-version-warning" style={{ display: 'block', marginTop: '0.3rem', fontSize: '0.72rem', fontWeight: 600, color: '#b91c1c' }}>
+                            This version name already exists. Please enter a different name.
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -12606,7 +12620,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           borderRadius: '10px'
                         }}
                         onClick={handlePublishExperience}
-                        disabled={actionLoading}
+                        disabled={actionLoading || versionNameTaken}
                       >
                         {actionLoading ? 'Compiling Build...' : 'Build & Publish the Package'}
                       </button>

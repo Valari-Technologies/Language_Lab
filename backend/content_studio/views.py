@@ -1074,6 +1074,9 @@ class PreviewViewSet(viewsets.ViewSet):
 # ---------------------------------------------------------------------------
 # Phase 7: Publish Center
 # ---------------------------------------------------------------------------
+DUPLICATE_VERSION_MESSAGE = "This version name already exists. Please enter a different name."
+
+
 def _parse_level(experience, raw):
     return parse_level(experience.experience_type, raw)
 
@@ -1145,17 +1148,12 @@ class PublishViewSet(viewsets.ViewSet):
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
-        # Duplicate version check
-        if version:
-            try:
-                package = PublishedPackage.objects.get(experience=experience)
-                if PublishVersion.objects.filter(published_package=package, version_number=version).exists():
-                    return Response(
-                        {"error": f"Version '{version}' already exists for this experience."},
-                        status=status.HTTP_409_CONFLICT,
-                    )
-            except PublishedPackage.DoesNotExist:
-                pass
+        # Duplicate version check: the name is trimmed and compared ignoring case, over every build of this lesson
+        version = str(version).strip() if version is not None else ""
+        if version and PublishVersion.objects.filter(
+            published_package__experience=experience, version_number__iexact=version
+        ).exists():
+            return Response({"error": DUPLICATE_VERSION_MESSAGE}, status=status.HTTP_409_CONFLICT)
 
         experience.status = "PENDING_APPROVAL"
         experience.pending_version = version or "1.0"
@@ -1615,10 +1613,7 @@ class SuperAdminExperienceViewSet(viewsets.ViewSet):
                     status=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 )
             if isinstance(args, tuple) and args[0] == "DUPLICATE_VERSION":
-                return Response(
-                    {"error": f"Version '{args[1]}' already exists for this experience."},
-                    status=status.HTTP_409_CONFLICT,
-                )
+                return Response({"error": DUPLICATE_VERSION_MESSAGE}, status=status.HTTP_409_CONFLICT)
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except RuntimeError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
