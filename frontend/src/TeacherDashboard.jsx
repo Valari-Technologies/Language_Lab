@@ -13,6 +13,12 @@ import './SchoolDashboard.css';
 import { apiFetch } from './api';
 import { API_BASE_URL } from './config';
 
+// Difficulty as shown to users: BEGINNER / INTERMEDIATE / MASTER (or "Intermediate") -> "Beginner" / "Intermediate" / "Master".
+const difficultyLabel = (value) => {
+  const clean = String(value || 'INTERMEDIATE').trim().toLowerCase();
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+};
+
 const resolveMediaUrl = (url) => {
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
@@ -3037,7 +3043,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                 <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', gap: '8px', alignItems: 'center' }}>
                                   <span>Subject: {lesson.subject || 'General'}</span>
                                   <span>•</span>
-                                  <span>Level: {lesson.difficulty || 'Intermediate'}</span>
+                                  <span>Level: {lesson.difficulty_display || difficultyLabel(lesson.difficulty)}</span>
                                 </div>
                               </div>
 

@@ -153,6 +153,12 @@ const generateRollNo = (fullName, existingStudents = []) => {
   return candidate;
 };
 
+/* Difficulty as shown to users: BEGINNER / INTERMEDIATE / MASTER (or "Intermediate") -> "Beginner" / "Intermediate" / "Master". */
+const difficultyLabel = (value) => {
+  const clean = String(value || 'INTERMEDIATE').trim().toLowerCase();
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+};
+
 /* Roll no as shown in Students Management: a single digit gets a leading 0 (1 -> 01); anything else is shown as entered. */
 const formatRollNo = (rollNo) => {
   const clean = String(rollNo ?? '').trim();
@@ -3200,7 +3206,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           <td>{s.grade_name ? String(s.grade_name).replace('Grade', 'Class') : (s.grade && `Class ${s.grade}`) || 'N/A'}</td>
                           <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
                             <span className={`sd-badge ${s.difficulty === 'BEGINNER' ? 'sd-badge-active' : s.difficulty === 'MASTER' ? 'sd-badge-leave' : s.difficulty === 'REVIEW' || s.difficulty === 'REJECTED' ? 'sd-badge-review' : 'sd-badge-review'}`}>
-                              {s.difficulty || 'INTERMEDIATE'}
+                              {s.difficulty_display || difficultyLabel(s.difficulty)}
                             </span>
                           </td>
                           <td>{s.estimated_duration ? `${s.estimated_duration} min` : '—'}</td>
