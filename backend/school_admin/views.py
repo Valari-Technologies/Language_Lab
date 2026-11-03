@@ -6,6 +6,7 @@ from rest_framework.parsers import MultiPartParser
 from django.db import transaction
 from django.contrib.auth import get_user_model
 
+from accounts.names import title_name
 from accounts.permissions import IsSuperAdminOrSchoolAdminWrite, IsInstituteAdmin, IsTeacherOrAdmin
 from accounts.scoping import filter_queryset_by_school, get_user_school
 from super_admin.views import CMSBaseViewSet
@@ -522,7 +523,7 @@ class BulkUploadAPIView(APIView):
                             if status_val is None or not str(status_val).strip(): raise ValueError("status is required for student.")
                             if not academic_year_val or not str(academic_year_val).strip(): raise ValueError("academy year is required for student.")
 
-                            full_name = str(fullname_val).strip()
+                            full_name = title_name(fullname_val)
                             grade_raw = str(grade_val).strip()
                             import re
                             grade_match = re.search(r"\d+", grade_raw)

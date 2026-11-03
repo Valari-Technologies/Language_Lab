@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
+from accounts.names import title_name
 from accounts.scoping import get_user_school
 from super_admin.models import School
 from .models import Student
@@ -130,7 +131,7 @@ class StudentSerializer(serializers.ModelSerializer):
         username = validated_data.pop("username")
         password = validated_data.pop("password")
         email = validated_data.pop("email", "")
-        full_name = validated_data.pop("full_name", "")
+        full_name = title_name(validated_data.pop("full_name", ""))
         is_active = validated_data.pop("is_active", True)
 
         user = User.objects.create_user(
@@ -155,7 +156,7 @@ class StudentSerializer(serializers.ModelSerializer):
             if email is not None:
                 user.email = email
             if full_name is not None:
-                user.full_name = full_name
+                user.full_name = title_name(full_name)
             if is_active is not None:
                 user.is_active = is_active
             if username and username != user.username:
