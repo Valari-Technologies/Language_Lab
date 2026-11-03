@@ -12,6 +12,7 @@ import './SchoolDashboard.css';
 import LmsHubPanel from './LmsHubPanel';
 import { apiFetch } from './api';
 import { API_BASE_URL } from './config';
+import { formatRollNo, titleName } from './format';
 
 const resolveMediaUrl = (url) => {
   if (!url) return '';
@@ -157,12 +158,6 @@ const generateRollNo = (fullName, existingStudents = []) => {
 const difficultyLabel = (value) => {
   const clean = String(value || 'INTERMEDIATE').trim().toLowerCase();
   return clean.charAt(0).toUpperCase() + clean.slice(1);
-};
-
-/* Roll no as shown in Students Management: a single digit gets a leading 0 (1 -> 01); anything else is shown as entered. */
-const formatRollNo = (rollNo) => {
-  const clean = String(rollNo ?? '').trim();
-  return /^\d$/.test(clean) ? `0${clean}` : clean;
 };
 
 const generateLmsLoginCode = (fullName, rollNo = '', existingStudents = []) => {
@@ -1481,7 +1476,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     };
     
     const rows = list.map(s => {
-      const fullName = s.full_name || s.username || 'N/A';
+      const fullName = titleName(s.full_name) || s.username || 'N/A';
       const rollNo = formatRollNo(s.roll_no) || 'N/A';
       const loginCode = (s.username && /^([A-Z]{3})_(\d)$/.test(s.username))
         ? s.username.replace(/^([A-Z]{3})_(\d)$/, '$1_0$2')
@@ -2842,7 +2837,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               </td>
                             )}
                             <td>
-                              <span className="sd-name-cell-primary">{s.full_name || s.username || 'N/A'}</span>
+                              <span className="sd-name-cell-primary">{titleName(s.full_name) || s.username || 'N/A'}</span>
                             </td>
                             <td>{formatRollNo(s.roll_no) || 'N/A'}</td>
                             <td><span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>{displayLmsCode}</span></td>
@@ -4215,7 +4210,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div style={{ padding: '0.5rem 0', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Full Name:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.full_name || 'N/A'}</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{titleName(selectedStudentCrudDetail.full_name) || 'N/A'}</span>
                     
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Roll Number:</span>
                     <span style={{ color: '#0f172a', fontWeight: 500 }}>{formatRollNo(selectedStudentCrudDetail.roll_no) || 'N/A'}</span>

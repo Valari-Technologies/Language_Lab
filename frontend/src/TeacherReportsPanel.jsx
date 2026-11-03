@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { FiBarChart2, FiDownload, FiEye, FiMoreVertical, FiRefreshCw, FiX } from 'react-icons/fi';
 import { apiFetch } from './api';
+import { formatRollNo, titleName } from './format';
 
 // Teacher portal "Reports": results of the students of the grade(s) the teacher teaches.
 // The CMS decides the students from the login (the teacher's own classes), never from the browser.
@@ -228,7 +229,8 @@ const TeacherReportsPanel = () => {
       const res = await apiFetch(`/api/cms/v1/teacher/reports/${gradeId ? `?grade_id=${gradeId}` : ''}`);
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
-        setData(body);
+        // Names and roll numbers are formatted once here, so the table, the day report and the PDFs all show them the same way.
+        setData({ ...body, students: (body.students || []).map(s => ({ ...s, name: titleName(s.name) || s.name, rollNo: formatRollNo(s.rollNo) })) });
         setError('');
       } else {
         setData(null);
