@@ -483,8 +483,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [experiencesReport,         setExperiencesReport]         = useState([]);
   const [classesReport,           setClassesReport]           = useState([]);
   const [studentsReport,          setStudentsReport]          = useState([]);
-  const [studentCompletionReport, setStudentCompletionReport] = useState([]);
-  const [completionPage, setCompletionPage] = useState(1);
 
   /* ── Detail modals ── */
   const [selectedExperienceDetail, setSelectedExperienceDetail] = useState(null);
@@ -623,17 +621,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     } catch (e) { console.error('Failed to load experiences.', e); }
   };
 
-  const loadStudentCompletionReport = async () => {
-    setCompletionPage(1);
-    try {
-      const res = await apiFetch('/api/v1/reports/student-completion/');
-      if (res.ok) {
-        const d = await res.json();
-        setStudentCompletionReport(d.results || d);
-      }
-    } catch (e) { console.error('Failed to load student completion report', e); }
-  };
-
   const loadReportsData = async () => {
     try {
       const [overRes, scenRes, classRes, studRes] = await Promise.all([
@@ -722,7 +709,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       await Promise.all([
         loadUserProfile(), loadDashboardData(), loadSchools(), loadGrades(),
         loadTeachers(), loadStudents(), loadClasses(),
-        loadExperiences(), loadReportsData(), loadStudentCompletionReport(),
+        loadExperiences(), loadReportsData(),
         loadNotifications()
       ]);
     } catch (e) { setErrorMsg('Error loading dashboard data.'); }
@@ -3257,38 +3244,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     ))}
                   </div>
 
-                  {/* Experience Report Table */}
-                  <div className="sd-card">
-                    <div className="sd-card-header">
-                      <div className="sd-card-title">Lesson Performance Analysis</div>
-                      <button className="sd-btn-outline" onClick={() => handleExportCSV('experiences')}>Export CSV</button>
-                    </div>
-                    <div className="sd-table-wrap">
-                      <table className="sd-table">
-                        <thead>
-                          <tr>
-                            <th>Lesson Title</th><th>Attempts</th>
-                            <th>Completed</th><th>Avg Score</th><th>Pass Rate</th>
-                            <th>High / Low</th><th>Avg Time</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {experiencesReport.map((s, i) => (
-                            <tr key={i} onClick={() => handleFetchExperienceDetail(s.experience_ref)} style={{ cursor:'pointer' }}>
-                              <td><span className="sd-name-cell-primary">{s.experience_title}</span></td>
-                              <td>{s.total_attempts}</td>
-                              <td>{s.completed}</td>
-                              <td style={{ fontWeight:700, color:'#7c3aed' }}>{s.average_score}%</td>
-                              <td>{s.pass_rate}%</td>
-                              <td>{s.highest_score}% / {s.lowest_score}%</td>
-                              <td>{Math.round(s.average_time_seconds/60)}m {s.average_time_seconds%60}s</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
                   {/* Classes Report Table */}
                   <div className="sd-card">
                     <div className="sd-card-header">
@@ -3352,86 +3307,36 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     </div>
                   </div>
 
-                  {/* Student Experience Completion Table */}
+                  {/* Experience Report Table */}
                   <div className="sd-card">
                     <div className="sd-card-header">
-                      <div className="sd-card-title">Student Lesson Completion</div>
-                      <span className="sd-card-meta">{studentCompletionReport.length} student{studentCompletionReport.length !== 1 ? 's' : ''}</span>
+                      <div className="sd-card-title">Lesson Performance Analysis</div>
+                      <button className="sd-btn-outline" onClick={() => handleExportCSV('experiences')}>Export CSV</button>
                     </div>
-                    {studentCompletionReport.length === 0 ? (
-                      <div className="sd-reports-empty" style={{ padding: '2rem 1rem' }}>
-                        <FiFileText/>
-                        <h3>No lesson assignments yet</h3>
-                        <p>Completion data will appear once lessons are assigned and synced from the LMS.</p>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="sd-table-wrap">
-                          <table className="sd-table">
-                            <thead>
-                              <tr>
-                                <th>Student Profile</th>
-                                <th>Assigned Lessons</th>
-                                <th>Completed</th>
-                                <th>Completion Progress</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {(() => {
-                                const COMPLETION_PER_PAGE = 5;
-                                const paginatedCompletion = studentCompletionReport.slice(
-                                  (completionPage - 1) * COMPLETION_PER_PAGE,
-                                  completionPage * COMPLETION_PER_PAGE
-                                );
-                                return paginatedCompletion.map((row) => {
-                                  const pct = row.total_assigned_experiences > 0
-                                    ? Math.round((row.completed_experiences_count / row.total_assigned_experiences) * 100)
-                                    : 0;
-                                  const barColor = pct === 100 ? '#16a34a' : pct >= 60 ? '#f59e0b' : '#ef4444';
-                                  return (
-                                    <tr key={row.student_id}>
-                                      <td>
-                                        <span className="sd-name-cell-primary">{row.student_name}</span>
-                                      </td>
-                                      <td style={{ textAlign: 'center', fontWeight: 600 }}>
-                                        {row.total_assigned_experiences}
-                                      </td>
-                                      <td style={{ textAlign: 'center', fontWeight: 600, color: '#16a34a' }}>
-                                        {row.completed_experiences_count}
-                                      </td>
-                                      <td style={{ minWidth: 160 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                          <div style={{ flex: 1, height: 8, background: '#f3f4f6', borderRadius: 4, overflow: 'hidden' }}>
-                                            <div style={{
-                                              width: `${pct}%`, height: '100%',
-                                              background: barColor, borderRadius: 4,
-                                              transition: 'width 0.6s ease'
-                                            }}/>
-                                          </div>
-                                          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: barColor, minWidth: 34 }}>
-                                            {pct}%
-                                          </span>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  );
-                                });
-                              })()}
-                            </tbody>
-                          </table>
-                        </div>
-                        {studentCompletionReport.length > 5 && (
-                          <div style={{ marginTop: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
-                            <Pagination
-                              total={studentCompletionReport.length}
-                              perPage={5}
-                              page={completionPage}
-                              onPage={setCompletionPage}
-                            />
-                          </div>
-                        )}
-                      </>
-                    )}
+                    <div className="sd-table-wrap">
+                      <table className="sd-table">
+                        <thead>
+                          <tr>
+                            <th>Lesson Title</th><th>Attempts</th>
+                            <th>Completed</th><th>Avg Score</th><th>Pass Rate</th>
+                            <th>High / Low</th><th>Avg Time</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {experiencesReport.map((s, i) => (
+                            <tr key={i} onClick={() => handleFetchExperienceDetail(s.experience_ref)} style={{ cursor:'pointer' }}>
+                              <td><span className="sd-name-cell-primary">{s.experience_title}</span></td>
+                              <td>{s.total_attempts}</td>
+                              <td>{s.completed}</td>
+                              <td style={{ fontWeight:700, color:'#7c3aed' }}>{s.average_score}%</td>
+                              <td>{s.pass_rate}%</td>
+                              <td>{s.highest_score}% / {s.lowest_score}%</td>
+                              <td>{Math.round(s.average_time_seconds/60)}m {s.average_time_seconds%60}s</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </>
               )}
