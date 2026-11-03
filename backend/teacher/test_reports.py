@@ -62,14 +62,35 @@ class TeacherReportsTests(TestCase):
         self.api.force_authenticate(self.teacher)
         data = self.api.get(URL).json()
         names = [r["loginCode"] for r in data["students"]]
-        self.assertEqual(names, ["AAA_1", "BBB_2"])  # both sections of the grade; not grade 4, other school, inactive
+        self.assertEqual(names, ["AAA_1"])  # only the teacher's own section (3-A); not 3-B, grade 4, other school, inactive
         row = data["students"][0]
         self.assertEqual((row["attempts"], row["completedLessons"], row["stars"]), (3, 2, 4))  # best stars per level 3 + 1
         self.assertEqual(row["averagePercent"], 80.0)
         self.assertIsNotNone(row["lastActivity"])
         self.assertEqual(row["rollNo"], "1")
-        self.assertEqual(data["summary"], {"students": 2, "attempts": 4, "averagePercent": 77.5, "completedLessons": 3})
+        self.assertEqual(data["summary"], {"students": 1, "attempts": 3, "averagePercent": 80.0, "completedLessons": 2})
         self.assertEqual(data["grades"], [{"id": self.grade3.id, "name": "Class 3"}])
+        self.assertEqual(data["classes"], ["Class 3-A"])
+
+    def test_teacher_sees_every_section_they_are_assigned_to(self):
+        teacher = Teacher.objects.get(user=self.teacher)
+        klass = Class.objects.create(school=self.school, class_name="Class 3-B", grade=self.grade3, academic_year="2026-2027")
+        TeacherClass.objects.create(teacher=teacher, class_obj=klass)
+        self.api.force_authenticate(self.teacher)
+        names = [r["loginCode"] for r in self.api.get(URL).json()["students"]]
+        self.assertEqual(names, ["AAA_1", "BBB_2"])  # 3-A and 3-B, still not grade 4
+
+    def test_class_without_a_section_letter_covers_its_grade(self):
+        user = self._teacher("whole3", self.school, self.grade3)
+        Class.objects.filter(teacherclass__teacher__user=user).update(class_name="Class 3")
+        self.api.force_authenticate(user)
+        names = [r["loginCode"] for r in self.api.get(URL).json()["students"]]
+        self.assertEqual(names, ["AAA_1", "BBB_2"])
+
+    def test_day_report_only_for_the_teachers_section(self):
+        day = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        self.api.force_authenticate(self.teacher)
+        self.assertEqual(self.api.get(self._day_url(self.s_b, day, day + timedelta(days=1))).status_code, 404)  # section 3-B
 
     def test_unfinished_attempts_do_not_count_as_completed(self):
         self._attempt(self.s_a, "1", None, None, None, status="IN_PROGRESS")
@@ -79,7 +100,7 @@ class TeacherReportsTests(TestCase):
 
     def test_grade_filter_only_for_own_grades(self):
         self.api.force_authenticate(self.teacher)
-        self.assertEqual(self.api.get(URL, {"grade_id": self.grade3.id}).json()["summary"]["students"], 2)
+        self.assertEqual(self.api.get(URL, {"grade_id": self.grade3.id}).json()["summary"]["students"], 1)
         self.assertEqual(self.api.get(URL, {"grade_id": self.grade4.id}).status_code, 400)
         self.assertEqual(self.api.get(URL, {"grade_id": "x"}).status_code, 400)
 
@@ -89,7 +110,7 @@ class TeacherReportsTests(TestCase):
         self.api.force_authenticate(self.teacher)
         data = self.api.get(URL).json()
         self.assertEqual([g["name"] for g in data["grades"]], ["Class 3", "Class 4"])
-        self.assertEqual(data["summary"]["students"], 3)
+        self.assertEqual(data["summary"]["students"], 2)  # 3-A and 4-A
         self.assertEqual(self.api.get(URL, {"grade_id": self.grade4.id}).json()["summary"]["students"], 1)
 
     def test_teacher_without_classes_sees_nothing(self):

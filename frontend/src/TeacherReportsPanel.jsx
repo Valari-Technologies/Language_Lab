@@ -54,7 +54,7 @@ const TeacherReportsPanel = () => {
           <h1 className="sd-page-title">Student Performance Reports</h1>
           <p className="sd-page-sub">
             {data && data.grades.length > 0
-              ? `Students of ${data.grades.map(g => g.name).join(', ')} only.`
+              ? `Students of ${(data.classes && data.classes.length ? data.classes : data.grades.map(g => g.name)).join(', ')} only.`
               : 'Monitor evaluation metrics and student progression.'}
           </p>
         </div>
@@ -78,7 +78,7 @@ const TeacherReportsPanel = () => {
           <FiBarChart2 style={{ fontSize: '3rem', color: '#94a3b8', marginBottom: '1rem' }} />
           <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#1e293b', marginBottom: '0.5rem' }}>No Class Assigned</h3>
           <p style={{ color: '#64748b', maxWidth: '450px', margin: '0 auto' }}>
-            Reports show the students of your grade. Ask your school admin to assign a class to you.
+            Reports show the students of your class. Ask your school admin to assign a class to you.
           </p>
         </div>
       )}
@@ -98,7 +98,7 @@ const TeacherReportsPanel = () => {
                 <FiBarChart2 style={{ fontSize: '2.5rem', color: '#94a3b8', marginBottom: '0.75rem' }} />
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#1e293b', marginBottom: '0.4rem' }}>No Reports Available</h3>
                 <p style={{ ...muted, maxWidth: '450px', margin: '0 auto' }}>
-                  There are no active students in your grade yet.
+                  There are no active students in your class yet.
                 </p>
               </div>
             ) : (

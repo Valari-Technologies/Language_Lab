@@ -1,4 +1,4 @@
-"""Teacher portal "Reports": results of the students of the grade(s) the teacher teaches."""
+"""Teacher portal "Reports": results of the students of the class section(s) the teacher is assigned to."""
 from datetime import timedelta
 
 from django.utils import timezone
@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 from accounts.permissions import IsTeacher
 from accounts.scoping import get_user_school
 from assessments.models import StudentAttempt
+from lms.hub.views import _section_letter
 from lms.packages.views import _grade_number, build_level_map, resolve_grade
 from lmshub.models import LmsSession
 from school_admin.models import Class
@@ -27,8 +28,19 @@ def _average(values):
     return round(sum(values) / len(values), 1) if values else None
 
 
+def _class_scope(classes):
+    """(grade, section letter) of each class of the teacher. A class whose name has no section letter covers its whole grade."""
+    return {(_grade_key(c.grade.grade_name), _section_letter(c.class_name)) for c in classes if c.grade_id}
+
+
+def _in_scope(student, scope):
+    """A student belongs to the teacher only in the grade AND section of one of the teacher's own classes."""
+    grade = _grade_key(student.grade)
+    return (grade, _section_letter(student.section)) in scope or (grade, "") in scope
+
+
 class TeacherReportsAPIView(APIView):
-    """GET /api/cms/v1/teacher/reports/?grade_id=<id>: only students of the teacher's own grade(s), own school."""
+    """GET /api/cms/v1/teacher/reports/?grade_id=<id>: only students of the teacher's own class section(s), own school."""
     permission_classes = [IsAuthenticated, IsTeacher]
 
     def get(self, request):
@@ -36,7 +48,8 @@ class TeacherReportsAPIView(APIView):
         classes = Class.objects.filter(teacherclass__teacher__user=request.user).select_related("grade")
         grades = {c.grade_id: c.grade for c in classes if c.grade_id}
         grade_list = [{"id": g.id, "name": g.grade_name} for g in sorted(grades.values(), key=lambda g: (g.sort_order, g.id))]
-        empty = {"grades": grade_list, "gradeId": None,
+        class_names = sorted({c.class_name for c in classes})
+        empty = {"grades": grade_list, "classes": class_names, "gradeId": None,
                  "summary": {"students": 0, "attempts": 0, "averagePercent": None, "completedLessons": 0},
                  "students": []}
         if not school or not grades:
@@ -48,11 +61,12 @@ class TeacherReportsAPIView(APIView):
             if not raw.isdigit() or int(raw) not in grades:
                 return Response({"error": "This grade is not assigned to you."}, status=status.HTTP_400_BAD_REQUEST)
             selected = [grades[int(raw)]]
-        keys = {_grade_key(g.grade_name) for g in selected}
+        selected_ids = {g.id for g in selected}
+        scope = _class_scope([c for c in classes if c.grade_id in selected_ids])
 
         students = [
             s for s in Student.objects.filter(school=school, user__is_active=True).select_related("user")
-            if _grade_key(s.grade) in keys
+            if _in_scope(s, scope)
         ]
         attempts_by_user = {}
         for attempt in (
@@ -95,6 +109,7 @@ class TeacherReportsAPIView(APIView):
         rows.sort(key=lambda r: (r["name"] or "").lower())
         return Response({
             "grades": grade_list,
+            "classes": class_names,
             "gradeId": selected[0].id if raw else None,
             "summary": {"students": len(rows), "attempts": total_attempts,
                         "averagePercent": _average(all_percentages), "completedLessons": total_lessons},
@@ -128,12 +143,9 @@ class TeacherStudentDayReportAPIView(APIView):
         if not start:
             return Response({"error": "Give a valid start and end for the day."}, status=status.HTTP_400_BAD_REQUEST)
         school = get_user_school(request.user)
-        keys = {
-            _grade_key(c.grade.grade_name)
-            for c in Class.objects.filter(teacherclass__teacher__user=request.user).select_related("grade") if c.grade_id
-        }
+        scope = _class_scope(Class.objects.filter(teacherclass__teacher__user=request.user).select_related("grade"))
         student = Student.objects.filter(student_id=student_id, school=school).select_related("user").first() if school else None
-        if not student or _grade_key(student.grade) not in keys:
+        if not student or not _in_scope(student, scope):
             return Response({"error": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
 
         grade = resolve_grade(student)
