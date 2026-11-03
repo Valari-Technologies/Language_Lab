@@ -3251,30 +3251,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 </div>
               ) : (
                 <>
-                  {/* Metrics overview */}
-                  <div className="sd-stat-row" style={{ gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))' }}>
-                    {[
-                      { label:'Students Attempted', value: overviewReport.total_students,  color:'#0284c7', bg:'#e0f2fe', icon:<FiUsers/> },
-                      { label:'Total Attempts',     value: overviewReport.total_attempts,   color:'#d97706', bg:'#fef3c7', icon:<FiActivity/> },
-                      { label:'Completion Rate',    value: `${overviewReport.completion_rate}%`, color:'#16a34a', bg:'#dcfce7', icon:<FiCheckCircle/> },
-                      { label:'Average Score',      value: `${overviewReport.average_score}%`,   color:'#7c3aed', bg:'#f3e8ff', icon:<FiAward/> },
-                      { label:'Pass Rate',          value: `${overviewReport.pass_rate}%`,       color:'#0284c7', bg:'#e0f2fe', icon:<FiTrendingUp/> },
-                    ].map((s, i) => (
-                      <div className="sd-stat-card" key={i}>
-                        <div className="sd-stat-icon-row">
-                          <div className="sd-stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
-                        </div>
-                        <div className="sd-stat-value">{s.value}</div>
-                        <div className="sd-stat-label">{s.label}</div>
-                      </div>
-                    ))}
-                  </div>
-
                   {/* Classes Report Table */}
                   <div className="sd-card">
                     <div className="sd-card-header">
                       <div className="sd-card-title">Class Performance Analysis</div>
-                      <button className="sd-btn-outline" onClick={() => handleExportCSV('classes')}>Export CSV</button>
                     </div>
                     <div className="sd-table-wrap">
                       <table className="sd-table">
@@ -4055,17 +4035,17 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 </div>
                 <div className="sd-table-wrap">
                   <table className="sd-table">
-                    <thead><tr><th>Student</th><th>Attempts</th><th>Completed</th><th>Avg Score</th><th>Last Attempt</th></tr></thead>
+                    <thead><tr><th>Student</th><th>Remaining</th><th>Completed</th><th>Last Attempt</th></tr></thead>
                     <tbody>
                       {selectedClassDetail.students?.map((st, i) => (
                         <tr key={i}>
-                          <td style={{ fontWeight:600 }}>{st.student_name}</td>
-                          <td>{st.total_attempts}</td>
-                          <td>{st.completed}</td>
-                          <td style={{ fontWeight:700, color:'#10b981' }}>{st.average_score}%</td>
+                          <td style={{ fontWeight:600 }}>{titleName(st.student_name)}</td>
+                          <td>{selectedClassDetail.total_lessons ? `${st.remaining_lessons} of ${selectedClassDetail.total_lessons}` : 'N/A'}</td>
+                          <td>{st.completed_lessons}</td>
                           <td>{st.last_attempt_date ? new Date(st.last_attempt_date).toLocaleDateString() : 'N/A'}</td>
                         </tr>
                       ))}
+                      {(selectedClassDetail.students || []).length === 0 && <tr><td colSpan="4" className="sd-empty-state">No students in this class.</td></tr>}
                     </tbody>
                   </table>
                 </div>

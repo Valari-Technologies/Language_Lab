@@ -556,6 +556,12 @@ class ReportsClassDetailAPIView(APIView):
         passed = completed_attempts.filter(percentage__gte=60.0).count()
         pass_rate = (passed / completed * 100) if completed > 0 else 0.0
 
+        # The lessons published for the class's grade: what each student has finished and what is still to do
+        from lms.packages.views import build_level_map
+        level_map = build_level_map(c.grade) if c.grade_id else {"lessons": [], "bosses": []}
+        map_lessons = {str(e["experienceId"]) for e in level_map["lessons"] if e}
+        map_bosses = {str(e["experienceId"]) for e in level_map["bosses"] if e}
+
         students_list = []
         for member in members:  # every student of the class, also those who have not played yet
             student_user = member.user
@@ -564,12 +570,20 @@ class ReportsClassDetailAPIView(APIView):
             std_completed_attempts = student_attempts.filter(status="COMPLETED", percentage__isnull=False)
             std_avg = std_completed_attempts.aggregate(avg=models.Avg("percentage"))["avg"] or 0.0
             last_attempt = student_attempts.order_by("-started_at").first()
-            
+
+            done = {
+                a.assignment.experience_ref
+                for a in student_attempts.filter(status="COMPLETED").select_related("assignment")
+                if a.assignment.experience_ref not in map_bosses and not str(a.level_key or "").upper().startswith("B")
+            }
+
             students_list.append({
                 "student_id": student_user.id,
                 "student_name": student_user.full_name or student_user.username,
                 "total_attempts": student_attempts.count(),
                 "completed": std_completed,
+                "completed_lessons": len(done),
+                "remaining_lessons": len(map_lessons - done),
                 "average_score": round(float(std_avg), 2),
                 "last_attempt_date": last_attempt.started_at if last_attempt else None
             })
@@ -584,6 +598,7 @@ class ReportsClassDetailAPIView(APIView):
             "completed": completed,
             "average_score": round(float(average_score), 2),
             "pass_rate": round(float(pass_rate), 2),
+            "total_lessons": len(map_lessons),
             "students": students_list
         }, status=status.HTTP_200_OK)
 

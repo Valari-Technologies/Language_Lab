@@ -72,6 +72,33 @@ class StudentDetailReportTests(TestCase):
         detail = self.api.get(f"/api/v1/reports/classes/{klass.class_id}/").json()
         self.assertEqual([s["student_name"] for s in detail["students"]], ["Arj", "Ravi"])  # also the ones with no attempts
 
+    def test_class_detail_shows_remaining_and_completed_lessons(self):
+        from content_studio.models import PublishedPackage, PublishVersion
+        from school_admin.models import Class
+        klass = Class.objects.create(school=self.school, class_name="Class 5-A", grade=self.grade, academic_year="2026-2027")
+        lessons = []
+        for title in ("One", "Two", "Three"):
+            exp = Experience.objects.create(title=title, grade=self.grade, subject="English", language="English",
+                                            difficulty="BEGINNER", estimated_duration=10, experience_type="LESSON",
+                                            status="APPROVED", created_by=self.author)
+            pkg = PublishedPackage.objects.create(experience=exp, package_name=title, compression_status="COMPLETED")
+            PublishVersion.objects.create(published_package=pkg, version_number="1.0", build_number=1, package_size=1,
+                                          checksum="c", published_by=self.author)
+            lessons.append(exp)
+        for exp in lessons[:2]:  # finished once; the first one twice (a retry is still one lesson)
+            for n in range(2 if exp is lessons[0] else 1):
+                assignment, _ = ExperienceAssignment.objects.get_or_create(
+                    school=self.school, experience_ref=str(exp.id),
+                    defaults={"experience_title": exp.title, "assigned_at": timezone.now()})
+                StudentAttempt.objects.create(
+                    assignment=assignment, student=self.student.user, school=self.school, started_at=timezone.now(),
+                    completed_at=timezone.now(), status="COMPLETED", percentage=70, level_key="L1",
+                    lms_attempt_id=f"r-{exp.id}-{n}")
+        detail = self.api.get(f"/api/v1/reports/classes/{klass.class_id}/").json()
+        self.assertEqual(detail["total_lessons"], 3)
+        row = detail["students"][0]
+        self.assertEqual((row["completed_lessons"], row["remaining_lessons"]), (2, 1))
+
     def test_attempts_carry_their_type_and_a_zero_score_is_kept(self):
         self._attempt("A lesson", "LESSON", level_key="L1")
         self._attempt("An assessment", "ASSESSMENT", score=0, maximum=10, percentage=0, level_key="B1")
