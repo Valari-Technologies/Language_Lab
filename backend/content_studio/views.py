@@ -1077,6 +1077,22 @@ class PreviewViewSet(viewsets.ViewSet):
 DUPLICATE_VERSION_MESSAGE = "This version name already exists. Please enter a different name."
 
 
+def used_version_names(experience):
+    """Every version name this lesson has used: built, waiting for approval, or rejected."""
+    names = list(
+        PublishVersion.objects.filter(published_package__experience=experience).values_list("version_number", flat=True)
+    )
+    names += list(experience.submitted_versions or [])
+    if experience.pending_version:
+        names.append(experience.pending_version)
+    return names
+
+
+def version_name_used(experience, name):
+    key = str(name).strip().lower()
+    return any(str(used).strip().lower() == key for used in used_version_names(experience))
+
+
 def _parse_level(experience, raw):
     return parse_level(experience.experience_type, raw)
 
@@ -1148,18 +1164,18 @@ class PublishViewSet(viewsets.ViewSet):
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
-        # Duplicate version check: the name is trimmed and compared ignoring case, over every build of this lesson
-        version = str(version).strip() if version is not None else ""
-        if version and PublishVersion.objects.filter(
-            published_package__experience=experience, version_number__iexact=version
-        ).exists():
-            return Response({"error": DUPLICATE_VERSION_MESSAGE}, status=status.HTTP_409_CONFLICT)
+        # Duplicate version check: a name is used once per lesson (trimmed, any case), whether the earlier
+        # build was approved, is waiting for approval, or was rejected
+        version = (str(version).strip() if version is not None else "") or "1.0"
+        if version_name_used(experience, version):
+            return Response({"error": DUPLICATE_VERSION_MESSAGE, "code": "version_exists"}, status=status.HTTP_409_CONFLICT)
 
         experience.status = "PENDING_APPROVAL"
-        experience.pending_version = version or "1.0"
+        experience.pending_version = version
+        experience.submitted_versions = [*(experience.submitted_versions or []), version]
         experience.pending_release_notes = release_notes
         experience.pending_level = level
-        experience.save(update_fields=["status", "pending_version", "pending_release_notes", "pending_level"])
+        experience.save(update_fields=["status", "pending_version", "submitted_versions", "pending_release_notes", "pending_level"])
 
         # Alert Super Admins via Notification models
         try:
@@ -1193,11 +1209,13 @@ class PublishViewSet(viewsets.ViewSet):
         if not experience:
             return Response({"error": "Experience not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        used_versions = used_version_names(experience)  # the page warns about these before the button is pressed
         try:
             pkg = PublishedPackage.objects.get(experience=experience)
         except PublishedPackage.DoesNotExist:
             return Response(
-                {"experience_id": experience.id, "status": experience.status, "published_package": None},
+                {"experience_id": experience.id, "status": experience.status, "published_package": None,
+                 "used_versions": used_versions},
                 status=status.HTTP_200_OK,
             )
 
@@ -1206,6 +1224,7 @@ class PublishViewSet(viewsets.ViewSet):
             {
                 "experience_id": experience.id,
                 "status": experience.status,
+                "used_versions": used_versions,
                 "published_package": PublishedPackageSerializer(pkg).data,
                 "latest_version": PublishVersionSerializer(latest_version).data if latest_version else None,
             },
@@ -1613,7 +1632,7 @@ class SuperAdminExperienceViewSet(viewsets.ViewSet):
                     status=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 )
             if isinstance(args, tuple) and args[0] == "DUPLICATE_VERSION":
-                return Response({"error": DUPLICATE_VERSION_MESSAGE}, status=status.HTTP_409_CONFLICT)
+                return Response({"error": DUPLICATE_VERSION_MESSAGE, "code": "version_exists"}, status=status.HTTP_409_CONFLICT)
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except RuntimeError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

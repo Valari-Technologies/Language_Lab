@@ -5439,9 +5439,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   };
 
   // The typed version name is already used by a build of this lesson (spaces and capitals are ignored); the server checks it too
+  // used_versions comes from the server: built, waiting for approval and rejected names of this lesson
   const versionNameTaken = !!(selectedExperience && publishVersion.trim()
-    && publishHistory.some(v => v.experience_id === selectedExperience.id
-      && String(v.version_number || '').trim().toLowerCase() === publishVersion.trim().toLowerCase()));
+    && ((publishStatus && publishStatus.experience_id === selectedExperience.id && publishStatus.used_versions) || [])
+      .some(name => String(name || '').trim().toLowerCase() === publishVersion.trim().toLowerCase()));
 
   const handlePublishExperience = async () => {
     if (!selectedExperience || !selectedExperience.id) {

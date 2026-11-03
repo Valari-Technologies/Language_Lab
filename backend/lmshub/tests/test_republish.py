@@ -82,10 +82,32 @@ class RepublishTests(HubTestBase):
         self._approve()
         for same in ("Version 1", "  version 1 ", "VERSION 1"):  # same name: trimmed, upper or lower case
             response = self._submit_level(self.exp, same, "")
-            self.assertEqual((response.status_code, response.data["error"]), (409, message), same)
+            self.assertEqual((response.status_code, response.data["error"], response.data["code"]),
+                             (409, message, "version_exists"), same)
         self.assertEqual(self._submit_level(self.exp, "Version 2", "").status_code, 200)  # a new name is fine
         self.exp.refresh_from_db()
         self.assertEqual(self.exp.pending_version, "Version 2")
+
+        # a build waiting for approval cannot be submitted again under the same name
+        for same in ("Version 2", " VERSION 2"):
+            self.assertEqual(self._submit_level(self.exp, same, "").status_code, 409, same)
+        self.assertEqual(self.exp.status, "PENDING_APPROVAL")
+
+        # a rejected name stays used
+        self.api.force_authenticate(self.root)
+        self.api.post(f"/api/v1/super-admin/experiences/{self.exp.id}/reject/", {"review_remark": "fix it"}, format="json")
+        self.exp.refresh_from_db()
+        self.assertEqual((self.exp.status, self.exp.pending_version), ("REJECTED", None))
+        self.assertEqual(self._submit_level(self.exp, "version 2", "").status_code, 409)
+        self.assertEqual(self.api.get(f"/api/v1/content/publish/{self.exp.id}/").status_code, 200)
+        self.api.force_authenticate(self.creator)
+        status_data = self.api.get(f"/api/v1/content/publish/{self.exp.id}/").data
+        self.assertEqual(sorted(n.lower() for n in set(status_data["used_versions"])), ["version 1", "version 2"])
+        self.assertEqual(self._submit_level(self.exp, "Version 3", "").status_code, 200)
+
+        # no name given means "1.0": that is a name too
+        self.assertEqual(self._submit_level(self.exp, "", "").status_code, 200)
+        self.assertEqual(self._submit_level(self.exp, "1.0", "").status_code, 409)
 
         # another lesson may use the same name
         other = Experience.objects.create(

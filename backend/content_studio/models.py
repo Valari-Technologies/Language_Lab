@@ -85,6 +85,12 @@ class Experience(models.Model):
         null=True,
         verbose_name=_("Pending Version")
     )
+    submitted_versions = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=_("Submitted Version Names"),
+        help_text=_("Every version name submitted for this lesson, approved, pending or rejected: a name is used once.")
+    )
     pending_release_notes = models.TextField(
         blank=True,
         null=True,
