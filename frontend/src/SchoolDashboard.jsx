@@ -12,6 +12,7 @@ import './SchoolDashboard.css';
 import LmsHubPanel from './LmsHubPanel';
 import { apiFetch } from './api';
 import { API_BASE_URL } from './config';
+import { formatRollNo, titleName } from './format';
 
 const resolveMediaUrl = (url) => {
   if (!url) return '';
@@ -153,19 +154,10 @@ const generateRollNo = (fullName, existingStudents = []) => {
   return candidate;
 };
 
-/* A person's name with a capital at the start of each word: "ravi kumar" / "RAVI KUMAR" -> "Ravi Kumar". */
-const titleName = (value) => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase().replace(/(^|[\s-])(\S)/g, (m, sep, ch) => sep + ch.toUpperCase());
-
 /* Difficulty as shown to users: BEGINNER / INTERMEDIATE / MASTER (or "Intermediate") -> "Beginner" / "Intermediate" / "Master". */
 const difficultyLabel = (value) => {
   const clean = String(value || 'INTERMEDIATE').trim().toLowerCase();
   return clean.charAt(0).toUpperCase() + clean.slice(1);
-};
-
-/* Roll no as shown in Students Management: a single digit gets a leading 0 (1 -> 01); anything else is shown as entered. */
-const formatRollNo = (rollNo) => {
-  const clean = String(rollNo ?? '').trim();
-  return /^\d$/.test(clean) ? `0${clean}` : clean;
 };
 
 const generateLmsLoginCode = (fullName, rollNo = '', existingStudents = []) => {

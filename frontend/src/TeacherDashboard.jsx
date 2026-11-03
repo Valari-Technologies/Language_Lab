@@ -12,6 +12,7 @@ import {
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
 import { API_BASE_URL } from './config';
+import { formatRollNo, titleName } from './format';
 
 // Difficulty as shown to users: BEGINNER / INTERMEDIATE / MASTER (or "Intermediate") -> "Beginner" / "Intermediate" / "Master".
 const difficultyLabel = (value) => {
@@ -1129,8 +1130,8 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     };
     
     const rows = list.map(s => {
-      const fullName = s.full_name || s.username || 'N/A';
-      const rollNo = s.roll_no || 'N/A';
+      const fullName = titleName(s.full_name) || s.username || 'N/A';
+      const rollNo = formatRollNo(s.roll_no) || 'N/A';
       const loginCode = (s.username && /^([A-Z]{3})_(\d)$/.test(s.username))
         ? s.username.replace(/^([A-Z]{3})_(\d)$/, '$1_0$2')
         : (s.username || 'N/A');
@@ -2207,9 +2208,9 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               </td>
                             )}
                             <td>
-                              <span className="sd-name-cell-primary">{s.full_name || 'N/A'}</span>
+                              <span className="sd-name-cell-primary">{titleName(s.full_name) || 'N/A'}</span>
                             </td>
-                            <td>{s.roll_no || 'N/A'}</td>
+                            <td>{formatRollNo(s.roll_no) || 'N/A'}</td>
                             <td>
                               <span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>
                                 {(() => {
@@ -3094,10 +3095,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div style={{ padding: '0.5rem 0', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem', alignItems: 'center' }}>
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Full Name:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.full_name || 'N/A'}</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{titleName(selectedStudentCrudDetail.full_name) || 'N/A'}</span>
                     
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Roll No:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.roll_no || 'N/A'}</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{formatRollNo(selectedStudentCrudDetail.roll_no) || 'N/A'}</span>
                     
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Class:</span>
                     <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.grade || 'N/A'}</span>

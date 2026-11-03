@@ -12,6 +12,7 @@ from accounts.scoping import filter_queryset_by_school, get_user_school
 from super_admin.views import CMSBaseViewSet
 from super_admin.models import School, Grade, SchoolAdminProfile
 from teacher.models import Student
+from teacher.rollno import find_roll_conflict, roll_conflict_message
 from .models import Class, Teacher, TeacherClass
 from .serializers import ClassSerializer, TeacherClassSerializer, TeacherSerializer
 import openpyxl
@@ -537,6 +538,11 @@ class BulkUploadAPIView(APIView):
                             roll_no = str(roll_no_val).strip()
                             status_str = str(status_val).strip().lower()
                             academic_year = str(academic_year_val).strip()
+
+                            # A roll no may not repeat inside one class section of the school (1 and 01 are the same)
+                            clash = find_roll_conflict(school, grade, section, roll_no)
+                            if clash:
+                                raise ValueError(roll_conflict_message(clash, roll_no, grade, section))
 
                             # Auto generate lms login code (username) from full name and roll no (e.g. DHA_12)
                             clean_name = "".join(ch for ch in full_name if ch.isalpha()).upper()

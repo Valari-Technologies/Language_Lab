@@ -5,6 +5,7 @@ from accounts.names import title_name
 from accounts.scoping import get_user_school
 from super_admin.models import School
 from .models import Student
+from .rollno import find_roll_conflict, roll_conflict_message, roll_position_changed
 
 User = get_user_model()
 
@@ -87,6 +88,18 @@ class StudentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Invalid Class/Grade. Grade 3 to 8 required.")
         return value
 
+    def _check_roll_no(self, attrs, school):
+        """No two students of one school, grade and section may share a roll number (1 and 01 are the same)."""
+        current = self.instance
+        roll_no = attrs.get("roll_no", current.roll_no if current else None)
+        grade = attrs.get("grade", current.grade if current else None)
+        section = attrs.get("section", current.section if current else None)
+        if current and not roll_position_changed(current, roll_no, grade, section):
+            return  # an existing duplicate does not block editing the student's other details
+        other = find_roll_conflict(school, grade, section, roll_no, current.student_id if current else None)
+        if other:
+            raise serializers.ValidationError({"roll_no": roll_conflict_message(other, roll_no, grade, section)})
+
     def validate(self, attrs):
         request = self.context.get("request")
         if not self.instance:
@@ -121,10 +134,14 @@ class StudentSerializer(serializers.ModelSerializer):
                 attrs["school"] = admin_school
             elif "school" not in attrs or attrs["school"] is None:
                 raise serializers.ValidationError({"school": "This field is required."})
-        elif request and request.user.role in ["SCHOOL_ADMIN", "TEACHER"]:
-            admin_school = get_user_school(request.user)
-            if admin_school and attrs.get("school") and attrs["school"] != admin_school:
-                raise serializers.ValidationError({"school": "You can only manage students in your own school."})
+            self._check_roll_no(attrs, attrs.get("school"))
+        else:
+            if request and request.user.role in ["SCHOOL_ADMIN", "TEACHER"]:
+                admin_school = get_user_school(request.user)
+                if admin_school and attrs.get("school") and attrs["school"] != admin_school:
+                    raise serializers.ValidationError({"school": "You can only manage students in your own school."})
+            if {"roll_no", "grade", "section"} & set(attrs):
+                self._check_roll_no(attrs, self.instance.school)
         return attrs
 
     def create(self, validated_data):
