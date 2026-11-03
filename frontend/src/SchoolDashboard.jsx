@@ -483,6 +483,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [experiencesReport,         setExperiencesReport]         = useState([]);
   const [classesReport,           setClassesReport]           = useState([]);
   const [studentsReport,          setStudentsReport]          = useState([]);
+  const [studentReportPage,       setStudentReportPage]       = useState(1);
+  const [studentReportGrade,      setStudentReportGrade]      = useState('');
 
   /* ── Detail modals ── */
   const [selectedExperienceDetail, setSelectedExperienceDetail] = useState(null);
@@ -1538,6 +1540,15 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   };
 
   const paginate = (list, page) => list.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  // Student Performance Analysis: five students a page, filtered by grade ("Class 5-A" belongs to grade 5)
+  const STUDENT_REPORT_PER_PAGE = 5;
+  const filteredStudentRows = studentsReport.filter(st => (
+    !studentReportGrade || (String(st.class_name || '').match(/\d+/) || [])[0] === studentReportGrade
+  ));
+  const studentReportPageNow = Math.min(studentReportPage, Math.max(1, Math.ceil(filteredStudentRows.length / STUDENT_REPORT_PER_PAGE)));
+  const visibleStudentRows = filteredStudentRows.slice(
+    (studentReportPageNow - 1) * STUDENT_REPORT_PER_PAGE, studentReportPageNow * STUDENT_REPORT_PER_PAGE);
 
   /* ── Stat values (from real API or fallbacks) ── */
   const statTeachers  = teachers.length;
@@ -3279,7 +3290,19 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                   <div className="sd-card">
                     <div className="sd-card-header">
                       <div className="sd-card-title">Student Performance Analysis</div>
-                      <button className="sd-btn-outline" onClick={() => handleExportCSV('students')}>Export CSV</button>
+                      <div style={{ display:'flex', gap:'0.5rem', alignItems:'center' }}>
+                        <select
+                          className="sd-form-input"
+                          aria-label="Grade"
+                          style={{ width:'auto', minWidth:'130px', height:'36px', padding:'0 2rem 0 0.8rem', borderRadius:'8px', border:'1px solid #cbd5e1', fontSize:'0.82rem' }}
+                          value={studentReportGrade}
+                          onChange={e => { setStudentReportGrade(e.target.value); setStudentReportPage(1); }}
+                        >
+                          <option value="">All Grades</option>
+                          {[3, 4, 5, 6, 7, 8].map(n => <option key={n} value={String(n)}>Class {n}</option>)}
+                        </select>
+                        <button className="sd-btn-outline" onClick={() => handleExportCSV('students')}>Export CSV</button>
+                      </div>
                     </div>
                     <div className="sd-table-wrap">
                       <table className="sd-table">
@@ -3289,7 +3312,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           </tr>
                         </thead>
                         <tbody>
-                          {studentsReport.map((st, i) => (
+                          {visibleStudentRows.map((st, i) => (
                             <tr key={i} onClick={() => handleFetchStudentDetail(st.student_id)} style={{ cursor:'pointer' }}>
                               <td><span className="sd-name-cell-primary">{titleName(st.student_name)}</span></td>
                               <td>{st.class_name}</td>
@@ -3301,10 +3324,20 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               </td>
                             </tr>
                           ))}
-                          {studentsReport.length === 0 && <tr><td colSpan="4" className="sd-empty-state">No students found.</td></tr>}
+                          {filteredStudentRows.length === 0 && <tr><td colSpan="4" className="sd-empty-state">No students found.</td></tr>}
                         </tbody>
                       </table>
                     </div>
+                    {filteredStudentRows.length > STUDENT_REPORT_PER_PAGE && (
+                      <div style={{ marginTop:'1rem', borderTop:'1px solid #f1f5f9', paddingTop:'1rem' }}>
+                        <Pagination
+                          total={filteredStudentRows.length}
+                          perPage={STUDENT_REPORT_PER_PAGE}
+                          page={studentReportPageNow}
+                          onPage={setStudentReportPage}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Experience Report Table */}
