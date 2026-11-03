@@ -165,7 +165,7 @@ const StudentDayReport = ({ student, onClose }) => {
           <button type="button" style={tabBtn(tab === 'yesterday')} onClick={() => setTab('yesterday')}>Yesterday</button>
           <input type="date" className="sd-form-input" value={picked} max={dateValue(new Date())} aria-label="Pick a date"
             onChange={e => { if (e.target.value) { setPicked(e.target.value); setTab('date'); } }}
-            style={{ height: '34px', width: 'auto', ...(tab === 'date' ? { borderColor: '#2563eb' } : {}) }} />
+            style={{ height: '34px', width: 'auto', padding: '0 0.7rem', ...(tab === 'date' ? { borderColor: '#2563eb' } : {}) }} />
         </div>
         <div style={{ ...muted, marginBottom: '0.75rem' }}>{day.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
 
@@ -258,7 +258,8 @@ const TeacherReportsPanel = () => {
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           {data && data.grades.length > 1 && (
-            <select className="sd-form-input" value={gradeId} onChange={e => setGradeId(e.target.value)} style={{ height: '36px' }}>
+            <select className="sd-form-input" value={gradeId} onChange={e => setGradeId(e.target.value)} aria-label="Grade"
+              style={{ height: '36px', width: 'auto', minWidth: '150px', padding: '0 2rem 0 0.9rem', lineHeight: '34px', fontSize: '0.85rem', fontWeight: 600, borderRadius: '10px' }}>
               <option value="">All my grades</option>
               {data.grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
@@ -301,7 +302,7 @@ const TeacherReportsPanel = () => {
                 <table className="sd-table">
                   <thead>
                     <tr>
-                      <th>Student</th><th>Roll No</th><th>Class</th><th style={{ width: '90px', textAlign: 'center' }}>Actions</th>
+                      <th>Student</th><th>Roll No</th><th>Class</th><th>Lessons Completed</th><th>Attempts</th><th>Last Active</th><th style={{ width: '90px', textAlign: 'center' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -310,6 +311,9 @@ const TeacherReportsPanel = () => {
                         <td>{s.name}<div style={muted}>{s.loginCode}</div></td>
                         <td>{s.rollNo || '—'}</td>
                         <td>{classLabel(s)}</td>
+                        <td>{s.completedLessons}</td>
+                        <td>{s.attempts}</td>
+                        <td>{fmt(s.lastActivity)}</td>
                         <td style={{ width: '90px', textAlign: 'center' }}>
                           <button type="button" title="Actions" aria-label={`Actions for ${s.name}`}
                             onClick={(e) => {
