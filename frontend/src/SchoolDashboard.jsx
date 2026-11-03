@@ -153,6 +153,12 @@ const generateRollNo = (fullName, existingStudents = []) => {
   return candidate;
 };
 
+/* Roll no as shown in Students Management: a single digit gets a leading 0 (1 -> 01); anything else is shown as entered. */
+const formatRollNo = (rollNo) => {
+  const clean = String(rollNo ?? '').trim();
+  return /^\d$/.test(clean) ? `0${clean}` : clean;
+};
+
 const generateLmsLoginCode = (fullName, rollNo = '', existingStudents = []) => {
   const letters = (fullName || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
   if (!letters) return '';
@@ -1470,7 +1476,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     
     const rows = list.map(s => {
       const fullName = s.full_name || s.username || 'N/A';
-      const rollNo = s.roll_no || 'N/A';
+      const rollNo = formatRollNo(s.roll_no) || 'N/A';
       const loginCode = (s.username && /^([A-Z]{3})_(\d)$/.test(s.username))
         ? s.username.replace(/^([A-Z]{3})_(\d)$/, '$1_0$2')
         : (s.username || 'N/A');
@@ -2832,7 +2838,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             <td>
                               <span className="sd-name-cell-primary">{s.full_name || s.username || 'N/A'}</span>
                             </td>
-                            <td>{s.roll_no || 'N/A'}</td>
+                            <td>{formatRollNo(s.roll_no) || 'N/A'}</td>
                             <td><span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>{displayLmsCode}</span></td>
                             <td>{s.grade ? (String(s.grade).startsWith('Class') || String(s.grade).startsWith('Grade') ? String(s.grade).replace('Grade', 'Class') : `Class ${s.grade}`) : 'N/A'}</td>
                             <td>{s.section ? (String(s.section).startsWith('Section') ? s.section : `Section ${s.section}`) : 'N/A'}</td>
@@ -4206,7 +4212,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.full_name || 'N/A'}</span>
                     
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Roll Number:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.roll_no || 'N/A'}</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{formatRollNo(selectedStudentCrudDetail.roll_no) || 'N/A'}</span>
                     
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Class:</span>
                     <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.grade || 'N/A'}</span>
