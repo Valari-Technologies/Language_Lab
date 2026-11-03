@@ -520,7 +520,7 @@ class ReportsClassDetailAPIView(APIView):
         pass_rate = (passed / completed * 100) if completed > 0 else 0.0
         
         students_list = []
-        student_ids = attempts.values_list("student", flat=True).distinct()
+        student_ids = attempts.values_list("student", flat=True).order_by().distinct()
         for sid in student_ids:
             student_user = User.objects.get(id=sid)
             student_attempts = attempts.filter(student=student_user)
@@ -557,13 +557,36 @@ class ReportsStudentsAPIView(APIView):
     def get(self, request):
         attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user)
         
-        student_ids = attempts.values_list("student", flat=True).distinct()
-        
+        # order_by() first: the model's default ordering would otherwise make distinct() repeat each student per attempt
+        student_ids = attempts.values_list("student", flat=True).order_by().distinct()
+
+        from lms.hub.views import _section_letter
+        from lms.packages.views import _grade_number
+        school_classes = {}  # school id -> [(class, grade number, section letter, [teacher names])]
+
+        def class_and_teachers(profile):
+            """The class (and its teachers) of the student's own grade and section, e.g. "Class 5-A"."""
+            if profile.school_id not in school_classes:
+                rows = []
+                for c in Class.objects.filter(school_id=profile.school_id).select_related("grade"):
+                    names = [
+                        (tc.teacher.user.full_name or tc.teacher.user.username)
+                        for tc in TeacherClass.objects.filter(class_obj=c).select_related("teacher__user")
+                    ]
+                    rows.append((c, _grade_number(c.grade.grade_name) if c.grade_id else None, _section_letter(c.class_name), names))
+                school_classes[profile.school_id] = rows
+            grade, section = _grade_number(profile.grade), _section_letter(profile.section)
+            found = [r for r in school_classes[profile.school_id] if r[1] == grade and r[2] == section]
+            class_name = ", ".join(sorted({r[0].class_name for r in found})) or (
+                " ".join(filter(None, [f"Class {grade}" if grade is not None else "", section])) or "N/A")
+            teachers = sorted({n for r in found for n in r[3]})
+            return class_name, ", ".join(teachers) or "N/A"
+
         results = []
         for sid in student_ids:
             student_user = User.objects.get(id=sid)
             student_attempts = attempts.filter(student=student_user)
-            
+
             total_attempts = student_attempts.count()
             completed = student_attempts.filter(status="COMPLETED").count()
             
@@ -580,13 +603,14 @@ class ReportsStudentsAPIView(APIView):
                 
             last_attempt = student_attempts.order_by("-started_at").first()
             
-            classes = list(student_attempts.values_list("assignment__class_obj__class_name", flat=True).distinct())
-            class_name = ", ".join(filter(None, classes)) or "N/A"
-            
+            profile = Student.objects.filter(user=student_user).select_related("school").first()
+            class_name, teacher_name = class_and_teachers(profile) if profile else ("N/A", "N/A")
+
             results.append({
                 "student_id": student_user.id,
                 "student_name": student_user.full_name or student_user.username,
                 "class_name": class_name,
+                "teacher_name": teacher_name,
                 "total_attempts": total_attempts,
                 "completed": completed,
                 "average_score": round(float(average_score), 2),
@@ -633,19 +657,37 @@ class ReportsStudentDetailAPIView(APIView):
         completed_attempts = attempts.filter(status="COMPLETED", percentage__isnull=False)
         average_score = completed_attempts.aggregate(avg=models.Avg("percentage"))["avg"] or 0.0
         
+        # A lesson or an assessment: the Content Studio type of the experience, else the level key (B1-B6 = assessment)
+        from content_studio.models import Experience
+
+        def ref_id(ref):
+            tail = str(ref or "").upper().replace("EXP-", "", 1)
+            return int(tail) if tail.isdigit() else None
+
+        attempt_rows = list(attempts.select_related("assignment__class_obj"))
+        experiences = Experience.objects.in_bulk(
+            [i for i in (ref_id(a.assignment.experience_ref) for a in attempt_rows) if i]
+        )
+
         attempts_list = []
-        for att in attempts.select_related("assignment__class_obj"):
+        for att in attempt_rows:
+            source = experiences.get(ref_id(att.assignment.experience_ref))
+            if str(att.level_key or "").upper().startswith("B"):
+                experience_type = "ASSESSMENT"
+            else:
+                experience_type = source.experience_type if source else "LESSON"
             attempts_list.append({
                 "lms_attempt_id": att.lms_attempt_id,
                 "experience_ref": att.assignment.experience_ref,
                 "experience_title": att.assignment.experience_title,
+                "experience_type": experience_type,
                 "class_name": att.assignment.class_obj.class_name if att.assignment.class_obj else "N/A",
                 "started_at": att.started_at,
                 "completed_at": att.completed_at,
                 "status": att.status,
-                "score": float(att.total_score) if att.total_score else None,
-                "max_score": float(att.max_score) if att.max_score else None,
-                "percentage": float(att.percentage) if att.percentage else None,
+                "score": float(att.total_score) if att.total_score is not None else None,
+                "max_score": float(att.max_score) if att.max_score is not None else None,
+                "percentage": float(att.percentage) if att.percentage is not None else None,
                 "time_spent_seconds": att.time_spent_seconds
             })
 

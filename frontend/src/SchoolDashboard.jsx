@@ -3285,23 +3285,23 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <table className="sd-table">
                         <thead>
                           <tr>
-                            <th>Student</th><th>Class</th><th>Attempts</th><th>Completed</th>
-                            <th>Avg Score</th><th>Best Lesson</th><th>Worst Lesson</th><th>Last Attempt</th>
+                            <th>Student</th><th>Class</th><th>Teacher Name</th><th style={{ width:'90px', textAlign:'center' }}>Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           {studentsReport.map((st, i) => (
                             <tr key={i} onClick={() => handleFetchStudentDetail(st.student_id)} style={{ cursor:'pointer' }}>
-                              <td><span className="sd-name-cell-primary">{st.student_name}</span></td>
+                              <td><span className="sd-name-cell-primary">{titleName(st.student_name)}</span></td>
                               <td>{st.class_name}</td>
-                              <td>{st.total_attempts}</td>
-                              <td>{st.completed}</td>
-                              <td style={{ fontWeight:700, color:'#3b82f6' }}>{st.average_score}%</td>
-                              <td style={{ color:'#047857' }}>{st.best_experience}</td>
-                              <td style={{ color:'#b91c1c' }}>{st.worst_experience}</td>
-                              <td>{st.last_attempt_date ? new Date(st.last_attempt_date).toLocaleDateString() : 'N/A'}</td>
+                              <td>{st.teacher_name || 'N/A'}</td>
+                              <td style={{ textAlign:'center' }}>
+                                <button className="sd-btn-outline" title="View student report" aria-label={`View report of ${st.student_name}`}
+                                  onClick={(e) => { e.stopPropagation(); handleFetchStudentDetail(st.student_id); }}
+                                  style={{ padding:'5px 9px', display:'inline-flex', alignItems:'center' }}><FiEye /></button>
+                              </td>
                             </tr>
                           ))}
+                          {studentsReport.length === 0 && <tr><td colSpan="4" className="sd-empty-state">No students found.</td></tr>}
                         </tbody>
                       </table>
                     </div>
@@ -4031,27 +4031,66 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
                   <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Student: {selectedStudentDetail.student_name}</h3>
                 </div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))', gap:'0.75rem', marginBottom:'1.25rem', padding:'0.85rem', background:'#f1f5f9', borderRadius:8, fontSize:'0.84rem' }}>
-                  <div><strong>Attempts:</strong> {selectedStudentDetail.total_attempts}</div>
-                  <div><strong>Completed:</strong> {selectedStudentDetail.completed}</div>
-                  <div><strong>Avg Score:</strong> {selectedStudentDetail.average_score}%</div>
-                </div>
-                <div className="sd-table-wrap">
-                  <table className="sd-table">
-                    <thead><tr><th>Experience</th><th>Class</th><th>Score</th><th>Status</th><th>Started At</th></tr></thead>
-                    <tbody>
-                      {selectedStudentDetail.attempts?.map((att, i) => (
-                        <tr key={i}>
-                          <td style={{ fontWeight:600 }}>{att.experience_title}</td>
-                          <td>{att.class_name}</td>
-                          <td style={{ fontWeight:700, color:'#3b82f6' }}>{att.percentage != null ? att.percentage+'%' : 'N/A'}</td>
-                          <td>{att.status}</td>
-                          <td>{new Date(att.started_at).toLocaleDateString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {(() => {
+                  // Lessons and assessments are listed apart; only assessments carry a score
+                  const attempts = selectedStudentDetail.attempts || [];
+                  const lessonAttempts = attempts.filter(a => a.experience_type !== 'ASSESSMENT');
+                  const assessmentAttempts = attempts.filter(a => a.experience_type === 'ASSESSMENT');
+                  const scored = assessmentAttempts.filter(a => a.status === 'COMPLETED' && a.percentage != null);
+                  const assessmentAverage = scored.length ? Math.round(scored.reduce((sum, a) => sum + a.percentage, 0) / scored.length * 10) / 10 : null;
+                  const marks = (a) => (a.score != null && a.max_score != null ? `${a.score} / ${a.max_score}` : 'N/A');
+                  return (
+                    <>
+                      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:'0.75rem', marginBottom:'1.25rem', padding:'0.85rem', background:'#f1f5f9', borderRadius:8, fontSize:'0.84rem' }}>
+                        <div><strong>Lessons completed:</strong> {lessonAttempts.filter(a => a.status === 'COMPLETED').length}</div>
+                        <div><strong>Assessments completed:</strong> {assessmentAttempts.filter(a => a.status === 'COMPLETED').length}</div>
+                        <div><strong>Avg assessment score:</strong> {assessmentAverage != null ? `${assessmentAverage}%` : 'N/A'}</div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Lessons</div>
+                        <div className="sd-table-wrap">
+                          <table className="sd-table">
+                            <thead><tr><th>Lesson</th><th>Class</th><th>Status</th><th>Started At</th></tr></thead>
+                            <tbody>
+                              {lessonAttempts.map((att, i) => (
+                                <tr key={i}>
+                                  <td style={{ fontWeight:600 }}>{att.experience_title}</td>
+                                  <td>{att.class_name}</td>
+                                  <td>{att.status}</td>
+                                  <td>{new Date(att.started_at).toLocaleDateString()}</td>
+                                </tr>
+                              ))}
+                              {lessonAttempts.length === 0 && <tr><td colSpan="4" className="sd-empty-state">No lessons played yet.</td></tr>}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Assessments</div>
+                        <div className="sd-table-wrap">
+                          <table className="sd-table">
+                            <thead><tr><th>Assessment</th><th>Class</th><th>Marks</th><th>Score</th><th>Status</th><th>Started At</th></tr></thead>
+                            <tbody>
+                              {assessmentAttempts.map((att, i) => (
+                                <tr key={i}>
+                                  <td style={{ fontWeight:600 }}>{att.experience_title}</td>
+                                  <td>{att.class_name}</td>
+                                  <td>{marks(att)}</td>
+                                  <td style={{ fontWeight:700, color:'#3b82f6' }}>{att.percentage != null ? att.percentage+'%' : 'N/A'}</td>
+                                  <td>{att.status}</td>
+                                  <td>{new Date(att.started_at).toLocaleDateString()}</td>
+                                </tr>
+                              ))}
+                              {assessmentAttempts.length === 0 && <tr><td colSpan="6" className="sd-empty-state">No assessments taken yet.</td></tr>}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           )}
