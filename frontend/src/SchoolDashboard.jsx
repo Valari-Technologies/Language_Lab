@@ -438,7 +438,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [teacherPage, setTeacherPage]   = useState(1);
   const [studentPage, setStudentPage]   = useState(1);
   const [classPage,   setClassPage]     = useState(1);
-  const [experiencePage,setExperiencePage]  = useState(1);
   const PER_PAGE = 4;
 
   /* ── Selection State ── */
@@ -471,7 +470,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [classes,        setClasses]        = useState([]);
   const [schClassFilter, setSchClassFilter] = useState('');
   const [schSectionFilter, setSchSectionFilter] = useState('');
-  const [schLessonClassFilter, setSchLessonClassFilter] = useState('');
   const [studentClassFilter, setStudentClassFilter] = useState('');
   const [studentSectionFilter, setStudentSectionFilter] = useState('');
   const [teacherClassFilter, setTeacherClassFilter] = useState('');
@@ -1517,20 +1515,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     });
   };
 
-  const getFilteredExperiences = () => {
-    if (classes.length === 0 && experiences.length === 0) {
-      return [];
-    }
-    return experiences.filter(exp => {
-      if (schLessonClassFilter) {
-        const gradeNum = exp.grade_name ? exp.grade_name.match(/\d+/) : null;
-        const expGrade = gradeNum ? gradeNum[0] : '';
-        return expGrade === schLessonClassFilter;
-      }
-      return true;
-    });
-  };
-
   /* ── Filter helpers ── */
   const filterList = (list) => {
     if (!searchQuery) return list;
@@ -1559,9 +1543,9 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     }],
   });
 
-  // Lesson Performance Analysis: ten lessons a page, filtered by the lesson's grade
+  // Lesson Performance Analysis: the lessons of Content Studio, ten a page, filtered by the lesson's grade
   const LESSON_REPORT_PER_PAGE = 10;
-  const filteredLessonRows = experiencesReport.filter(s => (
+  const filteredLessonRows = experiences.filter(s => (
     !lessonReportGrade || (String(s.grade_name || '').match(/\d+/) || [])[0] === lessonReportGrade
   ));
   const lessonReportPageNow = Math.min(lessonReportPage, Math.max(1, Math.ceil(filteredLessonRows.length / LESSON_REPORT_PER_PAGE)));
@@ -1591,7 +1575,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     setSearchQuery('');
     setSchClassFilter('');
     setSchSectionFilter('');
-    setSchLessonClassFilter('');
     setStudentClassFilter('');
     setStudentSectionFilter('');
     setTeacherClassFilter('');
@@ -1599,7 +1582,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     setTeacherPage(1);
     setStudentPage(1);
     setClassPage(1);
-    setExperiencePage(1);
     setImportActive(false);
     setUploadSummary(null);
     setShowModal(false);
@@ -1613,7 +1595,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     if (tab === 'classes') loadClasses();
     else if (tab === 'teachers') loadTeachers();
     else if (tab === 'students') loadStudents();
-    else if (tab === 'experiences') loadExperiences();
+    else if (tab === 'reports') loadExperiences(); // the Lesson Performance Analysis card lists the lessons
   };
 
   /* ── Loading screen ── */
@@ -1883,9 +1865,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           <button className={`sd-nav-item${activeSubTab==='classes' ? ' active' : ''}`} onClick={() => goTo('classes')} title={navCollapsed ? 'Classes' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
             <FiBookOpen/>{!navCollapsed && <span>Classes</span>}
           </button>
-          <button className={`sd-nav-item${activeSubTab==='experiences' ? ' active' : ''}`} onClick={() => goTo('experiences')} title={navCollapsed ? 'Lessons' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
-            <FiFileText/>{!navCollapsed && <span>Lessons</span>}
-          </button>
           <button className={`sd-nav-item${activeSubTab==='lms-hub' ? ' active' : ''}`} onClick={() => goTo('lms-hub')} title={navCollapsed ? 'LMS Hub' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
             <FiMonitor/>{!navCollapsed && <span>LMS Hub</span>}
           </button>
@@ -2013,7 +1992,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                activeSubTab === 'teachers' ? 'Teachers Management' :
                activeSubTab === 'students' ? 'Students Management' :
                activeSubTab === 'classes' ? 'Class Management' :
-               activeSubTab === 'experiences' ? 'Lesson Library' :
                activeSubTab === 'reports' ? 'Reports & Analytics' :
                activeSubTab === 'lms-hub' ? 'LMS Hub' :
                activeSubTab === 'profile' ? 'Profile Settings' : 'Dashboard Overview'
@@ -3178,76 +3156,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             </>
           )}
 
-          {/* ══════════ EXPERIENCES TAB ══════════ */}
-          {activeSubTab === 'experiences' && !isAnyOverlayOpen && (
-            <>
-            
-              <div className="sd-card" style={{ padding:'1.25rem 1.5rem' }}>
-                <div className="sd-table-toolbar">
-                  <div className="sd-table-search">
-                    <FiSearch/>
-                    <input
-                      type="text"
-                      placeholder="Search lessons..."
-                      value={searchQuery}
-                      onChange={e => { setSearchQuery(e.target.value); setExperiencePage(1); }}
-                    />
-                  </div>
-                  <div className="sd-table-actions">
-                    <select
-                      className="sd-form-input"
-                      style={{ width: '130px', height: '38px', padding: '0 0.5rem', fontSize: '0.82rem', borderRadius: '8px' }}
-                      value={schLessonClassFilter}
-                      onChange={e => { setSchLessonClassFilter(e.target.value); setExperiencePage(1); }}
-                    >
-                      <option value="">All Classes</option>
-                      {[3, 4, 5, 6, 7, 8].map(n => (
-                        <option key={n} value={String(n)}>Class {n}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="sd-table-wrap">
-                  <table className="sd-table">
-                    <thead>
-                      <tr>
-                        <th>Lesson Title</th>
-                        <th>Class</th>
-                        <th>Difficulty</th>
-                        <th>Duration</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginate(filterList(getFilteredExperiences()), experiencePage).map((s, i) => (
-                        <tr key={s.id || i}>
-                          <td>
-                            <span className="sd-name-cell-primary">{s.title ? s.title.toUpperCase() : ''}</span>
-                          </td>
-                          <td>{s.grade_name ? String(s.grade_name).replace('Grade', 'Class') : (s.grade && `Class ${s.grade}`) || 'N/A'}</td>
-                          <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
-                            <span className={`sd-badge ${s.difficulty === 'BEGINNER' ? 'sd-badge-active' : s.difficulty === 'MASTER' ? 'sd-badge-leave' : s.difficulty === 'REVIEW' || s.difficulty === 'REJECTED' ? 'sd-badge-review' : 'sd-badge-review'}`}>
-                              {s.difficulty_display || difficultyLabel(s.difficulty)}
-                            </span>
-                          </td>
-                          <td>{s.estimated_duration ? `${s.estimated_duration} min` : '—'}</td>
-                        </tr>
-                      ))}
-                      {filterList(getFilteredExperiences()).length === 0 && (
-                        <tr><td colSpan="4" className="sd-empty-state">No lessons found.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                <Pagination
-                  total={filterList(getFilteredExperiences()).length}
-                  perPage={PER_PAGE}
-                  page={experiencePage}
-                  onPage={setExperiencePage}
-                />
-              </div>
-            </>
-          )}
-
           {/* ══════════ REPORTS TAB ══════════ */}
           {activeSubTab === 'reports' && !isAnyOverlayOpen && (
             <>
@@ -3377,24 +3285,23 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <table className="sd-table">
                         <thead>
                           <tr>
-                            <th>Lesson Title</th><th>Attempts</th>
-                            <th>Completed</th><th>Avg Score</th><th>Pass Rate</th>
-                            <th>High / Low</th><th>Avg Time</th>
+                            <th>Lesson Title</th><th>Class</th><th>Difficulty</th><th>Duration</th>
                           </tr>
                         </thead>
                         <tbody>
                           {visibleLessonRows.map((s, i) => (
-                            <tr key={i} onClick={() => handleFetchExperienceDetail(s.experience_ref)} style={{ cursor:'pointer' }}>
-                              <td><span className="sd-name-cell-primary">{s.experience_title}</span></td>
-                              <td>{s.total_attempts}</td>
-                              <td>{s.completed}</td>
-                              <td style={{ fontWeight:700, color:'#7c3aed' }}>{s.average_score}%</td>
-                              <td>{s.pass_rate}%</td>
-                              <td>{s.highest_score}% / {s.lowest_score}%</td>
-                              <td>{Math.round(s.average_time_seconds/60)}m {s.average_time_seconds%60}s</td>
+                            <tr key={s.id || i}>
+                              <td><span className="sd-name-cell-primary">{s.title}</span></td>
+                              <td>{s.grade_name ? String(s.grade_name).replace('Grade', 'Class') : (s.grade && `Class ${s.grade}`) || 'N/A'}</td>
+                              <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
+                                <span className={`sd-badge ${s.difficulty === 'BEGINNER' ? 'sd-badge-active' : s.difficulty === 'MASTER' ? 'sd-badge-leave' : 'sd-badge-review'}`}>
+                                  {s.difficulty_display || difficultyLabel(s.difficulty)}
+                                </span>
+                              </td>
+                              <td>{s.estimated_duration ? `${s.estimated_duration} min` : '—'}</td>
                             </tr>
                           ))}
-                          {filteredLessonRows.length === 0 && <tr><td colSpan="7" className="sd-empty-state">No lessons found.</td></tr>}
+                          {filteredLessonRows.length === 0 && <tr><td colSpan="4" className="sd-empty-state">No lessons found.</td></tr>}
                         </tbody>
                       </table>
                     </div>
