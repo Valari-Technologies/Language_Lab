@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .levels import level_taken_by, parse_level
+from .levels import level_band, level_taken_by, parse_level
 from .models import (
     Experience,
     LearningOutcome,
@@ -235,6 +235,22 @@ def validate_lms_level(serializer, attrs):
     level, error = parse_level(experience_type, level)
     if error:
         raise serializers.ValidationError({"pending_level": error})
+
+    # The difficulty decides which levels may be chosen (lessons 1-10 / 11-20 / 21-30, assessments 1-2 / 3-4 / 5-6).
+    # A lesson saved before this rule keeps its level until the creator changes the level, type or difficulty.
+    difficulty = attrs.get("difficulty") or (instance.difficulty if instance else None)
+    band = level_band(experience_type, difficulty)
+    unchanged = bool(
+        instance
+        and level in (instance.pending_level, instance.level)
+        and attrs.get("difficulty") in (None, instance.difficulty)
+        and attrs.get("experience_type") in (None, instance.experience_type)
+    )
+    if band and not unchanged and not band[0] <= level <= band[1]:
+        raise serializers.ValidationError({
+            "pending_level": f"Level {level} is not allowed for {str(difficulty).capitalize()}. "
+                             f"Choose a level from {band[0]} to {band[1]}."
+        })
     taken = level_taken_by(grade, experience_type, level, exclude_pk=instance.pk if instance else None) if grade else None
     if taken:
         raise serializers.ValidationError(

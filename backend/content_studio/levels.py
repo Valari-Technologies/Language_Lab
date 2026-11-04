@@ -3,6 +3,17 @@ from .models import Experience
 
 LEVEL_LIMITS = {"LESSON": 30, "ASSESSMENT": 6}
 
+# The levels each difficulty may take: lessons 1-10 / 11-20 / 21-30, assessments 1-2 / 3-4 / 5-6
+LEVEL_BANDS = {
+    "LESSON": {"BEGINNER": (1, 10), "INTERMEDIATE": (11, 20), "MASTER": (21, 30)},
+    "ASSESSMENT": {"BEGINNER": (1, 2), "INTERMEDIATE": (3, 4), "MASTER": (5, 6)},
+}
+
+
+def level_band(experience_type, difficulty):
+    """(first, last) level allowed for this type and difficulty, or None when the difficulty is not known."""
+    return LEVEL_BANDS.get("ASSESSMENT" if experience_type == "ASSESSMENT" else "LESSON", {}).get(difficulty)
+
 
 def parse_level(experience_type, raw):
     """(level, error) for a level typed by the creator: empty -> (None, None); else a slot of the LMS level map."""

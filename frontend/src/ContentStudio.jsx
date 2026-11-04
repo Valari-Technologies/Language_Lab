@@ -567,6 +567,14 @@ const MediaUploadField = ({ label, value, mediaType, onChange, actionLoading, se
 /* ═══════════════════════════════════════════════════════════
    CONTENT STUDIO COMPONENT
    ═══════════════════════════════════════════════════════════ */
+// The LMS levels each difficulty may take: lessons 1-10 / 11-20 / 21-30, assessments 1-2 / 3-4 / 5-6
+const LEVEL_BANDS = {
+  LESSON: { BEGINNER: [1, 10], INTERMEDIATE: [11, 20], MASTER: [21, 30] },
+  ASSESSMENT: { BEGINNER: [1, 2], INTERMEDIATE: [3, 4], MASTER: [5, 6] },
+};
+const levelBand = (type, difficulty) => (LEVEL_BANDS[type === 'ASSESSMENT' ? 'ASSESSMENT' : 'LESSON'][difficulty] || [1, type === 'ASSESSMENT' ? 6 : 30]);
+const levelFits = (level, band) => /^\d+$/.test(String(level ?? '')) && Number(level) >= band[0] && Number(level) <= band[1];
+
 function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUser }) {
   // Views: dashboard, experiences, experience-builder, activity-builder, screen-builder, preview, media, publish, profile
   const [view, setView] = useState('dashboard');
@@ -7233,13 +7241,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           <select className="cs-form-input" value={experienceForm.experience_type || 'LESSON'}
                             onChange={e => {
                               const type = e.target.value;
-                              const max = type === 'ASSESSMENT' ? 6 : 30;
-                              const current = parseInt(experienceForm.level, 10);
-                              // a level that does not fit the new type is cleared
+                              // a level that does not fit the new type and the chosen difficulty is cleared
                               setExperienceForm({
                                 ...experienceForm,
                                 experience_type: type,
-                                level: current > max ? '' : experienceForm.level
+                                level: levelFits(experienceForm.level, levelBand(type, experienceForm.difficulty)) ? experienceForm.level : ''
                               });
                             }}>
                             <option value="LESSON">Lesson</option>
@@ -7247,25 +7253,21 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           </select>
                         </div>
                         <div className="cs-form-group">
-                          <label className="cs-form-label">
-                            Level {experienceForm.experience_type === 'ASSESSMENT' ? '(1-6)' : '(1-30)'}
-                          </label>
-                          <input
-                            className="cs-form-input"
-                            data-testid="lesson-level-input"
-                            type="text"
-                            inputMode="numeric"
-                            placeholder={experienceForm.experience_type === 'ASSESSMENT' ? 'LMS boss 1-6' : 'LMS level 1-30'}
-                            value={experienceForm.level ?? ''}
+                          <label className="cs-form-label">Difficulty <span style={{ color: '#ef4444' }}>*</span></label>
+                          <select className="cs-form-input" data-testid="lesson-difficulty-select" value={experienceForm.difficulty}
                             onChange={e => {
-                              const max = experienceForm.experience_type === 'ASSESSMENT' ? 6 : 30;
-                              const digits = e.target.value.replace(/\D/g, '').slice(0, 2);
-                              if (digits === '') { setExperienceForm({ ...experienceForm, level: '' }); return; }
-                              const n = parseInt(digits, 10);
-                              // only 1..max can be typed
-                              if (n >= 1 && n <= max) setExperienceForm({ ...experienceForm, level: String(n) });
-                            }}
-                          />
+                              const difficulty = e.target.value;
+                              // the difficulty decides which levels can be chosen; a level outside them is cleared
+                              setExperienceForm({
+                                ...experienceForm,
+                                difficulty,
+                                level: levelFits(experienceForm.level, levelBand(experienceForm.experience_type, difficulty)) ? experienceForm.level : ''
+                              });
+                            }}>
+                            <option value="BEGINNER">Beginner</option>
+                            <option value="INTERMEDIATE">Intermediate</option>
+                            <option value="MASTER">Master</option>
+                          </select>
                         </div>
                         <div className="cs-form-group">
                           <label className="cs-form-label">Grade <span style={{ color: '#ef4444' }}>*</span></label>
@@ -7319,15 +7321,37 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }}>
-                    <div className="cs-form-group">
-                      <label className="cs-form-label">Difficulty <span style={{ color: '#ef4444' }}>*</span></label>
-                      <select className="cs-form-input" value={experienceForm.difficulty}
-                        onChange={e => setExperienceForm({ ...experienceForm, difficulty: e.target.value })}>
-                        <option value="BEGINNER">Beginner</option>
-                        <option value="INTERMEDIATE">Intermediate</option>
-                        <option value="MASTER">Master</option>
-                      </select>
-                    </div>
+                    {(() => {
+                      const band = levelBand(experienceForm.experience_type, experienceForm.difficulty);
+                      const typed = String(experienceForm.level ?? '');
+                      const partial = typed !== '' && !levelFits(typed, band); // e.g. "1" on the way to 11
+                      const numbers = Array.from({ length: band[1] - band[0] + 1 }, (_, i) => String(band[0] + i));
+                      return (
+                        <div className="cs-form-group">
+                          <label className="cs-form-label">Level ({band[0]}-{band[1]})</label>
+                          <input
+                            className="cs-form-input"
+                            data-testid="lesson-level-input"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder={`LMS level ${band[0]} to ${band[1]}`}
+                            value={typed}
+                            style={partial ? { borderColor: '#ef4444' } : undefined}
+                            onChange={e => {
+                              const digits = e.target.value.replace(/\D/g, '').slice(0, 2);
+                              if (digits === '') { setExperienceForm({ ...experienceForm, level: '' }); return; }
+                              // only numbers of this difficulty can be typed (a start such as "1" for 11 is allowed on the way)
+                              if (numbers.some(n => n.startsWith(digits))) setExperienceForm({ ...experienceForm, level: digits });
+                            }}
+                          />
+                          {partial && (
+                            <span style={{ display: 'block', marginTop: '0.25rem', fontSize: '0.7rem', color: '#b91c1c' }}>
+                              Enter a level from {band[0]} to {band[1]}.
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <div className="cs-form-group">
                       <label className="cs-form-label">Estimated Duration (min)</label>
                       <input

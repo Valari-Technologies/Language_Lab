@@ -159,9 +159,9 @@ class RepublishTests(HubTestBase):
             self.assertEqual(self._builder_save(self.exp, pending_level=bad).status_code, 400, bad)
         # assessment: 1-6
         self.assertEqual(self._builder_save(self.exp, experience_type="ASSESSMENT", pending_level=7).status_code, 400)
-        self.assertEqual(self._builder_save(self.exp, experience_type="ASSESSMENT", pending_level=6).status_code, 200)
-        self.assertEqual(self._builder_save(self.exp, experience_type="LESSON", pending_level=12).status_code, 200)
-        response = self._builder_save(self.exp, pending_level=5)
+        self.assertEqual(self._builder_save(self.exp, experience_type="ASSESSMENT", difficulty="MASTER", pending_level=6).status_code, 200)
+        self.assertEqual(self._builder_save(self.exp, experience_type="LESSON", difficulty="INTERMEDIATE", pending_level=12).status_code, 200)
+        response = self._builder_save(self.exp, difficulty="BEGINNER", pending_level=5)
         self.assertEqual(response.status_code, 200)
         self.assertEqual((response.json()["pending_level"], response.json()["level"]), (5, None))
         self.assertEqual(self._builder_save(self.exp, level=9).status_code, 400)  # the live level is not writable
@@ -183,6 +183,30 @@ class RepublishTests(HubTestBase):
         response = self._builder_save(other, pending_level=5)
         self.assertEqual(response.status_code, 400)
         self.assertIn("Republish Lesson", str(response.json()))
+
+    def test_the_difficulty_decides_which_levels_can_be_chosen(self):
+        bands = {
+            "LESSON": {"BEGINNER": (1, 10), "INTERMEDIATE": (11, 20), "MASTER": (21, 30)},
+            "ASSESSMENT": {"BEGINNER": (1, 2), "INTERMEDIATE": (3, 4), "MASTER": (5, 6)},
+        }
+        for kind, by_difficulty in bands.items():
+            for difficulty, (first, last) in by_difficulty.items():
+                for ok in (first, last):
+                    response = self._builder_save(self.exp, experience_type=kind, difficulty=difficulty, pending_level=ok)
+                    self.assertEqual(response.status_code, 200, (kind, difficulty, ok))
+                for bad in (first - 1, last + 1):
+                    if bad < 1 or bad > (30 if kind == "LESSON" else 6):
+                        continue
+                    response = self._builder_save(self.exp, experience_type=kind, difficulty=difficulty, pending_level=bad)
+                    self.assertEqual(response.status_code, 400, (kind, difficulty, bad))
+                    self.assertIn(f"Choose a level from {first} to {last}", str(response.json()))
+
+        # a lesson saved before the rule keeps its level until the level, type or difficulty is changed
+        old = Experience.objects.create(
+            title="Old", description="d", grade=self.grade3, subject="English", language="English",
+            difficulty="MASTER", level=2, estimated_duration=30, status="APPROVED", created_by=self.creator)
+        self.assertEqual(self._builder_save(old, title="Old renamed", difficulty="MASTER", pending_level=2).status_code, 200)
+        self.assertEqual(self._builder_save(old, difficulty="MASTER", pending_level=3).status_code, 400)
 
     def test_publish_history_has_grade_and_type(self):
         self._submit("1.0")
