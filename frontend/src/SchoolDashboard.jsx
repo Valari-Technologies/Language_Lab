@@ -276,8 +276,8 @@ const Pagination = ({ total, perPage = 4, page, onPage }) => {
         </button>
         {items.map((it, i) =>
           it === '...'
-            ? <span key={i} className="sd-page-btn ellipsis">…</span>
-            : <button key={it} className={`sd-page-btn${page === it ? ' active' : ''}`} onClick={() => onPage(it)}>{it}</button>
+            ? <span key={`gap-${i}`} className="sd-page-btn ellipsis">…</span>
+            : <button key={`page-${it}`} className={`sd-page-btn${page === it ? ' active' : ''}`} onClick={() => onPage(it)}>{it}</button>
         )}
         <button className="sd-page-btn arrow" disabled={page === pages} onClick={() => onPage(page + 1)}>
           <FiChevronRight/>
