@@ -14,6 +14,7 @@ import PreviewCanvasRenderer from './PreviewCanvasRenderer';
 import './Dashboard.css';
 import { apiFetch } from './api';
 import { API_BASE_URL } from './config';
+import { pageItems } from './format';
 import dashboardHeaderBanner from './assets/1.jpeg';
 import superAdminBg from './assets/superadminbg.png';
 
@@ -490,7 +491,7 @@ const ActivityLineChart = () => {
 /* ─── Pagination ─── */
 const Pagination = ({ total, perPage = 4, page, onPage }) => {
   const pages = Math.max(1, Math.ceil(total / perPage));
-  const items = pages <= 5 ? Array.from({ length: pages }, (_, i) => i + 1) : [1, 2, 3, '...', pages];
+  const items = pageItems(page, pages);
   const from = total === 0 ? 0 : (page - 1) * perPage + 1;
   const to = Math.min(page * perPage, total);
   return (

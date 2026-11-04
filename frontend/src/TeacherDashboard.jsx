@@ -12,7 +12,7 @@ import {
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
 import { API_BASE_URL } from './config';
-import { formatRollNo, titleName } from './format';
+import { formatRollNo, pageItems, titleName } from './format';
 
 // Difficulty as shown to users: BEGINNER / INTERMEDIATE / MASTER (or "Intermediate") -> "Beginner" / "Intermediate" / "Master".
 const difficultyLabel = (value) => {
@@ -259,7 +259,7 @@ const LineChart = ({ lines = CHART_LINES }) => {
 /* ─── Pagination ─── */
 const Pagination = ({ total, perPage = 4, page, onPage }) => {
   const pages = Math.max(1, Math.ceil(total / perPage));
-  const items = pages <= 5 ? Array.from({ length: pages }, (_, i) => i + 1) : [1, 2, 3, '...', pages];
+  const items = pageItems(page, pages);
   const from = total === 0 ? 0 : (page - 1) * perPage + 1;
   const to = Math.min(page * perPage, total);
   return (

@@ -12,7 +12,7 @@ import './SchoolDashboard.css';
 import LmsHubPanel from './LmsHubPanel';
 import { apiFetch } from './api';
 import { API_BASE_URL } from './config';
-import { formatRollNo, titleName } from './format';
+import { formatRollNo, pageItems, titleName } from './format';
 import { savePdf } from './pdf';
 
 const resolveMediaUrl = (url) => {
@@ -262,12 +262,7 @@ const LineChart = ({ lines = CHART_LINES }) => {
 /* ─── Pagination helper ─── */
 const Pagination = ({ total, perPage = 4, page, onPage }) => {
   const pages = Math.max(1, Math.ceil(total / perPage));
-  const items = [];
-  if (pages <= 5) {
-    for (let i = 1; i <= pages; i++) items.push(i);
-  } else {
-    items.push(1, 2, 3, '...', pages);
-  }
+  const items = pageItems(page, pages);
   const from = total === 0 ? 0 : (page - 1) * perPage + 1;
   const to   = Math.min(page * perPage, total);
   return (
