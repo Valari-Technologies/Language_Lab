@@ -1,0 +1,292 @@
+"""Teacher Reports, the class list: one row per student with progress, assessment score, time and status.
+
+Search, sorting, filters and the pages are decided here, so a class of 30 or more students is never sent or shown
+as one long list. Only the students of the class section(s) the teacher is assigned to are ever included.
+"""
+import math
+import re
+from datetime import date, timedelta
+
+from django.conf import settings
+from django.db.models import Max
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from accounts.names import title_name
+from accounts.permissions import IsTeacher
+from accounts.scoping import get_user_school
+from assessments.models import StudentAttempt
+from lms.hub.views import _section_letter
+from lms.packages.views import build_level_map, resolve_grade
+from lmshub.models import LmsSession
+from school_admin.models import Class
+from .models import Student
+from .reports import _class_scope, _grade_key, _in_scope
+from .rollno import _roll_key
+
+PAGE_SIZE = 10
+LESSONS_PER_ZONE = 5
+ZONES = [
+    {"id": 1, "name": "Summer Zone"}, {"id": 2, "name": "Winter Zone"}, {"id": 3, "name": "Spring Zone"},
+    {"id": 4, "name": "Island Zone"}, {"id": 5, "name": "Desert Zone"}, {"id": 6, "name": "Lava Zone"},
+]
+SORTS = {"name", "score", "progress", "last_active"}
+PERFORMANCES = {"excellent", "good", "average", "needs_improvement", "not_assessed"}
+ACTIVITIES = {"active", "inactive"}
+PROGRESS = {"not_started", "in_progress", "completed"}
+
+
+def thresholds():
+    return {
+        "excellent": settings.REPORT_THRESHOLD_EXCELLENT,
+        "good": settings.REPORT_THRESHOLD_GOOD,
+        "average": settings.REPORT_THRESHOLD_AVERAGE,
+    }
+
+
+def performance_label(score):
+    """Excellent, Good, Average or Needs Improvement from the average assessment score; Not assessed without one."""
+    if score is None:
+        return "not_assessed"
+    limits = thresholds()
+    if score >= limits["excellent"]:
+        return "excellent"
+    if score >= limits["good"]:
+        return "good"
+    if score >= limits["average"]:
+        return "average"
+    return "needs_improvement"
+
+
+def _zone_of(slot):
+    return (slot - 1) // LESSONS_PER_ZONE + 1
+
+
+def _grade_map(grade, cache):
+    """The published levels of a grade: lesson id -> level (1-30), the assessment ids, and how many levels exist."""
+    if grade is None:
+        return {"slots": {}, "bosses": set()}
+    if grade.id not in cache:
+        level_map = build_level_map(grade)
+        cache[grade.id] = {
+            "slots": {str(e["experienceId"]): i + 1 for i, e in enumerate(level_map["lessons"]) if e},
+            "bosses": {str(e["experienceId"]) for e in level_map["bosses"] if e},
+        }
+    return cache[grade.id]
+
+
+def _student_row(student, attempts, last_session, gmap, now):
+    slots, bosses = gmap["slots"], gmap["bosses"]
+    published = set(slots.values())
+    done, zones_touched, assessment_scores, stamps, seconds = set(), set(), [], [], 0
+    for a in attempts:
+        ref = a.assignment.experience_ref
+        key = str(a.level_key or "").upper()
+        when = a.completed_at or a.started_at
+        stamps.append(when)
+        seconds += max(a.time_spent_seconds or 0, 0)
+        if ref in bosses or key.startswith("B"):
+            match = re.fullmatch(r"B([1-6])", key)
+            if match:
+                zones_touched.add(int(match.group(1)))
+            if a.status == "COMPLETED" and a.percentage is not None:
+                assessment_scores.append(float(a.percentage))
+            continue
+        slot = slots.get(ref)
+        if slot is None:
+            match = re.fullmatch(r"L(\d{1,2})", key)
+            slot = int(match.group(1)) if match and 1 <= int(match.group(1)) <= 30 else None
+        if slot:
+            zones_touched.add(_zone_of(slot))
+            if a.status == "COMPLETED":
+                done.add(slot)
+    if published:
+        done &= published
+    zones_done = sum(
+        1 for z in range(1, len(ZONES) + 1)
+        if (zone_levels := {s for s in published if _zone_of(s) == z}) and zone_levels <= done
+    )
+    last_active = max(stamps + ([last_session] if last_session else []), default=None)
+    average = round(sum(assessment_scores) / len(assessment_scores), 1) if assessment_scores else None
+    progress = round(len(done) / len(published) * 100) if published else None
+    inactive_after = timedelta(days=settings.REPORT_INACTIVE_AFTER_DAYS)
+    if not attempts:
+        progress_status = "not_started"
+    elif published and published <= done:
+        progress_status = "completed"
+    else:
+        progress_status = "in_progress"
+    return {
+        "id": student.student_id,
+        "name": title_name(student.user.full_name) or student.user.username,
+        "loginCode": student.user.username,
+        "rollNo": student.roll_no,
+        "grade": student.grade,
+        "section": student.section,
+        "progress": progress,
+        "zonesCompleted": zones_done,
+        "zonesTotal": len(ZONES),
+        "levelsCompleted": len(done),
+        "levelsTotal": len(published),
+        "avgAssessment": average,
+        "attempts": len(attempts),
+        "learningSeconds": seconds,
+        "lastActive": last_active.isoformat() if last_active else None,
+        "performance": performance_label(average),
+        "activity": "active" if last_active and now - last_active <= inactive_after else "inactive",
+        "progressStatus": progress_status,
+        "_zones": zones_touched,
+        "_days": {w.date() for w in stamps},
+    }
+
+
+def _date_param(request, name):
+    raw = str(request.query_params.get(name) or "").strip()
+    if not raw:
+        return None
+    return date.fromisoformat(raw)  # ValueError for a bad date, answered with 400 by the caller
+
+
+def _roll_matches(roll_no, query):
+    return bool(query) and _roll_key(roll_no) == _roll_key(query) or (bool(query) and query.lower() in str(roll_no or "").lower())
+
+
+class TeacherClassReportAPIView(APIView):
+    """GET /api/cms/v1/teacher/reports/class/ with ?page=&search=&sort=&order=&class_id=&grade_id=&zone=&performance=
+    &activity=&progress=&date_from=&date_to=  Ten students a page; the overview cards follow every filter but the search."""
+    permission_classes = [IsAuthenticated, IsTeacher]
+
+    def get(self, request):
+        school = get_user_school(request.user)
+        classes = list(Class.objects.filter(teacherclass__teacher__user=request.user).select_related("grade"))
+        seen, class_list = set(), []
+        for c in sorted(classes, key=lambda c: (c.grade.sort_order if c.grade_id else 0, c.class_name)):
+            if c.class_name not in seen:
+                seen.add(c.class_name)
+                class_list.append({"id": c.class_id, "name": c.class_name})
+        meta = {"classes": class_list, "zones": ZONES, "thresholds": thresholds(),
+                "inactiveAfterDays": settings.REPORT_INACTIVE_AFTER_DAYS, "pageSize": PAGE_SIZE}
+        empty = {**meta, "overview": {"totalStudents": 0, "activeStudents": 0, "inactiveStudents": 0,
+                                      "avgAssessment": None, "avgProgress": None, "needsImprovement": 0},
+                 "ranking": {"best": [], "least": []}, "students": [], "page": 1, "pages": 1, "total": 0}
+        if not school or not classes:
+            return Response(empty)
+
+        # which students: the teacher's own class sections, narrowed by the class or grade chosen
+        by_id = {c.class_id: c for c in classes}
+        chosen = classes
+        if request.query_params.get("class_id"):
+            raw = str(request.query_params["class_id"])
+            if not raw.isdigit() or int(raw) not in by_id:
+                return Response({"error": "This class is not assigned to you."}, status=status.HTTP_400_BAD_REQUEST)
+            chosen = [c for c in classes if c.class_name == by_id[int(raw)].class_name]
+        elif request.query_params.get("grade_id"):
+            raw = str(request.query_params["grade_id"])
+            chosen = [c for c in classes if c.grade_id and str(c.grade_id) == raw]
+            if not chosen:
+                return Response({"error": "This grade is not assigned to you."}, status=status.HTTP_400_BAD_REQUEST)
+        scope = _class_scope(chosen)
+        students = [
+            s for s in Student.objects.filter(school=school, user__is_active=True).select_related("user")
+            if _in_scope(s, scope)
+        ]
+
+        try:
+            date_from, date_to = _date_param(request, "date_from"), _date_param(request, "date_to")
+        except ValueError:
+            return Response({"error": "Dates must look like 2026-11-30."}, status=status.HTTP_400_BAD_REQUEST)
+        zone = request.query_params.get("zone") or ""
+        performance = request.query_params.get("performance") or ""
+        activity = request.query_params.get("activity") or ""
+        progress_filter = request.query_params.get("progress") or ""
+        sort = request.query_params.get("sort") or "name"
+        order = request.query_params.get("order") or "asc"
+        if (zone and zone not in {str(z["id"]) for z in ZONES}) or (performance and performance not in PERFORMANCES) \
+                or (activity and activity not in ACTIVITIES) or (progress_filter and progress_filter not in PROGRESS) \
+                or sort not in SORTS or order not in {"asc", "desc"}:
+            return Response({"error": "A filter or sort value is not valid."}, status=status.HTTP_400_BAD_REQUEST)
+
+        attempts_by_user = {}
+        for attempt in StudentAttempt.objects.filter(school=school, student__in=[s.user_id for s in students]) \
+                .select_related("assignment"):
+            attempts_by_user.setdefault(attempt.student_id, []).append(attempt)
+        last_session = {
+            row["student_id"]: row["last"]
+            for row in LmsSession.objects.filter(student__in=[s.student_id for s in students])
+            .values("student_id").annotate(last=Max("last_heartbeat"))
+        }
+        grade_cache, label_cache, now = {}, {}, timezone.now()
+        rows = []
+        for s in students:
+            if s.grade not in label_cache:
+                label_cache[s.grade] = _grade_map(resolve_grade(s), grade_cache)
+            rows.append(_student_row(s, attempts_by_user.get(s.user_id, []), last_session.get(s.student_id),
+                                     label_cache[s.grade], now))
+
+        def keep(row):
+            if zone and int(zone) not in row["_zones"]:
+                return False
+            if performance and row["performance"] != performance:
+                return False
+            if activity and row["activity"] != activity:
+                return False
+            if progress_filter and row["progressStatus"] != progress_filter:
+                return False
+            if date_from or date_to:
+                if not any((not date_from or d >= date_from) and (not date_to or d <= date_to) for d in row["_days"]):
+                    return False
+            return True
+
+        scoped = [r for r in rows if keep(r)]
+        scored = [r["avgAssessment"] for r in scoped if r["avgAssessment"] is not None]
+        progressed = [r["progress"] for r in scoped if r["progress"] is not None]
+        overview = {
+            "totalStudents": len(scoped),
+            "activeStudents": sum(1 for r in scoped if r["activity"] == "active"),
+            "inactiveStudents": sum(1 for r in scoped if r["activity"] == "inactive"),
+            "avgAssessment": round(sum(scored) / len(scored), 1) if scored else None,
+            "avgProgress": round(sum(progressed) / len(progressed), 1) if progressed else None,
+            "needsImprovement": sum(1 for r in scoped if r["performance"] == "needs_improvement"),
+        }
+        ranked = sorted((r for r in scoped if r["avgAssessment"] is not None),
+                        key=lambda r: (-r["avgAssessment"], -r["levelsCompleted"], r["name"].lower()))
+        ranking = {"best": ranked[:3], "least": list(reversed(ranked[3:][-3:]))}
+
+        query = (request.query_params.get("search") or "").strip()
+        matched = scoped
+        if query:
+            lowered = query.lower()
+            matched = [r for r in scoped if lowered in r["name"].lower() or lowered in str(r["loginCode"]).lower()
+                       or _roll_matches(r["rollNo"], query)]
+
+        def sort_key(r):
+            if sort == "name":
+                return (0, r["name"].lower())
+            value = {"score": r["avgAssessment"], "progress": r["progress"], "last_active": r["lastActive"]}[sort]
+            return (1, "") if value is None else (0, value)
+
+        present = [r for r in matched if sort == "name" or sort_key(r)[0] == 0]
+        missing = [r for r in matched if not (sort == "name" or sort_key(r)[0] == 0)]  # no value: always at the end
+        present.sort(key=lambda r: (sort_key(r)[1], r["name"].lower()), reverse=(order == "desc"))
+        ordered = present + sorted(missing, key=lambda r: r["name"].lower())
+
+        pages = max(1, math.ceil(len(ordered) / PAGE_SIZE))
+        try:
+            page = min(max(int(request.query_params.get("page") or 1), 1), pages)
+        except ValueError:
+            page = 1
+        window = ordered[(page - 1) * PAGE_SIZE: page * PAGE_SIZE]
+
+        def clean(r):
+            return {k: v for k, v in r.items() if not k.startswith("_")}
+
+        return Response({
+            **meta, "overview": overview, "page": page, "pages": pages, "total": len(ordered),
+            "students": [clean(r) for r in window],
+            "ranking": {k: [{"id": r["id"], "name": r["name"], "grade": r["grade"], "section": r["section"],
+                             "avgAssessment": r["avgAssessment"], "levelsCompleted": r["levelsCompleted"]} for r in v]
+                        for k, v in ranking.items()},
+        })
