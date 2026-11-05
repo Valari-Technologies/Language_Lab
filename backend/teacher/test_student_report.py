@@ -70,6 +70,13 @@ class TeacherStudentReportTests(TestCase):
         self._attempt(self.lessons[2], "L3", when=now - timedelta(days=40), seconds=60)  # long ago
         self._attempt(self.lessons[3], "L4", status="IN_PROGRESS", seconds=30)
         data = self._report()
+        rows = data["attempts"]  # one row per attempt, oldest first, with when it started and ended
+        self.assertEqual(len(rows), 5)
+        self.assertEqual([r["title"] for r in rows], ["Lesson 3", "Lesson 1", "Lesson 1", "Lesson 2", "Lesson 4"])
+        self.assertTrue(all(r["kind"] == "lesson" for r in rows))
+        unfinished = next(r for r in rows if r["status"] == "IN_PROGRESS")
+        self.assertIsNotNone(unfinished["startedAt"])
+        self.assertEqual(rows[1]["percentage"], 40.0)
         o = data["overview"]
         self.assertEqual((o["name"], o["rollNo"], o["loginCode"]), ("Ravi Kumar", "1", "RAV_01"))
         self.assertEqual((o["levelsCompleted"], o["levelsTotal"], o["progress"], o["zonesCompleted"], o["zonesTotal"]), (3, 6, 50, 0, 6))

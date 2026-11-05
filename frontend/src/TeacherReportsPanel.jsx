@@ -27,15 +27,41 @@ const reportRows = (s) => [
   ['Last active', fmt(s.lastActive)],
 ];
 
-const downloadReport = (s) => savePdf({
-  file: `report_${s.loginCode || s.id}.pdf`,
-  title: 'Student Report',
-  subtitle: `${s.name} · Class ${classLabel(s)}`,
-  tables: [
-    { head: ['Student', 'Login code', 'Roll No', 'Class'], body: [[s.name, s.loginCode, s.rollNo, classLabel(s)]] },
-    { heading: 'Performance', head: reportRows(s).map(([label]) => label), body: [reportRows(s).map(([, value]) => value)] },
-  ],
-});
+// The student's PDF: details, performance, then every lesson and assessment attempt with when it started and ended
+const downloadReport = async (s) => {
+  let attempts = [];
+  try {
+    const res = await apiFetch(`/api/cms/v1/teacher/reports/students/${s.id}/report/`);
+    if (res.ok) attempts = (await res.json()).attempts || [];
+  } catch (e) {
+    // without the attempts the PDF still has the details and the performance
+  }
+  const status = (a) => String(a.status || '').replace('_', ' ');
+  const lessons = attempts.filter(a => a.kind === 'lesson');
+  const assessments = attempts.filter(a => a.kind === 'assessment');
+  await savePdf({
+    file: `report_${s.loginCode || s.id}.pdf`,
+    title: 'Student Report',
+    subtitle: `${s.name} · ${classLabel(s)}`,
+    tables: [
+      { head: ['Student', 'Login code', 'Roll No', 'Class'], body: [[s.name, s.loginCode, s.rollNo, classLabel(s)]] },
+      { heading: 'Performance', head: reportRows(s).map(([label]) => label), body: [reportRows(s).map(([, value]) => value)] },
+      {
+        heading: 'Lessons',
+        head: ['Lesson', 'Status', 'Started At', 'Ended At'],
+        body: lessons.length ? lessons.map(a => [a.title, status(a), fmt(a.startedAt), fmt(a.completedAt)]) : [['No lessons played yet', '', '', '']],
+      },
+      {
+        heading: 'Assessments',
+        head: ['Assessment', 'Marks', 'Score', 'Status', 'Started At', 'Ended At'],
+        body: assessments.length ? assessments.map(a => [
+          a.title, a.score !== null && a.maxScore !== null ? `${a.score} / ${a.maxScore}` : 'N/A', a.percentage !== null ? `${a.percentage}%` : 'N/A',
+          status(a), fmt(a.startedAt), fmt(a.completedAt),
+        ]) : [['No assessments taken yet', '', '', '', '', '']],
+      },
+    ],
+  });
+};
 
 const Stat = ({ label, value }) => (
   <div style={{ ...card, padding: '0.9rem 1.1rem' }}>

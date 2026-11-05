@@ -4024,16 +4024,17 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Lessons</div>
                         <div className="sd-table-wrap">
                           <table className="sd-table">
-                            <thead><tr><th>Lesson</th><th>Status</th><th>Started At</th></tr></thead>
+                            <thead><tr><th>Lesson</th><th>Status</th><th>Started At</th><th>Ended At</th></tr></thead>
                             <tbody>
                               {lessonAttempts.map((att, i) => (
                                 <tr key={i}>
                                   <td style={{ fontWeight:600 }}>{att.experience_title}</td>
                                   <td>{att.status}</td>
-                                  <td>{new Date(att.started_at).toLocaleDateString()}</td>
+                                  <td>{att.started_at ? new Date(att.started_at).toLocaleString() : '—'}</td>
+                                  <td>{att.completed_at ? new Date(att.completed_at).toLocaleString() : '—'}</td>
                                 </tr>
                               ))}
-                              {lessonAttempts.length === 0 && <tr><td colSpan="3" className="sd-empty-state">No lessons played yet.</td></tr>}
+                              {lessonAttempts.length === 0 && <tr><td colSpan="4" className="sd-empty-state">No lessons played yet.</td></tr>}
                             </tbody>
                           </table>
                         </div>
@@ -4043,7 +4044,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Assessments</div>
                         <div className="sd-table-wrap">
                           <table className="sd-table">
-                            <thead><tr><th>Assessment</th><th>Marks</th><th>Score</th><th>Status</th><th>Started At</th></tr></thead>
+                            <thead><tr><th>Assessment</th><th>Marks</th><th>Score</th><th>Status</th><th>Started At</th><th>Ended At</th></tr></thead>
                             <tbody>
                               {assessmentAttempts.map((att, i) => (
                                 <tr key={i}>
@@ -4051,10 +4052,11 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                   <td>{marks(att)}</td>
                                   <td style={{ fontWeight:700, color:'#3b82f6' }}>{att.percentage != null ? att.percentage+'%' : 'N/A'}</td>
                                   <td>{att.status}</td>
-                                  <td>{new Date(att.started_at).toLocaleDateString()}</td>
+                                  <td>{att.started_at ? new Date(att.started_at).toLocaleString() : '—'}</td>
+                                  <td>{att.completed_at ? new Date(att.completed_at).toLocaleString() : '—'}</td>
                                 </tr>
                               ))}
-                              {assessmentAttempts.length === 0 && <tr><td colSpan="5" className="sd-empty-state">No assessments taken yet.</td></tr>}
+                              {assessmentAttempts.length === 0 && <tr><td colSpan="6" className="sd-empty-state">No assessments taken yet.</td></tr>}
                             </tbody>
                           </table>
                         </div>

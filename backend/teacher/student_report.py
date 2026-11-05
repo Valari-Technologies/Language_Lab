@@ -267,8 +267,16 @@ def build_student_report(student, now):
         "seconds": max(int(((s.ended_at or s.last_heartbeat) - s.created_at).total_seconds()), 0),
     } for s in sessions[:SESSIONS_SHOWN]]
 
+    # every attempt as one row (the lessons and assessments tables of the downloaded report), oldest first
+    attempt_rows = [{
+        "kind": "assessment" if (a.assignment.experience_ref in boss_entries or str(a.level_key or "").upper().startswith("B")) else "lesson",
+        "title": a.assignment.experience_title, "status": a.status,
+        "percentage": _num(a.percentage), "score": _num(a.total_score), "maxScore": _num(a.max_score),
+        "startedAt": _iso(a.started_at), "completedAt": _iso(a.completed_at),
+    } for a in attempts]
+
     return {
-        "overview": overview, "zones": zones, "levels": levels, "assessments": assessments,
+        "overview": overview, "attempts": attempt_rows, "zones": zones, "levels": levels, "assessments": assessments,
         "progress": {"timeline": timeline, "zoneComparison": [
             {"zone": z["zone"], "name": z["name"], "progress": z["progress"], "assessmentScore": z["assessmentScore"]} for z in zones],
             "periods": periods, "improvement": improvement},
