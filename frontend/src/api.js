@@ -1,9 +1,10 @@
 import { API_BASE_URL } from './config';
+import { sessionClear, sessionGet, sessionSet } from './session';
 
 let refreshPromise = null;
 
 async function refreshAccessToken() {
-  const refreshToken = localStorage.getItem('refresh_token');
+  const refreshToken = sessionGet('refresh_token');
   if (!refreshToken) {
     return false;
   }
@@ -19,9 +20,9 @@ async function refreshAccessToken() {
           return false;
         }
         const data = await response.json();
-        localStorage.setItem('access_token', data.access);
+        sessionSet('access_token', data.access);
         if (data.refresh) {
-          localStorage.setItem('refresh_token', data.refresh);
+          sessionSet('refresh_token', data.refresh);
         }
         return true;
       })
@@ -35,8 +36,8 @@ async function refreshAccessToken() {
 }
 
 export async function logoutSession() {
-  const refreshToken = localStorage.getItem('refresh_token');
-  const accessToken = localStorage.getItem('access_token');
+  const refreshToken = sessionGet('refresh_token');
+  const accessToken = sessionGet('access_token');
 
   if (refreshToken && accessToken) {
     try {
@@ -53,14 +54,12 @@ export async function logoutSession() {
     }
   }
 
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
-  localStorage.removeItem('user');
+  sessionClear();
 }
 
 export async function apiFetch(endpoint, options = {}) {
   const executeRequest = async () => {
-    const token = localStorage.getItem('access_token');
+    const token = sessionGet('access_token');
     const headers = {
       ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

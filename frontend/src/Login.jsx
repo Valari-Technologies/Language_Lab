@@ -14,6 +14,7 @@ import {
 import './Login.css';
 import logoIcon from './assets/icon.png';
 import { API_BASE_URL } from './config';
+import { sessionSet } from './session';
 
 const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
 
@@ -33,9 +34,9 @@ const GoogleLoginAction = ({ onLoginSuccess, setError, setLoading, loading }) =>
 
         const data = await response.json().catch(() => ({}));
         if (response.ok) {
-          localStorage.setItem('access_token', data.access);
-          localStorage.setItem('refresh_token', data.refresh);
-          localStorage.setItem('user', JSON.stringify(data.user));
+          sessionSet('access_token', data.access);
+          sessionSet('refresh_token', data.refresh);
+          sessionSet('user', JSON.stringify(data.user));
           if (onLoginSuccess) {
             onLoginSuccess(data.user);
           }
@@ -158,9 +159,9 @@ const Login = ({ onLoginSuccess }) => {
 
       if (response.ok) {
         const data = await response.json();
-        localStorage.setItem('access_token', data.access);
-        localStorage.setItem('refresh_token', data.refresh);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        sessionSet('access_token', data.access);
+        sessionSet('refresh_token', data.refresh);
+        sessionSet('user', JSON.stringify(data.user));
         if (onLoginSuccess) {
           onLoginSuccess(data.user);
         }

@@ -6,6 +6,10 @@ import Dashboard from './Dashboard.jsx'
 import SchoolDashboard from './SchoolDashboard.jsx'
 import TeacherDashboard from './TeacherDashboard.jsx'
 import ContentStudio from './ContentStudio.jsx'
+import { adoptLegacySession, sessionClear, sessionGet, sessionSet } from './session'
+
+// a login kept by an older version of the site moves into this tab (once)
+adoptLegacySession()
 
 
 export const App = () => {
@@ -22,8 +26,8 @@ export const App = () => {
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    const storedUser = localStorage.getItem('user');
+    const token = sessionGet('access_token');
+    const storedUser = sessionGet('user');
 
     if (token && storedUser) {
       const parsedUser = JSON.parse(storedUser);
@@ -54,7 +58,7 @@ export const App = () => {
 
       } else {
         // Fallback for invalid roles
-        localStorage.clear();
+        sessionClear();
         setUser(null);
         window.history.replaceState({}, '', '/login');
         setCurrentPath('/login');
@@ -71,8 +75,8 @@ export const App = () => {
       setCurrentPath(window.location.pathname);
     };
     const handlePageShow = () => {
-      const token = localStorage.getItem('access_token');
-      const storedUser = localStorage.getItem('user');
+      const token = sessionGet('access_token');
+      const storedUser = sessionGet('user');
       if (!token || !storedUser) {
         setUser(null);
         if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
@@ -108,21 +112,19 @@ export const App = () => {
 
   const handleUpdateUser = (updatedUser) => {
     setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
+    sessionSet('user', JSON.stringify(updatedUser));
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
+    sessionClear();
     setUser(null);
     window.history.pushState({}, '', '/login');
     setCurrentPath('/login');
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    const storedUser = localStorage.getItem('user');
+    const token = sessionGet('access_token');
+    const storedUser = sessionGet('user');
 
     if (user && (!token || !storedUser)) {
       handleLogout();
