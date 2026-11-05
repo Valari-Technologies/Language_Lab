@@ -284,7 +284,7 @@ const TeacherReportsPanel = () => {
   const [viewing, setViewing] = useState(null);
   const [menu, setMenu] = useState(null);
   const [reportOf, setReportOf] = useState(null); // { student, tab }: the student report page is open
-  const [statusList, setStatusList] = useState(null); // 'active' | 'inactive': the list behind that card is open
+  const [statusList, setStatusList] = useState(null); // 'active' | 'inactive' | 'needs_improvement': the list behind that card is open
 
   const [downloading, setDownloading] = useState(false);
 
@@ -421,7 +421,7 @@ const TeacherReportsPanel = () => {
             <Stat label="Inactive students" value={overview.inactiveStudents} onClick={() => setStatusList('inactive')} />
             <Stat label="Class avg assessment score" value={percent(overview.avgAssessment)} />
             <Stat label="Overall class progress" value={percent(overview.avgProgress)} />
-            <Stat label="Need improvement" value={overview.needsImprovement} />
+            <Stat label="Need improvement" value={overview.needsImprovement} onClick={() => setStatusList('needs_improvement')} />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
@@ -440,10 +440,6 @@ const TeacherReportsPanel = () => {
                   {data.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               )}
-              <select className="sd-form-input" aria-label="Zone" value={filters.zone} onChange={e => setFilter('zone', e.target.value)} style={filterInput}>
-                <option value="">All zones</option>
-                {data.zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
-              </select>
               <select className="sd-form-input" aria-label="Performance" value={filters.performance} onChange={e => setFilter('performance', e.target.value)} style={filterInput}>
                 <option value="">All performance</option>
                 {Object.entries(PERFORMANCE).map(([key, p]) => <option key={key} value={key}>{p.label}</option>)}
@@ -453,11 +449,6 @@ const TeacherReportsPanel = () => {
                 <option value="not_started">Not started</option>
                 <option value="in_progress">In progress</option>
                 <option value="completed">All levels completed</option>
-              </select>
-              <select className="sd-form-input" aria-label="Activity" value={filters.activity} onChange={e => setFilter('activity', e.target.value)} style={filterInput}>
-                <option value="">Active and inactive</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
               </select>
               <label style={{ ...muted, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
                 From <input type="date" className="sd-form-input" value={filters.dateFrom} max={filters.dateTo || undefined} onChange={e => setFilter('dateFrom', e.target.value)} style={filterInput} />

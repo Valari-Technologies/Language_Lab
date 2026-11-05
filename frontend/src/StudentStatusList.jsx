@@ -3,14 +3,26 @@ import { FiArrowLeft, FiBarChart2 } from 'react-icons/fi';
 import { apiFetch } from './api';
 import { formatRollNo, pageItems, titleName } from './format';
 
-// Teacher Reports: the page behind the "Active students" and "Inactive students" cards: who they are, with class and roll no.
-// It uses the class, zone, performance, progress and date filters that were chosen when the card was clicked.
+// Teacher Reports: the page behind the "Active students", "Inactive students" and "Need improvement" cards: who they are,
+// with class and roll no. It uses the filters that were chosen when the card was clicked (the card's own one replaces
+// the matching filter), so its total is the number on the card.
 
 const card = { background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', padding: '1.25rem 1.5rem' };
 const muted = { color: '#64748b', fontSize: '0.8rem' };
 
+// per card: the title, the filter it sets, and the words under the title
+const KINDS = {
+  active: { label: 'Active students', param: 'activity', value: 'active', none: 'No active students',
+    about: (d) => `Students with activity in the last ${d.inactiveAfterDays} days.` },
+  inactive: { label: 'Inactive students', param: 'activity', value: 'inactive', none: 'No inactive students',
+    about: (d) => `Students with no activity for ${d.inactiveAfterDays} days or more, or none yet.` },
+  needs_improvement: { label: 'Students needing improvement', param: 'performance', value: 'needs_improvement', none: 'No students need improvement',
+    about: (d) => `Students whose average assessment score is below ${d.thresholds.average}%.` },
+};
+
 const StudentStatusList = ({ status, filterQuery, onBack }) => {
-  const label = status === 'active' ? 'Active students' : 'Inactive students';
+  const kind = KINDS[status];
+  const label = kind.label;
   const [page, setPage] = useState(1);
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -19,7 +31,7 @@ const StudentStatusList = ({ status, filterQuery, onBack }) => {
     let cancelled = false;
     const params = new URLSearchParams(filterQuery);
     params.delete('search');
-    params.set('activity', status);
+    params.set(kind.param, kind.value);
     params.set('sort', 'name');
     params.set('order', 'asc');
     params.set('page', String(page));
@@ -56,11 +68,7 @@ const StudentStatusList = ({ status, filterQuery, onBack }) => {
 
       <div className="sd-card" style={{ padding: '1.25rem 1.5rem' }}>
         <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.25rem', color: '#0f172a' }}>{label}{data ? ` (${data.total})` : ''}</h2>
-        <p style={{ ...muted, margin: '0 0 1rem' }}>
-          {status === 'active'
-            ? `Students with activity in the last ${data ? data.inactiveAfterDays : 14} days.`
-            : `Students with no activity for ${data ? data.inactiveAfterDays : 14} days or more, or none yet.`}
-        </p>
+        <p style={{ ...muted, margin: '0 0 1rem' }}>{data ? kind.about(data) : ''}</p>
 
         {error && <div style={{ ...card, color: '#b91c1c', borderColor: '#fecaca', background: '#fef2f2' }}>{error}</div>}
         {!data && !error && <span style={muted}>Loading…</span>}
@@ -68,7 +76,7 @@ const StudentStatusList = ({ status, filterQuery, onBack }) => {
         {data && (data.total === 0 ? (
           <div style={{ padding: '2rem 1rem', textAlign: 'center' }}>
             <FiBarChart2 style={{ fontSize: '2.5rem', color: '#94a3b8', marginBottom: '0.75rem' }} />
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#1e293b', marginBottom: '0.4rem' }}>No {status} students</h3>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#1e293b', marginBottom: '0.4rem' }}>{kind.none}</h3>
           </div>
         ) : (
           <>
