@@ -1074,6 +1074,14 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     } finally { setActionLoading(false); }
   };
 
+  // The filter drop-downs offer only the classes and sections the teacher is assigned to
+  const gradeOf = (c) => (String(c.class_name || '').match(/\d+/) || [])[0] || '';
+  const sectionOf = (c) => String(c.section || '').replace('Section', '').trim().toUpperCase();
+  const assignedGrades = [...new Set(classes.map(gradeOf).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
+  const assignedSections = (grade) => [...new Set(
+    classes.filter(c => !grade || gradeOf(c) === String(grade)).map(sectionOf).filter(Boolean)
+  )].sort();
+
   const getFilteredClasses = () => {
     return classes.filter(c => {
       if (tchClassFilter) {
@@ -1992,10 +2000,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     className="sd-form-input"
                     style={{ width: '130px', height: '38px', padding: '0 0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.82rem' }}
                     value={studentClassFilter}
-                    onChange={e => { setStudentClassFilter(e.target.value); setStudentPage(1); }}
+                    onChange={e => { setStudentClassFilter(e.target.value); setStudentSectionFilter(''); setStudentPage(1); }}
                   >
                     <option value="">All Classes</option>
-                    {[3, 4, 5, 6, 7, 8].map(num => (
+                    {assignedGrades.map(num => (
                       <option key={num} value={`Class ${num}`}>Class {num}</option>
                     ))}
                   </select>
@@ -2007,7 +2015,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     onChange={e => { setStudentSectionFilter(e.target.value); setStudentPage(1); }}
                   >
                     <option value="">All Sections</option>
-                    {['A', 'B', 'C', 'D', 'E', 'F'].map(sec => (
+                    {assignedSections(String(studentClassFilter || '').replace(/\D/g, '')).map(sec => (
                       <option key={sec} value={sec}>Section {sec}</option>
                     ))}
                   </select>
@@ -2401,10 +2409,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       className="sd-form-input"
                       style={{ width: '130px', height: '38px', padding: '0 0.5rem', fontSize: '0.82rem', borderRadius: '8px' }}
                       value={tchClassFilter}
-                      onChange={e => { setTchClassFilter(e.target.value); setClassPage(1); }}
+                      onChange={e => { setTchClassFilter(e.target.value); setTchSectionFilter(''); setClassPage(1); }}
                     >
                       <option value="">All Classes</option>
-                      {[3, 4, 5, 6, 7, 8].map(n => (
+                      {assignedGrades.map(n => (
                         <option key={n} value={String(n)}>Class {n}</option>
                       ))}
                     </select>
@@ -2416,7 +2424,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       onChange={e => { setTchSectionFilter(e.target.value); setClassPage(1); }}
                     >
                       <option value="">All Sections</option>
-                      {['A', 'B', 'C', 'D', 'E', 'F'].map(sec => (
+                      {assignedSections(tchClassFilter).map(sec => (
                         <option key={sec} value={sec}>Section {sec}</option>
                       ))}
                     </select>
