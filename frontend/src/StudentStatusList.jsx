@@ -17,7 +17,9 @@ const KINDS = {
   inactive: { label: 'Inactive students', param: 'activity', value: 'inactive', none: 'No inactive students',
     about: (d) => `Students with no activity for ${d.inactiveAfterDays} days or more, or none yet.` },
   needs_improvement: { label: 'Students needing improvement', param: 'performance', value: 'needs_improvement', none: 'No students need improvement',
-    about: (d) => `Students whose average assessment score is below ${d.thresholds.average}%.` },
+    about: (d) => `Students whose average assessment score is below ${d.thresholds.average}%.`, score: true },
+  excellent: { label: 'Excellent students', param: 'performance', value: 'excellent', none: 'No student has reached the Excellent level yet',
+    about: (d) => `Students whose average assessment score is ${d.thresholds.excellent}% or more.`, score: true },
 };
 
 const StudentStatusList = ({ status, filterQuery, onBack }) => {
@@ -32,8 +34,9 @@ const StudentStatusList = ({ status, filterQuery, onBack }) => {
     const params = new URLSearchParams(filterQuery);
     params.delete('search');
     params.set(kind.param, kind.value);
-    params.set('sort', 'name');
-    params.set('order', 'asc');
+    // the score lists start with the highest (Excellent) or the lowest (Need improvement) student
+    params.set('sort', kind.score ? 'score' : 'name');
+    params.set('order', status === 'excellent' ? 'desc' : 'asc');
     params.set('page', String(page));
     (async () => {
       try {
@@ -82,13 +85,14 @@ const StudentStatusList = ({ status, filterQuery, onBack }) => {
           <>
             <div style={{ overflowX: 'auto' }}>
               <table className="sd-table">
-                <thead><tr><th>Student</th><th>Class</th><th>Roll No</th></tr></thead>
+                <thead><tr><th>Student</th><th>Class</th><th>Roll No</th>{kind.score && <th>Avg Assessment</th>}</tr></thead>
                 <tbody>
                   {data.students.map(s => (
                     <tr key={s.id}>
                       <td>{titleName(s.name) || s.name}<div style={muted}>{s.loginCode}</div></td>
                       <td>{[s.grade, s.section].filter(Boolean).join(' · ') || '—'}</td>
                       <td>{formatRollNo(s.rollNo) || '—'}</td>
+                      {kind.score && <td style={{ fontWeight: 700 }}>{s.avgAssessment === null ? '—' : `${s.avgAssessment}%`}</td>}
                     </tr>
                   ))}
                 </tbody>

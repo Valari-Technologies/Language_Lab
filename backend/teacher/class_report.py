@@ -253,9 +253,13 @@ class TeacherClassReportAPIView(APIView):
             "avgProgress": round(sum(progressed) / len(progressed), 1) if progressed else None,
             "needsImprovement": sum(1 for r in scoped if r["performance"] == "needs_improvement"),
         }
-        ranked = sorted((r for r in scoped if r["avgAssessment"] is not None),
-                        key=lambda r: (-r["avgAssessment"], -r["levelsCompleted"], r["name"].lower()))
-        ranking = {"best": ranked[:3], "least": list(reversed(ranked[3:][-3:]))}
+        # the cards: the three highest of the Excellent students and the three lowest of those who Need Improvement
+        # (clicking a card lists all of them)
+        excellent = sorted((r for r in scoped if r["performance"] == "excellent"),
+                           key=lambda r: (-r["avgAssessment"], -r["levelsCompleted"], r["name"].lower()))
+        needing = sorted((r for r in scoped if r["performance"] == "needs_improvement"),
+                         key=lambda r: (r["avgAssessment"], r["levelsCompleted"], r["name"].lower()))
+        ranking = {"best": excellent[:3], "least": needing[:3]}
 
         query = (request.query_params.get("search") or "").strip()
         matched = scoped
@@ -287,6 +291,8 @@ class TeacherClassReportAPIView(APIView):
         except ValueError:
             page = 1
         window = ordered[(page - 1) * PAGE_SIZE: page * PAGE_SIZE]
+        if request.query_params.get("all") == "1":  # the downloaded report: every student that matches, on one page
+            window, page, pages = ordered, 1, 1
 
         def clean(r):
             return {k: v for k, v in r.items() if not k.startswith("_")}

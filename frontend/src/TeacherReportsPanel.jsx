@@ -226,11 +226,19 @@ const StudentDayReport = ({ student, onClose }) => {
   );
 };
 
-const PerformanceList = ({ title, accent, students }) => (
-  <div style={{ ...card, padding: '1rem 1.25rem', borderTop: `4px solid ${accent}` }}>
-    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.6rem' }}>{title}</div>
+// A card with the first three students of a level; clicking it opens the list of all students of that level
+const PerformanceList = ({ title, accent, students, empty, onOpen }) => (
+  <div role="button" tabIndex={0} aria-label={`${title}: open the full list`}
+    onClick={onOpen} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
+    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(15,23,42,0.12)'; }}
+    onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}
+    style={{ ...card, padding: '1rem 1.25rem', borderTop: `4px solid ${accent}`, cursor: 'pointer', transition: 'box-shadow 0.15s' }}>
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.6rem' }}>
+      <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>{title}</span>
+      <span style={{ marginLeft: 'auto', fontSize: '0.72rem', fontWeight: 600, color: '#2563eb' }}>View all ›</span>
+    </div>
     {students.length === 0 ? (
-      <div style={muted}>Not enough results yet.</div>
+      <div style={muted}>{empty}</div>
     ) : (
       <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
         {students.map((s, i) => (
@@ -288,7 +296,7 @@ const TeacherReportsPanel = () => {
 
   const [downloading, setDownloading] = useState(false);
 
-  // the search and filters as the server wants them (the list adds its page, the Excel download takes every page)
+  // the search and filters as the server wants them (the list adds its page, the PDF download takes every page)
   const filterParams = () => {
     const params = new URLSearchParams({ sort, order });
     if (search) params.set('search', search);
@@ -302,23 +310,35 @@ const TeacherReportsPanel = () => {
     return params;
   };
 
-  // Download all: an Excel file with every student that matches the search and filters, not only this page
+  // Download all: a PDF with every student that matches the search and filters (all pages), one row each
   const downloadAll = async () => {
     setDownloading(true);
     try {
-      const res = await apiFetch(`/api/cms/v1/teacher/reports/class/export/?${filterParams()}`);
+      const params = filterParams();
+      params.set('all', '1');
+      const res = await apiFetch(`/api/cms/v1/teacher/reports/class/?${params}`);
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
         setError(body.error || 'Could not download the class report.');
         return;
       }
-      const url = URL.createObjectURL(await res.blob());
-      const link = document.createElement('a');
-      link.href = url;
       const chosen = data && data.classes.find(c => String(c.id) === String(filters.classId));
-      link.download = `class_report${chosen ? `_${chosen.name.replace(/[^A-Za-z0-9-]+/g, '-')}` : ''}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-      link.click();
-      URL.revokeObjectURL(url);
+      const students = body.students.map(s => ({ ...s, name: titleName(s.name) || s.name, rollNo: formatRollNo(s.rollNo) }));
+      await savePdf({
+        file: `class_report${chosen ? `_${chosen.name.replace(/[^A-Za-z0-9-]+/g, '-')}` : ''}_${new Date().toISOString().slice(0, 10)}.pdf`,
+        title: 'Class Report',
+        subtitle: `${chosen ? chosen.name : 'All my classes'} · ${students.length} ${students.length === 1 ? 'student' : 'students'} · ${new Date().toLocaleDateString()}`,
+        landscape: true,
+        tables: [{
+          head: ['Student', 'Roll No', 'Class', 'Overall Progress', 'Avg Assessment', 'Attempts', 'Learning Time', 'Last Active', 'Status'],
+          body: students.map(s => [
+            `${s.name} (${s.loginCode})`, s.rollNo || '—', classLabel(s),
+            s.progress === null ? '—' : `${s.progress}% (Zones ${s.zonesCompleted}/${s.zonesTotal}, Levels ${s.levelsCompleted}/${s.levelsTotal})`,
+            s.avgAssessment === null ? 'Not assessed' : `${s.avgAssessment}%`, s.attempts, studyTime(s.learningSeconds), fmt(s.lastActive),
+            `${PERFORMANCE[s.performance].label}${s.activity === 'inactive' ? ', Inactive' : ''}`,
+          ]),
+        }],
+      });
     } catch (e) {
       setError('Could not reach the CMS.');
     } finally {
@@ -425,8 +445,10 @@ const TeacherReportsPanel = () => {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
-            <PerformanceList title="Best performing students" accent="#16a34a" students={data.ranking.best} />
-            <PerformanceList title="Least performing students" accent="#dc2626" students={data.ranking.least} />
+            <PerformanceList title="Best performing students" accent="#16a34a" students={data.ranking.best}
+              empty={`No student has reached ${data.thresholds.excellent}% yet.`} onOpen={() => setStatusList('excellent')} />
+            <PerformanceList title="Least performing students" accent="#dc2626" students={data.ranking.least}
+              empty="No student needs improvement." onOpen={() => setStatusList('needs_improvement')} />
           </div>
 
           <div className="sd-card" style={{ padding: '1rem 1.25rem' }}>
@@ -450,23 +472,16 @@ const TeacherReportsPanel = () => {
                 <option value="in_progress">In progress</option>
                 <option value="completed">All levels completed</option>
               </select>
-              <label style={{ ...muted, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                From <input type="date" className="sd-form-input" value={filters.dateFrom} max={filters.dateTo || undefined} onChange={e => setFilter('dateFrom', e.target.value)} style={filterInput} />
-              </label>
-              <label style={{ ...muted, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                To <input type="date" className="sd-form-input" value={filters.dateTo} min={filters.dateFrom || undefined} onChange={e => setFilter('dateTo', e.target.value)} style={filterInput} />
-              </label>
               {filtered && <button type="button" className="sd-btn-outline" onClick={clearFilters} style={{ height: '36px' }}>Clear filters</button>}
               <button type="button" className="sd-btn-outline" onClick={downloadAll} disabled={downloading || data.total === 0}
-                title="Download every student that matches the search and filters as an Excel file"
+                title="Download every student that matches the search and filters as a PDF"
                 style={{ height: '36px', marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                <FiDownload /> {downloading ? 'Preparing…' : 'Download all (Excel)'}
+                <FiDownload /> {downloading ? 'Preparing…' : 'Download all (PDF)'}
               </button>
             </div>
             <p style={{ ...muted, margin: '0 0 0.75rem' }}>
               Performance uses the average assessment score: Excellent {data.thresholds.excellent}% and over, Good {data.thresholds.good}%,
               Average {data.thresholds.average}%, Needs Improvement below that. Inactive means no activity for {data.inactiveAfterDays} days.
-              The date range shows students with activity in it.
             </p>
 
             {data.total === 0 ? (

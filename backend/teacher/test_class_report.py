@@ -75,6 +75,9 @@ class TeacherClassReportTests(TestCase):
         self.assertEqual((first["total"], first["pages"], first["page"], len(first["students"])), (25, 3, 1, 10))
         self.assertEqual(first["students"][0]["name"], "Student 01")
         self.assertEqual(len(self._get(page=3)["students"]), 5)
+        everyone = self._get(all=1)  # the downloaded report: all of them at once
+        self.assertEqual((len(everyone["students"]), everyone["total"], everyone["pages"]), (25, 25, 1))
+        self.assertEqual(len(self._get(all=1, performance="excellent")["students"]), 0)
         self.assertEqual(self._get(page=99)["page"], 3)  # a page beyond the end shows the last one
         self.assertEqual(self._get(page="x")["page"], 1)
         names = [r["name"] for p in (1, 2, 3) for r in self._get(page=p)["students"]]
@@ -151,11 +154,21 @@ class TeacherClassReportTests(TestCase):
         self.assertEqual((both["total"], both["overview"]["totalStudents"]), (1, 2))
 
     def test_best_and_least_performing(self):
-        for student, score in zip(self.students[:7], (95, 85, 75, 65, 55, 45, 35)):
+        # best = the highest of the Excellent students (85% and over); least = the lowest of those who Need Improvement (below 50%)
+        for student, score in zip(self.students[:10], (99, 95, 90, 85, 75, 65, 55, 45, 35, 20)):
             self._attempt(student, self.boss, "B1", percentage=score)
         ranking = self._get()["ranking"]
-        self.assertEqual([r["avgAssessment"] for r in ranking["best"]], [95.0, 85.0, 75.0])
-        self.assertEqual([r["avgAssessment"] for r in ranking["least"]], [35.0, 45.0, 55.0])
+        self.assertEqual([r["avgAssessment"] for r in ranking["best"]], [99.0, 95.0, 90.0])
+        self.assertEqual([r["avgAssessment"] for r in ranking["least"]], [20.0, 35.0, 45.0])
+        # the cards open the full lists through the performance filter
+        self.assertEqual([r["avgAssessment"] for r in self._get(performance="excellent", sort="score", order="desc")["students"]],
+                         [99.0, 95.0, 90.0, 85.0])
+        self.assertEqual(self._get(performance="needs_improvement")["total"], 3)
+        # nobody at 85% or below 50%: both cards are empty, never filled with students of another level
+        for student in self.students[:10]:
+            StudentAttempt.objects.filter(student=student.user).update(percentage=70)
+        ranking = self._get()["ranking"]
+        self.assertEqual((ranking["best"], ranking["least"]), ([], []))
 
     def _export(self, **params):
         import io

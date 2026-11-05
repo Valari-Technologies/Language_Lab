@@ -1,8 +1,8 @@
 // A report as a PDF with tables, built in the browser from data already on screen.
 // tables: [{ heading, head: [..], body: [[..]] }]. The PDF library is loaded only when someone downloads.
-export const savePdf = async ({ file, title, subtitle, tables }) => {
+export const savePdf = async ({ file, title, subtitle, tables, landscape = false }) => {
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: landscape ? 'landscape' : 'portrait' });
   doc.setFontSize(16);
   doc.text(title, 40, 50);
   doc.setFontSize(10);
