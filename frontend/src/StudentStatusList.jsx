@@ -20,8 +20,11 @@ const KINDS = {
     about: (d) => `Students with no activity for ${d.inactiveAfterDays} days or more, or none yet.` },
   needs_improvement: { label: 'Students needing improvement', param: 'performance', value: 'needs_improvement', none: 'No students need improvement',
     about: (d) => `Students whose average assessment score is below ${d.thresholds.average}%.`, score: true },
-  assessed: { label: 'Best performing students', param: 'performance', value: 'assessed', none: 'No assessment has been completed yet',
-    about: (d) => `All students with an assessment score, the highest first. ${d.thresholds.excellent}% and over is Excellent.`, score: true, level: true, descending: true },
+  best: { label: 'Best performing students', param: 'performance', value: 'best', none: 'No student is at Excellent or Good yet',
+    about: (d) => `Students at Excellent (${d.thresholds.excellent}% and over) or Good (${d.thresholds.good}% and over), the highest score first.`,
+    score: true, level: true, descending: true },
+  least: { label: 'Least performing students', param: 'performance', value: 'least', none: 'No student is at Average or Needs Improvement',
+    about: (d) => `Students at Average or Needs Improvement (below ${d.thresholds.good}%), the lowest score first.`, score: true, level: true },
 };
 
 const StudentStatusList = ({ status, filterQuery, onBack }) => {

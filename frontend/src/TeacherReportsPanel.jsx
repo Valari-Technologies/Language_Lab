@@ -446,9 +446,9 @@ const TeacherReportsPanel = () => {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
             <PerformanceList title="Best performing students" accent="#16a34a" students={data.ranking.best}
-              empty="No assessment has been completed yet." onOpen={() => setStatusList('assessed')} />
+              empty="No student is at Excellent or Good yet." onOpen={() => setStatusList('best')} />
             <PerformanceList title="Least performing students" accent="#dc2626" students={data.ranking.least}
-              empty="No student needs improvement." onOpen={() => setStatusList('needs_improvement')} />
+              empty="No student is at Average or Needs Improvement." onOpen={() => setStatusList('least')} />
           </div>
 
           <div className="sd-card" style={{ padding: '1rem 1.25rem' }}>
