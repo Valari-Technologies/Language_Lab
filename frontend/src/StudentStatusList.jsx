@@ -10,6 +10,8 @@ import { formatRollNo, pageItems, titleName } from './format';
 const card = { background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', padding: '1.25rem 1.5rem' };
 const muted = { color: '#64748b', fontSize: '0.8rem' };
 
+const LEVELS = { excellent: 'Excellent', good: 'Good', average: 'Average', needs_improvement: 'Needs Improvement' };
+
 // per card: the title, the filter it sets, and the words under the title
 const KINDS = {
   active: { label: 'Active students', param: 'activity', value: 'active', none: 'No active students',
@@ -18,8 +20,8 @@ const KINDS = {
     about: (d) => `Students with no activity for ${d.inactiveAfterDays} days or more, or none yet.` },
   needs_improvement: { label: 'Students needing improvement', param: 'performance', value: 'needs_improvement', none: 'No students need improvement',
     about: (d) => `Students whose average assessment score is below ${d.thresholds.average}%.`, score: true },
-  excellent: { label: 'Excellent students', param: 'performance', value: 'excellent', none: 'No student has reached the Excellent level yet',
-    about: (d) => `Students whose average assessment score is ${d.thresholds.excellent}% or more.`, score: true },
+  assessed: { label: 'Best performing students', param: 'performance', value: 'assessed', none: 'No assessment has been completed yet',
+    about: (d) => `All students with an assessment score, the highest first. ${d.thresholds.excellent}% and over is Excellent.`, score: true, level: true, descending: true },
 };
 
 const StudentStatusList = ({ status, filterQuery, onBack }) => {
@@ -36,7 +38,7 @@ const StudentStatusList = ({ status, filterQuery, onBack }) => {
     params.set(kind.param, kind.value);
     // the score lists start with the highest (Excellent) or the lowest (Need improvement) student
     params.set('sort', kind.score ? 'score' : 'name');
-    params.set('order', status === 'excellent' ? 'desc' : 'asc');
+    params.set('order', kind.descending ? 'desc' : 'asc');
     params.set('page', String(page));
     (async () => {
       try {
@@ -85,7 +87,7 @@ const StudentStatusList = ({ status, filterQuery, onBack }) => {
           <>
             <div style={{ overflowX: 'auto' }}>
               <table className="sd-table">
-                <thead><tr><th>Student</th><th>Class</th><th>Roll No</th>{kind.score && <th>Avg Assessment</th>}</tr></thead>
+                <thead><tr><th>Student</th><th>Class</th><th>Roll No</th>{kind.score && <th>Avg Assessment</th>}{kind.level && <th>Level</th>}</tr></thead>
                 <tbody>
                   {data.students.map(s => (
                     <tr key={s.id}>
@@ -93,6 +95,7 @@ const StudentStatusList = ({ status, filterQuery, onBack }) => {
                       <td>{[s.grade, s.section].filter(Boolean).join(' · ') || '—'}</td>
                       <td>{formatRollNo(s.rollNo) || '—'}</td>
                       {kind.score && <td style={{ fontWeight: 700 }}>{s.avgAssessment === null ? '—' : `${s.avgAssessment}%`}</td>}
+                      {kind.level && <td>{LEVELS[s.performance] || '—'}</td>}
                     </tr>
                   ))}
                 </tbody>

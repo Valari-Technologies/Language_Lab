@@ -34,7 +34,7 @@ ZONES = [
     {"id": 4, "name": "Island Zone"}, {"id": 5, "name": "Desert Zone"}, {"id": 6, "name": "Lava Zone"},
 ]
 SORTS = {"name", "score", "progress", "last_active"}
-PERFORMANCES = {"excellent", "good", "average", "needs_improvement", "not_assessed"}
+PERFORMANCES = {"excellent", "good", "average", "needs_improvement", "not_assessed", "assessed"}  # "assessed": has a score
 ACTIVITIES = {"active", "inactive"}
 PROGRESS = {"not_started", "in_progress", "completed"}
 
@@ -231,7 +231,10 @@ class TeacherClassReportAPIView(APIView):
         def keep(row):
             if zone and int(zone) not in row["_zones"]:
                 return False
-            if performance and row["performance"] != performance:
+            if performance == "assessed":
+                if row["performance"] == "not_assessed":
+                    return False
+            elif performance and row["performance"] != performance:
                 return False
             if activity and row["activity"] != activity:
                 return False
@@ -253,13 +256,13 @@ class TeacherClassReportAPIView(APIView):
             "avgProgress": round(sum(progressed) / len(progressed), 1) if progressed else None,
             "needsImprovement": sum(1 for r in scoped if r["performance"] == "needs_improvement"),
         }
-        # the cards: the three highest of the Excellent students and the three lowest of those who Need Improvement
-        # (clicking a card lists all of them)
-        excellent = sorted((r for r in scoped if r["performance"] == "excellent"),
-                           key=lambda r: (-r["avgAssessment"], -r["levelsCompleted"], r["name"].lower()))
+        # the cards: the three highest scores of all the students who have an assessment score, and the three lowest of
+        # those who Need Improvement (clicking a card lists them all)
+        assessed = sorted((r for r in scoped if r["avgAssessment"] is not None),
+                          key=lambda r: (-r["avgAssessment"], -r["levelsCompleted"], r["name"].lower()))
         needing = sorted((r for r in scoped if r["performance"] == "needs_improvement"),
                          key=lambda r: (r["avgAssessment"], r["levelsCompleted"], r["name"].lower()))
-        ranking = {"best": excellent[:3], "least": needing[:3]}
+        ranking = {"best": assessed[:3], "least": needing[:3]}
 
         query = (request.query_params.get("search") or "").strip()
         matched = scoped
