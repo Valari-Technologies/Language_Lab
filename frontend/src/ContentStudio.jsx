@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from './api';
 import { API_BASE_URL } from './config';
+import { pageItems } from './format';
 import PreviewCanvasRenderer from './PreviewCanvasRenderer';
 import {
   FiGrid, FiBookOpen, FiActivity, FiMonitor, FiFileText,
@@ -7168,7 +7169,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           >
                             &lt;
                           </button>
-                          {Array.from({ length: Math.max(1, Math.ceil(totalCount / 10)) }, (_, i) => i + 1).map(pageNum => (
+                          {pageItems(page, Math.max(1, Math.ceil(totalCount / 10))).map(pageNum => (
                             <button
                               key={pageNum}
                               className={`cs-page-link ${page === pageNum ? 'active' : ''}`}
@@ -12946,7 +12947,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                     >
                                       &lt;
                                     </button>
-                                    {Array.from({ length: maxPage }, (_, i) => i + 1).map(pageNum => (
+                                    {pageItems(publishPage, maxPage).map(pageNum => (
                                       <button
                                         key={pageNum}
                                         className={`cs-page-link ${publishPage === pageNum ? 'active' : ''}`}
