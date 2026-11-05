@@ -4,6 +4,7 @@ import { apiFetch } from './api';
 import { formatRollNo, pageItems, titleName } from './format';
 import { savePdf } from './pdf';
 import StudentReportPage from './StudentReportPage';
+import StudentStatusList from './StudentStatusList';
 
 // Teacher portal "Reports": results of the students of the grade(s) the teacher teaches.
 // The CMS decides the students from the login (the teacher's own classes), never from the browser.
@@ -63,12 +64,25 @@ const downloadReport = async (s) => {
   });
 };
 
-const Stat = ({ label, value }) => (
-  <div style={{ ...card, padding: '0.9rem 1.1rem' }}>
-    <div style={muted}>{label}</div>
-    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a' }}>{value}</div>
-  </div>
-);
+// A number card; with onClick it is a button that opens the list behind the number
+const Stat = ({ label, value, onClick }) => {
+  const body = (
+    <>
+      <div style={muted}>{label}</div>
+      <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a' }}>{value}</div>
+      {onClick && <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#2563eb' }}>View students ›</div>}
+    </>
+  );
+  if (!onClick) return <div style={{ ...card, padding: '0.9rem 1.1rem' }}>{body}</div>;
+  return (
+    <button type="button" onClick={onClick} aria-label={`${label}: ${value}. View the list`}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = '#2563eb'; e.currentTarget.style.boxShadow = '0 4px 10px rgba(37,99,235,0.12)'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; }}
+      style={{ ...card, padding: '0.9rem 1.1rem', textAlign: 'left', cursor: 'pointer', font: 'inherit', width: '100%', transition: 'border-color 0.15s, box-shadow 0.15s' }}>
+      {body}
+    </button>
+  );
+};
 
 const hms = (seconds) => {
   const s = Math.max(Math.round(seconds || 0), 0);
@@ -270,6 +284,7 @@ const TeacherReportsPanel = () => {
   const [viewing, setViewing] = useState(null);
   const [menu, setMenu] = useState(null);
   const [reportOf, setReportOf] = useState(null); // { student, tab }: the student report page is open
+  const [statusList, setStatusList] = useState(null); // 'active' | 'inactive': the list behind that card is open
 
   const [downloading, setDownloading] = useState(false);
 
@@ -356,6 +371,11 @@ const TeacherReportsPanel = () => {
   const from = data && data.total > 0 ? (data.page - 1) * data.pageSize + 1 : 0;
   const to = data ? Math.min(data.page * data.pageSize, data.total) : 0;
 
+  // the active or inactive students list is a page of its own, with the filters that were chosen
+  if (statusList) {
+    return <StudentStatusList status={statusList} filterQuery={filterParams().toString()} onBack={() => setStatusList(null)} />;
+  }
+
   // the student report is a page of its own; the list keeps its search, filters and page behind it
   if (reportOf) {
     return (
@@ -397,8 +417,8 @@ const TeacherReportsPanel = () => {
           {/* Class overview: follows the filters, not the search */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
             <Stat label="Total students" value={overview.totalStudents} />
-            <Stat label="Active students" value={overview.activeStudents} />
-            <Stat label="Inactive students" value={overview.inactiveStudents} />
+            <Stat label="Active students" value={overview.activeStudents} onClick={() => setStatusList('active')} />
+            <Stat label="Inactive students" value={overview.inactiveStudents} onClick={() => setStatusList('inactive')} />
             <Stat label="Class avg assessment score" value={percent(overview.avgAssessment)} />
             <Stat label="Overall class progress" value={percent(overview.avgProgress)} />
             <Stat label="Need improvement" value={overview.needsImprovement} />
