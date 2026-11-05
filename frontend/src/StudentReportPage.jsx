@@ -78,22 +78,18 @@ const ScoreChart = ({ points }) => {
 const LevelRow = ({ level, open, onToggle }) => {
   const [label, bg, color] = LEVEL_STATUS[level.status];
   if (level.status === 'not_published') {
-    return <tr style={{ opacity: 0.6 }}><td>{level.levelInZone}</td><td colSpan="9"><span style={muted}>Level {level.level}: no lesson has been published for this level yet.</span></td></tr>;
+    return <tr style={{ opacity: 0.6 }}><td>{level.levelInZone}</td><td colSpan="7"><span style={muted}>Level {level.level}: no lesson has been published for this level yet.</span></td></tr>;
   }
-  const answers = level.correct === null ? '—' : `${level.correct} / ${level.incorrect}`;
   return (
     <>
       <tr>
         <td>{level.levelInZone}</td>
         <td style={{ fontWeight: 600 }}>{level.title}</td>
         <td><span style={badge(bg, color)}>{label}</span></td>
-        <td>{level.score === null ? <span style={muted}>No score</span> : pct(level.score)}</td>
         <td>{level.attempts}</td>
-        <td>{answers}</td>
         <td>{level.attempts ? dur(level.seconds) : '—'}</td>
         <td>{when(level.startedAt)}</td>
         <td>{when(level.completedAt)}</td>
-        <td>{level.previousScore === null && level.bestScore === null ? '—' : `${pct(level.previousScore)} / ${pct(level.bestScore)}`}</td>
         <td>
           {level.attempts > 0 && (
             <button type="button" style={linkBtn} onClick={onToggle}>View Details {open ? <FiChevronUp /> : <FiChevronDown />}</button>
@@ -102,21 +98,18 @@ const LevelRow = ({ level, open, onToggle }) => {
       </tr>
       {open && (
         <tr>
-          <td colSpan="11" style={{ background: '#f8fafc' }}>
+          <td colSpan="8" style={{ background: '#f8fafc' }}>
             <table className="sd-table" style={{ margin: 0 }}>
-              <thead><tr><th>Attempt</th><th>Status</th><th>Started</th><th>Finished</th><th>Score</th><th>Correct / Incorrect</th><th>Time</th></tr></thead>
+              <thead><tr><th>Attempt</th><th>Status</th><th>Started</th><th>Finished</th><th>Time</th></tr></thead>
               <tbody>
                 {level.attemptList.map((a, i) => (
                   <tr key={a.id}>
                     <td>{i + 1}</td><td>{a.status === 'COMPLETED' ? 'Completed' : 'In progress'}</td><td>{when(a.startedAt)}</td><td>{when(a.completedAt)}</td>
-                    <td>{a.percentage === null ? '—' : pct(a.percentage)}</td>
-                    <td>{a.correct === null ? '—' : `${a.correct} / ${a.incorrect}`}</td>
                     <td>{dur(a.seconds)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <p style={{ ...muted, margin: '0.4rem 0 0' }}>Previous score / best score are shown in the row above. Answers are shown only when the LMS sent them.</p>
           </td>
         </tr>
       )}
@@ -215,7 +208,7 @@ const StudentReportPage = ({ student, initialTab = 'overview', onBack, onOpenDay
               <div style={{ overflowX: 'auto', marginTop: '0.75rem' }}>
                 <table className="sd-table">
                   <thead>
-                    <tr><th>Level</th><th>Game</th><th>Status</th><th>Score</th><th>Attempts</th><th>Correct / Incorrect</th><th>Time</th><th>Started</th><th>Completed</th><th>Previous / Best</th><th /></tr>
+                    <tr><th>Level</th><th>Game</th><th>Status</th><th>Attempts</th><th>Time</th><th>Started</th><th>Completed</th><th /></tr>
                   </thead>
                   <tbody>
                     {report.levels.filter(l => l.zone === z.zone).map(l => (
