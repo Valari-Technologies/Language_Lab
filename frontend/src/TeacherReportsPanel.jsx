@@ -271,15 +271,11 @@ const TeacherReportsPanel = () => {
   const [menu, setMenu] = useState(null);
   const [reportOf, setReportOf] = useState(null); // { student, tab }: the student report page is open
 
-  // the search waits a moment after typing before it asks the server
-  useEffect(() => {
-    const timer = setTimeout(() => { setSearch(searchInput.trim()); setPage(1); }, 300);
-    return () => clearTimeout(timer);
-  }, [searchInput]);
+  const [downloading, setDownloading] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    const params = new URLSearchParams({ page: String(page), sort, order });
+  // the search and filters as the server wants them (the list adds its page, the Excel download takes every page)
+  const filterParams = () => {
+    const params = new URLSearchParams({ sort, order });
     if (search) params.set('search', search);
     if (filters.classId) params.set('class_id', filters.classId);
     if (filters.zone) params.set('zone', filters.zone);
@@ -288,6 +284,43 @@ const TeacherReportsPanel = () => {
     if (filters.activity) params.set('activity', filters.activity);
     if (filters.dateFrom) params.set('date_from', filters.dateFrom);
     if (filters.dateTo) params.set('date_to', filters.dateTo);
+    return params;
+  };
+
+  // Download all: an Excel file with every student that matches the search and filters, not only this page
+  const downloadAll = async () => {
+    setDownloading(true);
+    try {
+      const res = await apiFetch(`/api/cms/v1/teacher/reports/class/export/?${filterParams()}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error || 'Could not download the class report.');
+        return;
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const link = document.createElement('a');
+      link.href = url;
+      const chosen = data && data.classes.find(c => String(c.id) === String(filters.classId));
+      link.download = `class_report${chosen ? `_${chosen.name.replace(/[^A-Za-z0-9-]+/g, '-')}` : ''}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError('Could not reach the CMS.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  // the search waits a moment after typing before it asks the server
+  useEffect(() => {
+    const timer = setTimeout(() => { setSearch(searchInput.trim()); setPage(1); }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const params = filterParams();
+    params.set('page', String(page));
     (async () => {
       try {
         const res = await apiFetch(`/api/cms/v1/teacher/reports/class/?${params}`);
@@ -413,6 +446,11 @@ const TeacherReportsPanel = () => {
                 To <input type="date" className="sd-form-input" value={filters.dateTo} min={filters.dateFrom || undefined} onChange={e => setFilter('dateTo', e.target.value)} style={filterInput} />
               </label>
               {filtered && <button type="button" className="sd-btn-outline" onClick={clearFilters} style={{ height: '36px' }}>Clear filters</button>}
+              <button type="button" className="sd-btn-outline" onClick={downloadAll} disabled={downloading || data.total === 0}
+                title="Download every student that matches the search and filters as an Excel file"
+                style={{ height: '36px', marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                <FiDownload /> {downloading ? 'Preparing…' : 'Download all (Excel)'}
+              </button>
             </div>
             <p style={{ ...muted, margin: '0 0 0.75rem' }}>
               Performance uses the average assessment score: Excellent {data.thresholds.excellent}% and over, Good {data.thresholds.good}%,

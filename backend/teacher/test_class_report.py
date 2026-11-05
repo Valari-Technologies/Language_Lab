@@ -157,6 +157,60 @@ class TeacherClassReportTests(TestCase):
         self.assertEqual([r["avgAssessment"] for r in ranking["best"]], [95.0, 85.0, 75.0])
         self.assertEqual([r["avgAssessment"] for r in ranking["least"]], [35.0, 45.0, 55.0])
 
+    def _export(self, **params):
+        import io
+
+        import openpyxl
+        res = self.api.get(URL + "export/", params)
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertIn("spreadsheetml", res["Content-Type"])
+        self.assertIn(".xlsx", res["Content-Disposition"])
+        return list(openpyxl.load_workbook(io.BytesIO(res.content)).active.iter_rows(values_only=True))
+
+    def test_excel_export_has_every_student_that_matches_the_filters(self):
+        self._student("OTHER", "Section B", "1", section="B")
+        self._student("FOREIGN", "Other School", "3", school=self.other)
+        self._attempt(self.students[0], self.boss, "B1", percentage=90)
+        self._attempt(self.students[1], self.lessons[0], "L1")
+        rows = self._export()
+        self.assertEqual(rows[0][:4], ("Student", "Student ID", "Roll No", "Class"))
+        self.assertEqual(len(rows) - 1, 25)  # the whole class, not only the first page of 10; no other section or school
+        first = rows[1]
+        self.assertEqual((first[0], first[2], first[3], first[4]), ("Student 01", "1", "Class 5", "A"))
+        self.assertEqual((first[5], first[6], first[9], first[10], first[13]), (0, "0/6", 90.0, 1, "Excellent"))
+        # a filter, a search and a sort shape the file the same way as the list
+        self.assertEqual([r[0] for r in self._export(performance="excellent")[1:]], ["Student 01"])
+        self.assertEqual(len(self._export(search="Student 1")) - 1, self._get(search="Student 1")["total"])
+        by_score = self._export(sort="score", order="desc")
+        self.assertEqual((by_score[1][0], by_score[2][9]), ("Student 01", "Not assessed"))
+        self.assertEqual(len(self._export(activity="active")) - 1, self._get(activity="active")["total"])
+
+    def test_excel_export_of_the_class_that_was_chosen(self):
+        grade8 = Grade.objects.create(grade_name="Class 8", sort_order=8)
+        class_8a = Class.objects.create(school=self.school, class_name="Class 8-A", grade=grade8, academic_year="2026-2027")
+        TeacherClass.objects.create(teacher=Teacher.objects.get(user=self.teacher), class_obj=class_8a)
+        user = User.objects.create_user(username="HEL-1", password="x", role=User.Role.STUDENT, full_name="Hell")
+        Student.objects.create(user=user, school=self.school, roll_no="1", grade="Class 8", section="A")
+        self.assertEqual(len(self._export()) - 1, 26)  # both classes of the teacher
+        five = self._export(class_id=self.class_id)
+        self.assertEqual(len(five) - 1, 25)
+        self.assertEqual({r[3] for r in five[1:]}, {"Class 5"})  # only the chosen class
+        eight = self._export(class_id=class_8a.class_id)
+        self.assertEqual([(r[0], r[3]) for r in eight[1:]], [("Hell", "Class 8")])
+        res = self.api.get(URL + "export/", {"class_id": self.class_id})
+        self.assertIn("Class-5-A", res["Content-Disposition"])  # the file name says which class
+
+    def test_excel_export_for_a_teacher_without_classes_and_bad_values(self):
+        for bad in ({"zone": 9}, {"performance": "star"}, {"class_id": 999999}, {"date_from": "yesterday"}):
+            self.assertEqual(self.api.get(URL + "export/", bad).status_code, 400, bad)
+        lonely = User.objects.create_user(username="lonely", password="x", role=User.Role.TEACHER)
+        Teacher.objects.create(user=lonely, school=self.school)
+        self.api.force_authenticate(lonely)
+        self.assertEqual(len(self._export()), 1)  # only the header row
+        for user in (self.students[0].user, User.objects.create_user(username="adm", password="x", role=User.Role.SCHOOL_ADMIN)):
+            self.api.force_authenticate(user)
+            self.assertEqual(self.api.get(URL + "export/").status_code, 403)
+
     def test_class_filter_and_bad_values(self):
         data = self._get()
         self.assertEqual(data["classes"], [{"id": self.class_id, "name": "Class 5-A"}])

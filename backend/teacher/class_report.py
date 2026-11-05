@@ -159,7 +159,9 @@ class TeacherClassReportAPIView(APIView):
     &activity=&progress=&date_from=&date_to=  Ten students a page; the overview cards follow every filter but the search."""
     permission_classes = [IsAuthenticated, IsTeacher]
 
-    def get(self, request):
+    def collect(self, request):
+        """(early response, None) for a bad request or a teacher without a class, else (None, the filtered and sorted rows
+        with the overview and ranking). The page list and the Excel export both use it, so they always agree."""
         school = get_user_school(request.user)
         classes = list(Class.objects.filter(teacherclass__teacher__user=request.user).select_related("grade"))
         seen, class_list = set(), []
@@ -173,7 +175,7 @@ class TeacherClassReportAPIView(APIView):
                                       "avgAssessment": None, "avgProgress": None, "needsImprovement": 0},
                  "ranking": {"best": [], "least": []}, "students": [], "page": 1, "pages": 1, "total": 0}
         if not school or not classes:
-            return Response(empty)
+            return Response(empty), None
 
         # which students: the teacher's own class sections, narrowed by the class or grade chosen
         by_id = {c.class_id: c for c in classes}
@@ -181,13 +183,13 @@ class TeacherClassReportAPIView(APIView):
         if request.query_params.get("class_id"):
             raw = str(request.query_params["class_id"])
             if not raw.isdigit() or int(raw) not in by_id:
-                return Response({"error": "This class is not assigned to you."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "This class is not assigned to you."}, status=status.HTTP_400_BAD_REQUEST), None
             chosen = [c for c in classes if c.class_name == by_id[int(raw)].class_name]
         elif request.query_params.get("grade_id"):
             raw = str(request.query_params["grade_id"])
             chosen = [c for c in classes if c.grade_id and str(c.grade_id) == raw]
             if not chosen:
-                return Response({"error": "This grade is not assigned to you."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "This grade is not assigned to you."}, status=status.HTTP_400_BAD_REQUEST), None
         scope = _class_scope(chosen)
         students = [
             s for s in Student.objects.filter(school=school, user__is_active=True).select_related("user")
@@ -197,7 +199,7 @@ class TeacherClassReportAPIView(APIView):
         try:
             date_from, date_to = _date_param(request, "date_from"), _date_param(request, "date_to")
         except ValueError:
-            return Response({"error": "Dates must look like 2026-11-30."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Dates must look like 2026-11-30."}, status=status.HTTP_400_BAD_REQUEST), None
         zone = request.query_params.get("zone") or ""
         performance = request.query_params.get("performance") or ""
         activity = request.query_params.get("activity") or ""
@@ -207,7 +209,7 @@ class TeacherClassReportAPIView(APIView):
         if (zone and zone not in {str(z["id"]) for z in ZONES}) or (performance and performance not in PERFORMANCES) \
                 or (activity and activity not in ACTIVITIES) or (progress_filter and progress_filter not in PROGRESS) \
                 or sort not in SORTS or order not in {"asc", "desc"}:
-            return Response({"error": "A filter or sort value is not valid."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "A filter or sort value is not valid."}, status=status.HTTP_400_BAD_REQUEST), None
 
         attempts_by_user = {}
         for attempt in StudentAttempt.objects.filter(school=school, student__in=[s.user_id for s in students]) \
@@ -272,7 +274,13 @@ class TeacherClassReportAPIView(APIView):
         missing = [r for r in matched if not (sort == "name" or sort_key(r)[0] == 0)]  # no value: always at the end
         present.sort(key=lambda r: (sort_key(r)[1], r["name"].lower()), reverse=(order == "desc"))
         ordered = present + sorted(missing, key=lambda r: r["name"].lower())
+        return None, {"meta": meta, "overview": overview, "ranking": ranking, "ordered": ordered}
 
+    def get(self, request):
+        early, found = self.collect(request)
+        if early is not None:
+            return early
+        ordered = found["ordered"]
         pages = max(1, math.ceil(len(ordered) / PAGE_SIZE))
         try:
             page = min(max(int(request.query_params.get("page") or 1), 1), pages)
@@ -284,9 +292,64 @@ class TeacherClassReportAPIView(APIView):
             return {k: v for k, v in r.items() if not k.startswith("_")}
 
         return Response({
-            **meta, "overview": overview, "page": page, "pages": pages, "total": len(ordered),
+            **found["meta"], "overview": found["overview"], "page": page, "pages": pages, "total": len(ordered),
             "students": [clean(r) for r in window],
             "ranking": {k: [{"id": r["id"], "name": r["name"], "grade": r["grade"], "section": r["section"],
                              "avgAssessment": r["avgAssessment"], "levelsCompleted": r["levelsCompleted"]} for r in v]
-                        for k, v in ranking.items()},
+                        for k, v in found["ranking"].items()},
         })
+
+
+PERFORMANCE_LABELS = {"excellent": "Excellent", "good": "Good", "average": "Average",
+                      "needs_improvement": "Needs Improvement", "not_assessed": "Not assessed"}
+
+
+def _hms(seconds):
+    s = max(int(seconds or 0), 0)
+    return f"{s // 3600:02d}:{s % 3600 // 60:02d}:{s % 60:02d}"
+
+
+class TeacherClassExportAPIView(TeacherClassReportAPIView):
+    """GET /api/cms/v1/teacher/reports/class/export/ with the same filters as the list: an Excel file with a row for every
+    student that matches them (all pages, not only the ten on screen)."""
+
+    def get(self, request):
+        import openpyxl
+        from django.http import HttpResponse
+        from openpyxl.styles import Font, PatternFill
+        from openpyxl.utils import get_column_letter
+
+        early, found = self.collect(request)
+        if early is not None and early.status_code != 200:
+            return early
+        rows = found["ordered"] if found else []
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Class report"
+        head = ["Student", "Student ID", "Roll No", "Class", "Section", "Overall progress %", "Zones completed",
+                "Levels completed", "Levels published", "Avg assessment score %", "Attempts", "Learning time (hh:mm:ss)",
+                "Last active", "Performance", "Activity"]
+        ws.append(head)
+        for cell in ws[1]:
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill("solid", fgColor="2563EB")
+        for r in rows:
+            ws.append([
+                r["name"], r["loginCode"], r["rollNo"] or "", r["grade"] or "", r["section"] or "",
+                r["progress"] if r["progress"] is not None else "", f'{r["zonesCompleted"]}/{r["zonesTotal"]}',
+                r["levelsCompleted"], r["levelsTotal"], r["avgAssessment"] if r["avgAssessment"] is not None else "Not assessed",
+                r["attempts"], _hms(r["learningSeconds"]),
+                r["lastActive"][:16].replace("T", " ") if r["lastActive"] else "",
+                PERFORMANCE_LABELS[r["performance"]], "Active" if r["activity"] == "active" else "Inactive",
+            ])
+        for i, column in enumerate(head, start=1):
+            ws.column_dimensions[get_column_letter(i)].width = max(14, len(column) + 2)
+        ws.column_dimensions["A"].width = 26
+        ws.freeze_panes = "A2"
+        response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        chosen = next((c["name"] for c in (found["meta"]["classes"] if found else [])
+                       if str(c["id"]) == str(request.query_params.get("class_id"))), "")
+        label = f"_{re.sub(r'[^A-Za-z0-9-]+', '-', chosen).strip('-')}" if chosen else ""  # the class in the file name
+        response["Content-Disposition"] = f'attachment; filename="class_report{label}_{timezone.now().date().isoformat()}.xlsx"'
+        wb.save(response)
+        return response
