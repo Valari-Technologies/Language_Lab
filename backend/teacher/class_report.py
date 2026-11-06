@@ -280,8 +280,10 @@ class TeacherClassReportAPIView(APIView):
         class_progress = []
         for class_id, name, _grade, _section in class_keys:
             values = [r["progress"] for r in members_of[class_id] if r["progress"] is not None]
+            scores = [r["avgAssessment"] for r in members_of[class_id] if r["avgAssessment"] is not None]
             class_progress.append({"classId": class_id, "name": name, "students": len(members_of[class_id]),
-                                   "avgProgress": round(sum(values) / len(values), 1) if values else None})
+                                   "avgProgress": round(sum(values) / len(values), 1) if values else None,
+                                   "avgAssessment": round(sum(scores) / len(scores), 1) if scores else None})
         class_progress.sort(key=lambda c: (c["avgProgress"] is None, -(c["avgProgress"] or 0), c["name"]))
         overview["classProgress"] = class_progress
 

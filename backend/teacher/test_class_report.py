@@ -242,11 +242,22 @@ class TeacherClassReportTests(TestCase):
             self._attempt(hell, exp, f"L{n}")  # all 3 of 3: 100%
         for n, exp in enumerate(self.lessons[:3], start=1):
             self._attempt(self.students[0], exp, f"L{n}")  # 3 of 6: 50%; the 24 others are at 0%
+        self._attempt(hell, self.boss, "B1", percentage=90)  # assessment scores: Class 8-A 90%, Class 5-A 60%
+        self._attempt(self.students[0], self.boss, "B1", percentage=60)
         data = self._get()
         progress = data["overview"]["classProgress"]
         self.assertEqual([(c["name"], c["students"], c["avgProgress"]) for c in progress],
                          [("Class 8-A", 1, 100.0), ("Class 5-A", 25, 2.0)])  # the highest class first; (50 + 24 * 0) / 25
+        self.assertEqual({c["name"]: c["avgAssessment"] for c in progress}, {"Class 8-A": 90.0, "Class 5-A": 60.0})
+        self.assertEqual(data["overview"]["avgAssessment"], 75.0)  # the students with a score: (90 + 60) / 2
+        self.assertEqual([c["name"] for c in self._get(class_id=self.class_id)["overview"]["classProgress"]], ["Class 5-A"])
         self.assertEqual(data["overview"]["avgProgress"], 5.8)  # all 26 students together: (100 + 50 + 24 * 0) / 26
+        # a class with no student who has a score has no average (not 0)
+        last_class = Class.objects.create(school=self.school, class_name="Class 6-A", grade=Grade.objects.create(grade_name="Class 6", sort_order=6),
+                                          academic_year="2026-2027")
+        TeacherClass.objects.create(teacher=Teacher.objects.get(user=self.teacher), class_obj=last_class)
+        six = next(c for c in self._get()["overview"]["classProgress"] if c["name"] == "Class 6-A")
+        self.assertEqual((six["students"], six["avgProgress"], six["avgAssessment"]), (0, None, None))
         # one class chosen: the cards and the list count only that class
         five = self._get(class_id=self.class_id)["overview"]
         self.assertEqual([(c["name"], c["avgProgress"]) for c in five["classProgress"]], [("Class 5-A", 2.0)])

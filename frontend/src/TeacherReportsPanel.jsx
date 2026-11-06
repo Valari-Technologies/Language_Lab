@@ -295,7 +295,7 @@ const TeacherReportsPanel = () => {
   const [menu, setMenu] = useState(null);
   const [reportOf, setReportOf] = useState(null); // { student, tab }: the student report page is open
   const [statusList, setStatusList] = useState(null); // 'active' | 'inactive' | 'needs_improvement': the list behind that card is open
-  const [classProgressOpen, setClassProgressOpen] = useState(false); // the progress of each class is open
+  const [classMetric, setClassMetric] = useState(null); // 'progress' | 'score': the number of each class is open
 
   const [downloading, setDownloading] = useState(false);
 
@@ -391,19 +391,24 @@ const TeacherReportsPanel = () => {
 
   const noClass = data && data.classes.length === 0;
   const overview = data ? data.overview : null;
-  // the class with the highest progress, named on the card (two names at most; a tie shows them together)
-  const highestClass = (() => {
-    const ranked = overview ? overview.classProgress.filter(c => c.avgProgress !== null) : [];
+  // the class with the highest value of a field, named on its card (two names at most; a tie shows them together)
+  const highestClass = (field) => {
+    const ranked = overview
+      ? overview.classProgress.filter(c => c[field] !== null).sort((a, b) => b[field] - a[field])
+      : [];
     if (ranked.length < 2) return '';
-    const top = ranked.filter(c => c.avgProgress === ranked[0].avgProgress).map(c => c.name);
-    return `${top.slice(0, 2).join(', ')}${top.length > 2 ? ` +${top.length - 2} more` : ''} (${ranked[0].avgProgress}%)`;
-  })();
+    const top = ranked.filter(c => c[field] === ranked[0][field]).map(c => c.name);
+    return `${top.slice(0, 2).join(', ')}${top.length > 2 ? ` +${top.length - 2} more` : ''} (${ranked[0][field]}%)`;
+  };
   const from = data && data.total > 0 ? (data.page - 1) * data.pageSize + 1 : 0;
   const to = data ? Math.min(data.page * data.pageSize, data.total) : 0;
 
   // the active or inactive students list is a page of its own, with the filters that were chosen
-  if (classProgressOpen && overview) {
-    return <ClassProgressList classes={overview.classProgress} overall={overview.avgProgress} onBack={() => setClassProgressOpen(false)} />;
+  if (classMetric && overview) {
+    return (
+      <ClassProgressList classes={overview.classProgress} metric={classMetric}
+        overall={classMetric === 'score' ? overview.avgAssessment : overview.avgProgress} onBack={() => setClassMetric(null)} />
+    );
   }
 
   if (statusList) {
@@ -453,10 +458,12 @@ const TeacherReportsPanel = () => {
             <Stat label="Total students" value={overview.totalStudents} />
             <Stat label="Active students" value={overview.activeStudents} onClick={() => setStatusList('active')} />
             <Stat label="Inactive students" value={overview.inactiveStudents} onClick={() => setStatusList('inactive')} />
-            <Stat label="Class avg assessment score" value={percent(overview.avgAssessment)} />
+            <Stat label="Class avg assessment score" value={percent(overview.avgAssessment)}
+              hint={highestClass('avgAssessment') ? `Highest: ${highestClass('avgAssessment')}` : undefined}
+              onClick={overview.classProgress.length > 1 ? () => setClassMetric('score') : undefined} action="View all classes ›" />
             <Stat label="Overall class progress" value={percent(overview.avgProgress)}
-              hint={highestClass ? `Highest: ${highestClass}` : undefined}
-              onClick={overview.classProgress.length > 1 ? () => setClassProgressOpen(true) : undefined} action="View all classes ›" />
+              hint={highestClass('avgProgress') ? `Highest: ${highestClass('avgProgress')}` : undefined}
+              onClick={overview.classProgress.length > 1 ? () => setClassMetric('progress') : undefined} action="View all classes ›" />
             <Stat label="Need improvement" value={overview.needsImprovement} onClick={() => setStatusList('needs_improvement')} />
           </div>
 
