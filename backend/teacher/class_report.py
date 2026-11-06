@@ -175,7 +175,7 @@ class TeacherClassReportAPIView(APIView):
         meta = {"classes": class_list, "zones": ZONES, "thresholds": thresholds(),
                 "inactiveAfterDays": settings.REPORT_INACTIVE_AFTER_DAYS, "pageSize": PAGE_SIZE}
         empty = {**meta, "overview": {"totalStudents": 0, "activeStudents": 0, "inactiveStudents": 0,
-                                      "avgAssessment": None, "avgProgress": None, "needsImprovement": 0},
+                                      "avgAssessment": None, "avgProgress": None, "needsImprovement": 0, "classProgress": []},
                  "ranking": {"best": [], "least": []}, "students": [], "page": 1, "pages": 1, "total": 0}
         if not school or not classes:
             return Response(empty), None
@@ -262,6 +262,29 @@ class TeacherClassReportAPIView(APIView):
             "avgProgress": round(sum(progressed) / len(progressed), 1) if progressed else None,
             "needsImprovement": sum(1 for r in scoped if r["performance"] == "needs_improvement"),
         }
+
+        # progress of each class of the teacher (the card names the class with the highest one; clicking it lists them all):
+        # the same average as the card, taken over the students of that class only
+        class_keys, names_seen = [], set()
+        for c in sorted(chosen, key=lambda c: (c.grade.sort_order if c.grade_id else 0, c.class_name)):
+            if c.grade_id and c.class_name not in names_seen:
+                names_seen.add(c.class_name)
+                class_keys.append((c.class_id, c.class_name, _grade_key(c.grade.grade_name), _section_letter(c.class_name)))
+        members_of = {key[0]: [] for key in class_keys}
+        for r in scoped:
+            g, s = _grade_key(r["grade"]), _section_letter(r["section"])
+            match = next((k for k in class_keys if k[2] == g and k[3] == s), None) \
+                or next((k for k in class_keys if k[2] == g and k[3] == ""), None)  # a class without a section letter
+            if match:
+                members_of[match[0]].append(r)
+        class_progress = []
+        for class_id, name, _grade, _section in class_keys:
+            values = [r["progress"] for r in members_of[class_id] if r["progress"] is not None]
+            class_progress.append({"classId": class_id, "name": name, "students": len(members_of[class_id]),
+                                   "avgProgress": round(sum(values) / len(values), 1) if values else None})
+        class_progress.sort(key=lambda c: (c["avgProgress"] is None, -(c["avgProgress"] or 0), c["name"]))
+        overview["classProgress"] = class_progress
+
         # the cards: Best = the Excellent and Good students, Least = the Average and Needs Improvement students; each card
         # shows the three highest (Best) or the three lowest (Least) scores of its group, and clicking it lists the group
         top = sorted((r for r in scoped if r["performance"] in BEST_LEVELS),

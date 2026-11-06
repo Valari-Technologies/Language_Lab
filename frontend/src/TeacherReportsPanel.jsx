@@ -5,6 +5,7 @@ import { formatRollNo, pageItems, titleName } from './format';
 import { savePdf } from './pdf';
 import StudentReportPage from './StudentReportPage';
 import StudentStatusList from './StudentStatusList';
+import ClassProgressList from './ClassProgressList';
 
 // Teacher portal "Reports": results of the students of the grade(s) the teacher teaches.
 // The CMS decides the students from the login (the teacher's own classes), never from the browser.
@@ -65,12 +66,13 @@ const downloadReport = async (s) => {
 };
 
 // A number card; with onClick it is a button that opens the list behind the number
-const Stat = ({ label, value, onClick }) => {
+const Stat = ({ label, value, onClick, hint, action = 'View students ›' }) => {
   const body = (
     <>
       <div style={muted}>{label}</div>
       <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a' }}>{value}</div>
-      {onClick && <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#2563eb' }}>View students ›</div>}
+      {hint && <div style={{ fontSize: '0.74rem', fontWeight: 600, color: '#15803d' }}>{hint}</div>}
+      {onClick && <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#2563eb' }}>{action}</div>}
     </>
   );
   if (!onClick) return <div style={{ ...card, padding: '0.9rem 1.1rem' }}>{body}</div>;
@@ -293,6 +295,7 @@ const TeacherReportsPanel = () => {
   const [menu, setMenu] = useState(null);
   const [reportOf, setReportOf] = useState(null); // { student, tab }: the student report page is open
   const [statusList, setStatusList] = useState(null); // 'active' | 'inactive' | 'needs_improvement': the list behind that card is open
+  const [classProgressOpen, setClassProgressOpen] = useState(false); // the progress of each class is open
 
   const [downloading, setDownloading] = useState(false);
 
@@ -388,10 +391,21 @@ const TeacherReportsPanel = () => {
 
   const noClass = data && data.classes.length === 0;
   const overview = data ? data.overview : null;
+  // the class with the highest progress, named on the card (two names at most; a tie shows them together)
+  const highestClass = (() => {
+    const ranked = overview ? overview.classProgress.filter(c => c.avgProgress !== null) : [];
+    if (ranked.length < 2) return '';
+    const top = ranked.filter(c => c.avgProgress === ranked[0].avgProgress).map(c => c.name);
+    return `${top.slice(0, 2).join(', ')}${top.length > 2 ? ` +${top.length - 2} more` : ''} (${ranked[0].avgProgress}%)`;
+  })();
   const from = data && data.total > 0 ? (data.page - 1) * data.pageSize + 1 : 0;
   const to = data ? Math.min(data.page * data.pageSize, data.total) : 0;
 
   // the active or inactive students list is a page of its own, with the filters that were chosen
+  if (classProgressOpen && overview) {
+    return <ClassProgressList classes={overview.classProgress} overall={overview.avgProgress} onBack={() => setClassProgressOpen(false)} />;
+  }
+
   if (statusList) {
     return <StudentStatusList status={statusList} filterQuery={filterParams().toString()} onBack={() => setStatusList(null)} />;
   }
@@ -440,7 +454,9 @@ const TeacherReportsPanel = () => {
             <Stat label="Active students" value={overview.activeStudents} onClick={() => setStatusList('active')} />
             <Stat label="Inactive students" value={overview.inactiveStudents} onClick={() => setStatusList('inactive')} />
             <Stat label="Class avg assessment score" value={percent(overview.avgAssessment)} />
-            <Stat label="Overall class progress" value={percent(overview.avgProgress)} />
+            <Stat label="Overall class progress" value={percent(overview.avgProgress)}
+              hint={highestClass ? `Highest: ${highestClass}` : undefined}
+              onClick={overview.classProgress.length > 1 ? () => setClassProgressOpen(true) : undefined} action="View all classes ›" />
             <Stat label="Need improvement" value={overview.needsImprovement} onClick={() => setStatusList('needs_improvement')} />
           </div>
 

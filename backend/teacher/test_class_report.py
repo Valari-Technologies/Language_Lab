@@ -35,8 +35,8 @@ class TeacherClassReportTests(TestCase):
         self.students = [self._student(f"S{n:02d}", f"Student {n:02d}", str(n)) for n in range(1, 26)]
         self.seq = 0
 
-    def _published(self, title, kind):
-        exp = Experience.objects.create(title=title, grade=self.grade, subject="English", language="English",
+    def _published(self, title, kind, grade=None):
+        exp = Experience.objects.create(title=title, grade=grade or self.grade, subject="English", language="English",
                                         difficulty="BEGINNER", estimated_duration=10, experience_type=kind,
                                         status="APPROVED", created_by=self.author)
         pkg = PublishedPackage.objects.create(experience=exp, package_name=title, compression_status="COMPLETED")
@@ -230,6 +230,33 @@ class TeacherClassReportTests(TestCase):
         for user in (self.students[0].user, User.objects.create_user(username="adm", password="x", role=User.Role.SCHOOL_ADMIN)):
             self.api.force_authenticate(user)
             self.assertEqual(self.api.get(URL + "export/").status_code, 403)
+
+    def test_progress_of_each_class_of_the_teacher(self):
+        grade8 = Grade.objects.create(grade_name="Class 8", sort_order=8)
+        class_8a = Class.objects.create(school=self.school, class_name="Class 8-A", grade=grade8, academic_year="2026-2027")
+        TeacherClass.objects.create(teacher=Teacher.objects.get(user=self.teacher), class_obj=class_8a)
+        lessons8 = [self._published(f"Eight {n}", "LESSON", grade=grade8) for n in range(1, 4)]  # grade 8 has 3 lessons
+        user = User.objects.create_user(username="HEL-1", password="x", role=User.Role.STUDENT, full_name="Hell")
+        hell = Student.objects.create(user=user, school=self.school, roll_no="1", grade="Class 8", section="A")
+        for n, exp in enumerate(lessons8, start=1):
+            self._attempt(hell, exp, f"L{n}")  # all 3 of 3: 100%
+        for n, exp in enumerate(self.lessons[:3], start=1):
+            self._attempt(self.students[0], exp, f"L{n}")  # 3 of 6: 50%; the 24 others are at 0%
+        data = self._get()
+        progress = data["overview"]["classProgress"]
+        self.assertEqual([(c["name"], c["students"], c["avgProgress"]) for c in progress],
+                         [("Class 8-A", 1, 100.0), ("Class 5-A", 25, 2.0)])  # the highest class first; (50 + 24 * 0) / 25
+        self.assertEqual(data["overview"]["avgProgress"], 5.8)  # all 26 students together: (100 + 50 + 24 * 0) / 26
+        # one class chosen: the cards and the list count only that class
+        five = self._get(class_id=self.class_id)["overview"]
+        self.assertEqual([(c["name"], c["avgProgress"]) for c in five["classProgress"]], [("Class 5-A", 2.0)])
+        self.assertEqual(five["avgProgress"], 2.0)
+        # a class with no student yet is still listed, never as 0%
+        empty = Class.objects.create(school=self.school, class_name="Class 7-A", grade=Grade.objects.create(grade_name="Class 7", sort_order=7),
+                                     academic_year="2026-2027")
+        TeacherClass.objects.create(teacher=Teacher.objects.get(user=self.teacher), class_obj=empty)
+        last = self._get()["overview"]["classProgress"][-1]
+        self.assertEqual((last["name"], last["students"], last["avgProgress"]), ("Class 7-A", 0, None))
 
     def test_class_filter_and_bad_values(self):
         data = self._get()
