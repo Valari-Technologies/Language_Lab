@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { FiBarChart2, FiClock, FiDownload, FiEye, FiMoreVertical, FiX } from 'react-icons/fi';
 import { apiFetch } from './api';
-import { formatRollNo, pageItems, titleName } from './format';
+import { formatRollNo, pageItems, titleName, classLabel } from './format';
 import { savePdf } from './pdf';
 import StudentReportPage from './StudentReportPage';
 import StudentStatusList from './StudentStatusList';
@@ -18,7 +18,6 @@ const percent = (value) => (value === null || value === undefined ? '—' : `${v
 
 const iconBtn = { padding: '6px 9px', display: 'inline-flex', alignItems: 'center' };
 const menuItem = { display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', padding: '0.5rem 1rem', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 };
-const classLabel = (s) => [s.grade, s.section].filter(Boolean).join(' · ') || '—';
 
 const reportRows = (s) => [
   ['Overall progress', s.progress === null ? 'No levels published' : `${s.progress}%`],

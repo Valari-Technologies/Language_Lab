@@ -9,7 +9,14 @@ export const formatRollNo = (rollNo) => {
 // The page numbers a pager shows: three numbers that move with the current page (no dots, no last page).
 // Page 1: 1 2 3, page 2: 2 3 4, page 3: 2 3 4, page 4: 3 4 5, page 5: 4 5 6 ...
 // From page 3 on the current page is in the middle; page 1 stays visible only while you are on it.
-export const pageItems = (page, pages) => {
+// "Class 8 · Section A" for every student, whether the section was saved as "A" or as "Section A"
+export const classLabel = (s) => {
+  const raw = String((s && s.section) || '').trim();
+  const section = raw ? (/^section\b/i.test(raw) ? raw.replace(/^section\s*/i, 'Section ') : `Section ${raw}`) : '';
+  return [s && s.grade, section].filter(Boolean).join(' · ') || '—';
+};
+
+export const pageItems =(page, pages) => {
   if (pages <= 3) return Array.from({ length: pages }, (_, i) => i + 1);
   const start = Math.min(page === 1 ? 1 : Math.max(2, page - 1), pages - 2);
   return [start, start + 1, start + 2];

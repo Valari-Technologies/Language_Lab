@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { FiArrowLeft, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import { apiFetch } from './api';
-import { formatRollNo } from './format';
+import { formatRollNo, classLabel } from './format';
 
 // Teacher Reports: the report of one student across the 6 zones, their levels, assessments, progress and activity.
 // Missing data is shown as "Not captured" / "—" and never as a 0.
@@ -135,7 +135,7 @@ const StudentReportPage = ({ student, initialTab = 'overview', onBack, onOpenDay
             <div style={{ flex: 1, minWidth: '220px' }}>
               <h2 style={{ margin: 0, fontSize: '1.3rem', color: '#0f172a' }}>{o.name}</h2>
               <div style={muted}>
-                Student ID {o.loginCode} · Roll No {formatRollNo(o.rollNo) || '—'} · {[o.grade, o.section].filter(Boolean).join(' · ') || '—'}
+                Student ID {o.loginCode} · Roll No {formatRollNo(o.rollNo) || '—'} · {classLabel(o)}
               </div>
             </div>
             <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>

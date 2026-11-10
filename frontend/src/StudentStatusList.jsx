@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { FiArrowLeft, FiBarChart2 } from 'react-icons/fi';
 import { apiFetch } from './api';
-import { formatRollNo, pageItems, titleName } from './format';
+import { formatRollNo, pageItems, titleName, classLabel } from './format';
 
 // Teacher Reports: the page behind the "Active students", "Inactive students" and "Need improvement" cards: who they are,
 // with class and roll no. It uses the filters that were chosen when the card was clicked (the card's own one replaces
@@ -95,7 +95,7 @@ const StudentStatusList = ({ status, filterQuery, onBack }) => {
                   {data.students.map(s => (
                     <tr key={s.id}>
                       <td>{titleName(s.name) || s.name}<div style={muted}>{s.loginCode}</div></td>
-                      <td>{[s.grade, s.section].filter(Boolean).join(' · ') || '—'}</td>
+                      <td>{classLabel(s)}</td>
                       <td>{formatRollNo(s.rollNo) || '—'}</td>
                       {kind.score && <td style={{ fontWeight: 700 }}>{s.avgAssessment === null ? '—' : `${s.avgAssessment}%`}</td>}
                       {kind.level && <td>{LEVELS[s.performance] || '—'}</td>}
