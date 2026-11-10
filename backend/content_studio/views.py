@@ -72,7 +72,12 @@ class ExperienceViewSet(viewsets.ModelViewSet):
         # Filter for school tenants (only show published experiences within tenant scope)
         role = getattr(self.request.user, "role", None)
         if role in ["SCHOOL_ADMIN", "TEACHER", "STUDENT"]:
-            queryset = queryset.filter(status__in=["APPROVED", "PUBLISHED"])
+            from django.db.models import Q as _Q
+            visible = _Q(status__in=["APPROVED", "PUBLISHED"])
+            if self.action == "preview":
+                # a lesson already published stays viewable while a newer version waits for approval
+                visible |= _Q(published_package__isnull=False)
+            queryset = queryset.filter(visible)
             from accounts.scoping import get_user_school
             school = get_user_school(self.request.user)
             if school is None:

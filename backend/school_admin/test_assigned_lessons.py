@@ -57,6 +57,13 @@ class AssignedLessonsDifficultyTests(TestCase):
         api.force_authenticate(teacher)
         self.assertEqual(api.get(f"/api/v1/content/experiences/{mine.id}/preview/").status_code, 200)
         self.assertEqual(api.get(f"/api/v1/content/experiences/{elsewhere.id}/preview/").status_code, 404)  # not theirs
+        # a published lesson whose newer version waits for approval can still be viewed; an unpublished draft cannot
+        from content_studio.models import PublishedPackage
+        mine.status = "PENDING_APPROVAL"
+        mine.save()
+        self.assertEqual(api.get(f"/api/v1/content/experiences/{mine.id}/preview/").status_code, 404)
+        PublishedPackage.objects.create(experience=mine, package_name="Mine", compression_status="COMPLETED")
+        self.assertEqual(api.get(f"/api/v1/content/experiences/{mine.id}/preview/").status_code, 200)
         student = User.objects.create_user(username="kid", password="x", role=User.Role.STUDENT)
         api.force_authenticate(student)
         self.assertEqual(api.get(f"/api/v1/content/experiences/{mine.id}/preview/").status_code, 403)
