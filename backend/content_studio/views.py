@@ -55,6 +55,9 @@ class ExperienceViewSet(viewsets.ModelViewSet):
         if self.action in ("list", "retrieve", "activities"):
             from accounts.permissions import IsContentCreatorOrSuperAdminOrSchoolUser
             return [IsAuthenticated(), IsContentCreatorOrSuperAdminOrSchoolUser()]
+        if self.action == "preview" and getattr(self.request.user, "role", None) in ("TEACHER", "SCHOOL_ADMIN"):
+            # a teacher or school admin views the lessons of their own school; get_queryset limits which ones
+            return [IsAuthenticated()]
         if self.action in ("destroy", "preview"):
             return [IsAuthenticated(), IsContentCreatorOrSuperAdmin()]
         return [IsAuthenticated(), IsContentCreator()]

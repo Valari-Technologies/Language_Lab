@@ -214,6 +214,7 @@ class ClassSerializer(serializers.ModelSerializer):
             source = by_id.get(ref_id(a.experience_ref))  # the lesson's own difficulty, not a fixed value
             results.append({
                 "id": a.id,
+                "experience_id": source.id if source else None,  # opens the lesson preview
                 "experience_ref": ref,
                 "experience_title": title,
                 "subject": (source.subject if source else None) or "General",
@@ -241,6 +242,7 @@ class ClassSerializer(serializers.ModelSerializer):
                     seen_refs.add(title)
                     results.append({
                         "id": exp.id,
+                        "experience_id": exp.id,
                         "experience_ref": ref,
                         "experience_title": title,
                         "subject": exp.subject or "English",

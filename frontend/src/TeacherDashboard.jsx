@@ -34,6 +34,7 @@ import roundLogo from './assets/favicon.png';
 import AvatarCropperModal from './AvatarCropperModal';
 import HelpSupportModal from './HelpSupportModal';
 import TeacherReportsPanel from './TeacherReportsPanel';
+import LessonPreview from './LessonPreview';
 
 const sortClasses = (classesList) => {
   if (!Array.isArray(classesList)) return [];
@@ -454,6 +455,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [showClassCrudDetailModal, setShowClassCrudDetailModal] = useState(false);
   const [classDetailTab, setClassDetailTab] = useState('lessons'); // 'lessons' | 'overview'
   const [classLessonSearch, setClassLessonSearch] = useState('');
+  const [viewLesson, setViewLesson] = useState(null); // the lesson card opened with its View button: { id, title }
   const [selectedStudentCrudDetail, setSelectedStudentCrudDetail] = useState(null);
   const [showStudentCrudDetailModal, setShowStudentCrudDetailModal] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null); // { id, type }
@@ -2921,7 +2923,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', minHeight: '600px', backgroundColor: 'transparent', zIndex: 900, display: 'flex', flexDirection: 'column', padding: '1.5rem' }}>
                 <div style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <button
-                    onClick={() => setShowClassCrudDetailModal(false)}
+                    onClick={() => { setViewLesson(null); setShowClassCrudDetailModal(false); }}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#4f46e5', fontWeight: 600, fontSize: '0.9rem', padding: 0 }}
                   >
                     ← Back to Classes
@@ -2978,7 +2980,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         {selectedClassCrudDetail.is_active ? 'Active Class' : 'Inactive'}
                       </span>
                     </div>
-                    {classDetailTab === 'lessons' && (
+                    {classDetailTab === 'lessons' && !viewLesson && (
                       <div style={{ position: 'relative' }}>
                         <FiSearch style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: '0.85rem' }} />
                         <input
@@ -3020,7 +3022,9 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                      {filteredLessons.length > 0 ? (
+                      {viewLesson ? (
+                        <LessonPreview experienceId={viewLesson.id} title={viewLesson.title} onBack={() => setViewLesson(null)} />
+                      ) : filteredLessons.length > 0 ? (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
                           {filteredLessons.map((lesson, idx) => (
                             <div
@@ -3060,6 +3064,15 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                 <span>Ref: {lesson.experience_ref}</span>
                                 <span>Assigned: {lesson.assigned_at ? new Date(lesson.assigned_at).toLocaleDateString() : 'N/A'}</span>
                               </div>
+                              {lesson.experience_id && (
+                                <button
+                                  type="button"
+                                  onClick={() => setViewLesson({ id: lesson.experience_id, title: lesson.experience_title })}
+                                  style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '0.4rem 0.9rem', fontSize: '0.8rem', fontWeight: 700, color: '#4f46e5', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: '8px', cursor: 'pointer' }}
+                                >
+                                  <FiEye /> View
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>

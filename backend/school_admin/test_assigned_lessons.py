@@ -37,3 +37,26 @@ class AssignedLessonsDifficultyTests(TestCase):
         self.assertEqual((lessons["Hard one"]["difficulty"], lessons["Hard one"]["difficulty_display"]), ("MASTER", "Master"))
         self.assertEqual(lessons["Hard one"]["subject"], "Grammar")
         self.assertEqual(lessons["Not in Content Studio"]["difficulty"], "INTERMEDIATE")  # no lesson to read it from
+
+    def test_teacher_views_a_lesson_of_the_class(self):
+        from rest_framework.test import APIClient
+        from school_admin.models import Teacher, TeacherClass
+        mine = self._lesson("Mine", "BEGINNER")
+        mine.status = "APPROVED"
+        mine.save()
+        self._assign(str(mine.id), mine.title)
+        data = {l["experience_title"]: l for l in ClassSerializer(self.klass).data["assigned_lessons"]}
+        self.assertEqual(data["Mine"]["experience_id"], mine.id)  # the card's View button opens this lesson
+
+        other_grade = Grade.objects.create(grade_name="Class 9", sort_order=9)
+        elsewhere = Experience.objects.create(title="Elsewhere", grade=other_grade, subject="English", language="English",
+                                              difficulty="BEGINNER", estimated_duration=10, status="APPROVED", created_by=self.author)
+        teacher = User.objects.create_user(username="teach", password="x", role=User.Role.TEACHER)
+        TeacherClass.objects.create(teacher=Teacher.objects.create(user=teacher, school=self.school), class_obj=self.klass)
+        api = APIClient()
+        api.force_authenticate(teacher)
+        self.assertEqual(api.get(f"/api/v1/content/experiences/{mine.id}/preview/").status_code, 200)
+        self.assertEqual(api.get(f"/api/v1/content/experiences/{elsewhere.id}/preview/").status_code, 404)  # not theirs
+        student = User.objects.create_user(username="kid", password="x", role=User.Role.STUDENT)
+        api.force_authenticate(student)
+        self.assertEqual(api.get(f"/api/v1/content/experiences/{mine.id}/preview/").status_code, 403)
