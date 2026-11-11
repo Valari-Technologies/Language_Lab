@@ -2650,40 +2650,6 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     </div>
                   </div>
 
-                  {/* License Overview Card */}
-                  <div className="sd-card" style={{ padding: '2rem', marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
-                      <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>License Management</h3>
-                      {selectedSchoolDetail.license ? (
-                        <span className={`sd-badge sd-badge-${selectedSchoolDetail.license.status?.toLowerCase()}`} style={{ display: 'inline-flex' }}>
-                          {selectedSchoolDetail.license.status}
-                        </span>
-                      ) : (
-                        <span className="sd-badge sd-badge-inactive">No License</span>
-                      )}
-                    </div>
-
-                    {selectedSchoolDetail.license ? (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.55rem', fontSize: '0.85rem', color: '#334155' }}>
-                        <div>
-                          <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>License ID</span>
-                          <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.license.licenseId}</strong>
-                        </div>
-                        <div>
-                          <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Issue Date</span>
-                          <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.license.issueDate}</strong>
-                        </div>
-                        <div>
-                          <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Expiry Date</span>
-                          <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.license.expiryDate}</strong>
-                        </div>
-
-                      </div>
-                    ) : (
-                      <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>No license details available.</p>
-                    )}
-                  </div>
-
                   {/* Registered LMS Servers Card */}
                   <div className="sd-card" style={{ padding: '2rem', marginTop: '1.5rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
