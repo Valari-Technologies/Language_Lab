@@ -814,6 +814,44 @@ class LicenseStatusAPIView(APIView):
         return answer("ACTIVE", "Licence is active.")
 
 
+def _notify_school_admin_lms_status(server, action_type="disabled"):
+    try:
+        from content_studio.models import Notification
+        school = server.school
+        if not school:
+            return
+
+        admin_users = set()
+        if school.schoolAdminId:
+            admin_users.add(school.schoolAdminId)
+        for prof in SchoolAdminProfile.objects.filter(school=school).select_related("user"):
+            admin_users.add(prof.user)
+
+        key_display = server.licenseKey or server.installationId
+        if action_type == "disabled":
+            title = "LMS Hub Disabled"
+            message = f"Your LMS key code ({key_display}) for server '{server.serverName}' has been disabled by Super Admin."
+            notif_type = Notification.NotificationType.WARNING
+        elif action_type == "deleted":
+            title = "LMS Hub Server Deleted"
+            message = f"Your LMS server '{server.serverName}' (key: {key_display}) has been deleted and revoked by Super Admin."
+            notif_type = Notification.NotificationType.ERROR
+        else:
+            title = "LMS Hub Enabled"
+            message = f"Your LMS key code ({key_display}) for server '{server.serverName}' has been enabled by Super Admin."
+            notif_type = Notification.NotificationType.INFO
+
+        for u in admin_users:
+            Notification.objects.create(
+                user=u,
+                title=title,
+                message=message,
+                notification_type=notif_type,
+            )
+    except Exception as e:
+        logger.error(f"Error notifying school admin of LMS status: {e}")
+
+
 class LmsServerViewSet(CMSBaseViewSet):
     permission_classes = [IsAuthenticated, IsSuperAdminOrReadOnlyStaff]
     queryset = LmsServer.objects.all().select_related("school", "license")
@@ -821,12 +859,20 @@ class LmsServerViewSet(CMSBaseViewSet):
     lookup_field = "installationId"
     lookup_value_regex = "[^/]+"
 
+    def perform_destroy(self, instance):
+        _notify_school_admin_lms_status(instance, action_type="deleted")
+        super().perform_destroy(instance)
+
     @action(detail=True, methods=["post"], url_path="toggle-status")
     def toggle_status(self, request, installationId=None):
         server = self.get_object()
         new_status = LmsServer.Status.DEACTIVATED if server.status == LmsServer.Status.ACTIVE else LmsServer.Status.ACTIVE
         server.status = new_status
         server.save(update_fields=["status"])
+        if new_status == LmsServer.Status.DEACTIVATED:
+            _notify_school_admin_lms_status(server, action_type="disabled")
+        else:
+            _notify_school_admin_lms_status(server, action_type="enabled")
         return Response({
             "status": "success",
             "message": f"Server '{server.serverName}' is now {'active' if new_status == LmsServer.Status.ACTIVE else 'disabled'}.",
@@ -838,6 +884,7 @@ class LmsServerViewSet(CMSBaseViewSet):
         server = self.get_object()
         server.status = LmsServer.Status.DEACTIVATED
         server.save(update_fields=["status"])
+        _notify_school_admin_lms_status(server, action_type="disabled")
         return Response({
             "status": "success",
             "message": f"Server '{server.serverName}' has been disabled.",
@@ -851,6 +898,7 @@ class LmsServerViewSet(CMSBaseViewSet):
             return Response({"error": f"Cannot activate server. School license is {server.license.status}."}, status=status.HTTP_400_BAD_REQUEST)
         server.status = LmsServer.Status.ACTIVE
         server.save(update_fields=["status"])
+        _notify_school_admin_lms_status(server, action_type="enabled")
         return Response({
             "status": "success",
             "message": f"Server '{server.serverName}' has been enabled.",

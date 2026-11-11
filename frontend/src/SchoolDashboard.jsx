@@ -714,10 +714,14 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     finally { setLoading(false); }
   };
 
-  /* ── Clock ticker ── */
+  /* ── Clock ticker & Notification poller ── */
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
-    return () => clearInterval(timer);
+    const notifTimer = setInterval(loadNotifications, 30000);
+    return () => {
+      clearInterval(timer);
+      clearInterval(notifTimer);
+    };
   }, []);
 
   /* ── Dismiss notification and action dropdown on outside click ── */
@@ -3171,7 +3175,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <div className="sd-card-header">
                       <div className="sd-card-title">Class Performance Analysis</div>
                     </div>
-                    <div className="sd-table-wrap">
+                    <div className="sd-table-wrap" style={{ minHeight: '440px' }}>
                       <table className="sd-table">
                         <thead>
                           <tr>
@@ -3224,7 +3228,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           style={{ height:'36px', padding:'0 0.7rem', display:'inline-flex', alignItems:'center' }}><FiDownload /></button>
                       </div>
                     </div>
-                    <div className="sd-table-wrap">
+                    <div className="sd-table-wrap" style={{ minHeight: '440px' }}>
                       <table className="sd-table">
                         <thead>
                           <tr>
@@ -3276,7 +3280,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         {[3, 4, 5, 6, 7, 8].map(n => <option key={n} value={String(n)}>Class {n}</option>)}
                       </select>
                     </div>
-                    <div className="sd-table-wrap">
+                    <div className="sd-table-wrap" style={{ minHeight: '440px' }}>
                       <table className="sd-table">
                         <thead>
                           <tr>
@@ -3316,7 +3320,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             </>
           )}
 
-          {activeSubTab === 'lms-hub' && !isAnyOverlayOpen && <LmsHubPanel />}
+          {activeSubTab === 'lms-hub' && !isAnyOverlayOpen && (
+            <LmsHubPanel onActivated={(msg) => {
+              setSuccessMsg(msg);
+              loadNotifications();
+            }} />
+          )}
 
           {activeSubTab === 'profile' && !isAnyOverlayOpen && (
             <div style={{ padding: '0.5rem', width: '100%', maxWidth: '1100px', margin: '0 auto' }}>

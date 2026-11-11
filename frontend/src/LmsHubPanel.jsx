@@ -12,7 +12,7 @@ const muted = { color: '#64748b', fontSize: '0.8rem' };
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString() : '—');
 const clock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
-const LmsHubPanel = () => {
+const LmsHubPanel = ({ onActivated }) => {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -74,6 +74,10 @@ const LmsHubPanel = () => {
       if (res.ok) {
         setKeyInput('');
         setLocked(false);
+        setMessage('LMS Hub activated successfully.');
+        if (typeof onActivated === 'function') {
+          onActivated('LMS Hub activated successfully!');
+        }
         load();
       } else {
         setKeyError(body.message || 'This is not an LMS key of your school.');

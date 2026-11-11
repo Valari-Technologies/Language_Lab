@@ -234,4 +234,33 @@ class LmsHubUnlockAPIView(APIView):
             school=school,
             defaults={"license_key_hash": typed_hash, "unlocked_at": timezone.now(), "unlocked_by": request.user},
         )
+
+        # Mark matching server as synced/activated
+        matching_servers = LmsServer.objects.filter(school=school, licenseKey__iexact=typed)
+        if matching_servers.exists():
+            matching_servers.update(lastSyncTime=timezone.now(), status=LmsServer.Status.ACTIVE)
+        else:
+            LmsServer.objects.filter(school=school, status=LmsServer.Status.ACTIVE, lastSyncTime__isnull=True).update(lastSyncTime=timezone.now())
+
+        # Notify School Admin(s)
+        try:
+            from content_studio.models import Notification
+            from super_admin.models import SchoolAdminProfile
+            admin_users = set()
+            if school.schoolAdminId:
+                admin_users.add(school.schoolAdminId)
+            for prof in SchoolAdminProfile.objects.filter(school=school).select_related('user'):
+                admin_users.add(prof.user)
+            admin_users.add(request.user)
+
+            for u in admin_users:
+                Notification.objects.create(
+                    user=u,
+                    title="LMS Hub Activated",
+                    message="LMS Hub has been activated successfully.",
+                    notification_type=Notification.NotificationType.INFO,
+                )
+        except Exception:
+            pass
+
         return Response({"ok": True, "message": "The LMS Hub is unlocked for your school."})

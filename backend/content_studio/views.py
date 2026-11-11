@@ -904,11 +904,98 @@ class DashboardRecentActivityAPIView(APIView):
         return Response(recent_activities, status=status.HTTP_200_OK)
 
 
+def _check_and_generate_lms_expiry_notifications(user):
+    try:
+        from django.utils import timezone
+        from super_admin.models import School, LmsServer, License, SchoolAdminProfile
+        from accounts.scoping import get_user_school
+        today = timezone.now().date()
+
+        def _notify_admins_for_key(school, key_display, diff_days, exp_date):
+            admin_users = set()
+            if school.schoolAdminId:
+                admin_users.add(school.schoolAdminId)
+            for prof in SchoolAdminProfile.objects.filter(school=school).select_related("user"):
+                admin_users.add(prof.user)
+
+            if diff_days == 1:
+                title = "LMS Key Expiring Tomorrow"
+                msg = f"Tomorrow your LMS key code ({key_display}) will expire ({exp_date})."
+                notif_type = Notification.NotificationType.WARNING
+            elif diff_days <= 0:
+                title = "LMS Key Expired"
+                msg = f"Now your LMS key code ({key_display}) has expired."
+                notif_type = Notification.NotificationType.ERROR
+            else:
+                return
+
+            for u in admin_users:
+                if not Notification.objects.filter(user=u, title=title, message=msg, created_at__date=today).exists():
+                    Notification.objects.create(
+                        user=u,
+                        title=title,
+                        message=msg,
+                        notification_type=notif_type,
+                    )
+
+        if user.role == "SCHOOL_ADMIN":
+            school = get_user_school(user)
+            if school:
+                servers = LmsServer.objects.filter(school=school, status=LmsServer.Status.ACTIVE)
+                for srv in servers:
+                    exp = srv.expiryDate or (srv.license and srv.license.expiryDate)
+                    if exp:
+                        diff = (exp - today).days
+                        _notify_admins_for_key(school, srv.licenseKey or srv.serverName, diff, exp)
+
+                lic = getattr(school, "school_license", None) or getattr(school, "licenseId", None)
+                if lic and lic.expiryDate:
+                    diff = (lic.expiryDate - today).days
+                    _notify_admins_for_key(school, lic.licenseKey or "Primary License", diff, lic.expiryDate)
+
+        elif user.role == "SUPER_ADMIN" or user.is_superuser:
+            servers = LmsServer.objects.filter(status=LmsServer.Status.ACTIVE).select_related("school", "license")
+            for srv in servers:
+                exp = srv.expiryDate or (srv.license and srv.license.expiryDate)
+                if not exp:
+                    continue
+                diff = (exp - today).days
+                school_name = srv.school.school_name if srv.school else "School"
+                key_display = srv.licenseKey or srv.serverName
+
+                if srv.school:
+                    _notify_admins_for_key(srv.school, key_display, diff, exp)
+
+                if diff == 1:
+                    title = "LMS Key Expiring Tomorrow"
+                    msg = f"Tomorrow school '{school_name}' LMS key code ({key_display}) will expire ({exp})."
+                    if not Notification.objects.filter(user=user, title=title, message=msg, created_at__date=today).exists():
+                        Notification.objects.create(
+                            user=user,
+                            title=title,
+                            message=msg,
+                            notification_type=Notification.NotificationType.WARNING,
+                        )
+                elif diff <= 0:
+                    title = "LMS Key Expired"
+                    msg = f"School '{school_name}' LMS key code ({key_display}) has expired."
+                    if not Notification.objects.filter(user=user, title=title, message=msg, created_at__date=today).exists():
+                        Notification.objects.create(
+                            user=user,
+                            title=title,
+                            message=msg,
+                            notification_type=Notification.NotificationType.ERROR,
+                        )
+    except Exception as e:
+        logger.error(f"Error checking LMS expiry notifications: {e}")
+
+
 class DashboardNotificationsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
+        _check_and_generate_lms_expiry_notifications(user)
         notifications = list(Notification.objects.filter(user=user).order_by("-created_at")[:15])
 
         if not notifications:

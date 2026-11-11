@@ -2732,15 +2732,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                   </span>
                                 </td>
                                 <td>
-                                  {server.status === 'ACTIVE' && !server.lastSyncTime ? (
-                                    <span className="sd-badge" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
-                                      Not Installed
-                                    </span>
-                                  ) : (
-                                    <span className={`sd-badge sd-badge-${server.status?.toLowerCase()}`}>
-                                      {server.status === 'ACTIVE' ? 'Active' : server.status}
-                                    </span>
-                                  )}
+                                  <span className={`sd-badge ${server.status === 'ACTIVE' ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                                    {server.status === 'ACTIVE' ? 'Active' : (server.status === 'DEACTIVATED' ? 'Disabled' : server.status)}
+                                  </span>
                                 </td>
                                 <td>
                                   <span style={{ fontSize: '0.8rem', color: '#334155', whiteSpace: 'nowrap' }}>
