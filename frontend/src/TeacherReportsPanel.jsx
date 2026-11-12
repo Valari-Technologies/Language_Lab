@@ -51,11 +51,12 @@ const downloadReport = async (s, fallbackSchool = '', fallbackTeacher = '') => {
   await savePdf({
     file: `report_${s.loginCode || s.id}.pdf`,
     title: 'Student Report',
-    subtitle: `${s.name} · ${classLabel(s)}${schoolName ? ` · ${schoolName}` : ''}${teacherName ? ` · Teacher: ${teacherName}` : ''}`,
+    schoolName,
+    teacherName,
     tables: [
       {
-        head: ['Student', 'Login code', 'Roll No', 'Class', 'School Name', 'Teacher Name'],
-        body: [[s.name, s.loginCode, s.rollNo, classLabel(s), schoolName || '—', teacherName || '—']],
+        head: ['Student', 'Login code', 'Roll No', 'Class'],
+        body: [[s.name, s.loginCode, s.rollNo, classLabel(s)]],
       },
       { heading: 'Performance', head: reportRows(s).map(([label]) => label), body: [reportRows(s).map(([, value]) => value)] },
       {
@@ -159,13 +160,13 @@ const StudentDayReport = ({ student, onClose, fallbackSchool = '', fallbackTeach
   const download = () => savePdf({
     file: `report_${student.loginCode || student.id}_${dayKey}.pdf`,
     title: 'Student Day Report',
-    subtitle: `${student.name} · Roll No ${student.rollNo || '—'} · Class ${classLabel(student)}${resolvedSchool ? ` · ${resolvedSchool}` : ''}${resolvedTeacher ? ` · Teacher: ${resolvedTeacher}` : ''} · ${dayKey}`,
+    schoolName: resolvedSchool,
+    teacherName: resolvedTeacher,
+    subtitle: `${student.name} · Roll No ${student.rollNo || '—'} · Class ${classLabel(student)} · ${dayKey}`,
     tables: [
       {
         head: ['Item', 'Value'],
         body: [
-          ...(resolvedSchool ? [['School Name', resolvedSchool]] : []),
-          ...(resolvedTeacher ? [['Teacher Name', resolvedTeacher]] : []),
           ...cards,
           ['Time online', hms(report.onlineSeconds)],
         ],
@@ -354,7 +355,9 @@ const TeacherReportsPanel = ({ user, schoolName: propSchoolName }) => {
       await savePdf({
         file: `class_report${chosen ? `_${chosen.name.replace(/[^A-Za-z0-9-]+/g, '-')}` : ''}_${new Date().toISOString().slice(0, 10)}.pdf`,
         title: 'Class Report',
-        subtitle: `${chosen ? chosen.name : 'All my classes'}${currentSchoolName ? ` · ${currentSchoolName}` : ''}${currentTeacherName ? ` · Teacher: ${currentTeacherName}` : ''} · ${students.length} ${students.length === 1 ? 'student' : 'students'} · ${new Date().toLocaleDateString()}`,
+        schoolName: currentSchoolName,
+        teacherName: currentTeacherName,
+        subtitle: `${chosen ? chosen.name : 'All my classes'} · ${students.length} ${students.length === 1 ? 'student' : 'students'} · ${new Date().toLocaleDateString()}`,
         landscape: true,
         tables: [{
           head: ['Student', 'Roll No', 'Class', 'Overall Progress', 'Avg Assessment', 'Attempts', 'Learning Time', 'Last Active', 'Status'],
