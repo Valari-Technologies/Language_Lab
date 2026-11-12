@@ -21,7 +21,9 @@ def _normalize_key(key):
 
 
 def _valid_key_hashes(school):
-    """Hashes of the keys that open the school's LMS Hub: its licence key and the keys of its ACTIVE LMS servers."""
+    """Hashes of the keys that open the school's LMS Hub: its licence key and the keys of its ACTIVE,
+    non-expired LMS servers.  A key whose expiryDate is today or in the past is treated as invalid."""
+    today = timezone.now().date()
     keys = []
     lic = license_state(school)["license"]
     if lic and lic.licenseKey:
@@ -29,6 +31,8 @@ def _valid_key_hashes(school):
     keys += list(
         LmsServer.objects.filter(school=school, status=LmsServer.Status.ACTIVE)
         .exclude(licenseKey__isnull=True).exclude(licenseKey="")
+        # Exclude servers whose expiry date has already passed (expired today counts as expired)
+        .exclude(expiryDate__isnull=False, expiryDate__lte=today)
         .values_list("licenseKey", flat=True)
     )
     return {sha256_hex(_normalize_key(k)) for k in keys if _normalize_key(k)}

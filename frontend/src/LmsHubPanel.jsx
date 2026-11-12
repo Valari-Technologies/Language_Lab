@@ -177,7 +177,14 @@ const LmsHubPanel = ({ onActivated }) => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {data.lmsServers.map((s, i) => {
                   const off = s.status !== 'ACTIVE';
-                  const badge = off ? ['Deactivated', '#b91c1c', '#fef2f2'] : s.activated ? ['Activated', '#166534', '#f0fdf4'] : ['Not activated yet', '#b45309', '#fffbeb'];
+                  const isExpired = s.expiryDate && new Date(`${s.expiryDate}T23:59:59`) <= new Date();
+                  const badge = off
+                    ? ['Deactivated', '#b91c1c', '#fef2f2']
+                    : isExpired
+                      ? ['Expired', '#b91c1c', '#fef2f2']
+                      : s.activated
+                        ? ['Activated', '#166534', '#f0fdf4']
+                        : ['Not activated yet', '#b45309', '#fffbeb'];
                   return (
                     <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.75rem 0.9rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
@@ -186,7 +193,7 @@ const LmsHubPanel = ({ onActivated }) => {
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.5rem' }}>
                         <div><div style={muted}>Activated on</div><div style={{ fontSize: '0.85rem', color: '#0f172a' }}>{s.activated ? fmt(s.activatedAt) : '—'}</div></div>
-                        <div><div style={muted}>Expires on</div><div style={{ fontSize: '0.85rem', color: '#0f172a' }}>{s.expiryDate ? new Date(`${s.expiryDate}T00:00:00`).toLocaleDateString() : '—'}</div></div>
+                        <div><div style={muted}>Expires on</div><div style={{ fontSize: '0.85rem', color: isExpired ? '#b91c1c' : '#0f172a', fontWeight: isExpired ? 700 : 400 }}>{s.expiryDate ? new Date(`${s.expiryDate}T00:00:00`).toLocaleDateString() : '—'}</div></div>
                         <div><div style={muted}>User capacity</div><div style={{ fontSize: '0.85rem', color: '#0f172a' }}>{s.userCapacity} users</div></div>
                       </div>
                     </div>
