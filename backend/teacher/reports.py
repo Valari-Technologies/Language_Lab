@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.names import title_name
 from accounts.permissions import IsTeacher
 from accounts.scoping import get_user_school
 from assessments.models import StudentAttempt
@@ -188,9 +189,13 @@ class TeacherStudentDayReportAPIView(APIView):
                 spans.append((s, stop, active))
         online = sum(max(int((min(stop, end) - max(s.created_at, start)).total_seconds()), 0) for s, stop, _ in spans)
         last = spans[-1] if spans else None
+        teacher_name = title_name(request.user.full_name) or request.user.full_name or request.user.username
+        school_name = school.school_name if school else ""
         return Response({
             "studentId": student.student_id,
             "name": student.user.full_name or student.user.username,
+            "schoolName": school_name,
+            "teacherName": teacher_name,
             "completedLessons": len(lessons),
             "lessonSeconds": lesson_seconds,
             "remainingLessons": len(remaining),

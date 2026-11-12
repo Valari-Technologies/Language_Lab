@@ -129,6 +129,7 @@ def _student_row(student, attempts, last_session, gmap, now):
         "rollNo": student.roll_no,
         "grade": student.grade,
         "section": student.section,
+        "schoolName": student.school.school_name if (student and student.school) else "",
         "progress": progress,
         "zonesCompleted": zones_done,
         "zonesTotal": len(ZONES),
@@ -172,8 +173,11 @@ class TeacherClassReportAPIView(APIView):
             if c.class_name not in seen:
                 seen.add(c.class_name)
                 class_list.append({"id": c.class_id, "name": c.class_name})
+        teacher_name = title_name(request.user.full_name) or request.user.full_name or request.user.username
+        school_name = school.school_name if school else ""
         meta = {"classes": class_list, "zones": ZONES, "thresholds": thresholds(),
-                "inactiveAfterDays": settings.REPORT_INACTIVE_AFTER_DAYS, "pageSize": PAGE_SIZE}
+                "inactiveAfterDays": settings.REPORT_INACTIVE_AFTER_DAYS, "pageSize": PAGE_SIZE,
+                "schoolName": school_name, "teacherName": teacher_name}
         empty = {**meta, "overview": {"totalStudents": 0, "activeStudents": 0, "inactiveStudents": 0,
                                       "avgAssessment": None, "avgProgress": None, "needsImprovement": 0, "classProgress": []},
                  "ranking": {"best": [], "least": []}, "students": [], "page": 1, "pages": 1, "total": 0}

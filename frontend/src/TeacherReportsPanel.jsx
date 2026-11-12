@@ -29,23 +29,34 @@ const reportRows = (s) => [
 ];
 
 // The student's PDF: details, performance, then every lesson and assessment attempt with when it started and ended
-const downloadReport = async (s) => {
+const downloadReport = async (s, fallbackSchool = '', fallbackTeacher = '') => {
   let attempts = [];
+  let reportData = null;
   try {
     const res = await apiFetch(`/api/cms/v1/teacher/reports/students/${s.id}/report/`);
-    if (res.ok) attempts = (await res.json()).attempts || [];
+    if (res.ok) {
+      reportData = await res.json();
+      attempts = reportData.attempts || [];
+    }
   } catch (e) {
     // without the attempts the PDF still has the details and the performance
   }
   const status = (a) => String(a.status || '').replace('_', ' ');
   const lessons = attempts.filter(a => a.kind === 'lesson');
   const assessments = attempts.filter(a => a.kind === 'assessment');
+
+  const schoolName = reportData?.schoolName || reportData?.overview?.schoolName || s?.schoolName || fallbackSchool || localStorage.getItem('teacher_school_name') || '';
+  const teacherName = reportData?.teacherName || reportData?.overview?.teacherName || s?.teacherName || fallbackTeacher || '';
+
   await savePdf({
     file: `report_${s.loginCode || s.id}.pdf`,
     title: 'Student Report',
-    subtitle: `${s.name} · ${classLabel(s)}`,
+    subtitle: `${s.name} · ${classLabel(s)}${schoolName ? ` · ${schoolName}` : ''}${teacherName ? ` · Teacher: ${teacherName}` : ''}`,
     tables: [
-      { head: ['Student', 'Login code', 'Roll No', 'Class'], body: [[s.name, s.loginCode, s.rollNo, classLabel(s)]] },
+      {
+        head: ['Student', 'Login code', 'Roll No', 'Class', 'School Name', 'Teacher Name'],
+        body: [[s.name, s.loginCode, s.rollNo, classLabel(s), schoolName || '—', teacherName || '—']],
+      },
       { heading: 'Performance', head: reportRows(s).map(([label]) => label), body: [reportRows(s).map(([, value]) => value)] },
       {
         heading: 'Lessons',
@@ -97,7 +108,7 @@ const tabBtn = (active) => ({ padding: '6px 14px', borderRadius: '999px', border
   background: active ? '#2563eb' : '#ffffff', color: active ? '#ffffff' : '#334155' });
 
 // One student's day: Today, Yesterday or a picked date. The day is the browser's local midnight to midnight.
-const StudentDayReport = ({ student, onClose }) => {
+const StudentDayReport = ({ student, onClose, fallbackSchool = '', fallbackTeacher = '' }) => {
   const [tab, setTab] = useState('today');
   const [picked, setPicked] = useState(dateValue(new Date()));
   const [report, setReport] = useState(null);
@@ -142,12 +153,23 @@ const StudentDayReport = ({ student, onClose }) => {
     ['Completed assessments', report.assessments.length],
   ] : [];
 
+  const resolvedSchool = report?.schoolName || student?.schoolName || fallbackSchool || localStorage.getItem('teacher_school_name') || '';
+  const resolvedTeacher = report?.teacherName || student?.teacherName || fallbackTeacher || '';
+
   const download = () => savePdf({
     file: `report_${student.loginCode || student.id}_${dayKey}.pdf`,
     title: 'Student Day Report',
-    subtitle: `${student.name} · Roll No ${student.rollNo || '—'} · Class ${classLabel(student)} · ${dayKey}`,
+    subtitle: `${student.name} · Roll No ${student.rollNo || '—'} · Class ${classLabel(student)}${resolvedSchool ? ` · ${resolvedSchool}` : ''}${resolvedTeacher ? ` · Teacher: ${resolvedTeacher}` : ''} · ${dayKey}`,
     tables: [
-      { head: ['Item', 'Value'], body: [...cards, ['Time online', hms(report.onlineSeconds)]] },
+      {
+        head: ['Item', 'Value'],
+        body: [
+          ...(resolvedSchool ? [['School Name', resolvedSchool]] : []),
+          ...(resolvedTeacher ? [['Teacher Name', resolvedTeacher]] : []),
+          ...cards,
+          ['Time online', hms(report.onlineSeconds)],
+        ],
+      },
       ...(report.assessments.length > 0 ? [{
         heading: 'Assessment marks',
         head: ['Assessment', 'Marks', 'Percentage'],
@@ -281,7 +303,7 @@ const SortHead = ({ label, field, sort, order, onSort }) => (
   </th>
 );
 
-const TeacherReportsPanel = () => {
+const TeacherReportsPanel = ({ user, schoolName: propSchoolName }) => {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [filters, setFilters] = useState(NO_FILTERS);
@@ -297,6 +319,9 @@ const TeacherReportsPanel = () => {
   const [classMetric, setClassMetric] = useState(null); // 'progress' | 'score': the number of each class is open
 
   const [downloading, setDownloading] = useState(false);
+
+  const currentSchoolName = propSchoolName || data?.schoolName || localStorage.getItem('teacher_school_name') || user?.school_name || '';
+  const currentTeacherName = data?.teacherName || user?.full_name || user?.username || '';
 
   // the search and filters as the server wants them (the list adds its page, the PDF download takes every page)
   const filterParams = () => {
@@ -329,7 +354,7 @@ const TeacherReportsPanel = () => {
       await savePdf({
         file: `class_report${chosen ? `_${chosen.name.replace(/[^A-Za-z0-9-]+/g, '-')}` : ''}_${new Date().toISOString().slice(0, 10)}.pdf`,
         title: 'Class Report',
-        subtitle: `${chosen ? chosen.name : 'All my classes'} · ${students.length} ${students.length === 1 ? 'student' : 'students'} · ${new Date().toLocaleDateString()}`,
+        subtitle: `${chosen ? chosen.name : 'All my classes'}${currentSchoolName ? ` · ${currentSchoolName}` : ''}${currentTeacherName ? ` · Teacher: ${currentTeacherName}` : ''} · ${students.length} ${students.length === 1 ? 'student' : 'students'} · ${new Date().toLocaleDateString()}`,
         landscape: true,
         tables: [{
           head: ['Student', 'Roll No', 'Class', 'Overall Progress', 'Avg Assessment', 'Attempts', 'Learning Time', 'Last Active', 'Status'],
@@ -420,7 +445,7 @@ const TeacherReportsPanel = () => {
       <>
         <StudentReportPage key={`${reportOf.student.id}-${reportOf.tab}`} student={reportOf.student} initialTab={reportOf.tab}
           onBack={() => setReportOf(null)} onOpenDayReport={(s) => setViewing(s)} />
-        {viewing && <StudentDayReport student={viewing} onClose={() => setViewing(null)} />}
+        {viewing && <StudentDayReport student={viewing} onClose={() => setViewing(null)} fallbackSchool={currentSchoolName} fallbackTeacher={currentTeacherName} />}
       </>
     );
   }
@@ -608,12 +633,12 @@ const TeacherReportsPanel = () => {
             <button type="button" style={{ ...menuItem, color: '#0f172a' }}
               onClick={() => { setReportOf({ student: menu.student, tab: 'activity' }); setMenu(null); }}><FiClock /> View Activity History</button>
             <button type="button" style={{ ...menuItem, color: '#0f172a' }}
-              onClick={() => { downloadReport(menu.student); setMenu(null); }}><FiDownload /> Download Student Report (PDF)</button>
+              onClick={() => { downloadReport(menu.student, currentSchoolName, currentTeacherName); setMenu(null); }}><FiDownload /> Download Student Report (PDF)</button>
           </div>
         </>
       )}
 
-      {viewing && <StudentDayReport student={viewing} onClose={() => setViewing(null)} />}
+      {viewing && <StudentDayReport student={viewing} onClose={() => setViewing(null)} fallbackSchool={currentSchoolName} fallbackTeacher={currentTeacherName} />}
     </>
   );
 };

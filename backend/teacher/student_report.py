@@ -88,7 +88,7 @@ def _level_state(attempts, payloads):
     }
 
 
-def build_student_report(student, now):
+def build_student_report(student, now, teacher_name=""):
     grade = resolve_grade(student)
     level_map = build_level_map(grade) if grade else {"lessons": [], "bosses": []}
     lesson_entries = {str(e["experienceId"]): e for e in level_map["lessons"] if e}
@@ -204,6 +204,8 @@ def build_student_report(student, now):
         "studentId": student.student_id, "loginCode": student.user.username,
         "name": title_name(student.user.full_name) or student.user.username,
         "rollNo": student.roll_no, "grade": student.grade, "section": student.section,
+        "schoolName": student.school.school_name if (student and student.school) else "",
+        "teacherName": teacher_name or "",
         "progress": round(done_total / published_total * 100) if published_total else None,
         "zonesCompleted": sum(1 for z in zones if z["complete"]), "zonesTotal": len(ZONES),
         "levelsCompleted": done_total, "levelsTotal": published_total,
@@ -277,6 +279,8 @@ def build_student_report(student, now):
 
     return {
         "overview": overview, "attempts": attempt_rows, "zones": zones, "levels": levels, "assessments": assessments,
+        "schoolName": student.school.school_name if (student and student.school) else "",
+        "teacherName": teacher_name or "",
         "progress": {"timeline": timeline, "zoneComparison": [
             {"zone": z["zone"], "name": z["name"], "progress": z["progress"], "assessmentScore": z["assessmentScore"]} for z in zones],
             "periods": periods, "improvement": improvement},
@@ -297,4 +301,5 @@ class TeacherStudentReportAPIView(APIView):
             .select_related("user", "school").first() if school else None
         if not student or not _in_scope(student, scope):
             return Response({"error": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
-        return Response(build_student_report(student, timezone.now()))
+        teacher_name = title_name(request.user.full_name) or request.user.full_name or request.user.username
+        return Response(build_student_report(student, timezone.now(), teacher_name=teacher_name))

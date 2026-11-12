@@ -136,6 +136,8 @@ const StudentReportPage = ({ student, initialTab = 'overview', onBack, onOpenDay
               <h2 style={{ margin: 0, fontSize: '1.3rem', color: '#0f172a' }}>{o.name}</h2>
               <div style={muted}>
                 Student ID {o.loginCode} · Roll No {formatRollNo(o.rollNo) || '—'} · {classLabel(o)}
+                {(o.schoolName || report.schoolName) && ` · ${o.schoolName || report.schoolName}`}
+                {(o.teacherName || report.teacherName) && ` · Teacher: ${o.teacherName || report.teacherName}`}
               </div>
             </div>
             <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>

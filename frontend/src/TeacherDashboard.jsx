@@ -2539,7 +2539,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
           {/* ══════════ REPORTS TAB ══════════ */}
           {activeSubTab === 'reports' && !isAnyOverlayOpen && (
-            <TeacherReportsPanel />
+            <TeacherReportsPanel 
+              user={user} 
+              schoolName={data?.school_name || profileForm.school_name || user?.school_name} 
+            />
           )}
 
 {/* ══════════ PROFILE TAB ══════════ */}

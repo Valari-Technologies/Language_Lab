@@ -1521,7 +1521,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const downloadStudentsPdf = () => savePdf({
     file: `student_performance_report_${new Date().toISOString().slice(0, 10)}.pdf`,
     title: 'Student Performance Report',
-    subtitle: `${studentsReport.length} student${studentsReport.length === 1 ? '' : 's'} · ${new Date().toLocaleDateString()}`,
+    subtitle: `${dashboardData?.school_name || profileForm.school_name ? `${dashboardData?.school_name || profileForm.school_name} · ` : ''}${studentsReport.length} student${studentsReport.length === 1 ? '' : 's'} · ${new Date().toLocaleDateString()}`,
     tables: [{
       head: ['Student', 'Roll No', 'Class', 'Section', 'Attempts', 'Completed', 'Avg Score', 'Last Attempt'],
       body: studentsReport.map(st => [
