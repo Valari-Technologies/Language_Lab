@@ -919,12 +919,12 @@ def _check_and_generate_lms_expiry_notifications(user):
                 admin_users.add(prof.user)
 
             if diff_days == 1:
-                title = "LMS Key Expiring Tomorrow"
-                msg = f"Tomorrow your LMS key code ({key_display}) will expire ({exp_date})."
+                title = "LMS License Expiring Soon"
+                msg = f"Your LMS license key ({key_display}) is due to expire tomorrow ({exp_date}). Please renew it to avoid service interruption."
                 notif_type = Notification.NotificationType.WARNING
             elif diff_days <= 0:
-                title = "LMS Key Expired"
-                msg = f"Now your LMS key code ({key_display}) has expired."
+                title = "LMS License Expired"
+                msg = f"Your LMS license key ({key_display}) expired on {exp_date}. Access has been suspended. Please contact your administrator to renew."
                 notif_type = Notification.NotificationType.ERROR
             else:
                 return
@@ -967,8 +967,8 @@ def _check_and_generate_lms_expiry_notifications(user):
                     _notify_admins_for_key(srv.school, key_display, diff, exp)
 
                 if diff == 1:
-                    title = "LMS Key Expiring Tomorrow"
-                    msg = f"Tomorrow school '{school_name}' LMS key code ({key_display}) will expire ({exp})."
+                    title = "LMS License Expiring Soon"
+                    msg = f"The LMS license key ({key_display}) for school '{school_name}' is due to expire tomorrow ({exp}). Please renew it to avoid service interruption."
                     if not Notification.objects.filter(user=user, title=title, message=msg, created_at__date=today).exists():
                         Notification.objects.create(
                             user=user,
@@ -977,8 +977,8 @@ def _check_and_generate_lms_expiry_notifications(user):
                             notification_type=Notification.NotificationType.WARNING,
                         )
                 elif diff <= 0:
-                    title = "LMS Key Expired"
-                    msg = f"School '{school_name}' LMS key code ({key_display}) has expired."
+                    title = "LMS License Expired"
+                    msg = f"The LMS license key ({key_display}) for school '{school_name}' has expired. Access has been suspended. Please renew to restore service."
                     if not Notification.objects.filter(user=user, title=title, message=msg, created_at__date=today).exists():
                         Notification.objects.create(
                             user=user,
