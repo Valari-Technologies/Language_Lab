@@ -313,6 +313,7 @@ class TeacherDashboardAPIView(APIView):
         ).count()
 
         data = {
+            "school_name": teacher.school.school_name if (teacher and teacher.school) else "",
             "assigned_classes": assigned_classes,
             "active_experiences": active_experiences_count,
             # No Submission/grading model exists in this codebase yet -- returning an

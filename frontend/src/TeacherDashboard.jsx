@@ -475,6 +475,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [profileForm, setProfileForm] = useState({
     username: user?.username || '', email: user?.email || '',
     full_name: user?.full_name || '', phone_no: user?.phone_no || '',
+    school_name: localStorage.getItem('teacher_school_name') || user?.school_name || '',
     current_password: '', password: ''
   });
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
@@ -499,6 +500,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           d.recent_activities = await actRes.json();
         }
         setData(d);
+        if (d.school_name) {
+          setProfileForm(prev => ({ ...prev, school_name: d.school_name }));
+          try { localStorage.setItem('teacher_school_name', d.school_name); } catch {}
+        }
       }
     } catch (e) { console.error('Failed to load teacher dashboard data.', e); }
   };
@@ -639,11 +644,15 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         const data = await res.json();
         setUser(data);
         if (onUpdateUser) onUpdateUser(data);
+        if (data.school_name) {
+          try { localStorage.setItem('teacher_school_name', data.school_name); } catch {}
+        }
         setProfileForm({
           username: data.username || '',
           email: data.email || '',
           full_name: data.full_name || '',
           phone_no: data.phone_no || '',
+          school_name: data.school_name || localStorage.getItem('teacher_school_name') || '',
           current_password: '',
           password: ''
         });
@@ -1598,7 +1607,18 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               <img src={logoIcon} alt="Logo" style={{ width: '48px', height: '76px', objectFit: 'contain' }} />
               <div>
                 <div className="sd-brand-name">LinguaLab</div>
-                <div className="sd-brand-sub">Teacher Portal</div>
+                <div 
+                  className="sd-brand-sub" 
+                  title={data?.school_name || profileForm.school_name || user?.school_name || ''}
+                  style={{
+                    maxWidth: '150px',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                >
+                  {data?.school_name || profileForm.school_name || user?.school_name || 'Teacher Portal'}
+                </div>
               </div>
             </div>
           ) : (
@@ -1749,7 +1769,19 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               <>
                 <div className="sd-user-meta" style={{ flex: 1, minWidth: 0 }}>
                   <div className="sd-user-name" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profileForm.full_name || user?.full_name || user?.username || 'Teacher'}</div>
-                  <div className="sd-user-role" style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)' }}>Teacher</div>
+                  <div 
+                    className="sd-user-role" 
+                    title={data?.school_name || profileForm.school_name || user?.school_name || ''}
+                    style={{ 
+                      fontSize: '0.75rem', 
+                      color: 'rgba(255, 255, 255, 0.65)',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}
+                  >
+                    {data?.school_name || profileForm.school_name || user?.school_name || 'Teacher'}
+                  </div>
                 </div>
                 <div style={{ color: 'rgba(255, 255, 255, 0.75)', display: 'flex', alignItems: 'center', fontSize: '1rem' }}>
                   <FiChevronDown />
