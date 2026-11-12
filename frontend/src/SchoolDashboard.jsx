@@ -1811,7 +1811,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               <img src={logoIcon} alt="Logo" style={{ width: '48px', height: '76px', objectFit: 'contain' }} />
               <div>
                 <div className="sd-brand-name">LinguaLab</div>
-                <div className="sd-brand-sub">School Admin Portal</div>
+                <div className="sd-brand-sub">{dashboardData?.school_name || profileForm.school_name || 'School Admin Portal'}</div>
               </div>
             </div>
           ) : (
