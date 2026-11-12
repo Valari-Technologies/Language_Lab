@@ -232,6 +232,39 @@ class LmsHubUnlockAPIView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
         typed_hash = sha256_hex(typed)
         if not _matches(typed_hash, _valid_key_hashes(school)):
+            # Check if this key actually belongs to the school, but is expired or deactivated
+            today = timezone.now().date()
+
+            # 1. Check school's LMS servers
+            matched_server = LmsServer.objects.filter(school=school, licenseKey__iexact=typed).select_related("license").first()
+            if matched_server:
+                exp = matched_server.expiryDate or (matched_server.license.expiryDate if matched_server.license else None)
+                if exp:
+                    exp_date = exp.date() if hasattr(exp, "date") and not isinstance(exp, timezone.datetime.date) else exp
+                    if exp_date <= today:
+                        exp_str = exp_date.strftime("%d/%m/%Y")
+                        return Response({
+                            "error": "key_expired",
+                            "message": f"This LMS license key expired on {exp_str}. Access has been suspended. Please renew your license or contact your administrator."
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                if matched_server.status != LmsServer.Status.ACTIVE:
+                    return Response({
+                        "error": "key_disabled",
+                        "message": "This LMS server key has been disabled by the administrator. Please contact support."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            # 2. Check school's primary license
+            lic = license_state(school)["license"]
+            if lic and lic.licenseKey and _normalize_key(lic.licenseKey) == typed:
+                if lic.expiryDate:
+                    exp_date = lic.expiryDate.date() if hasattr(lic.expiryDate, "date") and not isinstance(lic.expiryDate, timezone.datetime.date) else lic.expiryDate
+                    if exp_date <= today:
+                        exp_str = exp_date.strftime("%d/%m/%Y")
+                        return Response({
+                            "error": "key_expired",
+                            "message": f"Your school license key expired on {exp_str}. Access has been suspended. Please renew your license or contact your administrator."
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
             return Response({"error": "wrong_key", "message": "This is not an LMS key of your school."},
                             status=status.HTTP_400_BAD_REQUEST)
         LmsHubAccess.objects.update_or_create(
