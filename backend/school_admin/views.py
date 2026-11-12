@@ -556,11 +556,13 @@ class BulkUploadAPIView(APIView):
                             else:
                                 username = f"{prefix}_01"
 
-                            orig_username = username
-                            suffix = 1
-                            while User.objects.filter(username=username).exists():
-                                username = f"{orig_username}_{suffix}"
-                                suffix += 1
+                            existing_user = User.objects.filter(username=username).first()
+                            if existing_user:
+                                from teacher.models import Student as StudentModel
+                                if not StudentModel.objects.filter(user=existing_user).exists():
+                                    existing_user.delete()
+                                else:
+                                    raise ValueError(f"A student with LMS login code '{username}' already exists in the system.")
 
                             # Password defaults to username (or lms login code)
                             password = username

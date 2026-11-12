@@ -63,8 +63,12 @@ class StudentSerializer(serializers.ModelSerializer):
                     prefix = "STU"
                 expected_username = f"{prefix}_{formatted_roll}"
                 legacy_username = f"{prefix}_{clean_roll}"
-                if (username.lower() == clean_full or username == legacy_username) and username != expected_username:
-                    if not User.objects.filter(username=expected_username).exclude(id=instance.user.id).exists():
+                if (username.lower() == clean_full or username == legacy_username or username.startswith(f"{expected_username}_")) and username != expected_username:
+                    conflict_user = User.objects.filter(username=expected_username).exclude(id=instance.user.id).first()
+                    if conflict_user and not Student.objects.filter(user=conflict_user).exists():
+                        conflict_user.delete()
+                        conflict_user = None
+                    if not conflict_user:
                         instance.user.username = expected_username
                         instance.user.save(update_fields=["username"])
                         username = expected_username
@@ -118,11 +122,14 @@ class StudentSerializer(serializers.ModelSerializer):
                 else:
                     username = f"{prefix}_01"
 
-            counter = 1
-            base_username = username
-            while User.objects.filter(username=username).exists():
-                username = f"{base_username}_{counter}"
-                counter += 1
+            existing_user = User.objects.filter(username=username).first()
+            if existing_user:
+                if not Student.objects.filter(user=existing_user).exists():
+                    existing_user.delete()
+                else:
+                    raise serializers.ValidationError({
+                        "username": f"A student with LMS login code '{username}' already exists. Please choose a different roll number or name."
+                    })
             attrs["username"] = username
             attrs["password"] = username
             attrs["email"] = f"{username.lower()}@languagelab.com"
