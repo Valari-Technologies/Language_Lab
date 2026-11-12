@@ -1769,19 +1769,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               <>
                 <div className="sd-user-meta" style={{ flex: 1, minWidth: 0 }}>
                   <div className="sd-user-name" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profileForm.full_name || user?.full_name || user?.username || 'Teacher'}</div>
-                  <div 
-                    className="sd-user-role" 
-                    title={data?.school_name || profileForm.school_name || user?.school_name || ''}
-                    style={{ 
-                      fontSize: '0.75rem', 
-                      color: 'rgba(255, 255, 255, 0.65)',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}
-                  >
-                    {data?.school_name || profileForm.school_name || user?.school_name || 'Teacher'}
-                  </div>
+                  <div className="sd-user-role" style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)' }}>Teacher</div>
                 </div>
                 <div style={{ color: 'rgba(255, 255, 255, 0.75)', display: 'flex', alignItems: 'center', fontSize: '1rem' }}>
                   <FiChevronDown />
