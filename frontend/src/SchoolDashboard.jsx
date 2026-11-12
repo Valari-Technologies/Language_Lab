@@ -2789,12 +2789,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 )}
 
                 <div className="sd-table-wrap">
-                  <table className="sd-table">
+                  <table className="sd-table sd-table-fixed" style={{ tableLayout: 'fixed', width: '100%' }}>
 
                     <thead>
                       <tr>
                         {isSelectModeStudents && (
-                          <th className="sd-checkbox-cell">
+                          <th className="sd-checkbox-cell" style={{ width: '36px', padding: '0.65rem 0.2rem' }}>
                             <input
                               type="checkbox"
                               checked={students.length > 0 && selectedStudentIds.length === getFilteredStudents().length}
@@ -2802,14 +2802,14 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             />
                           </th>
                         )}
-                        <th>Full Name</th>
-                        <th style={{ textAlign: 'center', width: '70px' }}>Roll No</th>
-                        <th style={{ whiteSpace: 'nowrap' }}>LMS Login Code</th>
-                        <th style={{ width: '85px' }}>Class</th>
-                        <th style={{ width: '85px' }}>Section</th>
-                        <th style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>Academic Year</th>
-                        <th style={{ textAlign: 'center', width: '90px' }}>Status</th>
-                        <th style={{ textAlign:'center', width: '70px' }}>Actions</th>
+                        <th style={{ width: isSelectModeStudents ? '16%' : '18%' }}>Full Name</th>
+                        <th style={{ textAlign: 'center', width: isSelectModeStudents ? '7%' : '8%' }}>Roll No</th>
+                        <th style={{ width: isSelectModeStudents ? '17%' : '18%' }}>LMS Login Code</th>
+                        <th style={{ width: isSelectModeStudents ? '10%' : '10%' }}>Class</th>
+                        <th style={{ width: isSelectModeStudents ? '10%' : '11%' }}>Section</th>
+                        <th style={{ textAlign: 'center', width: isSelectModeStudents ? '14%' : '15%' }}>Academic Year</th>
+                        <th style={{ textAlign: 'center', width: isSelectModeStudents ? '11%' : '12%' }}>Status</th>
+                        <th style={{ textAlign:'center', width: isSelectModeStudents ? '7%' : '8%' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>

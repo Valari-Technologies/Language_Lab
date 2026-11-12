@@ -710,46 +710,34 @@ body { font-family: var(--font); background: var(--main-bg); color: var(--text-d
 .sd-table-wrap {
   width: 100%;
   max-width: 100%;
-  overflow-x: auto !important;
-  -webkit-overflow-scrolling: touch;
-  min-height: 200px;
-  padding-bottom: 2rem;
-}
-.sd-table-wrap::-webkit-scrollbar {
-  height: 6px;
-}
-.sd-table-wrap::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-.sd-table-wrap::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-.sd-table-wrap::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 3px;
+  overflow: visible;
+  position: relative;
 }
 .sd-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.82rem;
 }
+.sd-table-fixed {
+  table-layout: fixed;
+  width: 100%;
+}
 .sd-table thead tr {
   background: #f8fafd;
   border-bottom: 2px solid #e8edf5;
 }
 .sd-table th {
-  padding: 0.65rem 0.75rem;
-  font-size: 0.7rem;
+  padding: 0.65rem 0.5rem;
+  font-size: 0.68rem;
   font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   white-space: nowrap;
   text-align: left;
 }
 .sd-table td {
-  padding: 0.7rem 0.75rem;
+  padding: 0.65rem 0.5rem;
   border-bottom: 1px solid #f1f5f9;
   color: var(--text-mid);
   vertical-align: middle;
