@@ -2803,13 +2803,13 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           </th>
                         )}
                         <th>Full Name</th>
-                        <th>Roll No</th>
-                        <th>LMS Login Code</th>
-                        <th>Class</th>
-                        <th>Section</th>
-                        <th style={{ textAlign: 'center' }}>Academic Year</th>
-                        <th>Status</th>
-                        <th style={{ textAlign:'center' }}>Actions</th>
+                        <th style={{ textAlign: 'center', width: '70px' }}>Roll No</th>
+                        <th style={{ whiteSpace: 'nowrap' }}>LMS Login Code</th>
+                        <th style={{ width: '85px' }}>Class</th>
+                        <th style={{ width: '85px' }}>Section</th>
+                        <th style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>Academic Year</th>
+                        <th style={{ textAlign: 'center', width: '90px' }}>Status</th>
+                        <th style={{ textAlign:'center', width: '70px' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2841,17 +2841,17 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             <td>
                               <span className="sd-name-cell-primary">{titleName(s.full_name) || s.username || 'N/A'}</span>
                             </td>
-                            <td>{formatRollNo(s.roll_no) || 'N/A'}</td>
-                            <td><span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>{displayLmsCode}</span></td>
+                            <td style={{ textAlign: 'center' }}>{formatRollNo(s.roll_no) || 'N/A'}</td>
+                            <td><span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{displayLmsCode}</span></td>
                             <td>{s.grade ? (String(s.grade).startsWith('Class') || String(s.grade).startsWith('Grade') ? String(s.grade).replace('Grade', 'Class') : `Class ${s.grade}`) : 'N/A'}</td>
                             <td>{s.section ? (String(s.section).startsWith('Section') ? s.section : `Section ${s.section}`) : 'N/A'}</td>
-                            <td style={{ textAlign: 'center' }}>{s.academic_year || '2025 - 2026'}</td>
-                            <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>{s.academic_year || '2025 - 2026'}</td>
+                            <td style={{ textAlign: 'center', overflow: 'visible', textOverflow: 'clip' }}>
                               <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
                                 {s.is_active ? 'Active' : 'Inactive'}
                               </span>
                             </td>
-                            <td style={{ overflow: 'visible' }}>
+                            <td style={{ textAlign: 'center', overflow: 'visible' }}>
                               <div className="sd-action-cell" style={{ justifyContent: 'center', overflow: 'visible' }}>
                                 <div className="sd-action-dropdown-container" style={{ position: 'relative', display: 'inline-block' }}>
                                   <button
@@ -2994,7 +2994,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         );
                       })}
                       {getFilteredStudents().length === 0 && (
-                        <tr><td colSpan={isSelectModeStudents ? "7" : "6"} className="sd-empty-state">No students found.</td></tr>
+                        <tr><td colSpan={isSelectModeStudents ? "9" : "8"} className="sd-empty-state">No students found.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -3789,6 +3789,11 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <div className="sd-form-group">
                         <label className="sd-form-label">LMS Login Code (Auto Generated)</label>
                         <input className="sd-form-input" type="text" value={studentForm.username || ''} readOnly style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }}/>
+                        {studentForm.username && studentForm.username.match(/_\d+$/) && modalType === 'add' && (
+                          <div style={{ fontSize: '0.75rem', color: '#b45309', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            ⚠️ This code was adjusted because <strong>{studentForm.username.replace(/_\d+$/, '')}</strong> is already taken.
+                          </div>
+                        )}
                       </div>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Class *</label>
