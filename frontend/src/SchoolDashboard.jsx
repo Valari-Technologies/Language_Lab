@@ -2779,12 +2779,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 )}
 
                 <div className="sd-table-wrap">
-                  <table className="sd-table sd-table-fixed" style={{ tableLayout: 'fixed', width: '100%' }}>
+                  <table className="sd-table">
 
                     <thead>
                       <tr>
                         {isSelectModeStudents && (
-                          <th className="sd-checkbox-cell" style={{ width: '36px', padding: '0.65rem 0.2rem' }}>
+                          <th className="sd-checkbox-cell" style={{ width: '40px' }}>
                             <input
                               type="checkbox"
                               checked={students.length > 0 && selectedStudentIds.length === getFilteredStudents().length}
@@ -2792,14 +2792,14 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             />
                           </th>
                         )}
-                        <th style={{ width: isSelectModeStudents ? '16%' : '18%' }}>Full Name</th>
-                        <th style={{ textAlign: 'center', width: isSelectModeStudents ? '7%' : '8%' }}>Roll No</th>
-                        <th style={{ width: isSelectModeStudents ? '17%' : '18%' }}>LMS Login Code</th>
-                        <th style={{ width: isSelectModeStudents ? '10%' : '10%' }}>Class</th>
-                        <th style={{ width: isSelectModeStudents ? '10%' : '11%' }}>Section</th>
-                        <th style={{ textAlign: 'center', width: isSelectModeStudents ? '14%' : '15%' }}>Academic Year</th>
-                        <th style={{ textAlign: 'center', width: isSelectModeStudents ? '11%' : '12%' }}>Status</th>
-                        <th style={{ textAlign:'center', width: isSelectModeStudents ? '7%' : '8%' }}>Actions</th>
+                        <th style={{ minWidth: '130px' }}>Full Name</th>
+                        <th style={{ textAlign: 'center', minWidth: '80px' }}>Roll No</th>
+                        <th style={{ minWidth: '140px' }}>LMS Login Code</th>
+                        <th style={{ minWidth: '90px' }}>Class</th>
+                        <th style={{ minWidth: '100px' }}>Section</th>
+                        <th style={{ textAlign: 'center', minWidth: '130px' }}>Academic Year</th>
+                        <th style={{ textAlign: 'center', minWidth: '90px' }}>Status</th>
+                        <th style={{ textAlign:'center', minWidth: '70px' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2836,8 +2836,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             </td>
                             <td style={{ textAlign: 'center' }}>{formatRollNo(s.roll_no) || 'N/A'}</td>
                             <td><span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{displayLmsCode}</span></td>
-                            <td>{s.grade ? (String(s.grade).startsWith('Class') || String(s.grade).startsWith('Grade') ? String(s.grade).replace('Grade', 'Class') : `Class ${s.grade}`) : 'N/A'}</td>
-                            <td>{s.section ? (String(s.section).startsWith('Section') ? s.section : `Section ${s.section}`) : 'N/A'}</td>
+                            <td style={{ whiteSpace: 'nowrap' }}>{s.grade ? (String(s.grade).startsWith('Class') || String(s.grade).startsWith('Grade') ? String(s.grade).replace('Grade', 'Class') : `Class ${s.grade}`) : 'N/A'}</td>
+                            <td style={{ whiteSpace: 'nowrap' }}>{s.section ? (String(s.section).startsWith('Section') ? s.section : `Section ${s.section}`) : 'N/A'}</td>
                             <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>{s.academic_year || '2025 - 2026'}</td>
                             <td style={{ textAlign: 'center', overflow: 'visible', textOverflow: 'clip' }}>
                               <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
