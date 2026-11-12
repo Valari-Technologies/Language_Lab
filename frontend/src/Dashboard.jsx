@@ -3269,8 +3269,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       </div>
                     </div>
 
-                    <div className="sd-table-wrap" style={{ overflow: 'visible' }}>
-                      <table className="sd-table" style={{ tableLayout: 'fixed', width: '100%' }}>
+                    <div className="sd-table-wrap">
+                      <table className="sd-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: '850px' }}>
                         <colgroup>
                           {isSelectModeSchools && <col style={{ width: '4%' }} />}
                           <col style={{ width: '28%' }} />
@@ -3873,12 +3873,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                   </div>
                 </div>
 
-                <div className="sd-table-wrap" style={{ overflow: 'visible' }}>
-                  <table className="sd-table sd-table-compact" style={{ width: '100%', tableLayout: 'fixed', overflow: 'visible' }}>
+                <div className="sd-table-wrap">
+                  <table className="sd-table" style={{ width: '100%', minWidth: isSelectMode ? '820px' : '760px' }}>
                     <thead>
-                      <tr style={{ overflow: 'visible' }}>
+                      <tr>
                         {isSelectMode && (
-                          <th style={{ width: '50px', textAlign: 'center', verticalAlign: 'middle', padding: '0.75rem 0' }}>
+                          <th className="sd-checkbox-cell" style={{ width: '40px', minWidth: '40px', textAlign: 'center', verticalAlign: 'middle', padding: '0.75rem 0' }}>
                             <input
                               type="checkbox"
                               style={{ cursor: 'pointer', transform: 'scale(1.1)', verticalAlign: 'middle' }}
@@ -3898,14 +3898,15 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             />
                           </th>
                         )}
-                        <th style={{ width: isSelectMode ? '35%' : '39%' }}>Title</th>
-                        <th style={{ width: '15%' }}>Grade</th>
-                        <th style={{ width: '15%' }}>Duration</th>
-                        <th style={{ width: '15%' }}>Status</th>
-                        <th style={{ width: isSelectMode ? '15%' : '16%' }}>Date Submitted</th>
-                        <th style={{ textAlign: 'center', width: isSelectMode ? '10%' : '15%' }}>Actions</th>                      </tr>
+                        <th style={{ minWidth: '220px' }}>Title</th>
+                        <th style={{ minWidth: '100px' }}>Grade</th>
+                        <th style={{ minWidth: '110px' }}>Duration</th>
+                        <th style={{ minWidth: '130px' }}>Status</th>
+                        <th style={{ minWidth: '140px' }}>Date Submitted</th>
+                        <th style={{ textAlign: 'center', minWidth: '80px' }}>Actions</th>
+                      </tr>
                     </thead>
-                    <tbody style={{ overflow: 'visible' }}>
+                    <tbody>
                       {submittedExperiences.length === 0 ? (
                         <tr>
                           <td colSpan={isSelectMode ? 7 : 6} style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
@@ -3916,9 +3917,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         </tr>
                       ) : (
                         paginate(filterList(submittedExperiences), saExpPage).map((exp, idx) => (
-                          <tr key={exp.id || idx} style={{ overflow: 'visible' }}>
+                          <tr key={exp.id || idx}>
                             {isSelectMode && (
-                              <td style={{ width: '50px', textAlign: 'center', verticalAlign: 'middle', padding: '0.75rem 0' }}>
+                              <td className="sd-checkbox-cell" style={{ width: '40px', minWidth: '40px', textAlign: 'center', verticalAlign: 'middle', padding: '0.75rem 0' }}>
                                 <input
                                   type="checkbox"
                                   style={{ cursor: 'pointer', transform: 'scale(1.1)', verticalAlign: 'middle' }}
@@ -3934,22 +3935,22 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                 />
                               </td>
                             )}
-                            <td style={{ width: isSelectMode ? '35%' : '39%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <td style={{ minWidth: '220px' }}>
                               <div style={{ display: 'flex', flexDirection: 'column' }}>
                                 <span style={{ fontWeight: 600, color: '#1e293b' }}>{exp.title ? exp.title.toUpperCase() : ''}</span>
                               </div>
                             </td>
-                            <td style={{ width: '15%' }}>{exp.grade_name || `Grade ${exp.grade}`}</td>
-                            <td style={{ width: '15%' }}>{exp.estimated_duration ? `${exp.estimated_duration} mins` : 'N/A'}</td>
-                            <td style={{ width: '15%' }}>
+                            <td style={{ minWidth: '100px', whiteSpace: 'nowrap' }}>{exp.grade_name || `Grade ${exp.grade}`}</td>
+                            <td style={{ minWidth: '110px', whiteSpace: 'nowrap' }}>{exp.estimated_duration ? `${exp.estimated_duration} mins` : 'N/A'}</td>
+                            <td style={{ minWidth: '130px', whiteSpace: 'nowrap' }}>
                               <span className={`sd-badge ${exp.status === 'APPROVED' ? 'sd-badge-published' :
                                 exp.status === 'PENDING_APPROVAL' ? 'sd-badge-review' : 'sd-badge-draft'
                                 }`}>
                                 {exp.status === 'PENDING_APPROVAL' ? 'PENDING' : exp.status}
                               </span>
                             </td>
-                            <td style={{ width: isSelectMode ? '15%' : '16%' }}>{new Date(exp.updated_at).toLocaleDateString()}</td>
-                            <td style={{ textAlign: 'center', width: isSelectMode ? '10%' : '15%' }}>
+                            <td style={{ minWidth: '140px', whiteSpace: 'nowrap' }}>{new Date(exp.updated_at).toLocaleDateString()}</td>
+                            <td style={{ textAlign: 'center', minWidth: '80px' }}>
                               <button
                                 style={{
                                   border: 'none',
