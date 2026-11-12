@@ -81,17 +81,36 @@ def _grade_map(grade, cache):
     return cache[grade.id]
 
 
+def _num(val):
+    if val is None:
+        return None
+    v = float(val)
+    return int(v) if v.is_integer() else round(v, 1)
+
+
 def _student_row(student, attempts, last_session, gmap, now):
     slots, bosses = gmap["slots"], gmap["bosses"]
     published = set(slots.values())
     done, zones_touched, assessment_scores, stamps, seconds = set(), set(), [], [], 0
+    attempt_list = []
     for a in attempts:
         ref = a.assignment.experience_ref
         key = str(a.level_key or "").upper()
         when = a.completed_at or a.started_at
         stamps.append(when)
         seconds += max(a.time_spent_seconds or 0, 0)
-        if ref in bosses or key.startswith("B"):
+        is_boss = ref in bosses or key.startswith("B")
+        attempt_list.append({
+            "kind": "assessment" if is_boss else "lesson",
+            "title": (a.assignment.experience_title if a.assignment else "") or a.level_key or "Activity",
+            "status": a.status,
+            "percentage": _num(a.percentage),
+            "score": _num(a.total_score),
+            "maxScore": _num(a.max_score),
+            "startedAt": a.started_at.isoformat() if a.started_at else None,
+            "completedAt": a.completed_at.isoformat() if a.completed_at else None,
+        })
+        if is_boss:
             match = re.fullmatch(r"B([1-6])", key)
             if match:
                 zones_touched.add(int(match.group(1)))
@@ -142,6 +161,7 @@ def _student_row(student, attempts, last_session, gmap, now):
         "performance": performance_label(average),
         "activity": "active" if last_active and now - last_active <= inactive_after else "inactive",
         "progressStatus": progress_status,
+        "attemptsList": attempt_list,
         "_zones": zones_touched,
         "_days": {w.date() for w in stamps},
     }
@@ -220,7 +240,7 @@ class TeacherClassReportAPIView(APIView):
 
         attempts_by_user = {}
         for attempt in StudentAttempt.objects.filter(school=school, student__in=[s.user_id for s in students]) \
-                .select_related("assignment"):
+                .select_related("assignment").order_by("started_at", "id"):
             attempts_by_user.setdefault(attempt.student_id, []).append(attempt)
         last_session = {
             row["student_id"]: row["last"]

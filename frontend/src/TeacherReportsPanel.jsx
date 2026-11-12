@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { FiBarChart2, FiClock, FiDownload, FiEye, FiMoreVertical, FiX } from 'react-icons/fi';
 import { apiFetch } from './api';
 import { formatRollNo, pageItems, titleName, classLabel } from './format';
-import { savePdf } from './pdf';
+import { savePdf, saveClassReportPdf } from './pdf';
 import StudentReportPage from './StudentReportPage';
 import StudentStatusList from './StudentStatusList';
 import ClassProgressList from './ClassProgressList';
@@ -338,7 +338,7 @@ const TeacherReportsPanel = ({ user, schoolName: propSchoolName }) => {
     return params;
   };
 
-  // Download all: a PDF with every student that matches the search and filters (all pages), one row each
+  // Download all: a PDF class report containing every student dossier (details, performance, lessons, assessments)
   const downloadAll = async () => {
     setDownloading(true);
     try {
@@ -351,23 +351,29 @@ const TeacherReportsPanel = ({ user, schoolName: propSchoolName }) => {
         return;
       }
       const chosen = data && data.classes.find(c => String(c.id) === String(filters.classId));
-      const students = body.students.map(s => ({ ...s, name: titleName(s.name) || s.name, rollNo: formatRollNo(s.rollNo) }));
-      await savePdf({
+      const rawClassName = chosen
+        ? chosen.name
+        : (data?.classes?.length === 1
+          ? data.classes[0].name
+          : (body.students && body.students.length > 0 && body.students[0].grade
+            ? `${body.students[0].grade}${body.students[0].section ? `-${body.students[0].section.replace(/^Section\s*/i, '')}` : ''}`
+            : 'All my classes'));
+
+      const students = (body.students || []).map(s => ({
+        ...s,
+        name: titleName(s.name) || s.name,
+        rollNo: formatRollNo(s.rollNo) || s.rollNo || '—',
+        classLabel: classLabel(s),
+      }));
+
+      await saveClassReportPdf({
         file: `class_report${chosen ? `_${chosen.name.replace(/[^A-Za-z0-9-]+/g, '-')}` : ''}_${new Date().toISOString().slice(0, 10)}.pdf`,
-        title: 'Class Report',
         schoolName: currentSchoolName,
+        title: 'Class Report',
         teacherName: currentTeacherName,
-        subtitle: `${chosen ? chosen.name : 'All my classes'} · ${students.length} ${students.length === 1 ? 'student' : 'students'} · ${new Date().toLocaleDateString()}`,
-        landscape: true,
-        tables: [{
-          head: ['Student', 'Roll No', 'Class', 'Overall Progress', 'Avg Assessment', 'Attempts', 'Learning Time', 'Last Active', 'Status'],
-          body: students.map(s => [
-            `${s.name} (${s.loginCode})`, s.rollNo || '—', classLabel(s),
-            s.progress === null ? '—' : `${s.progress}% (Zones ${s.zonesCompleted}/${s.zonesTotal}, Levels ${s.levelsCompleted}/${s.levelsTotal})`,
-            s.avgAssessment === null ? 'Not assessed' : `${s.avgAssessment}%`, s.attempts, studyTime(s.learningSeconds), fmt(s.lastActive),
-            `${PERFORMANCE[s.performance].label}${s.activity === 'inactive' ? ', Inactive' : ''}`,
-          ]),
-        }],
+        className: rawClassName,
+        totalStudents: students.length,
+        students,
       });
     } catch (e) {
       setError('Could not reach the CMS.');
