@@ -1776,7 +1776,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     grade: '',
     subject: [],
     language: 'English',
-    difficulty: 'INTERMEDIATE',
+    difficulty: 'BEGINNER',
     duration: 15,
     tags: [],
     experience_type: 'LESSON',
@@ -1890,7 +1890,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           grade: data.grade || '',
           subject: subjectArray,
           language: data.language || 'English',
-          difficulty: data.difficulty || 'INTERMEDIATE',
+          difficulty: data.difficulty || 'BEGINNER',
           duration: data.estimated_duration || 0,
           tags: data.tags || [],
           thumbnail: data.thumbnail || '',
@@ -1935,9 +1935,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
     setActionLoading(true);
     try {
-      let diff = (experienceForm.difficulty || 'Intermediate').toUpperCase();
+      let diff = (experienceForm.difficulty || 'Beginner').toUpperCase();
       if (diff !== 'BEGINNER' && diff !== 'INTERMEDIATE' && diff !== 'MASTER') {
-        diff = 'INTERMEDIATE';
+        diff = 'BEGINNER';
       }
 
       const payload = {
@@ -7010,7 +7010,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               grade: '',
                               subject: [],
                               language: 'English',
-                              difficulty: 'INTERMEDIATE',
+                              difficulty: 'BEGINNER',
                               duration: 15,
                               tags: [],
                               experience_type: 'LESSON',

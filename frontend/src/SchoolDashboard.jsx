@@ -466,6 +466,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [overviewReport,          setOverviewReport]          = useState(null);
   const [experiencesReport,         setExperiencesReport]         = useState([]);
   const [classesReport,           setClassesReport]           = useState([]);
+  const [classReportPage,         setClassReportPage]         = useState(1);
+  const [classReportGrade,        setClassReportGrade]        = useState('');
   const [studentsReport,          setStudentsReport]          = useState([]);
   const [lessonReportPage,        setLessonReportPage]        = useState(1);
   const [lessonReportGrade,       setLessonReportGrade]       = useState('');
@@ -1541,6 +1543,15 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const lessonReportPageNow = Math.min(lessonReportPage, Math.max(1, Math.ceil(filteredLessonRows.length / LESSON_REPORT_PER_PAGE)));
   const visibleLessonRows = filteredLessonRows.slice(
     (lessonReportPageNow - 1) * LESSON_REPORT_PER_PAGE, lessonReportPageNow * LESSON_REPORT_PER_PAGE);
+
+  // Class Performance Analysis: five classes a page, filtered by grade
+  const CLASS_REPORT_PER_PAGE = 5;
+  const filteredClassRows = classesReport.filter(c => (
+    !classReportGrade || (String(c.grade_name || c.class_name || '').match(/\d+/) || [])[0] === classReportGrade
+  ));
+  const classReportPageNow = Math.min(classReportPage, Math.max(1, Math.ceil(filteredClassRows.length / CLASS_REPORT_PER_PAGE)));
+  const visibleClassRows = filteredClassRows.slice(
+    (classReportPageNow - 1) * CLASS_REPORT_PER_PAGE, classReportPageNow * CLASS_REPORT_PER_PAGE);
 
   // Student Performance Analysis: five students a page, filtered by grade ("Class 5-A" belongs to grade 5)
   const STUDENT_REPORT_PER_PAGE = 5;
@@ -3168,6 +3179,18 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                   <div className="sd-card">
                     <div className="sd-card-header">
                       <div className="sd-card-title">Class Performance Analysis</div>
+                      <div style={{ display:'flex', gap:'0.5rem', alignItems:'center' }}>
+                        <select
+                          className="sd-form-input"
+                          aria-label="Grade"
+                          style={{ width:'auto', minWidth:'130px', height:'36px', padding:'0 2rem 0 0.8rem', borderRadius:'8px', border:'1px solid #cbd5e1', fontSize:'0.82rem' }}
+                          value={classReportGrade}
+                          onChange={e => { setClassReportGrade(e.target.value); setClassReportPage(1); }}
+                        >
+                          <option value="">All Grades</option>
+                          {[3, 4, 5, 6, 7, 8].map(n => <option key={n} value={String(n)}>Class {n}</option>)}
+                        </select>
+                      </div>
                     </div>
                     <div className="sd-table-wrap" style={{ minHeight: '440px' }}>
                       <table className="sd-table">
@@ -3178,7 +3201,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                           </tr>
                         </thead>
                         <tbody>
-                          {classesReport.map((c, i) => (
+                          {visibleClassRows.map((c, i) => (
                             <tr key={i} onClick={() => handleFetchClassDetail(c.class_id)} style={{ cursor:'pointer' }}>
                               <td><span className="sd-name-cell-primary">{String(c.grade_name || c.class_name).replace('Grade', 'Class')}</span></td>
                               <td>{c.section || 'N/A'}</td>
@@ -3196,10 +3219,20 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               </td>
                             </tr>
                           ))}
-                          {classesReport.length === 0 && <tr><td colSpan="6" className="sd-empty-state">No classes found.</td></tr>}
+                          {filteredClassRows.length === 0 && <tr><td colSpan="6" className="sd-empty-state">No classes found.</td></tr>}
                         </tbody>
                       </table>
                     </div>
+                    {filteredClassRows.length > CLASS_REPORT_PER_PAGE && (
+                      <div style={{ marginTop:'1rem', borderTop:'1px solid #f1f5f9', paddingTop:'1rem' }}>
+                        <Pagination
+                          total={filteredClassRows.length}
+                          perPage={CLASS_REPORT_PER_PAGE}
+                          page={classReportPageNow}
+                          onPage={setClassReportPage}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Students Report Table */}

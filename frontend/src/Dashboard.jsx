@@ -1035,7 +1035,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [schoolForm, setSchoolForm] = useState({ school_name: '', school_code: '', address: '', phone: '', email: '', logo: '', is_active: true });
   const [publishForm, setPublishForm] = useState({ release_name: '', grade: '', total_experiences: 0, status: 'DRAFT', export_file: '', checksum: '' });
   const [gradeForm, setGradeForm] = useState({ grade_name: '', description: '', sort_order: 1 });
-  const [experienceForm, setExperienceForm] = useState({ grade: '', title: '', description: '', objective: '', estimated_duration: 15, difficulty: 'INTERMEDIATE', status: 'DRAFT', thumbnail: '' });
+  const [experienceForm, setExperienceForm] = useState({ grade: '', title: '', description: '', objective: '', estimated_duration: 15, difficulty: 'BEGINNER', status: 'DRAFT', thumbnail: '' });
   const [experienceBuilderForm, setExperienceBuilderForm] = useState({ experience: '', block_type: 'VIDEO', title: '', content: '', media_url: '', display_order: 1, settings: '{}' });
   const [schoolAdminForm, setSchoolAdminForm] = useState({ username: '', email: '', full_name: '', is_active: true, school: '', password: '', role: 'school-admins' });
   const [teacherForm, setTeacherForm] = useState({ username: '', full_name: '', email: '', is_active: true, school: '', qualification: '', experience_years: 0, password: '' });
@@ -1595,11 +1595,11 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       setExperienceForm(entity ? {
         grade: entity.grade?.id || entity.grade || '', title: entity.title || '',
         description: entity.description || '', objective: entity.objective || '',
-        estimated_duration: entity.estimated_duration || 15, difficulty: entity.difficulty || 'INTERMEDIATE',
+        estimated_duration: entity.estimated_duration || 15, difficulty: entity.difficulty || 'BEGINNER',
         status: entity.status || 'DRAFT', thumbnail: entity.thumbnail || ''
       } : {
         grade: selectedGradeFilter || (grades[0]?.id || ''), title: '', description: '',
-        objective: '', estimated_duration: 15, difficulty: 'INTERMEDIATE', status: 'DRAFT', thumbnail: ''
+        objective: '', estimated_duration: 15, difficulty: 'BEGINNER', status: 'DRAFT', thumbnail: ''
       });
     } else if (tab === 'experience-builders') {
       setExperienceBuilderForm(entity ? {
