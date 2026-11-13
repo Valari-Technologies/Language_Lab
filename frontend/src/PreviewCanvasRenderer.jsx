@@ -2080,6 +2080,13 @@ export default function PreviewCanvasRenderer({
                 </div>
               )}
 
+              {(block.content?.targetAnswer || block.content?.correctAnswer) && (
+                <div style={{ fontSize: '0.72rem', color: '#047857', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '6px', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <strong style={{ color: '#065f46' }}>🎯 Targeted Answer (For Examination):</strong>
+                  <span>{block.content.targetAnswer || block.content.correctAnswer}</span>
+                </div>
+              )}
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
                 {turns.length > 0 ? (
                   turns.map((t, tIdx) => {
@@ -2129,6 +2136,33 @@ export default function PreviewCanvasRenderer({
                         }}>
                           <div style={{ fontSize: '0.6rem', fontWeight: 700, color: isNpc ? '#6b21a8' : '#e0f2fe' }}>{speakerName}</div>
                           <div style={{ fontSize: '0.72rem', lineHeight: 1.3 }}>{text}</div>
+
+                          {!isNpc && (() => {
+                            const turnTarget = t.targetAnswer || t.expectedResponse || (Array.isArray(t.expectedStudentResponses) && t.expectedStudentResponses[0]?.text) || '';
+                            if (turnTarget) {
+                              return (
+                                <div style={{
+                                  marginTop: '6px',
+                                  paddingTop: '5px',
+                                  borderTop: '1px dashed rgba(255,255,255,0.35)',
+                                  fontSize: '0.66rem',
+                                  color: '#f0fdf4',
+                                  background: 'rgba(5, 150, 105, 0.45)',
+                                  borderRadius: '4px',
+                                  padding: '4px 8px',
+                                  textAlign: 'left'
+                                }}>
+                                  <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', color: '#a7f3d0' }}>
+                                    🎯 Targeted Answer (For Examination):
+                                  </div>
+                                  <div style={{ marginTop: '2px', fontWeight: 500 }}>
+                                    {turnTarget}
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
 
                           {isNpc && (
                             <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #f3e8ff', display: 'flex', alignItems: 'center', gap: '6px' }}>

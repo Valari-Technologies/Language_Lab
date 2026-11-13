@@ -795,10 +795,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         scenario: aiPreviewData.scenario || 'Practice conversation with NPC',
         objectives: aiPreviewData.objectives || ['Introduce yourself', 'Ask a question'],
         npcCharacter: aiPreviewData.npcCharacter || 'Alex',
-        conversation: aiPreviewData.conversation || [
+        userRole: aiPreviewData.userRole || 'Student',
+        targetAnswer: aiPreviewData.targetAnswer || aiPreviewData.expectedAnswer || '',
+        conversation: (aiPreviewData.conversation || [
           { turn: 1, speaker: 'npc', text: 'Hello! Welcome.', audio: '', expectedStudentResponses: [] },
-          { turn: 2, speaker: 'student', recordingRequired: true, prompt: 'Greet the NPC back.' }
-        ]
+          { turn: 2, speaker: 'user', recordingRequired: true, prompt: 'Greet the NPC back.', targetAnswer: 'Hello! Nice to meet you.', expectedResponse: 'Hello! Nice to meet you.' }
+        ]).map(t => ({
+          ...t,
+          targetAnswer: t.targetAnswer || t.expectedResponse || '',
+          expectedResponse: t.expectedResponse || t.targetAnswer || ''
+        }))
       };
       addOrUpdateBlock('roleplay_simulation', newProps);
     }
@@ -2583,20 +2589,27 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         scenario: 'You are ordering food at a restaurant',
         objectives: ['Greet the waiter', 'Place order'],
         npcCharacter: 'Waiter',
+        userRole: 'Customer',
+        targetAnswer: "I'd like to order a sandwich and a glass of water, please.",
         npcImage: '',
+        allowAudioRecord: true,
         conversation: [
           {
             turn: 1,
             speaker: 'npc',
             text: 'Good evening! How can I help you?',
-            audio: '',
-            expectedStudentResponses: [{ text: "I'd like a table for two", hint: "Specify your request" }]
+            prompt: 'Good evening! How can I help you?',
+            audio: ''
           },
           {
             turn: 2,
-            speaker: 'student',
+            speaker: 'user',
             recordingRequired: true,
-            prompt: 'Respond to the waiter'
+            allowAudioRecord: true,
+            prompt: 'Respond to the waiter and place your order',
+            text: 'Respond to the waiter and place your order',
+            targetAnswer: "I'd like to order a sandwich and a glass of water, please.",
+            expectedResponse: "I'd like to order a sandwich and a glass of water, please."
           }
         ]
       };
@@ -3890,6 +3903,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 </div>
               )}
 
+              {(block.content?.targetAnswer || block.content?.correctAnswer) && (
+                <div style={{ fontSize: '0.7rem', color: '#047857', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '6px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <strong style={{ color: '#065f46' }}>🎯 Targeted Answer (Examiner):</strong>
+                  <span>{block.content.targetAnswer || block.content.correctAnswer}</span>
+                </div>
+              )}
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
                 {turns.length > 0 ? (
                   turns.map((t, tIdx) => {
@@ -3938,6 +3958,19 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         }}>
                           <div style={{ fontSize: '0.6rem', fontWeight: 700, color: isNpc ? '#6b21a8' : '#e0f2fe' }}>{speakerName}</div>
                           <div style={{ fontSize: '0.72rem', lineHeight: 1.3 }}>{text}</div>
+
+                          {!isNpc && (() => {
+                            const turnTarget = t.targetAnswer || t.expectedResponse || (Array.isArray(t.expectedStudentResponses) && t.expectedStudentResponses[0]?.text) || '';
+                            if (turnTarget) {
+                              return (
+                                <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px dashed rgba(255,255,255,0.3)', fontSize: '0.64rem', color: '#ecfdf5', background: 'rgba(5, 150, 105, 0.4)', borderRadius: '4px', padding: '3px 6px', textAlign: 'left' }}>
+                                  <strong style={{ color: '#a7f3d0' }}>🎯 Targeted Answer (Examiner):</strong>
+                                  <div style={{ marginTop: '1px' }}>{turnTarget}</div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
 
                           {isNpc && (
                             <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #f3e8ff', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -10266,6 +10299,26 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                             </div>
                                           </div>
 
+                                          <div className="cs-form-group">
+                                            <label className="cs-form-label" style={{ fontSize: '0.68rem', color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                              <span>🎯 Targeted Answer (For Examination / Grading)</span>
+                                            </label>
+                                            <textarea
+                                              className="cs-form-input"
+                                              style={{ minHeight: '44px', fontSize: '0.75rem', borderColor: '#a7f3d0' }}
+                                              value={selectedBlock.content?.targetAnswer || selectedBlock.content?.targetText || selectedBlock.content?.correctAnswer || ''}
+                                              onChange={e => {
+                                                handleUpdateBlockMultipleContent({
+                                                  targetAnswer: e.target.value,
+                                                  targetText: e.target.value,
+                                                  correctAnswer: e.target.value,
+                                                  expectedResponse: e.target.value
+                                                });
+                                              }}
+                                              placeholder="e.g. Enter benchmark model answer or target response for examiner evaluation..."
+                                            />
+                                          </div>
+
                                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.6rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
                                             <input
                                               type="checkbox"
@@ -10331,11 +10384,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                     { speaker: 'npc', prompt: 'Hello! Welcome to our restaurant. What would you like to order?', expectedResponse: 'I would like to order...' }
                                                   ];
 
-                                                return conversation.map((turn, tIdx) => (
-                                                  <div key={tIdx} style={{ background: turn.speaker === 'npc' ? '#f5f3ff' : '#eff6ff', border: turn.speaker === 'npc' ? '1px solid #ddd6fe' : '1px solid #bfdbfe', borderRadius: '6px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                                return conversation.map((turn, tIdx) => {
+                                                  const isStudent = ['user', 'student', 'speaker_b', 'speakerb', 'b'].includes(String(turn.speaker || '').toLowerCase());
+                                                  return (
+                                                  <div key={tIdx} style={{ background: !isStudent ? '#f5f3ff' : '#eff6ff', border: !isStudent ? '1px solid #ddd6fe' : '1px solid #bfdbfe', borderRadius: '6px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: turn.speaker === 'npc' ? '#6b21a8' : '#1e40af' }}>
-                                                        Turn #{tIdx + 1} ({turn.speaker === 'npc' ? (selectedBlock.content?.npcCharacter || 'NPC') : (selectedBlock.content?.userRole || 'User')})
+                                                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: !isStudent ? '#6b21a8' : '#1e40af' }}>
+                                                        Turn #{tIdx + 1} ({!isStudent ? (selectedBlock.content?.npcCharacter || 'Speaker A') : (selectedBlock.content?.userRole || 'Speaker B')})
                                                       </span>
                                                       {conversation.length > 1 && (
                                                         <button
@@ -10358,7 +10413,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                         <select
                                                           className="cs-form-input"
                                                           style={{ height: '24px', fontSize: '0.7rem', padding: '0 2px' }}
-                                                          value={turn.speaker || 'npc'}
+                                                          value={isStudent ? 'user' : 'npc'}
                                                           onChange={e => {
                                                             const updated = conversation.map((t, i) => i === tIdx ? { ...t, speaker: e.target.value } : t);
                                                             handleUpdateBlockMultipleContent({ conversation: updated });
@@ -10379,29 +10434,36 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                             const updated = conversation.map((t, i) => i === tIdx ? { ...t, prompt: e.target.value } : t);
                                                             handleUpdateBlockMultipleContent({ conversation: updated });
                                                           }}
-                                                          placeholder={turn.speaker === 'npc' ? 'What Speaker A says...' : 'Speaker B response prompt...'}
+                                                          placeholder={!isStudent ? 'What Speaker A says...' : 'Speaker B response prompt...'}
                                                         />
                                                       </div>
                                                     </div>
 
-                                                    {turn.speaker === 'user' && (
+                                                    {isStudent && (
                                                       <div className="cs-form-group" style={{ marginBottom: 0 }}>
-                                                        <label className="cs-form-label" style={{ fontSize: '0.6rem' }}>Expected Model Answer</label>
-                                                        <input
+                                                        <label className="cs-form-label" style={{ fontSize: '0.62rem', color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                          <span>🎯 Targeted Answer (For Examination)</span>
+                                                        </label>
+                                                        <textarea
                                                           className="cs-form-input"
-                                                          style={{ height: '24px', fontSize: '0.7rem' }}
-                                                          type="text"
-                                                          value={turn.expectedResponse || ''}
+                                                          style={{ minHeight: '34px', fontSize: '0.7rem', borderColor: '#a7f3d0' }}
+                                                          value={turn.targetAnswer || turn.expectedResponse || (Array.isArray(turn.expectedStudentResponses) && turn.expectedStudentResponses[0]?.text) || ''}
                                                           onChange={e => {
-                                                            const updated = conversation.map((t, i) => i === tIdx ? { ...t, expectedResponse: e.target.value } : t);
+                                                            const val = e.target.value;
+                                                            const updated = conversation.map((t, i) => i === tIdx ? {
+                                                              ...t,
+                                                              targetAnswer: val,
+                                                              expectedResponse: val,
+                                                              expectedStudentResponses: [{ text: val }]
+                                                            } : t);
                                                             handleUpdateBlockMultipleContent({ conversation: updated });
                                                           }}
-                                                          placeholder="e.g. Can I please get a glass of water?"
+                                                          placeholder="e.g. Expected target answer for examination / grading..."
                                                         />
                                                       </div>
                                                     )}
 
-                                                    {turn.speaker === 'npc' && (
+                                                    {!isStudent && (
                                                       <MediaUploadField
                                                         label="Speaker A Audio Prompt (Optional)"
                                                         value={turn.audioUrl || turn.audio || ''}
@@ -10416,7 +10478,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                       />
                                                     )}
 
-                                                    {turn.speaker === 'user' && (
+                                                    {isStudent && (
                                                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '2px' }}>
                                                         <input
                                                           type="checkbox"
@@ -10433,7 +10495,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                       </div>
                                                     )}
                                                   </div>
-                                                ));
+                                                );
+                                                });
                                               })()}
                                             </div>
                                           </div>
