@@ -51,6 +51,35 @@ const getScrambledWords = (wordsList) => {
   return shuffled;
 };
 
+const getShuffledItems = (items, seedKey = 42) => {
+  if (!Array.isArray(items) || items.length <= 1) return items || [];
+  const str = items.map(it => (typeof it === 'object' && it !== null ? (it.text || it.label || '') : String(it || ''))).join('|') + '|' + String(seedKey || '');
+  let hash = 0;
+  for (let k = 0; k < str.length; k++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(k);
+    hash |= 0;
+  }
+  const seededRandom = (seed) => {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+  };
+  const shuffled = [...items];
+  let currentSeed = Math.abs(hash) + 7;
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(seededRandom(currentSeed++) * (i + 1));
+    const temp = shuffled[i];
+    shuffled[i] = shuffled[j];
+    shuffled[j] = temp;
+  }
+  const val = (it) => (typeof it === 'object' && it !== null ? (it.text || it.label || '') : String(it || ''));
+  if (shuffled.length > 1 && shuffled.every((item, idx) => val(item) === val(items[idx]))) {
+    const temp = shuffled[0];
+    shuffled[0] = shuffled[shuffled.length - 1];
+    shuffled[shuffled.length - 1] = temp;
+  }
+  return shuffled;
+};
+
 const COMMON_IPA_DICT = {
   hello: '/həˈloʊ/',
   world: '/wɜːrld/',
@@ -2491,8 +2520,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       newBlock.type = 'match';
       newBlock.content = {
         question: 'Match the items in Column A with Column B.',
-        leftItems: [''],
-        rightItems: ['']
+        leftItems: [{ text: 'Item 1', imageUrl: '' }],
+        rightItems: [{ text: 'Match 1', imageUrl: '' }]
       };
     } else if (type.toLowerCase() === 'sequence' || type.toLowerCase() === 'sequence / order') {
       newBlock.type = 'sequence';
@@ -3367,8 +3396,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 })}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#7c3aed', textTransform: 'uppercase' }}>Column B</span>
-                {(block.content?.rightItems || []).map((right, pIdx) => {
+                <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#7c3aed', textTransform: 'uppercase' }}>Column B (Shuffled)</span>
+                {getShuffledItems(block.content?.rightItems || [], block.id).map((right, pIdx) => {
                   const rightText = typeof right === 'object' ? (right?.text || right?.label || '') : (right || '');
                   const rightImg = typeof right === 'object' ? (right?.imageUrl || right?.image || '') : '';
                   const resolvedRightImg = rightImg ? resolveMediaUrl(rightImg) : '';
@@ -9800,51 +9829,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         </div>
                                       )}
 
-                                      {/* BLOCK TYPE: MATCH ITEMS */}
-                                      {selectedBlock.type === 'match' && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Match Column Pairs</span>
-                                          <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question Instruction</label>
-                                            <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
-                                              onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Match left side options with correct right answers" />
-                                          </div>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
-                                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Match Pairs</span>
-                                            <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
-                                              onClick={() => {
-                                                const leftItems = [...(selectedBlock.content?.leftItems || []), 'Left Option'];
-                                                const rightItems = [...(selectedBlock.content?.rightItems || []), 'Right Match'];
-                                                handleUpdateBlockMultipleContent({ leftItems, rightItems });
-                                              }}>
-                                              + Add Match
-                                            </button>
-                                          </div>
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '200px', overflowY: 'auto' }}>
-                                            {(selectedBlock.content?.leftItems || []).map((left, pIdx) => (
-                                              <div key={pIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                  <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b' }}>Pair #{pIdx + 1}</span>
-                                                  <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
-                                                    onClick={() => {
-                                                      const leftItems = (selectedBlock.content.leftItems || []).filter((_, i) => i !== pIdx);
-                                                      const rightItems = (selectedBlock.content.rightItems || []).filter((_, i) => i !== pIdx);
-                                                      handleUpdateBlockMultipleContent({ leftItems, rightItems });
-                                                    }}>
-                                                    <FiTrash2 style={{ fontSize: '0.72rem' }} /></button>
-                                                </div>
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
-                                                  <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Column A (Left)" value={left}
-                                                    onChange={e => { const leftItems = [...selectedBlock.content.leftItems]; leftItems[pIdx] = e.target.value; handleUpdateBlockContent('leftItems', leftItems); }} />
-                                                  <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Column B (Right)" value={(selectedBlock.content?.rightItems || [])[pIdx] || ''}
-                                                    onChange={e => { const rightItems = [...(selectedBlock.content.rightItems || [])]; rightItems[pIdx] = e.target.value; handleUpdateBlockContent('rightItems', rightItems); }} />
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      )}
-
                                       {/* BLOCK TYPE: SEQUENCE */}
                                       {selectedBlock.type === 'sequence' && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -10077,7 +10061,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Match left side options with correct right answers" />
                                            </div>
                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
-                                             <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Match Pairs</span>
+                                             <div>
+                                               <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569', display: 'block' }}>Match Pairs</span>
+                                               <span style={{ fontSize: '0.6rem', color: '#64748b' }}>Define each pair in matching order. Column B is automatically shuffled for students.</span>
+                                             </div>
                                              <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
                                                onClick={() => {
                                                  const leftItems = [...(selectedBlock.content?.leftItems || []), { text: `Item ${(selectedBlock.content?.leftItems || []).length + 1}`, imageUrl: '' }];

@@ -34,6 +34,35 @@ const getScrambledWords = (wordsList) => {
   return shuffled;
 };
 
+const getShuffledItems = (items, seedKey = 42) => {
+  if (!Array.isArray(items) || items.length <= 1) return items || [];
+  const str = items.map(it => (typeof it === 'object' && it !== null ? (it.text || it.label || '') : String(it || ''))).join('|') + '|' + String(seedKey || '');
+  let hash = 0;
+  for (let k = 0; k < str.length; k++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(k);
+    hash |= 0;
+  }
+  const seededRandom = (seed) => {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+  };
+  const shuffled = [...items];
+  let currentSeed = Math.abs(hash) + 7;
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(seededRandom(currentSeed++) * (i + 1));
+    const temp = shuffled[i];
+    shuffled[i] = shuffled[j];
+    shuffled[j] = temp;
+  }
+  const val = (it) => (typeof it === 'object' && it !== null ? (it.text || it.label || '') : String(it || ''));
+  if (shuffled.length > 1 && shuffled.every((item, idx) => val(item) === val(items[idx]))) {
+    const temp = shuffled[0];
+    shuffled[0] = shuffled[shuffled.length - 1];
+    shuffled[shuffled.length - 1] = temp;
+  }
+  return shuffled;
+};
+
 const CustomAudioPlayer = ({ src, style = {} }) => {
   const audioRef = React.useRef(null);
   const [isPlaying, setIsPlaying] = React.useState(false);
@@ -1080,6 +1109,7 @@ export default function PreviewCanvasRenderer({
         const leftItems = block.content?.leftItems || [];
         const rightItems = block.content?.rightItems || [];
         const matchQuestion = block.content?.question || 'Match the columns';
+        const shuffledRight = getShuffledItems(rightItems, block.id);
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#fdf2f8', padding: '1rem', borderRadius: '12px', border: '1px solid #fbcfe8', marginTop: '0.5rem' }}>
             <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#9d174d' }}>
@@ -1112,7 +1142,7 @@ export default function PreviewCanvasRenderer({
                       style={{ padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #fbcfe8', fontSize: '0.7rem', color: '#9d174d', outline: 'none' }}
                     >
                       <option value="">Select match...</option>
-                      {rightItems.map((right, idx) => {
+                      {shuffledRight.map((right, idx) => {
                         const rightText = typeof right === 'object' ? (right?.text || right?.label || '') : (right || '');
                         return (
                           <option key={idx} value={rightText}>{rightText}</option>
