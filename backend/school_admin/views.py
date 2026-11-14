@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser
 from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
 from django.contrib.auth import get_user_model
 
 from accounts.names import title_name
@@ -544,7 +546,7 @@ class BulkUploadAPIView(APIView):
                             if clash:
                                 raise ValueError(roll_conflict_message(clash, roll_no, grade, section))
 
-                            # Auto generate lms login code (username) from full name and roll no (e.g. DHA_12)
+                            # Auto generate lms login code from full name and roll no (e.g. DHA_12)
                             clean_name = "".join(ch for ch in full_name if ch.isalpha()).upper()
                             prefix = clean_name[:3] if len(clean_name) >= 3 else clean_name.ljust(3, "X")
                             if not prefix:
@@ -552,22 +554,31 @@ class BulkUploadAPIView(APIView):
                             clean_roll = str(roll_no).strip()
                             if clean_roll:
                                 formatted_roll = clean_roll.zfill(2) if (clean_roll.isdigit() and len(clean_roll) == 1) else clean_roll
-                                username = f"{prefix}_{formatted_roll}"
+                                lms_code = f"{prefix}_{formatted_roll}"
                             else:
-                                username = f"{prefix}_01"
+                                lms_code = f"{prefix}_01"
 
-                            existing_user = User.objects.filter(username=username).first()
-                            if existing_user:
-                                from teacher.models import Student as StudentModel
-                                if not StudentModel.objects.filter(user=existing_user).exists():
-                                    existing_user.delete()
+                            from teacher.models import Student as StudentModel
+                            # Check if lms_code already exists in THIS school
+                            clash_student = StudentModel.objects.filter(school=school).filter(
+                                Q(lms_code__iexact=lms_code) | Q(user__username__iexact=lms_code)
+                            ).exists()
+                            if clash_student:
+                                raise ValueError(f"A student with LMS login code '{lms_code}' already exists in this school.")
+
+                            internal_username = lms_code
+                            clashing_user = User.objects.filter(username__iexact=internal_username).first()
+                            if clashing_user:
+                                if not StudentModel.objects.filter(user=clashing_user).exists():
+                                    clashing_user.delete()
                                 else:
-                                    raise ValueError(f"A student with LMS login code '{username}' already exists in the system.")
+                                    internal_username = f"sch{school.school_id}_{lms_code}"
+                                    if User.objects.filter(username__iexact=internal_username).exists():
+                                        internal_username = f"sch{school.school_id}_{lms_code}_{timezone.now().strftime('%m%d%H%M%S')}"
 
-                            # Password defaults to username (or lms login code)
-                            password = username
-                            # Email defaults to username@lingualab.com
-                            email = f"{username.lower()}@lingualab.com"
+                            # Password defaults to lms login code
+                            password = lms_code
+                            email = f"{lms_code.lower()}_{school.school_id}@lingualab.com"
 
                             # Parse status (is_active)
                             is_active = True
@@ -575,11 +586,11 @@ class BulkUploadAPIView(APIView):
                                 is_active = False
 
                             if User.objects.filter(email=email).exists():
-                                raise ValueError(f"A user with email '{email}' already exists.")
+                                email = f"{internal_username.lower()}@lingualab.com"
 
                             # Create Django auth user
                             new_user = User.objects.create_user(
-                                username=username,
+                                username=internal_username,
                                 password=password,
                                 email=email,
                                 full_name=full_name,
@@ -592,6 +603,7 @@ class BulkUploadAPIView(APIView):
                                 user=new_user,
                                 school=school,
                                 roll_no=roll_no,
+                                lms_code=lms_code,
                                 grade=grade,
                                 section=section,
                                 academic_year=academic_year

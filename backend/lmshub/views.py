@@ -165,10 +165,11 @@ def login(request, device):
     if not state["active"]:
         return error(403, "not_activated")
 
-    # Only active students of this PC's school, by login code (username)
+    # Only active students of this PC's school, by login code (lms_code or username)
     student = (
         Student.objects.select_related("user")
-        .filter(school=device.school, user__username__iexact=code, user__is_active=True)
+        .filter(school=device.school, user__is_active=True)
+        .filter(Q(lms_code__iexact=code) | Q(user__username__iexact=code))
         .order_by("student_id")
         .first()
     )
@@ -210,7 +211,7 @@ def login(request, device):
         "student": {
             "id": student.student_id,
             "name": user.full_name or user.username,
-            "login_code": user.username,
+            "login_code": student.lms_code or user.username,
             "grade": grade,
             "grade_number": grade_number,
         },
@@ -343,7 +344,7 @@ def offline_data(request, device):
             "grade_number": grade_number,
             "gradeId": grade_id,
             "planError": None if status_code == 200 else body.get("error") or "plan_not_available",
-            "codeKeys": [code_key(token, student.user.username)],
+            "codeKeys": list(set([code_key(token, student.user.username)] + ([code_key(token, student.lms_code)] if getattr(student, "lms_code", None) else []))),
             "progress": progress.snapshot(student),
         })
     return reply(200, {
@@ -369,8 +370,10 @@ def offline_progress(request, device):
         .first()
         if raw_id.isdigit() else None
     )
-    expected = code_key(request.headers.get("X-Hub-Token"), student.user.username) if student else ""
-    if not student or not hmac.compare_digest(str(body.get("code_key") or "").encode(), expected.encode()):
+    expected_keys = [code_key(request.headers.get("X-Hub-Token"), student.user.username)] if student else []
+    if student and getattr(student, "lms_code", None):
+        expected_keys.append(code_key(request.headers.get("X-Hub-Token"), student.lms_code))
+    if not student or not any(hmac.compare_digest(str(body.get("code_key") or "").encode(), exp.encode()) for exp in expected_keys):
         return error(404, "student_not_found")
     status_code, result = progress.apply_event(student, device, body["event"], offline=True)
     return reply(status_code, result)

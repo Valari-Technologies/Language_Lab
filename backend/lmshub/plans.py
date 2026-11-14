@@ -55,8 +55,11 @@ def plan_for_student(student):
         return 422, {"error": "grade_not_found", "raw": student.grade or ""}
     plan = plan_for_grade(grade)
     user = student.user
+    clean_code = getattr(student, "lms_code", None) or user.username
+    if clean_code.startswith(f"sch{student.school_id}_"):
+        clean_code = clean_code[len(f"sch{student.school_id}_"):]
     return 200, {
-        "student": {"id": student.student_id, "login_code": user.username, "name": user.full_name or user.username},
+        "student": {"id": student.student_id, "login_code": clean_code, "name": user.full_name or user.username},
         **plan,
     }
 

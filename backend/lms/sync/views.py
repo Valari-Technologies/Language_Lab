@@ -466,12 +466,29 @@ class LMSStudentRollNoAuthAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Optional school scoping if provided by client/headers
+        school_id_param = (
+            request.data.get('school_id')
+            or request.data.get('schoolId')
+            or request.data.get('school')
+            or request.headers.get('X-School-ID')
+            or request.headers.get('x-school-id')
+        )
+        student_query = Student.objects.select_related("user", "school")
+        if school_id_param:
+            clean_s = str(school_id_param).strip()
+            sq = Q(school__schoolId__iexact=clean_s) | Q(school__school_code__iexact=clean_s)
+            if clean_s.isdigit():
+                sq |= Q(school__school_id=int(clean_s))
+            student_query = student_query.filter(sq)
+
         # Robust Multi-field Match
         student = (
-            Student.objects.select_related("user", "school")
+            student_query
             .filter(
-                Q(roll_no__iexact=raw_code) |
-                Q(user__username__iexact=raw_code)
+                Q(lms_code__iexact=raw_code) |
+                Q(user__username__iexact=raw_code) |
+                Q(roll_no__iexact=raw_code)
             )
             .first()
         )
@@ -548,13 +565,19 @@ class LMSStudentRollNoAuthAPIView(APIView):
                 "checksum": version_obj.checksum or "",
             })
 
+        clean_code = getattr(student, "lms_code", None) or user.username
+        if clean_code.startswith(f"sch{student.school.school_id}_"):
+            clean_code = clean_code[len(f"sch{student.school.school_id}_"):]
+
         return Response(
             {
                 "status": "success",
                 "student": {
                     "id": student.student_id,
                     "name": user.full_name or user.username,
-                    "roll_number": student.roll_no or user.username,
+                    "roll_number": student.roll_no or clean_code,
+                    "lms_code": clean_code,
+                    "login_code": clean_code,
                     "school_id": student.school.school_id,
                     "grade": grade_label,
                 },
@@ -629,7 +652,9 @@ class BootstrapSyncAPIView(APIView):
                 if g_obj:
                     grade_val = g_obj.grade_name
 
-            code = s.user.username
+            code = getattr(s, "lms_code", None) or s.user.username
+            if code.startswith(f"sch{school.school_id}_"):
+                code = code[len(f"sch{school.school_id}_"):]
             roll = s.roll_no or code
             name = s.user.full_name or s.user.first_name or code
 

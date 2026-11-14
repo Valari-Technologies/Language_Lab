@@ -309,7 +309,11 @@ class HubProgressAPIView(APIView):
             if not student or not student.user.is_active:
                 rejected.append({"event_id": ev["event_id"], "error": "student_not_found"})
                 continue
-            if student.user.username.lower() != ev["login_code"].lower():
+            clean_code = (getattr(student, "lms_code", None) or student.user.username).lower()
+            if clean_code.startswith(f"sch{school.school_id}_"):
+                clean_code = clean_code[len(f"sch{school.school_id}_"):]
+            valid_codes = {clean_code, student.user.username.lower()}
+            if ev["login_code"].lower() not in valid_codes:
                 rejected.append({"event_id": ev["event_id"], "error": "login_code_mismatch"})
                 continue
 
@@ -387,10 +391,17 @@ class HubProgressAPIView(APIView):
         has_more = len(rows) > limit
         rows = rows[:limit]
 
-        student_ids = dict(
+        student_rows = list(
             Student.objects.filter(school=school, user_id__in=[r.student_id for r in rows])
-            .values_list("user_id", "student_id")
+            .values_list("user_id", "student_id", "lms_code")
         )
+        student_ids = {uid: sid for uid, sid, _ in student_rows}
+        student_codes = {}
+        for uid, _, code in student_rows:
+            if code and code.startswith(f"sch{school.school_id}_"):
+                code = code[len(f"sch{school.school_id}_"):]
+            student_codes[uid] = code
+
         exp_ids = [int(r.assignment.experience_ref) for r in rows if str(r.assignment.experience_ref).isdigit()]
         package_ids = dict(
             PublishedPackage.objects.filter(experience_id__in=exp_ids).values_list("experience_id", "id")
@@ -400,10 +411,13 @@ class HubProgressAPIView(APIView):
         for r in rows:
             ref = r.assignment.experience_ref
             experience_id = int(ref) if str(ref).isdigit() else None
+            login_code = student_codes.get(r.student_id) or r.student.username
+            if login_code.startswith(f"sch{school.school_id}_"):
+                login_code = login_code[len(f"sch{school.school_id}_"):]
             attempts.append({
                 "event_id": r.lms_attempt_id,
                 "student_id": student_ids.get(r.student_id),
-                "login_code": r.student.username,
+                "login_code": login_code,
                 "experience_id": experience_id,
                 "package_id": package_ids.get(experience_id),
                 "level_key": r.level_key,

@@ -535,7 +535,8 @@ class LevelMapAPIView(APIView):
 
         student = (
             Student.objects.select_related("user")
-            .filter(school=school, user__username__iexact=login_code, user__is_active=True)
+            .filter(school=school, user__is_active=True)
+            .filter(Q(lms_code__iexact=login_code) | Q(user__username__iexact=login_code))
             .order_by("student_id")
             .first()
         )
@@ -550,11 +551,14 @@ class LevelMapAPIView(APIView):
             )
 
         user = student.user
+        clean_code = getattr(student, "lms_code", None) or user.username
+        if clean_code.startswith(f"sch{school.school_id}_"):
+            clean_code = clean_code[len(f"sch{school.school_id}_"):]
         return Response(
             {
                 "student": {
                     "id": student.student_id,
-                    "login_code": user.username,
+                    "login_code": clean_code,
                     "name": user.full_name or user.username,
                 },
                 "grade": _grade_payload(grade),
