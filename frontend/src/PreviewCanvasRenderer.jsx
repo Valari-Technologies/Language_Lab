@@ -540,54 +540,54 @@ const HotspotExplorerPreviewBlock = ({ block, resolveUrl }) => {
       {block.content?.imageUrl ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
           <div style={{ position: 'relative', width: '100%', height: block.styles?.height || 'auto', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block' }}>
-            <img
-              src={resolvedImg}
-              alt="Hotspot explorer source"
-              style={{
-                width: '100%',
-                height: block.styles?.height && block.styles?.height !== 'auto' ? block.styles.height : 'auto',
-                maxHeight: '450px',
-                objectFit: block.styles?.objectFit || 'cover',
-                display: 'block'
-              }}
-            />
-            {hotspots.map((h, hidx) => {
-              const isActive = hidx === currentIdx;
-              return (
-                <div
-                  key={h.id || hidx}
-                  title={h.name || `Target ${hidx + 1}`}
-                  onClick={() => setActiveIdx(hidx)}
-                  style={{
-                    position: 'absolute',
-                    left: `${(h.x / 400) * 100}%`,
-                    top: `${(h.y / 250) * 100}%`,
-                    width: '26px',
-                    height: '26px',
-                    borderRadius: '50%',
-                    background: isActive
-                      ? 'radial-gradient(circle, #2563eb 0%, #1d4ed8 100%)'
-                      : 'radial-gradient(circle, #ef4444 0%, #dc2626 100%)',
-                    border: isActive ? '3px solid #60a5fa' : '2px solid #ffffff',
-                    boxShadow: isActive
-                      ? '0 0 12px rgba(37, 99, 235, 0.9), 0 2px 6px rgba(0,0,0,0.4)'
-                      : '0 0 10px rgba(239, 68, 68, 0.7), 0 2px 4px rgba(0,0,0,0.3)',
-                    color: '#ffffff',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
-                    transform: 'translate(-50%, -50%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    zIndex: 5,
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  {hidx + 1}
-                </div>
-              );
-            })}
+            <div style={{ position: 'relative', width: '100%', display: 'block' }}>
+              <img
+                src={resolvedImg}
+                alt="Hotspot explorer source"
+                style={{
+                  width: '100%',
+                  height: block.styles?.height && block.styles?.height !== 'auto' ? block.styles.height : 'auto',
+                  display: 'block'
+                }}
+              />
+              {hotspots.map((h, hidx) => {
+                const isActive = hidx === currentIdx;
+                return (
+                  <div
+                    key={h.id || hidx}
+                    title={h.name || `Target ${hidx + 1}`}
+                    onClick={() => setActiveIdx(hidx)}
+                    style={{
+                      position: 'absolute',
+                      left: `${(h.x / 400) * 100}%`,
+                      top: `${(h.y / 250) * 100}%`,
+                      width: '26px',
+                      height: '26px',
+                      borderRadius: '50%',
+                      background: isActive
+                        ? 'radial-gradient(circle, #2563eb 0%, #1d4ed8 100%)'
+                        : 'radial-gradient(circle, #ef4444 0%, #dc2626 100%)',
+                      border: isActive ? '3px solid #60a5fa' : '2px solid #ffffff',
+                      boxShadow: isActive
+                        ? '0 0 12px rgba(37, 99, 235, 0.9), 0 2px 6px rgba(0,0,0,0.4)'
+                        : '0 0 10px rgba(239, 68, 68, 0.7), 0 2px 4px rgba(0,0,0,0.3)',
+                      color: '#ffffff',
+                      fontSize: '11px',
+                      fontWeight: 'bold',
+                      transform: 'translate(-50%, -50%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      zIndex: 5,
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    {hidx + 1}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Compact Column-Wise Target Name Chips below Image */}

@@ -4095,11 +4095,19 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             {block.content?.imageUrl ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                 <div
+                  data-hotspot-container="true"
                   onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const relX = Math.round(((e.clientX - rect.left) / rect.width) * 400);
-                    const relY = Math.round(((e.clientY - rect.top) / rect.height) * 250);
-                    const hotspots = [...(block.content.hotspots || [])];
+                    const img = e.currentTarget.querySelector('img');
+                    if (!img) return;
+                    const rect = img.getBoundingClientRect();
+                    if (rect.width <= 0 || rect.height <= 0) return;
+                    const clickX = e.clientX - rect.left;
+                    const clickY = e.clientY - rect.top;
+                    const clampedX = Math.max(0, Math.min(rect.width, clickX));
+                    const clampedY = Math.max(0, Math.min(rect.height, clickY));
+                    const relX = Math.round((clampedX / rect.width) * 400);
+                    const relY = Math.round((clampedY / rect.height) * 250);
+                    const hotspots = [...(block.content?.hotspots || [])];
                     if (hotspots.length > 0) {
                       const targetIdx = activeHotspotIndex < hotspots.length ? activeHotspotIndex : 0;
                       hotspots[targetIdx] = { ...hotspots[targetIdx], x: relX, y: relY };
@@ -4108,59 +4116,90 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   }}
                   style={{ position: 'relative', width: '100%', height: block.styles?.height || 'auto', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block', cursor: 'crosshair' }}
                 >
-                  <img
-                    src={resolveMediaUrl(block.content.imageUrl)}
-                    alt="Hotspot explorer source"
-                    draggable={false}
-                    style={{
-                      width: '100%',
-                      height: block.styles?.height && block.styles?.height !== 'auto' ? block.styles.height : 'auto',
-                      maxHeight: '450px',
-                      objectFit: block.styles?.objectFit || 'cover',
-                      display: 'block',
-                      pointerEvents: 'none'
-                    }}
-                  />
-                  {(block.content.hotspots || []).map((h, hidx) => {
-                    const isActive = hidx === (activeHotspotIndex < (block.content.hotspots || []).length ? activeHotspotIndex : 0);
-                    return (
-                      <div
-                        key={h.id || hidx}
-                        title={h.name || `Target ${hidx + 1}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveHotspotIndex(hidx);
-                        }}
-                        style={{
-                          position: 'absolute',
-                          left: `${(h.x / 400) * 100}%`,
-                          top: `${(h.y / 250) * 100}%`,
-                          width: '26px',
-                          height: '26px',
-                          borderRadius: '50%',
-                          background: isActive
-                            ? 'radial-gradient(circle, #2563eb 0%, #1d4ed8 100%)'
-                            : 'radial-gradient(circle, #ef4444 0%, #dc2626 100%)',
-                          border: isActive ? '3px solid #60a5fa' : '2px solid #ffffff',
-                          boxShadow: isActive
-                            ? '0 0 12px rgba(37, 99, 235, 0.9), 0 2px 6px rgba(0,0,0,0.4)'
-                            : '0 0 10px rgba(239, 68, 68, 0.7), 0 2px 4px rgba(0,0,0,0.3)',
-                          color: '#ffffff',
-                          fontSize: '11px',
-                          fontWeight: 'bold',
-                          transform: 'translate(-50%, -50%)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          zIndex: 5,
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        {hidx + 1}
-                      </div>
-                    );
-                  })}
+                  <div style={{ position: 'relative', width: '100%', display: 'block' }}>
+                    <img
+                      src={resolveMediaUrl(block.content.imageUrl)}
+                      alt="Hotspot explorer source"
+                      draggable={false}
+                      style={{
+                        width: '100%',
+                        height: block.styles?.height && block.styles?.height !== 'auto' ? block.styles.height : 'auto',
+                        display: 'block',
+                        pointerEvents: 'none',
+                        userSelect: 'none'
+                      }}
+                    />
+                    {(block.content.hotspots || []).map((h, hidx) => {
+                      const isActive = hidx === (activeHotspotIndex < (block.content.hotspots || []).length ? activeHotspotIndex : 0);
+                      return (
+                        <div
+                          key={h.id || hidx}
+                          title={h.name || `Target ${hidx + 1}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveHotspotIndex(hidx);
+                          }}
+                          onPointerDown={(e) => {
+                            e.stopPropagation();
+                            setActiveHotspotIndex(hidx);
+                            const container = e.currentTarget.closest('[data-hotspot-container]');
+                            const img = container?.querySelector('img');
+                            if (!img) return;
+
+                            const onPointerMove = (moveEv) => {
+                              const rect = img.getBoundingClientRect();
+                              if (rect.width <= 0 || rect.height <= 0) return;
+                              const clampedX = Math.max(0, Math.min(rect.width, moveEv.clientX - rect.left));
+                              const clampedY = Math.max(0, Math.min(rect.height, moveEv.clientY - rect.top));
+                              const relX = Math.round((clampedX / rect.width) * 400);
+                              const relY = Math.round((clampedY / rect.height) * 250);
+                              const list = [...(block.content?.hotspots || [])];
+                              if (list[hidx]) {
+                                list[hidx] = { ...list[hidx], x: relX, y: relY };
+                                handleUpdateBlockContent('hotspots', list);
+                              }
+                            };
+
+                            const onPointerUp = () => {
+                              window.removeEventListener('pointermove', onPointerMove);
+                              window.removeEventListener('pointerup', onPointerUp);
+                            };
+
+                            window.addEventListener('pointermove', onPointerMove);
+                            window.addEventListener('pointerup', onPointerUp);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            left: `${(h.x / 400) * 100}%`,
+                            top: `${(h.y / 250) * 100}%`,
+                            width: '28px',
+                            height: '28px',
+                            borderRadius: '50%',
+                            background: isActive
+                              ? 'radial-gradient(circle, #2563eb 0%, #1d4ed8 100%)'
+                              : 'radial-gradient(circle, #ef4444 0%, #dc2626 100%)',
+                            border: isActive ? '3px solid #60a5fa' : '2px solid #ffffff',
+                            boxShadow: isActive
+                              ? '0 0 12px rgba(37, 99, 235, 0.9), 0 2px 6px rgba(0,0,0,0.4)'
+                              : '0 0 10px rgba(239, 68, 68, 0.7), 0 2px 4px rgba(0,0,0,0.3)',
+                            color: '#ffffff',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            transform: 'translate(-50%, -50%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'grab',
+                            zIndex: 5,
+                            userSelect: 'none',
+                            transition: 'box-shadow 0.2s ease, transform 0.1s ease'
+                          }}
+                        >
+                          {hidx + 1}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Compact Column-Wise Target Name Chips below Image */}
@@ -11372,51 +11411,99 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                 </span>
                                               </div>
                                               <div
+                                                data-hotspot-container="true"
                                                 onClick={(e) => {
-                                                  const rect = e.currentTarget.getBoundingClientRect();
-                                                  const relX = Math.round(((e.clientX - rect.left) / rect.width) * 400);
-                                                  const relY = Math.round(((e.clientY - rect.top) / rect.height) * 250);
-                                                  const hotspots = [...selectedBlock.content.hotspots];
-                                                  const targetIdx = activeHotspotIndex < hotspots.length ? activeHotspotIndex : 0;
-                                                  hotspots[targetIdx] = { ...hotspots[targetIdx], x: relX, y: relY };
-                                                  handleUpdateBlockContent('hotspots', hotspots);
+                                                  const img = e.currentTarget.querySelector('img');
+                                                  if (!img) return;
+                                                  const rect = img.getBoundingClientRect();
+                                                  if (rect.width <= 0 || rect.height <= 0) return;
+                                                  const clickX = e.clientX - rect.left;
+                                                  const clickY = e.clientY - rect.top;
+                                                  const clampedX = Math.max(0, Math.min(rect.width, clickX));
+                                                  const clampedY = Math.max(0, Math.min(rect.height, clickY));
+                                                  const relX = Math.round((clampedX / rect.width) * 400);
+                                                  const relY = Math.round((clampedY / rect.height) * 250);
+                                                  const hotspots = [...(selectedBlock.content?.hotspots || [])];
+                                                  if (hotspots.length > 0) {
+                                                    const targetIdx = activeHotspotIndex < hotspots.length ? activeHotspotIndex : 0;
+                                                    hotspots[targetIdx] = { ...hotspots[targetIdx], x: relX, y: relY };
+                                                    handleUpdateBlockContent('hotspots', hotspots);
+                                                  }
                                                 }}
-                                                style={{ position: 'relative', width: '100%', height: '140px', background: '#0f172a', borderRadius: '6px', overflow: 'hidden', cursor: 'crosshair' }}
+                                                style={{ position: 'relative', width: '100%', borderRadius: '6px', overflow: 'hidden', cursor: 'crosshair', background: '#e2e8f0', border: '1px solid #cbd5e1' }}
                                               >
-                                                <img
-                                                  src={resolveMediaUrl(selectedBlock.content.imageUrl)}
-                                                  alt="Hotspot target selector"
-                                                  draggable={false}
-                                                  style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
-                                                />
-                                                {(selectedBlock.content.hotspots || []).map((h, hidx) => {
-                                                  const isActive = hidx === (activeHotspotIndex < selectedBlock.content.hotspots.length ? activeHotspotIndex : 0);
-                                                  return (
-                                                    <div
-                                                      key={h.id || hidx}
-                                                      style={{
-                                                        position: 'absolute',
-                                                        left: `${(h.x / 400) * 100}%`,
-                                                        top: `${(h.y / 250) * 100}%`,
-                                                        width: '18px',
-                                                        height: '18px',
-                                                        borderRadius: '50%',
-                                                        background: isActive ? '#2563eb' : '#ef4444',
-                                                        border: '2px solid #ffffff',
-                                                        color: '#ffffff',
-                                                        fontSize: '9px',
-                                                        fontWeight: 'bold',
-                                                        transform: 'translate(-50%, -50%)',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        pointerEvents: 'none'
-                                                      }}
-                                                    >
-                                                      {hidx + 1}
-                                                    </div>
-                                                  );
-                                                })}
+                                                <div style={{ position: 'relative', width: '100%', display: 'block' }}>
+                                                  <img
+                                                    src={resolveMediaUrl(selectedBlock.content.imageUrl)}
+                                                    alt="Hotspot target selector"
+                                                    draggable={false}
+                                                    style={{ width: '100%', height: 'auto', display: 'block', pointerEvents: 'none', userSelect: 'none' }}
+                                                  />
+                                                  {(selectedBlock.content.hotspots || []).map((h, hidx) => {
+                                                    const isActive = hidx === (activeHotspotIndex < (selectedBlock.content.hotspots || []).length ? activeHotspotIndex : 0);
+                                                    return (
+                                                      <div
+                                                        key={h.id || hidx}
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          setActiveHotspotIndex(hidx);
+                                                        }}
+                                                        onPointerDown={(e) => {
+                                                          e.stopPropagation();
+                                                          setActiveHotspotIndex(hidx);
+                                                          const container = e.currentTarget.closest('[data-hotspot-container]');
+                                                          const img = container?.querySelector('img');
+                                                          if (!img) return;
+
+                                                          const onPointerMove = (moveEv) => {
+                                                            const rect = img.getBoundingClientRect();
+                                                            if (rect.width <= 0 || rect.height <= 0) return;
+                                                            const clampedX = Math.max(0, Math.min(rect.width, moveEv.clientX - rect.left));
+                                                            const clampedY = Math.max(0, Math.min(rect.height, moveEv.clientY - rect.top));
+                                                            const relX = Math.round((clampedX / rect.width) * 400);
+                                                            const relY = Math.round((clampedY / rect.height) * 250);
+                                                            const list = [...(selectedBlock.content?.hotspots || [])];
+                                                            if (list[hidx]) {
+                                                              list[hidx] = { ...list[hidx], x: relX, y: relY };
+                                                              handleUpdateBlockContent('hotspots', list);
+                                                            }
+                                                          };
+
+                                                          const onPointerUp = () => {
+                                                            window.removeEventListener('pointermove', onPointerMove);
+                                                            window.removeEventListener('pointerup', onPointerUp);
+                                                          };
+
+                                                          window.addEventListener('pointermove', onPointerMove);
+                                                          window.addEventListener('pointerup', onPointerUp);
+                                                        }}
+                                                        style={{
+                                                          position: 'absolute',
+                                                          left: `${(h.x / 400) * 100}%`,
+                                                          top: `${(h.y / 250) * 100}%`,
+                                                          width: '20px',
+                                                          height: '20px',
+                                                          borderRadius: '50%',
+                                                          background: isActive ? '#2563eb' : '#ef4444',
+                                                          border: '2px solid #ffffff',
+                                                          boxShadow: isActive ? '0 0 8px rgba(37,99,235,0.8)' : '0 1px 4px rgba(0,0,0,0.3)',
+                                                          color: '#ffffff',
+                                                          fontSize: '10px',
+                                                          fontWeight: 'bold',
+                                                          transform: 'translate(-50%, -50%)',
+                                                          display: 'flex',
+                                                          alignItems: 'center',
+                                                          justifyContent: 'center',
+                                                          cursor: 'grab',
+                                                          zIndex: 4,
+                                                          userSelect: 'none'
+                                                        }}
+                                                      >
+                                                        {hidx + 1}
+                                                      </div>
+                                                    );
+                                                  })}
+                                                </div>
                                               </div>
                                             </div>
                                           )}
@@ -11432,8 +11519,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                 hotspots.push({
                                                   id: `hotspot_${Date.now()}`,
                                                   name: `Target ${hotspots.length + 1}`,
-                                                  x: 100,
-                                                  y: 100,
+                                                  x: 200,
+                                                  y: 125,
                                                   width: 80,
                                                   height: 80,
                                                   info: 'Exploration info description...',
