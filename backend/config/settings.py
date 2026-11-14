@@ -45,6 +45,14 @@ if not DEBUG:
 LMS_SYNC_SECRET = config("LMS_SYNC_SECRET", default="super-secret-key-12345")
 SHOW_DEMO_DATA_IN_REPORTS = config("SHOW_DEMO_DATA_IN_REPORTS", default=False, cast=bool)
 
+# Teacher Reports: the performance labels come from the average assessment score (percent), and a student with no
+# activity for this many days is inactive. Starting values to be agreed with the product team; change them in the
+# environment, no code change is needed.
+REPORT_THRESHOLD_EXCELLENT = config("REPORT_THRESHOLD_EXCELLENT", default=85, cast=int)
+REPORT_THRESHOLD_GOOD = config("REPORT_THRESHOLD_GOOD", default=70, cast=int)
+REPORT_THRESHOLD_AVERAGE = config("REPORT_THRESHOLD_AVERAGE", default=50, cast=int)
+REPORT_INACTIVE_AFTER_DAYS = config("REPORT_INACTIVE_AFTER_DAYS", default=14, cast=int)
+
 
 # Application definition
 
@@ -66,6 +74,7 @@ INSTALLED_APPS = [
     'content_studio',
     'assessments',
     'lms',
+    'lmshub',
     'drf_spectacular',
 ]
 

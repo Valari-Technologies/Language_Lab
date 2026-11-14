@@ -34,6 +34,35 @@ const getScrambledWords = (wordsList) => {
   return shuffled;
 };
 
+const getShuffledItems = (items, seedKey = 42) => {
+  if (!Array.isArray(items) || items.length <= 1) return items || [];
+  const str = items.map(it => (typeof it === 'object' && it !== null ? (it.text || it.label || '') : String(it || ''))).join('|') + '|' + String(seedKey || '');
+  let hash = 0;
+  for (let k = 0; k < str.length; k++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(k);
+    hash |= 0;
+  }
+  const seededRandom = (seed) => {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+  };
+  const shuffled = [...items];
+  let currentSeed = Math.abs(hash) + 7;
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(seededRandom(currentSeed++) * (i + 1));
+    const temp = shuffled[i];
+    shuffled[i] = shuffled[j];
+    shuffled[j] = temp;
+  }
+  const val = (it) => (typeof it === 'object' && it !== null ? (it.text || it.label || '') : String(it || ''));
+  if (shuffled.length > 1 && shuffled.every((item, idx) => val(item) === val(items[idx]))) {
+    const temp = shuffled[0];
+    shuffled[0] = shuffled[shuffled.length - 1];
+    shuffled[shuffled.length - 1] = temp;
+  }
+  return shuffled;
+};
+
 const CustomAudioPlayer = ({ src, style = {} }) => {
   const audioRef = React.useRef(null);
   const [isPlaying, setIsPlaying] = React.useState(false);
@@ -304,18 +333,14 @@ const MultimediaInteractiveQuizPlayer = ({
             const pauseSec = q.pauseAt !== undefined ? parseFloat(q.pauseAt) : 35;
             const isTargetTrigger = triggeredPauseIdx === qIdx;
             const isFillBlank = (q.type || 'mcq') === 'fill_blank';
-
-            // Hide question until video/audio playback reaches target timestamp (or triggered / answered)
-            const shouldShow = pauseSec === 0 || currentTime >= pauseSec || hasAnswered || isTargetTrigger;
-
-            if (!shouldShow) return null;
+            const isPlaybackReached = pauseSec === 0 || currentTime >= pauseSec;
 
             return (
               <div
                 key={q.id || qIdx}
                 style={{
                   background: isTargetTrigger ? '#f0fdf4' : '#ffffff',
-                  border: isTargetTrigger ? '2px solid #22c55e' : '1.5px solid #bae6fd',
+                  border: isTargetTrigger ? '2px solid #22c55e' : (isPlaybackReached ? '1.5px solid #0284c7' : '1.5px solid #bae6fd'),
                   borderRadius: '10px',
                   padding: '0.85rem',
                   display: 'flex',
@@ -650,8 +675,12 @@ export default function PreviewCanvasRenderer({
       normType = 'hotspot_explorer';
     } else if (['functional_reading', 'functional reading'].includes(rawType)) {
       normType = 'functional_reading';
-    } else if (['multimedia_reading_assessment', 'multimedia reading assessment', 'multimedia_reading'].includes(rawType)) {
+    } else if (['multimedia_reading_assessment', 'multimedia reading assessment', 'multimedia_reading', 'multimedia_assessment', 'multimedia reading & assessment', 'multimedia'].includes(rawType)) {
       normType = 'multimedia_reading_assessment';
+    } else if (['quiz', 'mcq', 'assessment', 'quiz_assessment', 'assessment_quiz', 'assessment_question', 'multiple_choice', 'quiz_listening'].includes(rawType)) {
+      normType = 'quiz';
+    } else if (['listen_repeat', 'listen and repeat', 'listen & repeat'].includes(rawType)) {
+      normType = 'pronunciation';
     }
     switch (normType) {
       case 'heading':
@@ -819,13 +848,13 @@ export default function PreviewCanvasRenderer({
 
       case 'quiz':
         {
-          const rawQuestions = block.content?.questions;
+          const rawQuestions = block.content?.questions || block.content?.quiz_questions || block.content?.items;
           const questionsList = rawQuestions && rawQuestions.length > 0
             ? rawQuestions
             : [{
-                question: block.content?.question || 'Quiz question text label...',
-                options: block.content?.options || ['', '', '', ''],
-                correctAnswerIndex: block.content?.correctAnswerIndex ?? 0
+                question: block.content?.question || block.content?.quiz_question || block.content?.prompt || block.content?.title || block.content?.text || 'Quiz question text label...',
+                options: block.content?.options || block.content?.quiz_options || block.content?.choices || ['', '', '', ''],
+                correctAnswerIndex: block.content?.correctAnswerIndex ?? block.content?.quiz_correct_index ?? block.content?.correctAnswer ?? 0
               }];
 
           return (
@@ -834,9 +863,10 @@ export default function PreviewCanvasRenderer({
                 const blockAnswerKey = `${activeScreenId}_${block.id}_q${qIdx}`;
                 const selectedAnsIndex = previewAnswers[blockAnswerKey];
                 const hasSelected = selectedAnsIndex !== undefined;
-                const qText = qObj.question || `Question #${qIdx + 1}`;
-                const options = qObj.options || ['', '', '', ''];
-                const correctIdx = parseInt(qObj.correctAnswerIndex ?? qObj.correctAnswer) || 0;
+                const qText = qObj.question || qObj.quiz_question || qObj.prompt || qObj.text || `Question #${qIdx + 1}`;
+                const rawOpts = qObj.options || qObj.quiz_options || qObj.choices || qObj.answers || ['', '', '', ''];
+                const options = Array.isArray(rawOpts) ? rawOpts : [];
+                const correctIdx = parseInt(qObj.correctAnswerIndex ?? qObj.quiz_correct_index ?? qObj.correctAnswer) || 0;
 
                 return (
                   <div key={qIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
@@ -1079,6 +1109,7 @@ export default function PreviewCanvasRenderer({
         const leftItems = block.content?.leftItems || [];
         const rightItems = block.content?.rightItems || [];
         const matchQuestion = block.content?.question || 'Match the columns';
+        const shuffledRight = getShuffledItems(rightItems, block.id);
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#fdf2f8', padding: '1rem', borderRadius: '12px', border: '1px solid #fbcfe8', marginTop: '0.5rem' }}>
             <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#9d174d' }}>
@@ -1111,7 +1142,7 @@ export default function PreviewCanvasRenderer({
                       style={{ padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #fbcfe8', fontSize: '0.7rem', color: '#9d174d', outline: 'none' }}
                     >
                       <option value="">Select match...</option>
-                      {rightItems.map((right, idx) => {
+                      {shuffledRight.map((right, idx) => {
                         const rightText = typeof right === 'object' ? (right?.text || right?.label || '') : (right || '');
                         return (
                           <option key={idx} value={rightText}>{rightText}</option>
@@ -1732,41 +1763,60 @@ export default function PreviewCanvasRenderer({
 
       case 'pronunciation':
         {
-          const pronQuestion = block.content?.question || 'Practice pronouncing words correctly';
+          const pronQuestion = block.content?.question || 'Listen to each word, then say it into the recorder.';
           const pronItems = block.content?.items || (block.content?.word ? [{ id: 'migrated', word: block.content.word, phonetic: block.content.phonetic }] : []);
+          const pronMode = block.content?.mode === 'listen' ? 'listen' : 'read';
+          const showPhonetic = block.content?.showPhonetic !== false;
+          const maxDuration = block.content?.maxDuration || 5;
+          const attempts = block.content?.attempts || 3;
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem', marginTop: '0.5rem' }}>
               <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FiMic /> Pronunciation: {pronQuestion}
+                <FiMic /> Listen & Repeat: {pronQuestion}
+              </div>
+              <div style={{ fontSize: '0.68rem', color: '#92400e' }}>
+                {pronMode === 'listen' ? 'Play the model, then record yourself.' : 'Read the word aloud and record yourself.'} Up to {maxDuration}s per recording, {attempts} {attempts === 1 ? 'try' : 'tries'} per word.
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {pronItems.map((item, itemIdx) => (
-                  <div key={item.id || itemIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '6px', padding: '0.45rem 0.65rem' }}>
-                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span style={{ color: '#b45309', fontWeight: 800 }}>{itemIdx + 1}.</span>
-                      <span>{item.word || `Word ${itemIdx + 1}`}</span>
+                {pronItems.map((item, itemIdx) => {
+                  const recordKey = `${activeScreenId}_${block.id}_${item.id || itemIdx}`;
+                  const isRec = voiceRecordingStates[recordKey];
+                  const modelAudio = item.audioUrl || item.audio;
+                  const canListen = pronMode === 'listen' && modelAudio;
+                  return (
+                    <div key={item.id || itemIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '6px', padding: '0.45rem 0.65rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span style={{ color: '#b45309', fontWeight: 800 }}>{itemIdx + 1}.</span>
+                          <span>{item.word || `Word ${itemIdx + 1}`}</span>
+                        </div>
+                        {showPhonetic && item.phonetic && (
+                          <span style={{ fontSize: '0.7rem', color: '#92400e', paddingLeft: '1.1rem' }}>{item.phonetic}</span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.35rem', flexShrink: 0 }}>
+                        {canListen && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              try { new Audio(resolveUrl(modelAudio)).play().catch(() => {}); } catch (e) { /* unsupported source */ }
+                            }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#ffffff', color: '#b45309', border: '1px solid #f59e0b', borderRadius: '16px', padding: '4px 10px', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            <FiPlay style={{ fontSize: '0.8rem' }} /> Listen
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setVoiceRecordingStates(prev => ({ ...prev, [recordKey]: !isRec }))}
+                          style={{ display: 'flex', alignItems: 'center', gap: '4px', background: isRec ? '#ef4444' : '#f59e0b', color: '#ffffff', border: 'none', borderRadius: '16px', padding: '4px 10px', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 3px rgba(245, 158, 11, 0.3)' }}
+                        >
+                          <FiMic style={{ fontSize: '0.8rem' }} /> {isRec ? 'Stop' : 'Record'}
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        background: '#f59e0b',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: '16px',
-                        padding: '4px 10px',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        boxShadow: '0 1px 3px rgba(245, 158, 11, 0.3)'
-                      }}
-                    >
-                      <FiMic style={{ fontSize: '0.8rem' }} /> Record
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
@@ -2030,6 +2080,13 @@ export default function PreviewCanvasRenderer({
                 </div>
               )}
 
+              {(block.content?.targetAnswer || block.content?.correctAnswer) && (
+                <div style={{ fontSize: '0.72rem', color: '#047857', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '6px', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <strong style={{ color: '#065f46' }}>🎯 Targeted Answer (For Examination):</strong>
+                  <span>{block.content.targetAnswer || block.content.correctAnswer}</span>
+                </div>
+              )}
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
                 {turns.length > 0 ? (
                   turns.map((t, tIdx) => {
@@ -2079,6 +2136,33 @@ export default function PreviewCanvasRenderer({
                         }}>
                           <div style={{ fontSize: '0.6rem', fontWeight: 700, color: isNpc ? '#6b21a8' : '#e0f2fe' }}>{speakerName}</div>
                           <div style={{ fontSize: '0.72rem', lineHeight: 1.3 }}>{text}</div>
+
+                          {!isNpc && (() => {
+                            const turnTarget = t.targetAnswer || t.expectedResponse || (Array.isArray(t.expectedStudentResponses) && t.expectedStudentResponses[0]?.text) || '';
+                            if (turnTarget) {
+                              return (
+                                <div style={{
+                                  marginTop: '6px',
+                                  paddingTop: '5px',
+                                  borderTop: '1px dashed rgba(255,255,255,0.35)',
+                                  fontSize: '0.66rem',
+                                  color: '#f0fdf4',
+                                  background: 'rgba(5, 150, 105, 0.45)',
+                                  borderRadius: '4px',
+                                  padding: '4px 8px',
+                                  textAlign: 'left'
+                                }}>
+                                  <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', color: '#a7f3d0' }}>
+                                    🎯 Targeted Answer (For Examination):
+                                  </div>
+                                  <div style={{ marginTop: '2px', fontWeight: 500 }}>
+                                    {turnTarget}
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
 
                           {isNpc && (
                             <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #f3e8ff', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -2444,9 +2528,12 @@ export default function PreviewCanvasRenderer({
     } else if (normType === 'matching' || normType === 'match') {
       const pairCount = (block.content?.pairs || block.content?.leftItems || []).length || 2;
       estimatedHeight = 100 + pairCount * 45;
-    } else if (normType === 'quiz') {
+    } else if (['quiz', 'mcq', 'assessment', 'quiz_assessment', 'assessment_quiz'].includes(normType)) {
       const qCount = (block.content?.questions || []).length || 1;
       estimatedHeight = 120 + qCount * 180;
+    } else if (normType === 'multimedia_reading_assessment' || normType === 'multimedia') {
+      const qCount = (block.content?.questions || []).length || 1;
+      estimatedHeight = 260 + qCount * 140;
     } else if (normType === 'roleplay_simulation' || normType === 'roleplay') {
       const turnsArr = block.content?.conversation || block.content?.steps || block.content?.dialogue_lines || block.content?.lines || block.content?.turns || block.content?.script || block.content?.items || [];
       const turnCount = Array.isArray(turnsArr) ? turnsArr.length : 2;

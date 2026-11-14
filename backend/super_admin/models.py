@@ -71,18 +71,46 @@ class LmsServer(models.Model):
 
     installationId = models.CharField(max_length=100, unique=True, primary_key=True)
     serverName = models.CharField(max_length=150)
+    licenseKey = models.CharField(max_length=100, unique=True, null=True, blank=True)
     school = models.ForeignKey('School', on_delete=models.CASCADE, related_name='lms_servers')
     license = models.ForeignKey('License', on_delete=models.CASCADE, related_name='lms_servers')
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
     activationDate = models.DateTimeField(auto_now_add=True)
     lastSyncTime = models.DateTimeField(null=True, blank=True)
     currentCapacity = models.IntegerField(default=0)
+    maxUsers = models.IntegerField(default=40)
+    licenseDuration = models.CharField(max_length=50, default="1 Year", null=True, blank=True)
+    expiryDate = models.DateField(null=True, blank=True)
+    deviceName = models.CharField(max_length=150, null=True, blank=True)
+    publicIp = models.GenericIPAddressField(null=True, blank=True)
+    localIp = models.GenericIPAddressField(null=True, blank=True)
+    lastSeenAt = models.DateTimeField(null=True, blank=True)
+    removedAt = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "cms_lmsserver"
 
     def __str__(self):
         return f"{self.serverName} ({self.installationId})"
+
+
+class RemovedInstallation(models.Model):
+    """A PC removed from a licence in the CMS; activation refuses it until it is allowed again."""
+    installationId = models.CharField(max_length=100)
+    license = models.ForeignKey('License', on_delete=models.CASCADE, related_name='removed_installations')
+    removedAt = models.DateTimeField(auto_now_add=True)
+    removedBy = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+'
+    )
+
+    class Meta:
+        db_table = "cms_removed_installation"
+        constraints = [
+            models.UniqueConstraint(fields=["installationId", "license"], name="unique_removed_installation_per_license")
+        ]
+
+    def __str__(self):
+        return f"{self.installationId} removed from {self.license_id}"
 
 
 class School(models.Model):

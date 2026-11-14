@@ -11,7 +11,7 @@ class StudentViewSet(CMSBaseViewSet):
     permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
     queryset = Student.objects.select_related("user", "school").all()
     serializer_class = StudentSerializer
-    search_fields = ["user__username", "user__email", "user__full_name"]
+    search_fields = ["user__username", "user__email", "user__full_name", "lms_code"]
 
     def get_queryset(self):
         queryset = filter_queryset_by_school(

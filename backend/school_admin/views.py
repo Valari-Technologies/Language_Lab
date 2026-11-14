@@ -4,13 +4,17 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser
 from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
 from django.contrib.auth import get_user_model
 
+from accounts.names import title_name
 from accounts.permissions import IsSuperAdminOrSchoolAdminWrite, IsInstituteAdmin, IsTeacherOrAdmin
 from accounts.scoping import filter_queryset_by_school, get_user_school
 from super_admin.views import CMSBaseViewSet
 from super_admin.models import School, Grade, SchoolAdminProfile
 from teacher.models import Student
+from teacher.rollno import find_roll_conflict, roll_conflict_message
 from .models import Class, Teacher, TeacherClass
 from .serializers import ClassSerializer, TeacherClassSerializer, TeacherSerializer
 import openpyxl
@@ -522,7 +526,7 @@ class BulkUploadAPIView(APIView):
                             if status_val is None or not str(status_val).strip(): raise ValueError("status is required for student.")
                             if not academic_year_val or not str(academic_year_val).strip(): raise ValueError("academy year is required for student.")
 
-                            full_name = str(fullname_val).strip()
+                            full_name = title_name(fullname_val)
                             grade_raw = str(grade_val).strip()
                             import re
                             grade_match = re.search(r"\d+", grade_raw)
@@ -537,21 +541,44 @@ class BulkUploadAPIView(APIView):
                             status_str = str(status_val).strip().lower()
                             academic_year = str(academic_year_val).strip()
 
-                            # Auto generate lms login code (username) from full name
-                            clean_name = "".join(ch for ch in full_name if ch.isalnum()).lower()
-                            if not clean_name:
-                                clean_name = "student"
-                            username = clean_name
-                            orig_username = username
-                            suffix = 1
-                            while User.objects.filter(username=username).exists():
-                                username = f"{orig_username}{suffix}"
-                                suffix += 1
+                            # A roll no may not repeat inside one class section of the school (1 and 01 are the same)
+                            clash = find_roll_conflict(school, grade, section, roll_no)
+                            if clash:
+                                raise ValueError(roll_conflict_message(clash, roll_no, grade, section))
 
-                            # Password defaults to username (or lms login code)
-                            password = username
-                            # Email defaults to username@lingualab.com
-                            email = f"{username}@lingualab.com"
+                            # Auto generate lms login code from full name and roll no (e.g. DHA_12)
+                            clean_name = "".join(ch for ch in full_name if ch.isalpha()).upper()
+                            prefix = clean_name[:3] if len(clean_name) >= 3 else clean_name.ljust(3, "X")
+                            if not prefix:
+                                prefix = "STU"
+                            clean_roll = str(roll_no).strip()
+                            if clean_roll:
+                                formatted_roll = clean_roll.zfill(2) if (clean_roll.isdigit() and len(clean_roll) == 1) else clean_roll
+                                lms_code = f"{prefix}_{formatted_roll}"
+                            else:
+                                lms_code = f"{prefix}_01"
+
+                            from teacher.models import Student as StudentModel
+                            # Check if lms_code already exists in THIS school
+                            clash_student = StudentModel.objects.filter(school=school).filter(
+                                Q(lms_code__iexact=lms_code) | Q(user__username__iexact=lms_code)
+                            ).exists()
+                            if clash_student:
+                                raise ValueError(f"A student with LMS login code '{lms_code}' already exists in this school.")
+
+                            internal_username = lms_code
+                            clashing_user = User.objects.filter(username__iexact=internal_username).first()
+                            if clashing_user:
+                                if not StudentModel.objects.filter(user=clashing_user).exists():
+                                    clashing_user.delete()
+                                else:
+                                    internal_username = f"sch{school.school_id}_{lms_code}"
+                                    if User.objects.filter(username__iexact=internal_username).exists():
+                                        internal_username = f"sch{school.school_id}_{lms_code}_{timezone.now().strftime('%m%d%H%M%S')}"
+
+                            # Password defaults to lms login code
+                            password = lms_code
+                            email = f"{lms_code.lower()}_{school.school_id}@lingualab.com"
 
                             # Parse status (is_active)
                             is_active = True
@@ -559,11 +586,11 @@ class BulkUploadAPIView(APIView):
                                 is_active = False
 
                             if User.objects.filter(email=email).exists():
-                                raise ValueError(f"A user with email '{email}' already exists.")
+                                email = f"{internal_username.lower()}@lingualab.com"
 
                             # Create Django auth user
                             new_user = User.objects.create_user(
-                                username=username,
+                                username=internal_username,
                                 password=password,
                                 email=email,
                                 full_name=full_name,
@@ -576,6 +603,7 @@ class BulkUploadAPIView(APIView):
                                 user=new_user,
                                 school=school,
                                 roll_no=roll_no,
+                                lms_code=lms_code,
                                 grade=grade,
                                 section=section,
                                 academic_year=academic_year

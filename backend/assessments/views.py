@@ -339,13 +339,25 @@ class ReportsExperiencesAPIView(APIView):
     def get(self, request):
         attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user)
         
-        experience_refs = attempts.values_list("assignment__experience_ref", flat=True).distinct()
-        
+        # order_by() first: the model's default ordering would otherwise make distinct() repeat a lesson per attempt
+        experience_refs = list(attempts.values_list("assignment__experience_ref", flat=True).order_by().distinct())
+
+        # The grade of each lesson (the report page filters by it): its Content Studio grade, else the assignment's
+        from content_studio.models import Experience
+
+        def ref_id(ref):
+            tail = str(ref or "").upper().replace("EXP-", "", 1)
+            return int(tail) if tail.isdigit() else None
+
+        experiences = Experience.objects.select_related("grade").in_bulk([i for i in map(ref_id, experience_refs) if i])
+
         results = []
         for ref in experience_refs:
             experience_attempts = attempts.filter(assignment__experience_ref=ref)
-            first_att = experience_attempts.first()
+            first_att = experience_attempts.select_related("assignment__grade").first()
             experience_title = first_att.assignment.experience_title if first_att else ref
+            source = experiences.get(ref_id(ref))
+            grade = source.grade if source and source.grade_id else (first_att.assignment.grade if first_att else None)
             
             total_attempts = experience_attempts.count()
             completed = experience_attempts.filter(status="COMPLETED").count()
@@ -364,6 +376,7 @@ class ReportsExperiencesAPIView(APIView):
             results.append({
                 "experience_ref": ref,
                 "experience_title": experience_title,
+                "grade_name": grade.grade_name if grade else "",
                 "total_attempts": total_attempts,
                 "completed": completed,
                 "average_score": round(float(average_score), 2),
@@ -429,6 +442,30 @@ class ReportsExperienceDetailAPIView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+def class_section(c):
+    from lms.hub.views import _section_letter
+    return _section_letter(c.class_name)
+
+
+def class_members(c):
+    """The active students of a class: same school, same grade number and same section letter as the class.
+
+    A class whose name has no section letter ("Class 5") takes every section of its grade."""
+    from lms.hub.views import _section_letter
+    from lms.packages.views import _grade_number
+    grade = _grade_number(c.grade.grade_name) if c.grade_id else None
+    section = _section_letter(c.class_name)
+    if grade is None:
+        return []
+    students = Student.objects.filter(school_id=c.school_id, user__is_active=True).select_related("user")
+    if not getattr(settings, "SHOW_DEMO_DATA_IN_REPORTS", False):
+        students = students.exclude(user__username__startswith="DEMO")
+    return sorted(
+        (s for s in students if _grade_number(s.grade) == grade and (not section or _section_letter(s.section) == section)),
+        key=lambda s: (s.user.full_name or s.user.username).lower(),
+    )
+
+
 class ReportsClassesAPIView(APIView):
     permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
     serializer_class = ClassReportSerializer
@@ -445,51 +482,69 @@ class ReportsClassesAPIView(APIView):
         # Deduplicate classes by normalized name and academic year to prevent duplicates in report
         seen = set()
         classes = []
+        teacher_names = {}  # class key -> teachers of every class sharing that name and year
         for c in classes_queryset:
             norm_name = (c.class_name or "").strip().upper()
             norm_year = (c.academic_year or "").replace(" ", "").strip()
             key = (norm_name, norm_year)
+            teacher_names.setdefault(key, set()).update(
+                (tc.teacher.user.full_name or tc.teacher.user.username)
+                for tc in TeacherClass.objects.filter(class_obj=c).select_related("teacher__user")
+            )
             if key not in seen:
                 seen.add(key)
                 classes.append(c)
         
         attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user)
-        
+
         results = []
         for c in classes:
-            class_attempts = attempts.filter(assignment__class_obj=c)
-            
-            total_students = class_attempts.values("student").distinct().count()
+            # The class is its students (their own grade and section), not only the attempts that arrived linked to it
+            members = class_members(c)
+            class_attempts = attempts.filter(student_id__in=[m.user_id for m in members])
+
+            attempted = class_attempts.values("student").order_by().distinct().count()
             completed = class_attempts.filter(status="COMPLETED").count()
-            
+
             completed_attempts = class_attempts.filter(status="COMPLETED", percentage__isnull=False)
             average_score = completed_attempts.aggregate(avg=models.Avg("percentage"))["avg"] or 0.0
-            
+
             passed = completed_attempts.filter(percentage__gte=60.0).count()
             pass_rate = (passed / completed * 100) if completed > 0 else 0.0
-            
-            student_averages = class_attempts.filter(percentage__isnull=False).values("student__full_name", "student__username").annotate(avg_pct=models.Avg("percentage")).order_by("-avg_pct")
-            
+
+            student_averages = list(
+                class_attempts.filter(percentage__isnull=False)
+                .values("student_id", "student__full_name", "student__username")
+                .annotate(avg_pct=models.Avg("percentage"))
+                .order_by("-avg_pct", "student__full_name")
+            )
+
             top_student = "N/A"
+            top_student_score = None
             weakest_student = "N/A"
-            if student_averages.exists():
-                top = student_averages.first()
+            if student_averages:
+                top, weak = student_averages[0], student_averages[-1]
                 top_student = top["student__full_name"] or top["student__username"]
-                weak = student_averages.last()
+                top_student_score = round(float(top["avg_pct"]), 2)
                 weakest_student = weak["student__full_name"] or weak["student__username"]
-                
+
             results.append({
                 "class_id": c.class_id,
                 "class_name": c.class_name,
-                "total_students": total_students,
-                "attempted": total_students,
+                "grade_name": c.grade.grade_name if c.grade_id else "",
+                "section": class_section(c),
+                "teacher_name": ", ".join(sorted(teacher_names.get(
+                    ((c.class_name or "").strip().upper(), (c.academic_year or "").replace(" ", "").strip()), []))) or "N/A",
+                "total_students": len(members),
+                "attempted": attempted,
                 "completed": completed,
                 "average_score": round(float(average_score), 2),
                 "pass_rate": round(float(pass_rate), 2),
                 "top_student": top_student,
+                "top_student_score": top_student_score,
                 "weakest_student": weakest_student
             })
-            
+
         return Response(results, status=status.HTTP_200_OK)
 
 
@@ -509,31 +564,46 @@ class ReportsClassDetailAPIView(APIView):
         if not c:
             return Response({"message": "Class not found or access denied."}, status=status.HTTP_404_NOT_FOUND)
         
-        attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user).filter(assignment__class_obj=c)
-        total_students = attempts.values("student").distinct().count()
+        members = class_members(c)
+        attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user).filter(
+            student_id__in=[m.user_id for m in members])
+        total_students = len(members)
         completed = attempts.filter(status="COMPLETED").count()
-        
+
         completed_attempts = attempts.filter(status="COMPLETED", percentage__isnull=False)
         average_score = completed_attempts.aggregate(avg=models.Avg("percentage"))["avg"] or 0.0
-        
+
         passed = completed_attempts.filter(percentage__gte=60.0).count()
         pass_rate = (passed / completed * 100) if completed > 0 else 0.0
-        
+
+        # The lessons published for the class's grade: what each student has finished and what is still to do
+        from lms.packages.views import build_level_map
+        level_map = build_level_map(c.grade) if c.grade_id else {"lessons": [], "bosses": []}
+        map_lessons = {str(e["experienceId"]) for e in level_map["lessons"] if e}
+        map_bosses = {str(e["experienceId"]) for e in level_map["bosses"] if e}
+
         students_list = []
-        student_ids = attempts.values_list("student", flat=True).distinct()
-        for sid in student_ids:
-            student_user = User.objects.get(id=sid)
+        for member in members:  # every student of the class, also those who have not played yet
+            student_user = member.user
             student_attempts = attempts.filter(student=student_user)
             std_completed = student_attempts.filter(status="COMPLETED").count()
             std_completed_attempts = student_attempts.filter(status="COMPLETED", percentage__isnull=False)
             std_avg = std_completed_attempts.aggregate(avg=models.Avg("percentage"))["avg"] or 0.0
             last_attempt = student_attempts.order_by("-started_at").first()
-            
+
+            done = {
+                a.assignment.experience_ref
+                for a in student_attempts.filter(status="COMPLETED").select_related("assignment")
+                if a.assignment.experience_ref not in map_bosses and not str(a.level_key or "").upper().startswith("B")
+            }
+
             students_list.append({
                 "student_id": student_user.id,
                 "student_name": student_user.full_name or student_user.username,
                 "total_attempts": student_attempts.count(),
                 "completed": std_completed,
+                "completed_lessons": len(done),
+                "remaining_lessons": len(map_lessons - done),
                 "average_score": round(float(std_avg), 2),
                 "last_attempt_date": last_attempt.started_at if last_attempt else None
             })
@@ -541,11 +611,14 @@ class ReportsClassDetailAPIView(APIView):
         return Response({
             "class_id": c.class_id,
             "class_name": c.class_name,
+            "grade_name": c.grade.grade_name if c.grade_id else "",
+            "section": class_section(c),
             "total_students": total_students,
-            "attempted": total_students,
+            "attempted": attempts.values("student").order_by().distinct().count(),
             "completed": completed,
             "average_score": round(float(average_score), 2),
             "pass_rate": round(float(pass_rate), 2),
+            "total_lessons": len(map_lessons),
             "students": students_list
         }, status=status.HTTP_200_OK)
 
@@ -557,13 +630,36 @@ class ReportsStudentsAPIView(APIView):
     def get(self, request):
         attempts = filter_attempts_for_user(StudentAttempt.objects.all(), request.user)
         
-        student_ids = attempts.values_list("student", flat=True).distinct()
-        
+        # order_by() first: the model's default ordering would otherwise make distinct() repeat each student per attempt
+        student_ids = attempts.values_list("student", flat=True).order_by().distinct()
+
+        from lms.hub.views import _section_letter
+        from lms.packages.views import _grade_number
+        school_classes = {}  # school id -> [(class, grade number, section letter, [teacher names])]
+
+        def class_and_teachers(profile):
+            """The class (and its teachers) of the student's own grade and section, e.g. "Class 5-A"."""
+            if profile.school_id not in school_classes:
+                rows = []
+                for c in Class.objects.filter(school_id=profile.school_id).select_related("grade"):
+                    names = [
+                        (tc.teacher.user.full_name or tc.teacher.user.username)
+                        for tc in TeacherClass.objects.filter(class_obj=c).select_related("teacher__user")
+                    ]
+                    rows.append((c, _grade_number(c.grade.grade_name) if c.grade_id else None, _section_letter(c.class_name), names))
+                school_classes[profile.school_id] = rows
+            grade, section = _grade_number(profile.grade), _section_letter(profile.section)
+            found = [r for r in school_classes[profile.school_id] if r[1] == grade and r[2] == section]
+            class_name = ", ".join(sorted({r[0].class_name for r in found})) or (
+                " ".join(filter(None, [f"Class {grade}" if grade is not None else "", section])) or "N/A")
+            teachers = sorted({n for r in found for n in r[3]})
+            return class_name, ", ".join(teachers) or "N/A"
+
         results = []
         for sid in student_ids:
             student_user = User.objects.get(id=sid)
             student_attempts = attempts.filter(student=student_user)
-            
+
             total_attempts = student_attempts.count()
             completed = student_attempts.filter(status="COMPLETED").count()
             
@@ -580,13 +676,18 @@ class ReportsStudentsAPIView(APIView):
                 
             last_attempt = student_attempts.order_by("-started_at").first()
             
-            classes = list(student_attempts.values_list("assignment__class_obj__class_name", flat=True).distinct())
-            class_name = ", ".join(filter(None, classes)) or "N/A"
-            
+            profile = Student.objects.filter(user=student_user).select_related("school").first()
+            class_name, teacher_name = class_and_teachers(profile) if profile else ("N/A", "N/A")
+            grade_number = _grade_number(profile.grade) if profile else None
+
             results.append({
                 "student_id": student_user.id,
                 "student_name": student_user.full_name or student_user.username,
                 "class_name": class_name,
+                "grade_name": f"Class {grade_number}" if grade_number is not None else ((profile.grade if profile else "") or ""),
+                "section": ((_section_letter(profile.section) or profile.section or "") if profile else ""),
+                "roll_no": (profile.roll_no or "") if profile else "",
+                "teacher_name": teacher_name,
                 "total_attempts": total_attempts,
                 "completed": completed,
                 "average_score": round(float(average_score), 2),
@@ -633,19 +734,37 @@ class ReportsStudentDetailAPIView(APIView):
         completed_attempts = attempts.filter(status="COMPLETED", percentage__isnull=False)
         average_score = completed_attempts.aggregate(avg=models.Avg("percentage"))["avg"] or 0.0
         
+        # A lesson or an assessment: the Content Studio type of the experience, else the level key (B1-B6 = assessment)
+        from content_studio.models import Experience
+
+        def ref_id(ref):
+            tail = str(ref or "").upper().replace("EXP-", "", 1)
+            return int(tail) if tail.isdigit() else None
+
+        attempt_rows = list(attempts.select_related("assignment__class_obj"))
+        experiences = Experience.objects.in_bulk(
+            [i for i in (ref_id(a.assignment.experience_ref) for a in attempt_rows) if i]
+        )
+
         attempts_list = []
-        for att in attempts.select_related("assignment__class_obj"):
+        for att in attempt_rows:
+            source = experiences.get(ref_id(att.assignment.experience_ref))
+            if str(att.level_key or "").upper().startswith("B"):
+                experience_type = "ASSESSMENT"
+            else:
+                experience_type = source.experience_type if source else "LESSON"
             attempts_list.append({
                 "lms_attempt_id": att.lms_attempt_id,
                 "experience_ref": att.assignment.experience_ref,
                 "experience_title": att.assignment.experience_title,
+                "experience_type": experience_type,
                 "class_name": att.assignment.class_obj.class_name if att.assignment.class_obj else "N/A",
                 "started_at": att.started_at,
                 "completed_at": att.completed_at,
                 "status": att.status,
-                "score": float(att.total_score) if att.total_score else None,
-                "max_score": float(att.max_score) if att.max_score else None,
-                "percentage": float(att.percentage) if att.percentage else None,
+                "score": float(att.total_score) if att.total_score is not None else None,
+                "max_score": float(att.max_score) if att.max_score is not None else None,
+                "percentage": float(att.percentage) if att.percentage is not None else None,
                 "time_spent_seconds": att.time_spent_seconds
             })
 

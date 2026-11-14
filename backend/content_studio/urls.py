@@ -26,6 +26,7 @@ router.register("content/activities", ActivityViewSet, basename="activity")
 router.register("content/activity-skills", ActivitySkillViewSet, basename="activity-skill")
 router.register("content/screens", ScreenViewSet, basename="screen")
 router.register("content/media", MediaViewSet, basename="media")
+
 router.register("content/learning-outcomes", LearningOutcomeViewSet, basename="learning-outcome")
 router.register("content/validation", ValidationViewSet, basename="validation")
 router.register("content/preview", PreviewViewSet, basename="preview")
@@ -45,6 +46,9 @@ urlpatterns = [
          name="publish-history"),
 
     # Package metadata / download / regenerate
+    path("content/packages/bulk-download/",
+         PackageViewSet.as_view({"post": "bulk_download"}),
+         name="package-bulk-download"),
     path("content/packages/<int:pk>/",
          PackageViewSet.as_view({"get": "retrieve"}),
          name="package-detail"),

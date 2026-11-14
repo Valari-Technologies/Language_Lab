@@ -1,0 +1,255 @@
+import hashlib
+
+from django.test import override_settings
+from django.urls import reverse
+from rest_framework.test import APIClient
+
+from content_studio.models import Activity, Experience, Screen
+from .base import HubTestBase, User
+
+
+class RepublishTests(HubTestBase):
+    """A lesson edited, submitted and approved again reaches the LMS with a new file, checksum and version."""
+
+    def setUp(self):
+        super().setUp()
+        override = override_settings(PACKAGES_ROOT=self.tmp_dir)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.api = APIClient()
+        self.creator = User.objects.create_user(username="cc", password="x", role="CONTENT_CREATOR")
+        self.root = User.objects.create_user(username="root", password="x", role="SUPER_ADMIN")
+        self.exp = Experience.objects.create(
+            title="Republish Lesson", description="d", grade=self.grade3, subject="English", language="English",
+            difficulty="BEGINNER", estimated_duration=30, status="DRAFT", created_by=self.creator)
+        self.activity = Activity.objects.create(
+            experience=self.exp, title="Activity One", learning_objective="Learn", estimated_duration=15,
+            mastery_threshold=80, display_order=1)
+        self._add_screen(1)
+        self.token = self.pair()
+        self.session_token = self.session(self.token)
+
+    def _add_screen(self, order):
+        Screen.objects.create(
+            activity=self.activity, title=f"Screen {order}", screen_type="INFORMATION", display_order=order,
+            estimated_duration=30,
+            content={"elements": [{"id": str(order), "type": "text", "props": {"value": f"Hello {order}"}}]})
+
+    def _submit(self, version):
+        self.api.force_authenticate(self.creator)
+        response = self.api.post(reverse("publish-experience", kwargs={"experience_id": self.exp.id}),
+                                 {"version": version, "release_notes": f"build {version}"}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def _approve(self):
+        self.api.force_authenticate(self.root)
+        response = self.api.post(reverse("super-admin-experiences-approve", args=[self.exp.id]))
+        self.assertEqual(response.status_code, 200, response.content)
+        return response.data
+
+    def _entry(self, lessons):
+        found = [e for e in lessons if e and e["title"] == "Republish Lesson"]
+        self.assertEqual(len(found), 1, "the lesson must be in the plan exactly once")
+        return found[0]
+
+    def _plan_entry(self):
+        plan = self.get("level-plan", token=self.token, session=self.session_token).json()
+        return self._entry(plan["lessons"])
+
+    def _offline_entry(self):
+        data = self.get("offline-data", token=self.token).json()
+        return self._entry(data["plans"][str(self.grade3.id)]["lessons"])
+
+    def _assert_serves(self, version, checksum):
+        pkg_id = self._plan_entry()["packageId"]
+        for entry in (self._plan_entry(), self._offline_entry()):
+            self.assertEqual((entry["version"], entry["checksum"]), (version, checksum))
+        for path, session in ((f"packages/{pkg_id}", self.session_token), (f"device-packages/{pkg_id}", None)):
+            response, body = self.download(path, self.token, session)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response["X-Package-Version"], version)
+            self.assertEqual(response["X-Package-Checksum"], checksum)
+            self.assertEqual(hashlib.sha256(body).hexdigest(), checksum)
+
+    def _submit_level(self, exp, version, level):
+        self.api.force_authenticate(self.creator)
+        return self.api.post(reverse("publish-experience", kwargs={"experience_id": exp.id}),
+                             {"version": version, "level": level}, format="json")
+
+    def test_a_version_name_already_used_by_the_lesson_is_refused(self):
+        message = "This version name already exists. Please enter a different name."
+        self._submit("Version 1")
+        self._approve()
+        for same in ("Version 1", "  version 1 ", "VERSION 1"):  # same name: trimmed, upper or lower case
+            response = self._submit_level(self.exp, same, "")
+            self.assertEqual((response.status_code, response.data["error"], response.data["code"]),
+                             (409, message, "version_exists"), same)
+        self.assertEqual(self._submit_level(self.exp, "Version 2", "").status_code, 200)  # a new name is fine
+        self.exp.refresh_from_db()
+        self.assertEqual(self.exp.pending_version, "Version 2")
+
+        # a build waiting for approval cannot be submitted again under the same name
+        for same in ("Version 2", " VERSION 2"):
+            self.assertEqual(self._submit_level(self.exp, same, "").status_code, 409, same)
+        self.assertEqual(self.exp.status, "PENDING_APPROVAL")
+
+        # a rejected name stays used
+        self.api.force_authenticate(self.root)
+        self.api.post(f"/api/v1/super-admin/experiences/{self.exp.id}/reject/", {"review_remark": "fix it"}, format="json")
+        self.exp.refresh_from_db()
+        self.assertEqual((self.exp.status, self.exp.pending_version), ("REJECTED", None))
+        self.assertEqual(self._submit_level(self.exp, "version 2", "").status_code, 409)
+        self.assertEqual(self.api.get(f"/api/v1/content/publish/{self.exp.id}/").status_code, 200)
+        self.api.force_authenticate(self.creator)
+        status_data = self.api.get(f"/api/v1/content/publish/{self.exp.id}/").data
+        self.assertEqual(sorted(n.lower() for n in set(status_data["used_versions"])), ["version 1", "version 2"])
+        self.assertEqual(self._submit_level(self.exp, "Version 3", "").status_code, 200)
+
+        # no name given means "1.0": that is a name too
+        self.assertEqual(self._submit_level(self.exp, "", "").status_code, 200)
+        self.assertEqual(self._submit_level(self.exp, "1.0", "").status_code, 409)
+
+        # another lesson may use the same name
+        other = Experience.objects.create(
+            title="Other", description="d", grade=self.grade3, subject="English", language="English",
+            difficulty="BEGINNER", estimated_duration=30, status="DRAFT", created_by=self.creator)
+        activity = Activity.objects.create(experience=other, title="A", learning_objective="L", estimated_duration=15,
+                                           mastery_threshold=80, display_order=1)
+        Screen.objects.create(activity=activity, title="S", screen_type="INFORMATION", display_order=1,
+                              estimated_duration=30, content={"elements": [{"id": "1", "type": "text", "props": {"value": "x"}}]})
+        self.assertEqual(self._submit_level(other, "Version 1", "").status_code, 200)
+
+    def test_level_places_the_lesson_in_that_lms_slot(self):
+        for bad in (0, 31, "abc", -2):
+            response = self._submit_level(self.exp, "1.0", bad)
+            self.assertEqual(response.status_code, 400, bad)
+        self.exp.refresh_from_db()
+        self.assertEqual(self.exp.status, "DRAFT")
+
+        self.assertEqual(self._submit_level(self.exp, "1.0", 5).status_code, 200)
+        self.exp.refresh_from_db()
+        self.assertEqual((self.exp.pending_level, self.exp.level), (5, None))
+        self._approve()
+        self.exp.refresh_from_db()
+        self.assertEqual((self.exp.level, self.exp.pending_level), (5, None))
+
+        plan = self.get("level-plan", token=self.token, session=self.session_token).json()
+        self.assertEqual(plan["lessons"][4]["title"], "Republish Lesson")
+        self.assertEqual(plan["lessons"][4]["slot"], 5)
+        # the two lessons without a level keep the first free slots
+        self.assertEqual([e["title"] for e in plan["lessons"][:2]], ["Lesson One", "Lesson Two"])
+        self.assertIsNone(plan["lessons"][2])
+        offline = self.get("offline-data", token=self.token).json()["plans"][str(self.grade3.id)]
+        self.assertEqual(offline["lessons"][4]["title"], "Republish Lesson")
+
+        # re-publishing without a level keeps level 5
+        self._add_screen(2)
+        self.assertEqual(self._submit_level(self.exp, "1.1", "").status_code, 200)
+        self._approve()
+        plan = self.get("level-plan", token=self.token, session=self.session_token).json()
+        self.assertEqual(plan["lessons"][4]["version"], "1.1")
+
+    def _builder_save(self, exp, **fields):
+        self.api.force_authenticate(self.creator)
+        return self.api.patch(reverse("experience-detail", args=[exp.id]), fields, format="json")
+
+    def test_lesson_builder_level_is_saved_validated_and_published(self):
+        # lesson: 1-30
+        for bad in (0, 31, -1):
+            self.assertEqual(self._builder_save(self.exp, pending_level=bad).status_code, 400, bad)
+        # assessment: 1-6
+        self.assertEqual(self._builder_save(self.exp, experience_type="ASSESSMENT", pending_level=7).status_code, 400)
+        self.assertEqual(self._builder_save(self.exp, experience_type="ASSESSMENT", difficulty="MASTER", pending_level=6).status_code, 200)
+        self.assertEqual(self._builder_save(self.exp, experience_type="LESSON", difficulty="INTERMEDIATE", pending_level=12).status_code, 200)
+        response = self._builder_save(self.exp, difficulty="BEGINNER", pending_level=5)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual((response.json()["pending_level"], response.json()["level"]), (5, None))
+        self.assertEqual(self._builder_save(self.exp, level=9).status_code, 400)  # the live level is not writable
+
+        # the Publish Center sends no level: the one saved in the builder is used
+        self.api.force_authenticate(self.creator)
+        self.assertEqual(self.api.post(reverse("publish-experience", kwargs={"experience_id": self.exp.id}),
+                                       {"version": "1.0"}, format="json").status_code, 200)
+        self._approve()
+        plan = self.get("level-plan", token=self.token, session=self.session_token).json()
+        self.assertEqual(plan["lessons"][4]["title"], "Republish Lesson")
+        detail = self.api.get(reverse("experience-detail", args=[self.exp.id])).json()
+        self.assertEqual((detail["level"], detail["pending_level"]), (5, None))
+
+        # another lesson of the grade cannot take level 5 either
+        other = Experience.objects.create(
+            title="Other", description="d", grade=self.grade3, subject="English", language="English",
+            difficulty="BEGINNER", estimated_duration=30, status="DRAFT", created_by=self.creator)
+        response = self._builder_save(other, pending_level=5)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Republish Lesson", str(response.json()))
+
+    def test_the_difficulty_decides_which_levels_can_be_chosen(self):
+        bands = {
+            "LESSON": {"BEGINNER": (1, 10), "INTERMEDIATE": (11, 20), "MASTER": (21, 30)},
+            "ASSESSMENT": {"BEGINNER": (1, 2), "INTERMEDIATE": (3, 4), "MASTER": (5, 6)},
+        }
+        for kind, by_difficulty in bands.items():
+            for difficulty, (first, last) in by_difficulty.items():
+                for ok in (first, last):
+                    response = self._builder_save(self.exp, experience_type=kind, difficulty=difficulty, pending_level=ok)
+                    self.assertEqual(response.status_code, 200, (kind, difficulty, ok))
+                for bad in (first - 1, last + 1):
+                    if bad < 1 or bad > (30 if kind == "LESSON" else 6):
+                        continue
+                    response = self._builder_save(self.exp, experience_type=kind, difficulty=difficulty, pending_level=bad)
+                    self.assertEqual(response.status_code, 400, (kind, difficulty, bad))
+                    self.assertIn(f"Choose a level from {first} to {last}", str(response.json()))
+
+        # a lesson saved before the rule keeps its level until the level, type or difficulty is changed
+        old = Experience.objects.create(
+            title="Old", description="d", grade=self.grade3, subject="English", language="English",
+            difficulty="MASTER", level=2, estimated_duration=30, status="APPROVED", created_by=self.creator)
+        self.assertEqual(self._builder_save(old, title="Old renamed", difficulty="MASTER", pending_level=2).status_code, 200)
+        self.assertEqual(self._builder_save(old, difficulty="MASTER", pending_level=3).status_code, 400)
+
+    def test_publish_history_has_grade_and_type(self):
+        self._submit("1.0")
+        self._approve()
+        self.api.force_authenticate(self.creator)
+        rows = self.api.get(reverse("publish-history-all")).json()["versions"]
+        row = [r for r in rows if r["experience_id"] == self.exp.id][0]
+        self.assertEqual((row["grade_name"], row["experience_type"]), ("Grade 3", "LESSON"))
+
+    def test_level_already_used_is_refused(self):
+        self._submit_level(self.exp, "1.0", 5)
+        self._approve()
+        other = Experience.objects.create(
+            title="Other Lesson", description="d", grade=self.grade3, subject="English", language="English",
+            difficulty="BEGINNER", estimated_duration=30, status="DRAFT", created_by=self.creator)
+        activity = Activity.objects.create(experience=other, title="A", learning_objective="L",
+                                           estimated_duration=15, mastery_threshold=80, display_order=1)
+        Screen.objects.create(activity=activity, title="S", screen_type="INFORMATION", display_order=1,
+                              estimated_duration=30, content={"elements": [{"id": "1", "type": "text", "props": {"value": "x"}}]})
+        response = self._submit_level(other, "1.0", 5)
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("Republish Lesson", response.json()["error"])
+        # another free level is fine, and the lesson itself may resubmit its own level 5
+        self.assertEqual(self._submit_level(other, "1.0", 6).status_code, 200)
+        self.assertEqual(self._submit_level(self.exp, "1.1", 5).status_code, 200)
+
+    def test_edit_submit_approve_updates_every_endpoint(self):
+        self._submit("1.0")
+        first = self._approve()
+        self._assert_serves("1.0", first["checksum"])
+
+        # Saving an edit alone changes nothing for the LMS
+        self._add_screen(2)
+        self._assert_serves("1.0", first["checksum"])
+
+        # Submitted again: still waiting for approval, the LMS keeps the last approved package
+        self._submit("1.1")
+        self.exp.refresh_from_db()
+        self.assertEqual(self.exp.status, "PENDING_APPROVAL")
+        self._assert_serves("1.0", first["checksum"])
+
+        # Approved: new file with the new screen, new checksum, new version everywhere
+        second = self._approve()
+        self.assertNotEqual(second["checksum"], first["checksum"])
+        self.assertEqual(second["version"], "1.1")
+        self._assert_serves("1.1", second["checksum"])

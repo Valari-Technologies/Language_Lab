@@ -1,23 +1,27 @@
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import viewsets, status
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.views import APIView
+import ipaddress
+import logging
 import uuid
 from datetime import timedelta
 from django.db import transaction
 
 from accounts.permissions import IsSuperAdmin, IsSuperAdminOrReadOnlyStaff
 from accounts.scoping import filter_queryset_by_school
-from .models import Grade, School, SchoolAdminProfile, PublishContent, License, LmsServer
+from .models import Grade, School, SchoolAdminProfile, PublishContent, License, LmsServer, RemovedInstallation
 from .serializers import (
     GradeDetailSerializer,
     GradeSerializer,
     SchoolAdminSerializer,
     SchoolSerializer,
     PublishContentSerializer,
+    LmsServerSerializer,
 )
 
 User = get_user_model()
@@ -270,6 +274,21 @@ class SchoolViewSet(CMSBaseViewSet):
             
             school.licenseId = license_obj
             school.save()
+
+            # Auto-generate initial LMS server installation license (40 users capacity)
+            first_inst_id = "INST-" + uuid.uuid4().hex[:8].upper()
+            first_lic_key = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
+            LmsServer.objects.create(
+                installationId=first_inst_id,
+                serverName=f"{school_name} - Primary Server",
+                licenseKey=first_lic_key,
+                school=school,
+                license=license_obj,
+                status=LmsServer.Status.ACTIVE,
+                maxUsers=concurrent_users or 40,
+                licenseDuration=duration or "1 Year",
+                expiryDate=expiry_date
+            )
             
             SchoolAdminProfile.objects.create(
                 user=admin_user,
@@ -294,7 +313,17 @@ Username: {admin_username}
 Password: {admin_password}
 --------------------------------------------
 
+LMS Installation License Key:
+--------------------------------------------
+License Key: {first_lic_key}
+User Capacity: {concurrent_users or 40} concurrent users
+Valid Until: {expiry_date.strftime('%d %b %Y')}
+--------------------------------------------
+
 Please use these credentials to sign in to the Language Lab CMS portal.
+Use the LMS Installation License Key to activate the LMS on your school's computer,
+and to unlock the "LMS Hub" page in your School Admin portal the first time you open it.
+Keep this key private.
 
 Best regards,
 Language Lab Team
@@ -345,7 +374,37 @@ Language Lab Team
             duration = request.data.get("licenseDuration")
             expiry_str = request.data.get("expiryDate") or request.data.get("expiry_date")
 
-            license_obj = getattr(instance, "school_license", None) or License.objects.filter(school=instance).first()
+            license_obj = None
+            try:
+                license_obj = instance.school_license
+            except Exception:
+                license_obj = License.objects.filter(school=instance).first()
+
+            today = timezone.now().date()
+            if not license_obj and (max_servers is not None or concurrent_users is not None or duration or expiry_str):
+                first_lic_key = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
+                if duration == "2 Years":
+                    initial_exp = today + timedelta(days=730)
+                elif duration == "Custom" and expiry_str:
+                    try:
+                        initial_exp = timezone.datetime.strptime(expiry_str, "%Y-%m-%d").date()
+                    except Exception:
+                        initial_exp = today + timedelta(days=365)
+                else:
+                    initial_exp = today + timedelta(days=365)
+
+                license_obj = License.objects.create(
+                    school=instance,
+                    licenseKey=first_lic_key,
+                    maxLmsServers=int(max_servers) if max_servers else 2,
+                    concurrentUsersPerServer=int(concurrent_users) if concurrent_users else 40,
+                    licenseDuration=duration or "1 Year",
+                    expiryDate=initial_exp,
+                    status=License.Status.ACTIVE
+                )
+                instance.licenseId = license_obj
+                instance.save(update_fields=["licenseId"])
+
             if license_obj:
                 update_fields = []
                 if max_servers is not None:
@@ -356,13 +415,13 @@ Language Lab Team
                         pass
                 if concurrent_users is not None:
                     try:
-                        license_obj.concurrentUsersPerServer = int(concurrent_users)
+                        new_users = int(concurrent_users)
+                        license_obj.concurrentUsersPerServer = new_users
                         update_fields.append("concurrentUsersPerServer")
                     except (ValueError, TypeError):
                         pass
 
                 if duration or expiry_str:
-                    today = timezone.now().date()
                     if duration == "1 Year":
                         license_obj.expiryDate = today + timedelta(days=365)
                         license_obj.licenseDuration = "1 Year"
@@ -384,16 +443,58 @@ Language Lab Team
                 if update_fields:
                     license_obj.save(update_fields=update_fields)
 
+            if license_obj and not LmsServer.objects.filter(school=instance).exists():
+                first_inst_id = "INST-" + uuid.uuid4().hex[:8].upper()
+                first_lic_key = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
+                LmsServer.objects.create(
+                    installationId=first_inst_id,
+                    serverName=f"{instance.school_name} - Primary Server",
+                    school=instance,
+                    license=license_obj,
+                    licenseKey=first_lic_key,
+                    maxUsers=int(concurrent_users) if concurrent_users else (license_obj.concurrentUsersPerServer or 40),
+                    licenseDuration=license_obj.licenseDuration or "1 Year",
+                    expiryDate=license_obj.expiryDate,
+                    status=LmsServer.Status.ACTIVE
+                )
+
+            instance.refresh_from_db()
             serializer = self.get_serializer(instance)
             return Response({"message": "School updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
         return response
 
 
 
+logger = logging.getLogger(__name__)
+
+
+def _valid_ip(value):
+    try:
+        return str(ipaddress.ip_address(str(value).strip()))
+    except ValueError:
+        return None
+
+
+def _client_ip(request):
+    """Caller's public IP: nginx sets X-Real-IP in production; fall back to the socket address."""
+    raw = request.META.get("HTTP_X_REAL_IP") or request.META.get("REMOTE_ADDR") or ""
+    return _valid_ip(raw)
+
+
 class ActivateServerAPIView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        try:
+            return self._activate(request)
+        except Exception:
+            logger.exception("Unexpected error during LMS server activation")
+            return Response(
+                {"error": "Internal error while activating server. Please contact support."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def _activate(self, request):
         license_key = request.data.get("licenseKey")
         server_name = request.data.get("serverName")
         installation_identity = request.data.get("installationIdentity")
@@ -401,47 +502,248 @@ class ActivateServerAPIView(APIView):
         if not license_key or not server_name or not installation_identity:
             return Response({"error": "licenseKey, serverName, and installationIdentity are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            license_obj = License.objects.select_related('school').get(licenseKey=license_key)
-        except License.DoesNotExist:
-            return Response({"error": "Invalid License Key."}, status=status.HTTP_400_BAD_REQUEST)
+        # Check if licenseKey matches a specific LMS server's pre-generated key
+        server_obj = LmsServer.objects.select_related('license', 'school').filter(licenseKey=license_key).first()
+        if server_obj:
+            license_obj = server_obj.license
+        else:
+            try:
+                license_obj = License.objects.select_related('school').get(licenseKey=license_key)
+            except License.DoesNotExist:
+                return Response({"error": "Invalid License Key."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if license_obj is None:
+            return Response({"error": "No license associated with this server."}, status=status.HTTP_400_BAD_REQUEST)
 
         if license_obj.status != License.Status.ACTIVE:
             return Response({"error": f"License is not active. Status: {license_obj.status}"}, status=status.HTTP_400_BAD_REQUEST)
 
+        if license_obj.expiryDate is None:
+            return Response({"error": "License has no expiry date configured."}, status=status.HTTP_400_BAD_REQUEST)
+
         if license_obj.expiryDate < timezone.now().date():
             license_obj.status = License.Status.EXPIRED
-            license_obj.save()
+            license_obj.save(update_fields=["status"])
             return Response({"error": "License has expired."}, status=status.HTTP_400_BAD_REQUEST)
 
-        active_servers = LmsServer.objects.filter(license=license_obj, status=LmsServer.Status.ACTIVE)
-        existing_server = active_servers.filter(installationId=installation_identity).first()
-        if not existing_server:
-            if active_servers.count() >= license_obj.maxLmsServers:
-                return Response({"error": "Maximum registered LMS servers capacity reached for this license."}, status=status.HTTP_400_BAD_REQUEST)
-            
-            server_obj = LmsServer.objects.create(
-                installationId=installation_identity,
-                serverName=server_name,
-                school=license_obj.school,
-                license=license_obj,
-                status=LmsServer.Status.ACTIVE,
-                lastSyncTime=timezone.now()
+        # Resolve authoritative School record linked to the validated License
+        target_school = getattr(license_obj, 'school', None)
+        if not target_school and hasattr(license_obj, 'schools_linked'):
+            target_school = license_obj.schools_linked.first()
+        if not target_school and server_obj and getattr(server_obj, 'school', None):
+            target_school = server_obj.school
+
+        if not target_school:
+            return Response({"error": "No school associated with this license."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if RemovedInstallation.objects.filter(installationId=installation_identity, license=license_obj).exists():
+            return Response(
+                {"error": "device_removed",
+                 "message": "This computer was removed from the school licence. Ask the CMS administrator to allow it again."},
+                status=status.HTTP_403_FORBIDDEN,
             )
-        else:
-            existing_server.serverName = server_name
-            existing_server.lastSyncTime = timezone.now()
-            existing_server.save()
-            server_obj = existing_server
+
+        with transaction.atomic():
+            # A server key belongs to one machine. It is bound on first use (lastSyncTime
+            # is empty); a different machine using an already-bound key gets its own
+            # server slot, counted against maxLmsServers.
+            use_key_row = False
+            if server_obj:
+                if server_obj.installationId == installation_identity:
+                    use_key_row = True
+                elif server_obj.lastSyncTime is None and not LmsServer.objects.filter(pk=installation_identity).exists():
+                    # installationId is the primary key: rebind with a queryset update(),
+                    # never by assigning it and calling save() (that would INSERT a duplicate).
+                    LmsServer.objects.filter(pk=server_obj.pk).update(installationId=installation_identity)
+                    server_obj.installationId = installation_identity
+                    use_key_row = True
+
+            if use_key_row:
+                if server_obj.status != LmsServer.Status.ACTIVE:
+                    active_count = LmsServer.objects.filter(license=license_obj, status=LmsServer.Status.ACTIVE).count()
+                    if active_count >= license_obj.maxLmsServers:
+                        return Response({"error": "Maximum registered LMS servers capacity reached for this license."}, status=status.HTTP_400_BAD_REQUEST)
+                server_obj.serverName = server_name
+                server_obj.lastSyncTime = timezone.now()
+                server_obj.status = LmsServer.Status.ACTIVE
+                server_obj.save(update_fields=["serverName", "lastSyncTime", "status"])
+            else:
+                active_servers = LmsServer.objects.filter(license=license_obj, status=LmsServer.Status.ACTIVE)
+                # installationId is the primary key, so look it up in any status: a disabled
+                # or re-allowed PC must be switched back on, never inserted a second time.
+                existing_server = LmsServer.objects.filter(pk=installation_identity).first()
+                if existing_server and existing_server.license_id != license_obj.pk:
+                    return Response({"error": "This computer is registered to another licence."}, status=status.HTTP_400_BAD_REQUEST)
+                if existing_server and existing_server.status != LmsServer.Status.ACTIVE:
+                    if active_servers.count() >= license_obj.maxLmsServers:
+                        return Response({"error": "Maximum registered LMS servers capacity reached for this license."}, status=status.HTTP_400_BAD_REQUEST)
+                    existing_server.status = LmsServer.Status.ACTIVE
+                if not existing_server:
+                    if active_servers.count() >= license_obj.maxLmsServers:
+                        return Response({"error": "Maximum registered LMS servers capacity reached for this license."}, status=status.HTTP_400_BAD_REQUEST)
+
+                    auto_key = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
+                    server_obj = LmsServer.objects.create(
+                        installationId=installation_identity,
+                        serverName=server_name,
+                        licenseKey=auto_key,
+                        school=target_school,
+                        license=license_obj,
+                        status=LmsServer.Status.ACTIVE,
+                        lastSyncTime=timezone.now(),
+                        maxUsers=40
+                    )
+                else:
+                    existing_server.serverName = server_name
+                    existing_server.lastSyncTime = timezone.now()
+                    if not existing_server.licenseKey:
+                        existing_server.licenseKey = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
+                    existing_server.save()
+                    server_obj = existing_server
+
+        device_name = str(request.data.get("deviceName") or server_name or "").strip()[:150] or None
+        LmsServer.objects.filter(pk=server_obj.pk).update(
+            deviceName=device_name,
+            publicIp=_client_ip(request),
+            localIp=_valid_ip(request.data.get("localIp")),
+            lastSeenAt=timezone.now(),
+        )
+
+        resolved_school_id = target_school.schoolId or str(target_school.school_id)
+        resolved_school_name = target_school.school_name
 
         return Response({
             "status": "success",
+            "valid": True,
             "message": "Server activated successfully.",
             "installationId": server_obj.installationId,
+            "licenseKey": license_obj.licenseKey,
+            "license_key": license_obj.licenseKey,
+            "serverLicenseKey": server_obj.licenseKey,
+            "licenseId": license_obj.licenseId,
+            "license_id": license_obj.licenseId,
+            "school_id": resolved_school_id,
+            "schoolId": resolved_school_id,
+            "school_name": resolved_school_name,
+            "schoolName": resolved_school_name,
+            "school_code": target_school.school_code or target_school.schoolId or "",
+            "schoolCode": target_school.school_code or target_school.schoolId or "",
+            "address": target_school.address or "",
+            "phone": target_school.phone or "",
+            "email": target_school.email or "",
+            "academic_year": target_school.academic_year or "2026-2027",
+            "school": {
+                "school_id": resolved_school_id,
+                "schoolId": resolved_school_id,
+                "school_name": resolved_school_name,
+                "schoolName": resolved_school_name,
+                "school_code": target_school.school_code or target_school.schoolId or "",
+                "schoolCode": target_school.school_code or target_school.schoolId or "",
+                "address": target_school.address or "",
+                "phone": target_school.phone or "",
+                "email": target_school.email or "",
+                "academic_year": target_school.academic_year or "2026-2027",
+            },
             "maxLmsServers": license_obj.maxLmsServers,
-            "concurrentUsersPerServer": license_obj.concurrentUsersPerServer,
-            "expiryDate": str(license_obj.expiryDate)
+            "concurrentUsersPerServer": server_obj.maxUsers or license_obj.concurrentUsersPerServer or 40,
+            "expiryDate": str(license_obj.expiryDate),
+            "expires_at": str(license_obj.expiryDate)
         }, status=status.HTTP_200_OK)
+
+
+class LmsServerCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, school_id=None):
+        target_school_id = school_id or request.data.get("school_id") or request.data.get("schoolId")
+        if not target_school_id:
+            return Response({"error": "school_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            school = School.objects.select_related('school_license').get(school_id=target_school_id)
+        except (School.DoesNotExist, ValueError):
+            try:
+                school = School.objects.select_related('school_license').get(schoolId=str(target_school_id))
+            except School.DoesNotExist:
+                return Response({"error": "School not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            license_obj = school.school_license
+        except Exception:
+            license_obj = getattr(school, 'licenseId', None)
+
+        if not license_obj:
+            return Response({"error": "School has no active license configured."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if license_obj.status != License.Status.ACTIVE:
+            return Response({"error": f"Cannot create server. School license status is {license_obj.status}."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if license_obj.expiryDate and license_obj.expiryDate < timezone.now().date():
+            license_obj.status = License.Status.EXPIRED
+            license_obj.save()
+            return Response({"error": "Cannot create server. School license has expired."}, status=status.HTTP_400_BAD_REQUEST)
+
+        active_servers = LmsServer.objects.filter(license=license_obj, status=LmsServer.Status.ACTIVE)
+        if active_servers.count() >= license_obj.maxLmsServers:
+            return Response({
+                "error": f"Maximum allowed LMS servers limit ({license_obj.maxLmsServers}) has already been reached for this school license."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        server_name = request.data.get("serverName") or request.data.get("server_name")
+        if not server_name:
+            total_servers = LmsServer.objects.filter(school=school).count()
+            server_name = f"{school.school_name} - LMS Server {total_servers + 1}"
+
+        req_users = request.data.get("maxUsers") or request.data.get("concurrentUsersPerServer")
+        if req_users is not None:
+            try:
+                max_users = int(req_users)
+            except (ValueError, TypeError):
+                max_users = license_obj.concurrentUsersPerServer or 40
+        else:
+            max_users = license_obj.concurrentUsersPerServer or 40
+        server_duration = request.data.get("licenseDuration") or license_obj.licenseDuration or "1 Year"
+        today = timezone.now().date()
+        if server_duration == "6 Months":
+            server_expiry = today + timedelta(days=180)
+        elif server_duration == "1 Year":
+            server_expiry = today + timedelta(days=365)
+        elif server_duration == "2 Years":
+            server_expiry = today + timedelta(days=730)
+        elif server_duration == "Custom":
+            exp_str = request.data.get("expiryDate")
+            if exp_str:
+                try:
+                    server_expiry = timezone.datetime.strptime(exp_str, "%Y-%m-%d").date()
+                except Exception:
+                    server_expiry = today + timedelta(days=365)
+            else:
+                server_expiry = today + timedelta(days=365)
+        else:
+            server_expiry = license_obj.expiryDate or (today + timedelta(days=365))
+
+        inst_id_str = "INST-" + uuid.uuid4().hex[:8].upper()
+        lic_key_str = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
+
+        server = LmsServer.objects.create(
+            installationId=inst_id_str,
+            serverName=server_name,
+            licenseKey=lic_key_str,
+            school=school,
+            license=license_obj,
+            status=LmsServer.Status.ACTIVE,
+            maxUsers=max_users,
+            licenseDuration=server_duration,
+            expiryDate=server_expiry,
+            lastSyncTime=None
+        )
+
+        serializer = LmsServerSerializer(server)
+        return Response({
+            "status": "success",
+            "message": "LMS Server installation license generated successfully.",
+            "server": serializer.data
+        }, status=status.HTTP_201_CREATED)
 
 
 class DeactivateServerAPIView(APIView):
@@ -457,12 +759,245 @@ class DeactivateServerAPIView(APIView):
         except LmsServer.DoesNotExist:
             return Response({"error": "LMS Server installation not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        server.status = LmsServer.Status.DEACTIVATED
+        action_type = request.data.get("action", "deactivate")
+        if action_type == "activate":
+            server.status = LmsServer.Status.ACTIVE
+            msg = f"Server '{server.serverName}' has been activated successfully."
+        else:
+            server.status = LmsServer.Status.DEACTIVATED
+            msg = f"Server '{server.serverName}' has been deactivated successfully."
         server.save()
 
         return Response({
             "status": "success",
-            "message": f"Server '{server.serverName}' has been deactivated successfully."
+            "message": msg,
+            "server": LmsServerSerializer(server).data
+        }, status=status.HTTP_200_OK)
+
+
+class LicenseStatusAPIView(APIView):
+    """
+    Licence status for one LMS installation; the LMS calls it at start and every few minutes.
+    `POST /api/v1/licensing/status` {"installationId": "...", "licenseId": "LIC-..."}
+    -> {"status": "ACTIVE" | "REMOVED" | "EXPIRED" | "SUSPENDED" | "UNKNOWN", "message": "..."}
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        installation_id = str(request.data.get("installationId") or "").strip()
+        license_id = str(request.data.get("licenseId") or "").strip()
+        if not installation_id or not license_id:
+            return Response({"error": "invalid_body"}, status=status.HTTP_400_BAD_REQUEST)
+
+        def answer(state, message):
+            return Response({"status": state, "message": message}, status=status.HTTP_200_OK)
+
+        license_obj = License.objects.filter(licenseId=license_id).first()
+        if not license_obj:
+            return answer("UNKNOWN", "Licence not found.")
+        if RemovedInstallation.objects.filter(installationId=installation_id, license=license_obj).exists():
+            return answer("REMOVED", "This computer was removed from the school licence.")
+        server = LmsServer.objects.filter(installationId=installation_id, license=license_obj).first()
+        if not server:
+            return answer("UNKNOWN", "This computer is not registered on the licence.")
+        if license_obj.status == License.Status.EXPIRED or (
+            license_obj.expiryDate and license_obj.expiryDate < timezone.now().date()
+        ):
+            return answer("EXPIRED", "The school licence has expired.")
+        if license_obj.status != License.Status.ACTIVE:
+            return answer("SUSPENDED", f"The school licence is {license_obj.status.lower()}.")
+        if server.status != LmsServer.Status.ACTIVE:
+            return answer("SUSPENDED", "This computer is disabled in the CMS.")
+
+        LmsServer.objects.filter(pk=server.pk).update(lastSeenAt=timezone.now(), publicIp=_client_ip(request))
+        return answer("ACTIVE", "Licence is active.")
+
+
+def _notify_school_admin_lms_status(server, action_type="disabled"):
+    try:
+        from content_studio.models import Notification
+        school = server.school
+        if not school:
+            return
+
+        admin_users = set()
+        if school.schoolAdminId:
+            admin_users.add(school.schoolAdminId)
+        for prof in SchoolAdminProfile.objects.filter(school=school).select_related("user"):
+            admin_users.add(prof.user)
+
+        key_display = server.licenseKey or server.installationId
+        if action_type == "disabled":
+            title = "LMS Hub Disabled"
+            message = f"Your LMS key code ({key_display}) for server '{server.serverName}' has been disabled by Super Admin."
+            notif_type = Notification.NotificationType.WARNING
+        elif action_type == "deleted":
+            title = "LMS Hub Server Deleted"
+            message = f"Your LMS server '{server.serverName}' (key: {key_display}) has been deleted and revoked by Super Admin."
+            notif_type = Notification.NotificationType.ERROR
+        else:
+            title = "LMS Hub Enabled"
+            message = f"Your LMS key code ({key_display}) for server '{server.serverName}' has been enabled by Super Admin."
+            notif_type = Notification.NotificationType.INFO
+
+        for u in admin_users:
+            Notification.objects.create(
+                user=u,
+                title=title,
+                message=message,
+                notification_type=notif_type,
+            )
+    except Exception as e:
+        logger.error(f"Error notifying school admin of LMS status: {e}")
+
+
+class LmsServerViewSet(CMSBaseViewSet):
+    permission_classes = [IsAuthenticated, IsSuperAdminOrReadOnlyStaff]
+    queryset = LmsServer.objects.all().select_related("school", "license")
+    serializer_class = LmsServerSerializer
+    lookup_field = "installationId"
+    lookup_value_regex = "[^/]+"
+
+    def perform_destroy(self, instance):
+        _notify_school_admin_lms_status(instance, action_type="deleted")
+        super().perform_destroy(instance)
+
+    @action(detail=True, methods=["post"], url_path="toggle-status")
+    def toggle_status(self, request, installationId=None):
+        server = self.get_object()
+        new_status = LmsServer.Status.DEACTIVATED if server.status == LmsServer.Status.ACTIVE else LmsServer.Status.ACTIVE
+        server.status = new_status
+        server.save(update_fields=["status"])
+        if new_status == LmsServer.Status.DEACTIVATED:
+            _notify_school_admin_lms_status(server, action_type="disabled")
+        else:
+            _notify_school_admin_lms_status(server, action_type="enabled")
+        return Response({
+            "status": "success",
+            "message": f"Server '{server.serverName}' is now {'active' if new_status == LmsServer.Status.ACTIVE else 'disabled'}.",
+            "server": self.get_serializer(server).data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="deactivate")
+    def deactivate(self, request, installationId=None):
+        server = self.get_object()
+        server.status = LmsServer.Status.DEACTIVATED
+        server.save(update_fields=["status"])
+        _notify_school_admin_lms_status(server, action_type="disabled")
+        return Response({
+            "status": "success",
+            "message": f"Server '{server.serverName}' has been disabled.",
+            "server": self.get_serializer(server).data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="activate")
+    def activate(self, request, installationId=None):
+        server = self.get_object()
+        if server.license and server.license.status != License.Status.ACTIVE:
+            return Response({"error": f"Cannot activate server. School license is {server.license.status}."}, status=status.HTTP_400_BAD_REQUEST)
+        server.status = LmsServer.Status.ACTIVE
+        server.save(update_fields=["status"])
+        _notify_school_admin_lms_status(server, action_type="enabled")
+        return Response({
+            "status": "success",
+            "message": f"Server '{server.serverName}' has been enabled.",
+            "server": self.get_serializer(server).data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="remove")
+    def remove_device(self, request, installationId=None):
+        server = self.get_object()
+        with transaction.atomic():
+            server.status = LmsServer.Status.DEACTIVATED
+            server.removedAt = timezone.now()
+            server.save(update_fields=["status", "removedAt"])
+            RemovedInstallation.objects.get_or_create(
+                installationId=server.installationId, license=server.license,
+                defaults={"removedBy": request.user},
+            )
+        return Response({
+            "status": "success",
+            "message": f"Computer '{server.deviceName or server.serverName}' was removed. Its licence slot is free.",
+            "server": self.get_serializer(server).data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="allow")
+    def allow_device(self, request, installationId=None):
+        server = self.get_object()
+        with transaction.atomic():
+            RemovedInstallation.objects.filter(installationId=server.installationId, license=server.license).delete()
+            server.removedAt = None
+            server.save(update_fields=["removedAt"])
+        return Response({
+            "status": "success",
+            "message": f"Computer '{server.deviceName or server.serverName}' can activate again if the licence has a free slot.",
+            "server": self.get_serializer(server).data
+        }, status=status.HTTP_200_OK)
+
+    def partial_update(self, request, *args, **kwargs):
+        server = self.get_object()
+        server_name = request.data.get("serverName") or request.data.get("server_name")
+        max_users = request.data.get("maxUsers") or request.data.get("concurrentUsersPerServer")
+        status_val = request.data.get("status")
+        duration = request.data.get("licenseDuration")
+        expiry_str = request.data.get("expiryDate")
+
+        update_fields = []
+        if server_name:
+            server.serverName = server_name.strip()
+            update_fields.append("serverName")
+        if max_users is not None:
+            try:
+                server.maxUsers = int(max_users)
+                update_fields.append("maxUsers")
+            except (ValueError, TypeError):
+                pass
+        if duration:
+            server.licenseDuration = duration
+            update_fields.append("licenseDuration")
+            today = timezone.now().date()
+            if duration == "6 Months":
+                server.expiryDate = today + timedelta(days=180)
+                update_fields.append("expiryDate")
+            elif duration == "1 Year":
+                server.expiryDate = today + timedelta(days=365)
+                update_fields.append("expiryDate")
+            elif duration == "2 Years":
+                server.expiryDate = today + timedelta(days=730)
+                update_fields.append("expiryDate")
+            elif duration == "Custom" and expiry_str:
+                try:
+                    server.expiryDate = timezone.datetime.strptime(expiry_str, "%Y-%m-%d").date()
+                    update_fields.append("expiryDate")
+                except Exception:
+                    pass
+        elif expiry_str:
+            try:
+                server.expiryDate = timezone.datetime.strptime(expiry_str, "%Y-%m-%d").date()
+                update_fields.append("expiryDate")
+            except Exception:
+                pass
+        if status_val and status_val in [LmsServer.Status.ACTIVE, LmsServer.Status.DEACTIVATED]:
+            server.status = status_val
+            update_fields.append("status")
+
+        if update_fields:
+            server.save(update_fields=update_fields)
+
+        return Response({
+            "status": "success",
+            "message": f"Server '{server.serverName}' updated successfully.",
+            "server": self.get_serializer(server).data
+        }, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        server = self.get_object()
+        server_name = server.serverName
+        server.delete()
+        return Response({
+            "status": "success",
+            "message": f"Server '{server_name}' has been deleted."
         }, status=status.HTTP_200_OK)
 
 

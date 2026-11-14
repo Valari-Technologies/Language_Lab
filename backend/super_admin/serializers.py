@@ -7,9 +7,19 @@ User = get_user_model()
 
 
 class LmsServerSerializer(serializers.ModelSerializer):
+    createdDate = serializers.DateTimeField(source='activationDate', read_only=True)
+
     class Meta:
         model = LmsServer
         fields = '__all__'
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        if not ret.get('expiryDate') and instance.license and instance.license.expiryDate:
+            ret['expiryDate'] = str(instance.license.expiryDate)
+        if not ret.get('licenseDuration') and instance.license and instance.license.licenseDuration:
+            ret['licenseDuration'] = instance.license.licenseDuration
+        return ret
 
 
 class LicenseSerializer(serializers.ModelSerializer):
@@ -35,13 +45,39 @@ class GradeDetailSerializer(serializers.ModelSerializer):
 class SchoolSerializer(serializers.ModelSerializer):
     license = LicenseSerializer(source='school_license', read_only=True)
     lms_servers = LmsServerSerializer(many=True, read_only=True)
-    admin_name = serializers.CharField(source='schoolAdminId.full_name', read_only=True)
-    admin_username = serializers.CharField(source='schoolAdminId.username', read_only=True)
-    admin_email = serializers.CharField(source='schoolAdminId.email', read_only=True)
+    admin_name = serializers.SerializerMethodField()
+    admin_username = serializers.SerializerMethodField()
+    admin_email = serializers.SerializerMethodField()
 
     class Meta:
         model = School
         fields = '__all__'
+
+    def get_admin_user(self, obj):
+        if obj.schoolAdminId:
+            return obj.schoolAdminId
+        profile = SchoolAdminProfile.objects.filter(school=obj).select_related('user').first()
+        if profile and profile.user:
+            return profile.user
+        return None
+
+    def get_admin_name(self, obj):
+        admin = self.get_admin_user(obj)
+        if admin:
+            return admin.full_name or admin.username or ""
+        return ""
+
+    def get_admin_username(self, obj):
+        admin = self.get_admin_user(obj)
+        if admin:
+            return admin.username or ""
+        return ""
+
+    def get_admin_email(self, obj):
+        admin = self.get_admin_user(obj)
+        if admin:
+            return admin.email or ""
+        return ""
 
     def validate(self, attrs):
         email = attrs.get('email')

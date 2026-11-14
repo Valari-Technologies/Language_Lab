@@ -1,12 +1,16 @@
+import logging
 from rest_framework import viewsets, status, filters
 from rest_framework.views import APIView
 from rest_framework.response import Response
+
+logger = logging.getLogger(__name__)
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 
 from accounts.permissions import IsContentCreatorOrSuperAdmin, IsSuperAdmin, IsContentCreator
+from .levels import level_taken_by, parse_level
 from .models import (
     Experience,
     LearningOutcome,
@@ -51,6 +55,9 @@ class ExperienceViewSet(viewsets.ModelViewSet):
         if self.action in ("list", "retrieve", "activities"):
             from accounts.permissions import IsContentCreatorOrSuperAdminOrSchoolUser
             return [IsAuthenticated(), IsContentCreatorOrSuperAdminOrSchoolUser()]
+        if self.action == "preview" and getattr(self.request.user, "role", None) in ("TEACHER", "SCHOOL_ADMIN"):
+            # a teacher or school admin views the lessons of their own school; get_queryset limits which ones
+            return [IsAuthenticated()]
         if self.action in ("destroy", "preview"):
             return [IsAuthenticated(), IsContentCreatorOrSuperAdmin()]
         return [IsAuthenticated(), IsContentCreator()]
@@ -62,10 +69,124 @@ class ExperienceViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = Experience.objects.filter(is_deleted=False).select_related("grade", "created_by")
 
-        # Filter for school tenants (only show published experiences)
+        # Filter for school tenants (only show published experiences within tenant scope)
         role = getattr(self.request.user, "role", None)
         if role in ["SCHOOL_ADMIN", "TEACHER", "STUDENT"]:
-            queryset = queryset.filter(status__in=["APPROVED", "PUBLISHED"])
+            from django.db.models import Q as _Q
+            visible = _Q(status__in=["APPROVED", "PUBLISHED"])
+            if self.action == "preview":
+                # a lesson already published stays viewable while a newer version waits for approval
+                visible |= _Q(published_package__isnull=False)
+            queryset = queryset.filter(visible)
+            from accounts.scoping import get_user_school
+            school = get_user_school(self.request.user)
+            if school is None:
+                return queryset.none()
+
+            from django.db.models import Q
+            from assessments.models import ExperienceAssignment
+
+            if role == "SCHOOL_ADMIN":
+                from school_admin.models import Class
+                school_classes = Class.objects.filter(school=school, is_active=True)
+                school_grade_ids = list(school_classes.exclude(grade__isnull=True).values_list("grade_id", flat=True).distinct())
+
+                assignments = ExperienceAssignment.objects.filter(school=school)
+                assigned_grade_ids = list(assignments.exclude(grade__isnull=True).values_list("grade_id", flat=True).distinct())
+                assigned_refs = list(assignments.values_list("experience_ref", flat=True).distinct())
+
+                assigned_exp_ids = []
+                for ref in assigned_refs:
+                    if ref and str(ref).isdigit():
+                        assigned_exp_ids.append(int(ref))
+                    elif ref and str(ref).startswith("EXP-") and str(ref)[4:].isdigit():
+                        assigned_exp_ids.append(int(str(ref)[4:]))
+
+                all_grades = set(school_grade_ids + assigned_grade_ids)
+                if not all_grades and not assigned_exp_ids and not assigned_refs:
+                    return queryset.none()
+
+                filter_q = Q()
+                if all_grades:
+                    filter_q |= Q(grade_id__in=all_grades)
+                if assigned_exp_ids:
+                    filter_q |= Q(id__in=assigned_exp_ids)
+                if assigned_refs:
+                    filter_q |= Q(title__in=assigned_refs)
+                queryset = queryset.filter(filter_q)
+
+            elif role == "TEACHER":
+                from school_admin.models import TeacherClass
+                teacher_classes = TeacherClass.objects.filter(teacher__user=self.request.user, class_obj__is_active=True)
+                teacher_grade_ids = list(teacher_classes.exclude(class_obj__grade__isnull=True).values_list("class_obj__grade_id", flat=True).distinct())
+
+                assignments = ExperienceAssignment.objects.filter(
+                    school=school
+                ).filter(
+                    Q(class_obj__in=teacher_classes.values_list("class_obj", flat=True)) |
+                    Q(assigned_by=self.request.user)
+                )
+                assigned_grade_ids = list(assignments.exclude(grade__isnull=True).values_list("grade_id", flat=True).distinct())
+                assigned_refs = list(assignments.values_list("experience_ref", flat=True).distinct())
+
+                assigned_exp_ids = []
+                for ref in assigned_refs:
+                    if ref and str(ref).isdigit():
+                        assigned_exp_ids.append(int(ref))
+                    elif ref and str(ref).startswith("EXP-") and str(ref)[4:].isdigit():
+                        assigned_exp_ids.append(int(str(ref)[4:]))
+
+                all_grades = set(teacher_grade_ids + assigned_grade_ids)
+                if not all_grades and not assigned_exp_ids and not assigned_refs:
+                    return queryset.none()
+
+                filter_q = Q()
+                if all_grades:
+                    filter_q |= Q(grade_id__in=all_grades)
+                if assigned_exp_ids:
+                    filter_q |= Q(id__in=assigned_exp_ids)
+                if assigned_refs:
+                    filter_q |= Q(title__in=assigned_refs)
+                queryset = queryset.filter(filter_q)
+
+            elif role == "STUDENT":
+                from teacher.models import Student
+                from super_admin.models import Grade
+                import re
+
+                student = Student.objects.filter(user=self.request.user, school=school).first()
+                student_grade_id = None
+                if student and student.grade:
+                    m = re.search(r'\d+', str(student.grade))
+                    if m:
+                        grade_num = int(m.group(0))
+                        g = Grade.objects.filter(grade_name__icontains=str(grade_num)).first()
+                        if g:
+                            student_grade_id = g.id
+
+                assignments = ExperienceAssignment.objects.filter(school=school)
+                if student_grade_id:
+                    assignments = assignments.filter(Q(grade_id=student_grade_id) | Q(grade__isnull=True))
+                assigned_refs = list(assignments.values_list("experience_ref", flat=True).distinct())
+
+                assigned_exp_ids = []
+                for ref in assigned_refs:
+                    if ref and str(ref).isdigit():
+                        assigned_exp_ids.append(int(ref))
+                    elif ref and str(ref).startswith("EXP-") and str(ref)[4:].isdigit():
+                        assigned_exp_ids.append(int(str(ref)[4:]))
+
+                if not student_grade_id and not assigned_exp_ids and not assigned_refs:
+                    return queryset.none()
+
+                filter_q = Q()
+                if student_grade_id:
+                    filter_q |= Q(grade_id=student_grade_id)
+                if assigned_exp_ids:
+                    filter_q |= Q(id__in=assigned_exp_ids)
+                if assigned_refs:
+                    filter_q |= Q(title__in=assigned_refs)
+                queryset = queryset.filter(filter_q)
         
 
         grade = self.request.query_params.get("grade")
@@ -783,11 +904,98 @@ class DashboardRecentActivityAPIView(APIView):
         return Response(recent_activities, status=status.HTTP_200_OK)
 
 
+def _check_and_generate_lms_expiry_notifications(user):
+    try:
+        from django.utils import timezone
+        from super_admin.models import School, LmsServer, License, SchoolAdminProfile
+        from accounts.scoping import get_user_school
+        today = timezone.now().date()
+
+        def _notify_admins_for_key(school, key_display, diff_days, exp_date):
+            admin_users = set()
+            if school.schoolAdminId:
+                admin_users.add(school.schoolAdminId)
+            for prof in SchoolAdminProfile.objects.filter(school=school).select_related("user"):
+                admin_users.add(prof.user)
+
+            if diff_days == 1:
+                title = "LMS License Expiring Soon"
+                msg = f"Your LMS license key ({key_display}) is due to expire tomorrow ({exp_date}). Please renew it to avoid service interruption."
+                notif_type = Notification.NotificationType.WARNING
+            elif diff_days <= 0:
+                title = "LMS License Expired"
+                msg = f"Your LMS license key ({key_display}) expired on {exp_date}. Access has been suspended. Please contact your administrator to renew."
+                notif_type = Notification.NotificationType.ERROR
+            else:
+                return
+
+            for u in admin_users:
+                if not Notification.objects.filter(user=u, title=title, message=msg, created_at__date=today).exists():
+                    Notification.objects.create(
+                        user=u,
+                        title=title,
+                        message=msg,
+                        notification_type=notif_type,
+                    )
+
+        if user.role == "SCHOOL_ADMIN":
+            school = get_user_school(user)
+            if school:
+                servers = LmsServer.objects.filter(school=school, status=LmsServer.Status.ACTIVE)
+                for srv in servers:
+                    exp = srv.expiryDate or (srv.license and srv.license.expiryDate)
+                    if exp:
+                        diff = (exp - today).days
+                        _notify_admins_for_key(school, srv.licenseKey or srv.serverName, diff, exp)
+
+                lic = getattr(school, "school_license", None) or getattr(school, "licenseId", None)
+                if lic and lic.expiryDate:
+                    diff = (lic.expiryDate - today).days
+                    _notify_admins_for_key(school, lic.licenseKey or "Primary License", diff, lic.expiryDate)
+
+        elif user.role == "SUPER_ADMIN" or user.is_superuser:
+            servers = LmsServer.objects.filter(status=LmsServer.Status.ACTIVE).select_related("school", "license")
+            for srv in servers:
+                exp = srv.expiryDate or (srv.license and srv.license.expiryDate)
+                if not exp:
+                    continue
+                diff = (exp - today).days
+                school_name = srv.school.school_name if srv.school else "School"
+                key_display = srv.licenseKey or srv.serverName
+
+                if srv.school:
+                    _notify_admins_for_key(srv.school, key_display, diff, exp)
+
+                if diff == 1:
+                    title = "LMS License Expiring Soon"
+                    msg = f"The LMS license key ({key_display}) for school '{school_name}' is due to expire tomorrow ({exp}). Please renew it to avoid service interruption."
+                    if not Notification.objects.filter(user=user, title=title, message=msg, created_at__date=today).exists():
+                        Notification.objects.create(
+                            user=user,
+                            title=title,
+                            message=msg,
+                            notification_type=Notification.NotificationType.WARNING,
+                        )
+                elif diff <= 0:
+                    title = "LMS License Expired"
+                    msg = f"The LMS license key ({key_display}) for school '{school_name}' has expired. Access has been suspended. Please renew to restore service."
+                    if not Notification.objects.filter(user=user, title=title, message=msg, created_at__date=today).exists():
+                        Notification.objects.create(
+                            user=user,
+                            title=title,
+                            message=msg,
+                            notification_type=Notification.NotificationType.ERROR,
+                        )
+    except Exception as e:
+        logger.error(f"Error checking LMS expiry notifications: {e}")
+
+
 class DashboardNotificationsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
+        _check_and_generate_lms_expiry_notifications(user)
         notifications = list(Notification.objects.filter(user=user).order_by("-created_at")[:15])
 
         if not notifications:
@@ -961,6 +1169,33 @@ class PreviewViewSet(viewsets.ViewSet):
 # ---------------------------------------------------------------------------
 # Phase 7: Publish Center
 # ---------------------------------------------------------------------------
+DUPLICATE_VERSION_MESSAGE = "This version name already exists. Please enter a different name."
+
+
+def used_version_names(experience):
+    """Every version name this lesson has used: built, waiting for approval, or rejected."""
+    names = list(
+        PublishVersion.objects.filter(published_package__experience=experience).values_list("version_number", flat=True)
+    )
+    names += list(experience.submitted_versions or [])
+    if experience.pending_version:
+        names.append(experience.pending_version)
+    return names
+
+
+def version_name_used(experience, name):
+    key = str(name).strip().lower()
+    return any(str(used).strip().lower() == key for used in used_version_names(experience))
+
+
+def _parse_level(experience, raw):
+    return parse_level(experience.experience_type, raw)
+
+
+def _level_taken_by(experience, level):
+    return level_taken_by(experience.grade, experience.experience_type, level, exclude_pk=experience.pk)
+
+
 class PublishViewSet(viewsets.ViewSet):
     """
     POST /api/v1/content/publish/{experienceId}/   — run the pipeline
@@ -983,6 +1218,19 @@ class PublishViewSet(viewsets.ViewSet):
 
         version = request.data.get("version")  # optional
         release_notes = request.data.get("release_notes", "")
+
+        # The level is normally set in the Lesson Builder (pending_level); a "level" in the request overrides it
+        raw_level = request.data.get("level") if "level" in request.data else experience.pending_level
+        level, level_error = _parse_level(experience, raw_level)
+        if level_error:
+            return Response({"error": level_error}, status=status.HTTP_400_BAD_REQUEST)
+        if level is not None:
+            taken = _level_taken_by(experience, level)
+            if taken:
+                return Response(
+                    {"error": f"Level {level} is already used by '{taken.title}'. Choose another level."},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
         from content_studio.validation_engine import run_validation_engine
         report_data = run_validation_engine(experience)
@@ -1011,22 +1259,18 @@ class PublishViewSet(viewsets.ViewSet):
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
-        # Duplicate version check
-        if version:
-            try:
-                package = PublishedPackage.objects.get(experience=experience)
-                if PublishVersion.objects.filter(published_package=package, version_number=version).exists():
-                    return Response(
-                        {"error": f"Version '{version}' already exists for this experience."},
-                        status=status.HTTP_409_CONFLICT,
-                    )
-            except PublishedPackage.DoesNotExist:
-                pass
+        # Duplicate version check: a name is used once per lesson (trimmed, any case), whether the earlier
+        # build was approved, is waiting for approval, or was rejected
+        version = (str(version).strip() if version is not None else "") or "1.0"
+        if version_name_used(experience, version):
+            return Response({"error": DUPLICATE_VERSION_MESSAGE, "code": "version_exists"}, status=status.HTTP_409_CONFLICT)
 
         experience.status = "PENDING_APPROVAL"
-        experience.pending_version = version or "1.0"
+        experience.pending_version = version
+        experience.submitted_versions = [*(experience.submitted_versions or []), version]
         experience.pending_release_notes = release_notes
-        experience.save(update_fields=["status", "pending_version", "pending_release_notes"])
+        experience.pending_level = level
+        experience.save(update_fields=["status", "pending_version", "submitted_versions", "pending_release_notes", "pending_level"])
 
         # Alert Super Admins via Notification models
         try:
@@ -1048,7 +1292,8 @@ class PublishViewSet(viewsets.ViewSet):
                 "message": "Experience submitted to Super Admin for approval.",
                 "status": experience.status,
                 "pending_version": experience.pending_version,
-                "pending_release_notes": experience.pending_release_notes
+                "pending_release_notes": experience.pending_release_notes,
+                "pending_level": experience.pending_level,
             },
             status=status.HTTP_200_OK
         )
@@ -1059,11 +1304,13 @@ class PublishViewSet(viewsets.ViewSet):
         if not experience:
             return Response({"error": "Experience not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        used_versions = used_version_names(experience)  # the page warns about these before the button is pressed
         try:
             pkg = PublishedPackage.objects.get(experience=experience)
         except PublishedPackage.DoesNotExist:
             return Response(
-                {"experience_id": experience.id, "status": experience.status, "published_package": None},
+                {"experience_id": experience.id, "status": experience.status, "published_package": None,
+                 "used_versions": used_versions},
                 status=status.HTTP_200_OK,
             )
 
@@ -1072,6 +1319,7 @@ class PublishViewSet(viewsets.ViewSet):
             {
                 "experience_id": experience.id,
                 "status": experience.status,
+                "used_versions": used_versions,
                 "published_package": PublishedPackageSerializer(pkg).data,
                 "latest_version": PublishVersionSerializer(latest_version).data if latest_version else None,
             },
@@ -1101,7 +1349,7 @@ class PublishViewSet(viewsets.ViewSet):
         all_versions = (
             PublishVersion.objects
             .filter(published_package__experience__is_deleted=False)
-            .select_related("published_package__experience", "published_by")
+            .select_related("published_package__experience__grade", "published_by")
             .order_by("-published_at")
         )
         data = []
@@ -1110,6 +1358,8 @@ class PublishViewSet(viewsets.ViewSet):
             entry = PublishVersionSerializer(v).data
             entry["experience_title"] = exp.title if exp else "—"
             entry["experience_id"] = exp.id if exp else None
+            entry["experience_type"] = exp.experience_type if exp else None
+            entry["grade_name"] = exp.grade.grade_name if exp and exp.grade else None
             data.append(entry)
         return Response({"versions": data}, status=status.HTTP_200_OK)
 
@@ -1122,7 +1372,7 @@ class PackageViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated, IsContentCreatorOrSuperAdmin]
 
     def get_permissions(self):
-        if self.action in ["download"]:
+        if self.action in ["download", "bulk_download"]:
             from accounts.permissions import IsAuthenticatedOrLMSClient
             return [IsAuthenticatedOrLMSClient()]
         return super().get_permissions()
@@ -1179,6 +1429,89 @@ class PackageViewSet(viewsets.ViewSet):
         )
         response["Content-Disposition"] = f'attachment; filename="{zip_filename}"'
         response["X-Checksum-SHA256"] = version.checksum or ""
+        return response
+
+    def bulk_download(self, request):
+        """
+        POST /api/v1/content/packages/bulk-download/
+        Takes JSON: {"version_ids": [id1, id2, ...]} or {"package_ids": [...]}
+        Bundles approved packages into a single .zip file.
+        """
+        import io
+        import os
+        import zipfile
+        from datetime import datetime
+        from django.http import FileResponse
+
+        version_ids = request.data.get("version_ids") or request.data.get("package_ids") or []
+        if not isinstance(version_ids, list) or len(version_ids) == 0:
+            return Response(
+                {"error": "Please specify a list of package or version IDs to download."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Allow querying either by PublishVersion id or PublishedPackage id
+        versions = list(
+            PublishVersion.objects.filter(
+                id__in=version_ids,
+                published_package__experience__is_deleted=False
+            ).select_related("published_package__experience")
+        )
+
+        if not versions:
+            versions = list(
+                PublishVersion.objects.filter(
+                    published_package_id__in=version_ids,
+                    published_package__experience__is_deleted=False
+                ).select_related("published_package__experience")
+            )
+
+        if not versions:
+            return Response({"error": "No matching package versions found."}, status=status.HTTP_404_NOT_FOUND)
+
+        valid_versions = [v for v in versions if v.published_package.experience.status == "APPROVED"]
+        if not valid_versions:
+            return Response(
+                {"error": "Only approved experience packages can be downloaded."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        missing_files = []
+        available_files = []
+        for v in valid_versions:
+            if v.file_path and os.path.exists(v.file_path):
+                available_files.append(v)
+            else:
+                missing_files.append(v)
+
+        if not available_files:
+            return Response(
+                {"error": "None of the selected package files are available on disk."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as bundle_zip:
+            added_names = set()
+            for v in available_files:
+                file_path = v.file_path
+                elab_filename = os.path.basename(file_path)
+                zip_filename = elab_filename.replace('.elab', '.zip') if elab_filename.endswith('.elab') else f"{elab_filename}.zip"
+                target_arcname = zip_filename
+                idx = 1
+                while target_arcname in added_names:
+                    name_base, ext = os.path.splitext(zip_filename)
+                    target_arcname = f"{name_base}_{idx}{ext}"
+                    idx += 1
+                added_names.add(target_arcname)
+                bundle_zip.write(file_path, arcname=target_arcname)
+
+        buffer.seek(0)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        bundle_filename = f"englishlab_packages_bulk_{timestamp}.zip"
+        response = FileResponse(buffer, content_type="application/zip")
+        response["Content-Disposition"] = f'attachment; filename="{bundle_filename}"'
+        response["X-Packages-Count"] = str(len(available_files))
         return response
 
     def preview_json(self, request, pk=None):
@@ -1366,6 +1699,16 @@ class SuperAdminExperienceViewSet(viewsets.ViewSet):
         except Experience.DoesNotExist:
             return Response({"error": "Experience not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        # The level may have been taken by another lesson since this one was submitted
+        if experience.pending_level is not None:
+            taken = _level_taken_by(experience, experience.pending_level)
+            if taken:
+                return Response(
+                    {"error": f"Level {experience.pending_level} is already used by '{taken.title}'. "
+                              "Ask the creator to submit again with another level."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
         # Generate the final .elab package zip file
         from content_studio.publish.publish_service import build_elab_package
         try:
@@ -1384,10 +1727,7 @@ class SuperAdminExperienceViewSet(viewsets.ViewSet):
                     status=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 )
             if isinstance(args, tuple) and args[0] == "DUPLICATE_VERSION":
-                return Response(
-                    {"error": f"Version '{args[1]}' already exists for this experience."},
-                    status=status.HTTP_409_CONFLICT,
-                )
+                return Response({"error": DUPLICATE_VERSION_MESSAGE, "code": "version_exists"}, status=status.HTTP_409_CONFLICT)
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except RuntimeError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1396,7 +1736,12 @@ class SuperAdminExperienceViewSet(viewsets.ViewSet):
         experience.pending_version = None
         experience.pending_release_notes = None
         experience.review_remark = None
-        experience.save(update_fields=["pending_version", "pending_release_notes", "review_remark"])
+        update_fields = ["pending_version", "pending_release_notes", "review_remark", "pending_level"]
+        if experience.pending_level is not None:
+            experience.level = experience.pending_level
+            update_fields.append("level")
+        experience.pending_level = None
+        experience.save(update_fields=update_fields)
 
         # Notify Content Creator
         if experience.created_by:

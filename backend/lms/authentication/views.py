@@ -1,4 +1,5 @@
 import logging
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -29,8 +30,10 @@ class RollNumberLoginAPIView(APIView):
 
         # 1. Search Student Entity Maps
         student = None
-        # Try username exact match first
-        student = Student.objects.select_related("user", "school").filter(user__username=roll_token).first()
+        # Try lms_code or username exact match first
+        student = Student.objects.select_related("user", "school").filter(
+            Q(lms_code__iexact=roll_token) | Q(user__username__iexact=roll_token)
+        ).first()
 
         # Fallback to student_id if numeric
         if not student and roll_token.isdigit():
@@ -92,7 +95,8 @@ class RollNumberLoginAPIView(APIView):
             "student": {
                 "id": student.student_id,
                 "user_id": user.id,
-                "roll_number": user.username,
+                "roll_number": getattr(student, "lms_code", None) or user.username,
+                "lms_code": getattr(student, "lms_code", None) or user.username,
                 "full_name": user.full_name or user.username,
                 "email": user.email or ""
             },

@@ -22,12 +22,14 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 from lms.packages.views import LMSPackageListAPIView, LMSPackageDownloadAPIView
-from super_admin.views import ActivateServerAPIView, DeactivateServerAPIView
+from super_admin.views import ActivateServerAPIView, DeactivateServerAPIView, LmsServerCreateAPIView, LicenseStatusAPIView
 
 from lms.sync.views import BootstrapSyncAPIView, LessonsPackageSyncAPIView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path("api/lms-hub/", include("lmshub.urls")),
+    path("api/cms/v1/lms-hub/", include("lmshub.admin_urls")),
     path("api/", include("accounts.urls")),
     path("api/packages/", include("lms.packages.canonical_urls")),
     path("api/progress/", include("lms.sync.canonical_urls")),
@@ -37,6 +39,7 @@ urlpatterns = [
     path("api/v1/", include("content_studio.urls")),
     path("api/v1/", include("assessments.urls")),
     path("api/lms/", include("lms.urls")),
+    path("api/hub/", include("lms.hub.urls")),
     path("api/v1/lms/packages/", LMSPackageListAPIView.as_view(), name="lms-v1-packages"),
     path("api/v1/lms/packages/<int:pk>/download/", LMSPackageDownloadAPIView.as_view(), name="lms-v1-package-download"),
     path("api/v1/lms/published-packages/", LMSPackageListAPIView.as_view(), name="lms-published-packages"),
@@ -46,6 +49,9 @@ urlpatterns = [
     path("api/v1/sync/lessons/package/", LessonsPackageSyncAPIView.as_view(), name="sync-lessons-package"),
     path("api/v1/licensing/activate-server", ActivateServerAPIView.as_view(), name="activate-server"),
     path("api/v1/licensing/deactivate-server", DeactivateServerAPIView.as_view(), name="deactivate-server"),
+    path("api/v1/licensing/create-server", LmsServerCreateAPIView.as_view(), name="create-server"),
+    path("api/v1/licensing/status", LicenseStatusAPIView.as_view(), name="license-status"),
+    path("api/v1/licensing/status/", LicenseStatusAPIView.as_view()),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
 ]

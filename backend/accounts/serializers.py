@@ -51,26 +51,83 @@ class ProfileSerializer(serializers.ModelSerializer):
     Serializer for the logged-in user viewing/updating their own profile.
     Username and role are intentionally read-only here.
     """
-    school_name = serializers.SerializerMethodField()
+    school_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    full_name = serializers.CharField(required=True, allow_blank=False, max_length=255)
+    email = serializers.EmailField(required=True, allow_blank=False)
+    phone_no = serializers.CharField(required=True, allow_blank=False, max_length=20)
 
     class Meta:
         model = User
         fields = ("id", "username", "email", "full_name", "phone_no", "role", "school_name", "profile_picture")
-        read_only_fields = ("id", "username", "role", "school_name")
+        read_only_fields = ("id", "username", "role")
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        ret["school_name"] = self.get_school_name(instance)
+        return ret
 
     def get_school_name(self, obj):
         if hasattr(obj, "school_admin_profile") and obj.school_admin_profile.school:
             return obj.school_admin_profile.school.school_name
         if hasattr(obj, "teacher_profile") and obj.teacher_profile.school:
             return obj.teacher_profile.school.school_name
+        if hasattr(obj, "schools_administered") and obj.schools_administered.exists():
+            return obj.schools_administered.first().school_name
         return ""
 
+    def validate_full_name(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Full name is required.")
+        return value.strip()
+
+    def validate_email(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Email address is required.")
+        email = value.strip().lower()
+        qs = User.objects.filter(email__iexact=email)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("A user with this email address already exists.")
+        return email
+
     def validate_phone_no(self, value):
-        if value:
-            cleaned = "".join(c for c in value if c.isdigit())
-            if len(cleaned) != 10 or len(value) != 10:
-                raise serializers.ValidationError("Phone number must be exactly 10 numeric digits.")
-        return value
+        if not value or not str(value).strip():
+            raise serializers.ValidationError("Phone number is required.")
+        val_str = str(value).strip()
+        cleaned = "".join(c for c in val_str if c.isdigit())
+        if len(cleaned) != 10 or len(val_str) != 10:
+            raise serializers.ValidationError("Phone number must be exactly 10 numeric digits.")
+        return cleaned
+
+    def validate(self, attrs):
+        user = self.instance or getattr(self.context.get("request"), "user", None)
+        if user and user.role == User.Role.SCHOOL_ADMIN:
+            if "school_name" in attrs:
+                s_name = attrs.get("school_name")
+                if s_name is not None and not str(s_name).strip():
+                    raise serializers.ValidationError({"school_name": "School name cannot be empty."})
+        return attrs
+
+    def update(self, instance, validated_data):
+        school_name = validated_data.pop("school_name", None)
+        user = super().update(instance, validated_data)
+
+        if school_name is not None and user.role == User.Role.SCHOOL_ADMIN:
+            cleaned_s_name = str(school_name).strip()
+            if cleaned_s_name:
+                if hasattr(user, "school_admin_profile") and user.school_admin_profile.school:
+                    school = user.school_admin_profile.school
+                    school.school_name = cleaned_s_name
+                    if school.schoolAdminId is None:
+                        school.schoolAdminId = user
+                    school.save()
+                if user.schools_administered.exists():
+                    for s in user.schools_administered.all():
+                        s.school_name = cleaned_s_name
+                        s.save()
+
+        return user
 
 
 from django.core.exceptions import ValidationError as DjangoValidationError

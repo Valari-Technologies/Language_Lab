@@ -112,6 +112,12 @@ class LicensingSystemTests(APITestCase):
         self.assertEqual(res_1.status_code, status.HTTP_200_OK)
         self.assertEqual(res_1.data["status"], "success")
         self.assertEqual(res_1.data["installationId"], "INSTALL-001")
+        self.assertEqual(res_1.data["school_id"], "SCH-SETUP")
+        self.assertEqual(res_1.data["schoolId"], "SCH-SETUP")
+        self.assertEqual(res_1.data["school_name"], "Setup School")
+        self.assertEqual(res_1.data["license_id"], "LIC-SETUP")
+        self.assertEqual(res_1.data["licenseKey"], "KEY-SETUP-123")
+        self.assertEqual(res_1.data["expiryDate"], str(license_obj.expiryDate))
 
         # Verify server created in DB
         server_1 = LmsServer.objects.get(installationId="INSTALL-001")
@@ -150,3 +156,194 @@ class LicensingSystemTests(APITestCase):
         # 5. Now server 3 can be activated because server 1 was deactivated
         res_3_retry = self.client.post(activation_url, payload_3, format="json")
         self.assertEqual(res_3_retry.status_code, status.HTTP_200_OK)
+
+    def test_create_lms_server_api_and_activate_with_server_license_key(self):
+        school = School.objects.create(
+            schoolId="SCH-LMS-TEST",
+            school_name="LMS Test School",
+            address="Test Addr",
+            email="lmstest@school.com",
+            is_active=True
+        )
+        license_obj = License.objects.create(
+            licenseId="LIC-LMS-TEST",
+            licenseKey="KEY-MASTER-999",
+            school=school,
+            maxLmsServers=2,
+            concurrentUsersPerServer=40,
+            expiryDate=timezone.now().date() + timezone.timedelta(days=365),
+            status=License.Status.ACTIVE
+        )
+        school.licenseId = license_obj
+        school.save()
+
+        # 1. Create LMS Server via CMS API
+        create_url = reverse("school-create-lms-server", kwargs={"school_id": school.school_id})
+        res = self.client.post(create_url, {"serverName": "Computer Lab 1", "maxUsers": 40}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertIn("server", res.data)
+        server_data = res.data["server"]
+        self.assertEqual(server_data["serverName"], "Computer Lab 1")
+        self.assertEqual(server_data["maxUsers"], 40)
+        self.assertTrue(server_data["licenseKey"].startswith("LMS-KEY-"))
+        self.assertTrue(server_data["installationId"].startswith("INST-"))
+
+        # 2. Activate using the newly generated server-specific license key
+        activation_url = reverse("activate-server")
+        act_res = self.client.post(activation_url, {
+            "licenseKey": server_data["licenseKey"],
+            "serverName": "Computer Lab 1",
+            "installationIdentity": server_data["installationId"]
+        }, format="json")
+        self.assertEqual(act_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(act_res.data["status"], "success")
+        self.assertEqual(act_res.data["concurrentUsersPerServer"], 40)
+        self.assertEqual(act_res.data["installationId"], server_data["installationId"])
+
+    def test_lms_server_crud_and_disable_enable_toggle(self):
+        school = School.objects.create(
+            schoolId="SCH-CRUD-TEST",
+            school_name="CRUD Test School",
+            address="Test Addr",
+            email="crudtest@school.com",
+            is_active=True
+        )
+        license_obj = License.objects.create(
+            licenseId="LIC-CRUD-TEST",
+            licenseKey="KEY-CRUD-999",
+            school=school,
+            maxLmsServers=3,
+            concurrentUsersPerServer=40,
+            expiryDate=timezone.now().date() + timezone.timedelta(days=365),
+            status=License.Status.ACTIVE
+        )
+        school.licenseId = license_obj
+        school.save()
+
+        # 1. Create server
+        create_url = reverse("school-create-lms-server", kwargs={"school_id": school.school_id})
+        res = self.client.post(create_url, {"serverName": "Initial Lab", "maxUsers": 40}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        inst_id = res.data["server"]["installationId"]
+
+        # 2. Update / Rename server via PATCH
+        update_url = f"/api/cms/v1/lms-servers/{inst_id}/"
+        patch_res = self.client.patch(update_url, {"serverName": "Renamed Lab A"}, format="json")
+        self.assertEqual(patch_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(patch_res.data["server"]["serverName"], "Renamed Lab A")
+
+        # 3. Disable server via toggle-status
+        toggle_url = f"/api/cms/v1/lms-servers/{inst_id}/toggle-status/"
+        toggle_res = self.client.post(toggle_url, format="json")
+        self.assertEqual(toggle_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(toggle_res.data["server"]["status"], "DEACTIVATED")
+
+        # 4. Re-enable server via toggle-status
+        toggle_res2 = self.client.post(toggle_url, format="json")
+        self.assertEqual(toggle_res2.status_code, status.HTTP_200_OK)
+        self.assertEqual(toggle_res2.data["server"]["status"], "ACTIVE")
+
+        # 5. Delete server
+        delete_res = self.client.delete(update_url, format="json")
+        self.assertEqual(delete_res.status_code, status.HTTP_200_OK)
+        self.assertFalse(LmsServer.objects.filter(installationId=inst_id).exists())
+
+
+class ActivateServerRegressionTests(APITestCase):
+    """Regression tests for POST activate-server (HTTP 500 on pre-generated server keys)."""
+
+    def setUp(self):
+        self.url = reverse("activate-server")
+        self.school = School.objects.create(
+            schoolId="SCH-REG", school_name="Reg School", address="Addr",
+            phone="123", email="reg@school.com", is_active=True,
+        )
+        self.license = License.objects.create(
+            licenseId="LIC-REG", licenseKey="KEY-REG-1", school=self.school,
+            maxLmsServers=2, concurrentUsersPerServer=40,
+            expiryDate=timezone.now().date() + timezone.timedelta(days=100),
+            status=License.Status.ACTIVE,
+        )
+        self.school.licenseId = self.license
+        self.school.save()
+        self.server = LmsServer.objects.create(
+            installationId="INST-1D34E819", serverName="Lab",
+            licenseKey="LMS-KEY-A3CF36CC1519426A",
+            school=self.school, license=self.license,
+        )
+
+    def _post(self, key, inst, name="Lab PC"):
+        return self.client.post(self.url, {
+            "licenseKey": key, "serverName": name,
+            "installationIdentity": inst, "installationId": inst,
+        }, format="json")
+
+    def test_pregenerated_key_with_different_installation_id(self):
+        res = self._post("LMS-KEY-A3CF36CC1519426A", "INST-BD155C75")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data["valid"])
+        # First use binds the key to this machine; no duplicate row is created.
+        self.assertEqual(res.data["installationId"], "INST-BD155C75")
+        self.assertEqual(LmsServer.objects.count(), 1)
+        server = LmsServer.objects.get(installationId="INST-BD155C75")
+        self.assertEqual(server.serverName, "Lab PC")
+        self.assertEqual(server.licenseKey, "LMS-KEY-A3CF36CC1519426A")
+
+    def test_repeat_activation_is_idempotent(self):
+        first = self._post("LMS-KEY-A3CF36CC1519426A", "INST-BD155C75")
+        second = self._post("LMS-KEY-A3CF36CC1519426A", "INST-BD155C75")
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(first.data["installationId"], second.data["installationId"])
+        self.assertEqual(LmsServer.objects.count(), 1)
+
+    def test_second_machine_with_same_key_gets_own_slot(self):
+        a = self._post("LMS-KEY-A3CF36CC1519426A", "INST-A")
+        b = self._post("LMS-KEY-A3CF36CC1519426A", "INST-B")
+        self.assertEqual(a.status_code, status.HTTP_200_OK)
+        self.assertEqual(b.status_code, status.HTTP_200_OK)
+        self.assertEqual(b.data["installationId"], "INST-B")
+        self.assertEqual(LmsServer.objects.filter(lastSyncTime__isnull=False).count(), 2)
+        # License allows 2 servers: a third machine is rejected.
+        c = self._post("LMS-KEY-A3CF36CC1519426A", "INST-C")
+        self.assertEqual(c.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Maximum registered LMS servers", c.data["error"])
+
+    def test_invalid_key(self):
+        res = self._post("LMS-KEY-TEST", "INST-1")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.data["error"], "Invalid License Key.")
+
+    def test_expired_license(self):
+        self.license.expiryDate = timezone.now().date() - timezone.timedelta(days=1)
+        self.license.save()
+        res = self._post("LMS-KEY-A3CF36CC1519426A", "INST-1D34E819")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("expired", res.data["error"])
+        self.license.refresh_from_db()
+        self.assertEqual(self.license.status, License.Status.EXPIRED)
+
+    def test_max_servers_limit_with_master_key(self):
+        LmsServer.objects.create(
+            installationId="INST-2", serverName="Two", licenseKey="LMS-KEY-2",
+            school=self.school, license=self.license,
+        )
+        res = self._post("KEY-REG-1", "INST-NEW")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Maximum registered LMS servers", res.data["error"])
+
+    def test_response_contains_client_fields(self):
+        res = self._post("LMS-KEY-A3CF36CC1519426A", "INST-1D34E819")
+        for field in ("status", "valid", "installationId", "licenseKey", "school_id",
+                      "school_code", "school_name", "address", "phone", "email",
+                      "academic_year", "expires_at", "maxLmsServers",
+                      "concurrentUsersPerServer"):
+            self.assertIn(field, res.data)
+
+    def test_unexpected_error_returns_json_500(self):
+        from unittest import mock
+        with mock.patch("super_admin.views.LmsServer.objects.select_related", side_effect=RuntimeError("boom")):
+            with self.assertLogs("super_admin.views", level="ERROR"):
+                res = self._post("LMS-KEY-A3CF36CC1519426A", "INST-1")
+        self.assertEqual(res.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertIn("error", res.data)

@@ -6,11 +6,14 @@ import {
   FiChevronDown, FiBell,
   FiCheckCircle, FiFileText,
   FiActivity, FiTrendingUp, FiAward, FiLock, FiChevronLeft, FiChevronRight,
-  FiEye, FiEyeOff, FiAlertTriangle, FiInfo, FiUpload, FiDownload, FiRefreshCw, FiMoreVertical, FiClock
+  FiEye, FiEyeOff, FiAlertTriangle, FiInfo, FiUpload, FiDownload, FiRefreshCw, FiMoreVertical, FiClock, FiMonitor
 } from 'react-icons/fi';
 import './SchoolDashboard.css';
+import LmsHubPanel from './LmsHubPanel';
 import { apiFetch } from './api';
 import { API_BASE_URL } from './config';
+import { formatRollNo, pageItems, titleName } from './format';
+import { savePdf } from './pdf';
 
 const resolveMediaUrl = (url) => {
   if (!url) return '';
@@ -152,17 +155,19 @@ const generateRollNo = (fullName, existingStudents = []) => {
   return candidate;
 };
 
-const generateLmsLoginCode = (fullName, existingStudents = []) => {
-  const cleanName = (fullName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!cleanName) return '';
-  const takenUsernames = new Set((existingStudents || []).map(s => (s.username || '').toLowerCase()));
-  let candidate = cleanName;
-  let suffix = 1;
-  while (takenUsernames.has(candidate)) {
-    candidate = `${cleanName}${suffix}`;
-    suffix += 1;
-  }
-  return candidate;
+/* Difficulty as shown to users: BEGINNER / INTERMEDIATE / MASTER (or "Intermediate") -> "Beginner" / "Intermediate" / "Master". */
+const difficultyLabel = (value) => {
+  const clean = String(value || 'INTERMEDIATE').trim().toLowerCase();
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+};
+
+const generateLmsLoginCode = (fullName, rollNo = '') => {
+  const letters = (fullName || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
+  if (!letters) return '';
+  const prefix = letters.slice(0, 3).padEnd(3, 'X');
+  const cleanRoll = String(rollNo || '').trim();
+  const formattedRoll = /^\d$/.test(cleanRoll) ? `0${cleanRoll}` : cleanRoll;
+  return formattedRoll ? `${prefix}_${formattedRoll}` : `${prefix}_`;
 };
 
 /* ─── Static chart data (reference-matched visual) ─── */
@@ -247,12 +252,7 @@ const LineChart = ({ lines = CHART_LINES }) => {
 /* ─── Pagination helper ─── */
 const Pagination = ({ total, perPage = 4, page, onPage }) => {
   const pages = Math.max(1, Math.ceil(total / perPage));
-  const items = [];
-  if (pages <= 5) {
-    for (let i = 1; i <= pages; i++) items.push(i);
-  } else {
-    items.push(1, 2, 3, '...', pages);
-  }
+  const items = pageItems(page, pages);
   const from = total === 0 ? 0 : (page - 1) * perPage + 1;
   const to   = Math.min(page * perPage, total);
   return (
@@ -266,8 +266,8 @@ const Pagination = ({ total, perPage = 4, page, onPage }) => {
         </button>
         {items.map((it, i) =>
           it === '...'
-            ? <span key={i} className="sd-page-btn ellipsis">…</span>
-            : <button key={it} className={`sd-page-btn${page === it ? ' active' : ''}`} onClick={() => onPage(it)}>{it}</button>
+            ? <span key={`gap-${i}`} className="sd-page-btn ellipsis">…</span>
+            : <button key={`page-${it}`} className={`sd-page-btn${page === it ? ' active' : ''}`} onClick={() => onPage(it)}>{it}</button>
         )}
         <button className="sd-page-btn arrow" disabled={page === pages} onClick={() => onPage(page + 1)}>
           <FiChevronRight/>
@@ -423,7 +423,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [teacherPage, setTeacherPage]   = useState(1);
   const [studentPage, setStudentPage]   = useState(1);
   const [classPage,   setClassPage]     = useState(1);
-  const [experiencePage,setExperiencePage]  = useState(1);
   const PER_PAGE = 4;
 
   /* ── Selection State ── */
@@ -444,6 +443,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [showModal,   setShowModal]   = useState(false);
   const [modalType,   setModalType]   = useState('add');
   const [editingId,   setEditingId]   = useState(null);
+  const [selectedEntity, setSelectedEntity] = useState(null);
   const [showPwModal, setShowPwModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, type: null });
   const [showRecentActivityModal, setShowRecentActivityModal] = useState(false);
@@ -455,7 +455,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [classes,        setClasses]        = useState([]);
   const [schClassFilter, setSchClassFilter] = useState('');
   const [schSectionFilter, setSchSectionFilter] = useState('');
-  const [schLessonClassFilter, setSchLessonClassFilter] = useState('');
   const [studentClassFilter, setStudentClassFilter] = useState('');
   const [studentSectionFilter, setStudentSectionFilter] = useState('');
   const [teacherClassFilter, setTeacherClassFilter] = useState('');
@@ -467,9 +466,13 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [overviewReport,          setOverviewReport]          = useState(null);
   const [experiencesReport,         setExperiencesReport]         = useState([]);
   const [classesReport,           setClassesReport]           = useState([]);
+  const [classReportPage,         setClassReportPage]         = useState(1);
+  const [classReportGrade,        setClassReportGrade]        = useState('');
   const [studentsReport,          setStudentsReport]          = useState([]);
-  const [studentCompletionReport, setStudentCompletionReport] = useState([]);
-  const [completionPage, setCompletionPage] = useState(1);
+  const [lessonReportPage,        setLessonReportPage]        = useState(1);
+  const [lessonReportGrade,       setLessonReportGrade]       = useState('');
+  const [studentReportPage,       setStudentReportPage]       = useState(1);
+  const [studentReportGrade,      setStudentReportGrade]      = useState('');
 
   /* ── Detail modals ── */
   const [selectedExperienceDetail, setSelectedExperienceDetail] = useState(null);
@@ -608,17 +611,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     } catch (e) { console.error('Failed to load experiences.', e); }
   };
 
-  const loadStudentCompletionReport = async () => {
-    setCompletionPage(1);
-    try {
-      const res = await apiFetch('/api/v1/reports/student-completion/');
-      if (res.ok) {
-        const d = await res.json();
-        setStudentCompletionReport(d.results || d);
-      }
-    } catch (e) { console.error('Failed to load student completion report', e); }
-  };
-
   const loadReportsData = async () => {
     try {
       const [overRes, scenRes, classRes, studRes] = await Promise.all([
@@ -690,6 +682,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           email: data.email || '',
           full_name: data.full_name || '',
           phone_no: data.phone_no || '',
+          school_name: data.school_name || localStorage.getItem('school_admin_school_name') || '',
           current_password: '',
           password: ''
         });
@@ -706,17 +699,21 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       await Promise.all([
         loadUserProfile(), loadDashboardData(), loadSchools(), loadGrades(),
         loadTeachers(), loadStudents(), loadClasses(),
-        loadExperiences(), loadReportsData(), loadStudentCompletionReport(),
+        loadExperiences(), loadReportsData(),
         loadNotifications()
       ]);
     } catch (e) { setErrorMsg('Error loading dashboard data.'); }
     finally { setLoading(false); }
   };
 
-  /* ── Clock ticker ── */
+  /* ── Clock ticker & Notification poller ── */
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
-    return () => clearInterval(timer);
+    const notifTimer = setInterval(loadNotifications, 30000);
+    return () => {
+      clearInterval(timer);
+      clearInterval(notifTimer);
+    };
   }, []);
 
   /* ── Dismiss notification and action dropdown on outside click ── */
@@ -869,8 +866,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         const match = String(rawGrade).match(/\d+/);
         formattedGrade = match ? `Class ${match[0]}` : rawGrade;
       }
+      let initialUsername = entity?.username || '';
+      if (entity && (!initialUsername || initialUsername.toLowerCase() === (entity.full_name || '').toLowerCase().replace(/[^a-z0-9]/g, ''))) {
+        initialUsername = generateLmsLoginCode(entity.full_name, entity.roll_no);
+      }
       setStudentForm(entity ? {
-        username: entity.username || '', password: '', email: entity.email || '',
+        username: initialUsername, password: '', email: entity.email || '',
         full_name: entity.full_name || '',
         roll_no: entity.roll_no || '',
         grade: formattedGrade,
@@ -898,10 +899,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     }
   };
 
-  const handleOpenAdd = () => { setModalType('add'); setEditingId(null); initForm(activeSubTab); setShowModal(true); };
+  const handleOpenAdd = () => { setModalType('add'); setEditingId(null); setSelectedEntity(null); initForm(activeSubTab); setShowModal(true); };
   const handleOpenEdit = (entity) => {
     setModalType('edit');
-    setEditingId(entity.student_id || entity.teacher_id || entity.class_id || entity.id);
+    const id = entity.student_id || entity.teacher_id || entity.class_id || entity.id;
+    setEditingId(id);
+    setSelectedEntity(entity);
     initForm(activeSubTab, entity);
     setShowModal(true);
   };
@@ -951,9 +954,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
           if (existingClass) {
             if (existingClass.teacher_name) {
-              const editingTeacherId = modalType === 'edit' && selectedEntity ? (selectedEntity.teacher_id || selectedEntity.id) : null;
+              const editingTeacherId = modalType === 'edit' ? (editingId || selectedEntity?.teacher_id || selectedEntity?.id) : null;
               const assignedTeacherIds = existingClass.assigned_teacher_ids || [];
-              if (!editingTeacherId || !assignedTeacherIds.includes(editingTeacherId)) {
+              const isAssignedToThisTeacher = editingTeacherId && assignedTeacherIds.some(id => String(id) === String(editingTeacherId));
+              if (!editingTeacherId || !isAssignedToThisTeacher) {
                 setErrorMsg(`${targetClassName} is already assigned to teacher '${existingClass.teacher_name}'. A class & section can only be assigned to one teacher.`);
                 setActionLoading(false);
                 return;
@@ -1013,9 +1017,11 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       } else if (activeSubTab === 'students') {
         body = { ...studentForm };
         if (modalType === 'add') {
-          if (!body.username) body.username = body.roll_no;
-          if (!body.password) body.password = body.roll_no;
-          if (!body.email) body.email = `${body.roll_no}@school.com`;
+          if (!body.username || body.username.endsWith('_')) {
+            body.username = generateLmsLoginCode(body.full_name, body.roll_no);
+          }
+          if (!body.password) body.password = body.username;
+          if (!body.email) body.email = `${body.username.toLowerCase()}@lingualab.com`;
         } else if (modalType === 'edit' && !body.password) {
           delete body.password;
         }
@@ -1025,16 +1031,21 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
       const method = modalType === 'add' ? 'POST' : 'PUT';
       const res = await apiFetch(url, { method, body: JSON.stringify(body) });
-      const resData = await res.json();
+      let resData = {};
+      try {
+        resData = await res.json();
+      } catch {
+        resData = {};
+      }
       if (res.ok) {
         showFeedback(resData.message || 'Operation successful', null);
         setShowModal(false);
         if (activeSubTab === 'teachers') await loadTeachers();
         else if (activeSubTab === 'students') await loadStudents();
-        else if (activeSubTab === 'classes') await loadClasses();
+        else if (activeSubTab === 'classes') { await loadClasses(); await loadExperiences(); }
         await loadDashboardData();
       } else {
-        if (resData && typeof resData === 'object') {
+        if (resData && typeof resData === 'object' && Object.keys(resData).length > 0) {
           const errs = Object.entries(resData).map(([k, v]) => {
             const field = k.charAt(0).toUpperCase() + k.slice(1);
             const msg = Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v);
@@ -1042,11 +1053,12 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           });
           setErrorMsg(errs.join(' | ') || 'Operation failed.');
         } else {
-          setErrorMsg(resData.message || 'Operation failed.');
+          setErrorMsg(resData.message || resData.detail || resData.error || 'Operation failed.');
         }
       }
     } catch (err) {
-      setErrorMsg('Failed to process request. Check connections.');
+      console.error('Error submitting form:', err);
+      setErrorMsg(err.message || 'Failed to process request. Check connections.');
     } finally {
       setActionLoading(false);
     }
@@ -1198,6 +1210,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           showFeedback(`Successfully deleted ${count} class(es).`, null);
           setSelectedClassIds([]);
           await loadClasses();
+          await loadExperiences();
         }
         await loadDashboardData();
         setDeleteConfirm({ show: false, id: null, type: null, isBulk: false, ids: [], count: 0 });
@@ -1218,7 +1231,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         setDeleteConfirm({ show: false, id: null, type: null });
         if (activeSubTab === 'teachers') await loadTeachers();
         else if (activeSubTab === 'students') await loadStudents();
-        else if (activeSubTab === 'classes') await loadClasses();
+        else if (activeSubTab === 'classes') { await loadClasses(); await loadExperiences(); }
         await loadDashboardData();
       } else {
         setErrorMsg(resData.message || 'Delete operation failed.');
@@ -1307,15 +1320,48 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setErrorMsg('');
-    if (profileForm.phone_no && profileForm.phone_no.replace(/\D/g, '').length !== 10) {
+
+    const trimmedFullName = (profileForm.full_name || '').trim();
+    const trimmedEmail = (profileForm.email || '').trim();
+    const cleanedPhone = (profileForm.phone_no || '').replace(/\D/g, '');
+    const trimmedSchoolName = (profileForm.school_name || '').trim();
+
+    if (!trimmedFullName) {
+      setErrorMsg('Admin Name is required.');
+      return;
+    }
+    if (!trimmedEmail) {
+      setErrorMsg('Email Address is required.');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+    if (!cleanedPhone) {
+      setErrorMsg('Phone number is required.');
+      return;
+    }
+    if (cleanedPhone.length !== 10) {
       setErrorMsg('Phone number must be exactly 10 numeric digits.');
       return;
     }
+    if (!trimmedSchoolName) {
+      setErrorMsg('School Name is required.');
+      return;
+    }
+
     setActionLoading(true);
     try {
       const res = await apiFetch('/api/users/profile/', {
         method: 'PATCH',
-        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no })
+        body: JSON.stringify({
+          full_name: trimmedFullName,
+          email: trimmedEmail,
+          phone_no: cleanedPhone,
+          school_name: trimmedSchoolName
+        })
       });
       let resData = {};
       try { resData = await res.json(); } catch { resData = {}; }
@@ -1324,6 +1370,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         if (resData.email) msg = Array.isArray(resData.email) ? resData.email.join(' ') : resData.email;
         else if (resData.phone_no) msg = Array.isArray(resData.phone_no) ? resData.phone_no.join(' ') : resData.phone_no;
         else if (resData.full_name) msg = Array.isArray(resData.full_name) ? resData.full_name.join(' ') : resData.full_name;
+        else if (resData.school_name) msg = Array.isArray(resData.school_name) ? resData.school_name.join(' ') : resData.school_name;
         else if (resData.detail) msg = String(resData.detail);
         else if (resData.error) msg = String(resData.error);
         else if (typeof resData === 'object' && Object.keys(resData).length > 0) {
@@ -1333,8 +1380,26 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         setErrorMsg(msg);
         return;
       }
-      const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
+      const updatedUser = resData.user || {
+        ...user,
+        full_name: trimmedFullName,
+        email: trimmedEmail,
+        phone_no: cleanedPhone,
+        school_name: trimmedSchoolName
+      };
       if (onUpdateUser) onUpdateUser(updatedUser);
+      setUser(updatedUser);
+      setProfileForm(prev => ({
+        ...prev,
+        full_name: trimmedFullName,
+        email: trimmedEmail,
+        phone_no: cleanedPhone,
+        school_name: trimmedSchoolName
+      }));
+      try {
+        localStorage.setItem('school_admin_school_name', trimmedSchoolName);
+      } catch {}
+      setDashboardData(prev => ({ ...prev, school_name: trimmedSchoolName }));
       showFeedback('Profile updated successfully', null);
     } catch (err) {
       console.error('Profile update error:', err);
@@ -1392,9 +1457,11 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     };
     
     const rows = list.map(s => {
-      const fullName = s.full_name || s.username || 'N/A';
-      const rollNo = s.roll_no || 'N/A';
-      const loginCode = s.username || 'N/A';
+      const fullName = titleName(s.full_name) || s.username || 'N/A';
+      const rollNo = formatRollNo(s.roll_no) || 'N/A';
+      const loginCode = (s.username && /^([A-Z]{3})_(\d)$/.test(s.username))
+        ? s.username.replace(/^([A-Z]{3})_(\d)$/, '$1_0$2')
+        : (s.username || 'N/A');
       const className = s.grade ? (String(s.grade).startsWith('Class') || String(s.grade).startsWith('Grade') ? String(s.grade).replace('Grade', 'Class') : `Class ${s.grade}`) : 'N/A';
       const section = s.section ? (String(s.section).startsWith('Section') ? s.section : `Section ${s.section}`) : 'N/A';
       const academicYear = s.academic_year || '2025 - 2026';
@@ -1439,17 +1506,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     });
   };
 
-  const getFilteredExperiences = () => {
-    return experiences.filter(exp => {
-      if (schLessonClassFilter) {
-        const gradeNum = exp.grade_name ? exp.grade_name.match(/\d+/) : null;
-        const expGrade = gradeNum ? gradeNum[0] : '';
-        return expGrade === schLessonClassFilter;
-      }
-      return true;
-    });
-  };
-
   /* ── Filter helpers ── */
   const filterList = (list) => {
     if (!searchQuery) return list;
@@ -1463,11 +1519,54 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
   const paginate = (list, page) => list.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
+  // Download symbol of Student Performance Analysis: every student (not only the filtered page) as a PDF table
+  const downloadStudentsPdf = () => savePdf({
+    file: `student_performance_report_${new Date().toISOString().slice(0, 10)}.pdf`,
+    title: 'Student Performance Report',
+    schoolName: dashboardData?.school_name || profileForm.school_name || '',
+    subtitle: `${studentsReport.length} student${studentsReport.length === 1 ? '' : 's'} · ${new Date().toLocaleDateString()}`,
+    tables: [{
+      head: ['Student', 'Roll No', 'Class', 'Section', 'Attempts', 'Completed', 'Avg Score', 'Last Attempt'],
+      body: studentsReport.map(st => [
+        titleName(st.student_name), formatRollNo(st.roll_no) || 'N/A', st.grade_name || st.class_name, st.section || 'N/A',
+        st.total_attempts, st.completed,
+        `${st.average_score}%`, st.last_attempt_date ? new Date(st.last_attempt_date).toLocaleDateString() : 'N/A',
+      ]),
+    }],
+  });
+
+  // Lesson Performance Analysis: the lessons of Content Studio, ten a page, filtered by the lesson's grade
+  const LESSON_REPORT_PER_PAGE = 10;
+  const filteredLessonRows = experiences.filter(s => (
+    !lessonReportGrade || (String(s.grade_name || '').match(/\d+/) || [])[0] === lessonReportGrade
+  ));
+  const lessonReportPageNow = Math.min(lessonReportPage, Math.max(1, Math.ceil(filteredLessonRows.length / LESSON_REPORT_PER_PAGE)));
+  const visibleLessonRows = filteredLessonRows.slice(
+    (lessonReportPageNow - 1) * LESSON_REPORT_PER_PAGE, lessonReportPageNow * LESSON_REPORT_PER_PAGE);
+
+  // Class Performance Analysis: five classes a page, filtered by grade
+  const CLASS_REPORT_PER_PAGE = 5;
+  const filteredClassRows = classesReport.filter(c => (
+    !classReportGrade || (String(c.grade_name || c.class_name || '').match(/\d+/) || [])[0] === classReportGrade
+  ));
+  const classReportPageNow = Math.min(classReportPage, Math.max(1, Math.ceil(filteredClassRows.length / CLASS_REPORT_PER_PAGE)));
+  const visibleClassRows = filteredClassRows.slice(
+    (classReportPageNow - 1) * CLASS_REPORT_PER_PAGE, classReportPageNow * CLASS_REPORT_PER_PAGE);
+
+  // Student Performance Analysis: five students a page, filtered by grade ("Class 5-A" belongs to grade 5)
+  const STUDENT_REPORT_PER_PAGE = 5;
+  const filteredStudentRows = studentsReport.filter(st => (
+    !studentReportGrade || (String(st.class_name || '').match(/\d+/) || [])[0] === studentReportGrade
+  ));
+  const studentReportPageNow = Math.min(studentReportPage, Math.max(1, Math.ceil(filteredStudentRows.length / STUDENT_REPORT_PER_PAGE)));
+  const visibleStudentRows = filteredStudentRows.slice(
+    (studentReportPageNow - 1) * STUDENT_REPORT_PER_PAGE, studentReportPageNow * STUDENT_REPORT_PER_PAGE);
+
   /* ── Stat values (from real API or fallbacks) ── */
   const statTeachers  = teachers.length;
   const statStudents  = students.length;
   const statClasses   = classes.length;
-  const statExperiences = experiences.length;
+  const statExperiences = dashboardData?.total_lessons !== undefined ? dashboardData.total_lessons : (classes.length === 0 ? 0 : experiences.length);
   const statSchools   = schools.length;
   const statAttend    = dashboardData?.monthly_engagement_rate || '—';
 
@@ -1477,7 +1576,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     setSearchQuery('');
     setSchClassFilter('');
     setSchSectionFilter('');
-    setSchLessonClassFilter('');
     setStudentClassFilter('');
     setStudentSectionFilter('');
     setTeacherClassFilter('');
@@ -1485,7 +1583,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     setTeacherPage(1);
     setStudentPage(1);
     setClassPage(1);
-    setExperiencePage(1);
     setImportActive(false);
     setUploadSummary(null);
     setShowModal(false);
@@ -1499,6 +1596,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     if (tab === 'classes') loadClasses();
     else if (tab === 'teachers') loadTeachers();
     else if (tab === 'students') loadStudents();
+    else if (tab === 'reports') loadExperiences(); // the Lesson Performance Analysis card lists the lessons
   };
 
   /* ── Loading screen ── */
@@ -1715,7 +1813,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               <img src={logoIcon} alt="Logo" style={{ width: '48px', height: '76px', objectFit: 'contain' }} />
               <div>
                 <div className="sd-brand-name">LinguaLab</div>
-                <div className="sd-brand-sub">School Admin Portal</div>
+                <div className="sd-brand-sub">{dashboardData?.school_name || profileForm.school_name || 'School Admin Portal'}</div>
               </div>
             </div>
           ) : (
@@ -1768,8 +1866,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           <button className={`sd-nav-item${activeSubTab==='classes' ? ' active' : ''}`} onClick={() => goTo('classes')} title={navCollapsed ? 'Classes' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
             <FiBookOpen/>{!navCollapsed && <span>Classes</span>}
           </button>
-          <button className={`sd-nav-item${activeSubTab==='experiences' ? ' active' : ''}`} onClick={() => goTo('experiences')} title={navCollapsed ? 'Lessons' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
-            <FiFileText/>{!navCollapsed && <span>Lessons</span>}
+          <button className={`sd-nav-item${activeSubTab==='lms-hub' ? ' active' : ''}`} onClick={() => goTo('lms-hub')} title={navCollapsed ? 'LMS Hub' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
+            <FiMonitor/>{!navCollapsed && <span>LMS Hub</span>}
           </button>
           <button className={`sd-nav-item${activeSubTab==='reports' ? ' active' : ''}`} onClick={() => goTo('reports')} title={navCollapsed ? 'Reports' : undefined} style={navCollapsed ? { justifyContent: 'center', padding: '0.75rem' } : {}}>
             <FiBarChart2/>{!navCollapsed && <span>Reports</span>}
@@ -1871,7 +1969,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               <>
                 <div className="sd-user-meta" style={{ flex: 1, minWidth: 0 }}>
                   <div className="sd-user-name" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profileForm.full_name || user?.full_name || user?.username || 'School Admin'}</div>
-                  <div className="sd-user-role" style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)' }}>School Admin</div>
+                  <div className="sd-user-role" style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)' }}>{dashboardData?.school_name || profileForm.school_name || 'School Admin'}</div>
                 </div>
                 <div style={{ color: 'rgba(255, 255, 255, 0.75)', display: 'flex', alignItems: 'center', fontSize: '1rem' }}>
                   <FiChevronDown />
@@ -1895,8 +1993,8 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                activeSubTab === 'teachers' ? 'Teachers Management' :
                activeSubTab === 'students' ? 'Students Management' :
                activeSubTab === 'classes' ? 'Class Management' :
-               activeSubTab === 'experiences' ? 'Lesson Library' :
                activeSubTab === 'reports' ? 'Reports & Analytics' :
+               activeSubTab === 'lms-hub' ? 'LMS Hub' :
                activeSubTab === 'profile' ? 'Profile Settings' : 'Dashboard Overview'
                }
             </h2>
@@ -2638,7 +2736,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         </tbody>
                       </table>
                       <div style={{ padding: '0.75rem 1.25rem', background: '#fffbeb', borderTop: '1px solid #fef3c7', fontSize: '0.8rem', color: '#92400e' }}>
-                        LMS login code is auto-generated from <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>fullname</code>.
+                        LMS login code is auto-generated from <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>fullname</code> and <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>roll no</code> (e.g. <span style={{ fontWeight: 700 }}>ABU_07</span> or <span style={{ fontWeight: 700 }}>DHA_12</span>).
                       </div>
                     </div>
 
@@ -2698,7 +2796,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <thead>
                       <tr>
                         {isSelectModeStudents && (
-                          <th className="sd-checkbox-cell">
+                          <th className="sd-checkbox-cell" style={{ width: '40px' }}>
                             <input
                               type="checkbox"
                               checked={students.length > 0 && selectedStudentIds.length === getFilteredStudents().length}
@@ -2706,19 +2804,34 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             />
                           </th>
                         )}
-                        <th>Full Name</th>
-                        <th>Roll No</th>
-                        <th>LMS Login Code</th>
-                        <th>Class</th>
-                        <th>Section</th>
-                        <th style={{ textAlign: 'center' }}>Academic Year</th>
-                        <th>Status</th>
-                        <th style={{ textAlign:'center' }}>Actions</th>
+                        <th style={{ minWidth: '130px' }}>Full Name</th>
+                        <th style={{ textAlign: 'center', minWidth: '80px' }}>Roll No</th>
+                        <th style={{ minWidth: '140px' }}>LMS Login Code</th>
+                        <th style={{ minWidth: '90px' }}>Class</th>
+                        <th style={{ minWidth: '100px' }}>Section</th>
+                        <th style={{ textAlign: 'center', minWidth: '130px' }}>Academic Year</th>
+                        <th style={{ textAlign: 'center', minWidth: '90px' }}>Status</th>
+                        <th style={{ textAlign:'center', minWidth: '70px' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {paginate(getFilteredStudents(), studentPage).map((s, i) => {
                         const sid = s.student_id || s.id;
+                        const displayLmsCode = (() => {
+                          if (s.username) {
+                            let code = s.username;
+                            if (/^([A-Z]{3})_(\d)$/.test(code)) {
+                              code = code.replace(/^([A-Z]{3})_(\d)$/, '$1_0$2');
+                            } else if (/^([A-Z]{3}_\d{2})_\d+$/.test(code)) {
+                              code = code.replace(/^([A-Z]{3}_\d{2})_\d+$/, '$1');
+                            }
+                            return code;
+                          }
+                          if (s.full_name && s.roll_no) {
+                            return generateLmsLoginCode(s.full_name, s.roll_no);
+                          }
+                          return 'N/A';
+                        })();
                         return (
                           <tr key={sid || i}>
                             {isSelectModeStudents && (
@@ -2731,19 +2844,19 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               </td>
                             )}
                             <td>
-                              <span className="sd-name-cell-primary">{s.full_name || s.username || 'N/A'}</span>
+                              <span className="sd-name-cell-primary">{titleName(s.full_name) || s.username || 'N/A'}</span>
                             </td>
-                            <td>{s.roll_no || 'N/A'}</td>
-                            <td><span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>{s.username || 'N/A'}</span></td>
-                            <td>{s.grade ? (String(s.grade).startsWith('Class') || String(s.grade).startsWith('Grade') ? String(s.grade).replace('Grade', 'Class') : `Class ${s.grade}`) : 'N/A'}</td>
-                            <td>{s.section ? (String(s.section).startsWith('Section') ? s.section : `Section ${s.section}`) : 'N/A'}</td>
-                            <td style={{ textAlign: 'center' }}>{s.academic_year || '2025 - 2026'}</td>
-                            <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
+                            <td style={{ textAlign: 'center' }}>{formatRollNo(s.roll_no) || 'N/A'}</td>
+                            <td><span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{displayLmsCode}</span></td>
+                            <td style={{ whiteSpace: 'nowrap' }}>{s.grade ? (String(s.grade).startsWith('Class') || String(s.grade).startsWith('Grade') ? String(s.grade).replace('Grade', 'Class') : `Class ${s.grade}`) : 'N/A'}</td>
+                            <td style={{ whiteSpace: 'nowrap' }}>{s.section ? (String(s.section).startsWith('Section') ? s.section : `Section ${s.section}`) : 'N/A'}</td>
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>{s.academic_year || '2025 - 2026'}</td>
+                            <td style={{ textAlign: 'center', overflow: 'visible', textOverflow: 'clip' }}>
                               <span className={`sd-badge ${s.is_active ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
                                 {s.is_active ? 'Active' : 'Inactive'}
                               </span>
                             </td>
-                            <td style={{ overflow: 'visible' }}>
+                            <td style={{ textAlign: 'center', overflow: 'visible' }}>
                               <div className="sd-action-cell" style={{ justifyContent: 'center', overflow: 'visible' }}>
                                 <div className="sd-action-dropdown-container" style={{ position: 'relative', display: 'inline-block' }}>
                                   <button
@@ -2886,7 +2999,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         );
                       })}
                       {getFilteredStudents().length === 0 && (
-                        <tr><td colSpan={isSelectModeStudents ? "7" : "6"} className="sd-empty-state">No students found.</td></tr>
+                        <tr><td colSpan={isSelectModeStudents ? "9" : "8"} className="sd-empty-state">No students found.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -3047,76 +3160,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
             </>
           )}
 
-          {/* ══════════ EXPERIENCES TAB ══════════ */}
-          {activeSubTab === 'experiences' && !isAnyOverlayOpen && (
-            <>
-            
-              <div className="sd-card" style={{ padding:'1.25rem 1.5rem' }}>
-                <div className="sd-table-toolbar">
-                  <div className="sd-table-search">
-                    <FiSearch/>
-                    <input
-                      type="text"
-                      placeholder="Search lessons..."
-                      value={searchQuery}
-                      onChange={e => { setSearchQuery(e.target.value); setExperiencePage(1); }}
-                    />
-                  </div>
-                  <div className="sd-table-actions">
-                    <select
-                      className="sd-form-input"
-                      style={{ width: '130px', height: '38px', padding: '0 0.5rem', fontSize: '0.82rem', borderRadius: '8px' }}
-                      value={schLessonClassFilter}
-                      onChange={e => { setSchLessonClassFilter(e.target.value); setExperiencePage(1); }}
-                    >
-                      <option value="">All Classes</option>
-                      {[3, 4, 5, 6, 7, 8].map(n => (
-                        <option key={n} value={String(n)}>Class {n}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="sd-table-wrap">
-                  <table className="sd-table">
-                    <thead>
-                      <tr>
-                        <th>Lesson Title</th>
-                        <th>Class</th>
-                        <th>Difficulty</th>
-                        <th>Duration</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginate(filterList(getFilteredExperiences()), experiencePage).map((s, i) => (
-                        <tr key={s.id || i}>
-                          <td>
-                            <span className="sd-name-cell-primary">{s.title ? s.title.toUpperCase() : ''}</span>
-                          </td>
-                          <td>{s.grade_name ? String(s.grade_name).replace('Grade', 'Class') : (s.grade && `Class ${s.grade}`) || 'N/A'}</td>
-                          <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
-                            <span className={`sd-badge ${s.difficulty === 'BEGINNER' ? 'sd-badge-active' : s.difficulty === 'MASTER' ? 'sd-badge-leave' : s.difficulty === 'REVIEW' || s.difficulty === 'REJECTED' ? 'sd-badge-review' : 'sd-badge-review'}`}>
-                              {s.difficulty || 'INTERMEDIATE'}
-                            </span>
-                          </td>
-                          <td>{s.estimated_duration ? `${s.estimated_duration} min` : '—'}</td>
-                        </tr>
-                      ))}
-                      {filterList(getFilteredExperiences()).length === 0 && (
-                        <tr><td colSpan="4" className="sd-empty-state">No lessons found.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                <Pagination
-                  total={filterList(getFilteredExperiences()).length}
-                  perPage={PER_PAGE}
-                  page={experiencePage}
-                  onPage={setExperiencePage}
-                />
-              </div>
-            </>
-          )}
-
           {/* ══════════ REPORTS TAB ══════════ */}
           {activeSubTab === 'reports' && !isAnyOverlayOpen && (
             <>
@@ -3132,205 +3175,183 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 </div>
               ) : (
                 <>
-                  {/* Metrics overview */}
-                  <div className="sd-stat-row" style={{ gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))' }}>
-                    {[
-                      { label:'Students Attempted', value: overviewReport.total_students,  color:'#0284c7', bg:'#e0f2fe', icon:<FiUsers/> },
-                      { label:'Total Attempts',     value: overviewReport.total_attempts,   color:'#d97706', bg:'#fef3c7', icon:<FiActivity/> },
-                      { label:'Completion Rate',    value: `${overviewReport.completion_rate}%`, color:'#16a34a', bg:'#dcfce7', icon:<FiCheckCircle/> },
-                      { label:'Average Score',      value: `${overviewReport.average_score}%`,   color:'#7c3aed', bg:'#f3e8ff', icon:<FiAward/> },
-                      { label:'Pass Rate',          value: `${overviewReport.pass_rate}%`,       color:'#0284c7', bg:'#e0f2fe', icon:<FiTrendingUp/> },
-                    ].map((s, i) => (
-                      <div className="sd-stat-card" key={i}>
-                        <div className="sd-stat-icon-row">
-                          <div className="sd-stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
-                        </div>
-                        <div className="sd-stat-value">{s.value}</div>
-                        <div className="sd-stat-label">{s.label}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Experience Report Table */}
-                  <div className="sd-card">
-                    <div className="sd-card-header">
-                      <div className="sd-card-title">Lesson Performance Analysis</div>
-                      <button className="sd-btn-outline" onClick={() => handleExportCSV('experiences')}>Export CSV</button>
-                    </div>
-                    <div className="sd-table-wrap">
-                      <table className="sd-table">
-                        <thead>
-                          <tr>
-                            <th>Lesson Title</th><th>Lesson Ref</th><th>Attempts</th>
-                            <th>Completed</th><th>Avg Score</th><th>Pass Rate</th>
-                            <th>High / Low</th><th>Avg Time</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {experiencesReport.map((s, i) => (
-                            <tr key={i} onClick={() => handleFetchExperienceDetail(s.experience_ref)} style={{ cursor:'pointer' }}>
-                              <td><span className="sd-name-cell-primary">{s.experience_title}</span></td>
-                              <td style={{ color:'#6b7280' }}>{s.experience_ref}</td>
-                              <td>{s.total_attempts}</td>
-                              <td>{s.completed}</td>
-                              <td style={{ fontWeight:700, color:'#7c3aed' }}>{s.average_score}%</td>
-                              <td>{s.pass_rate}%</td>
-                              <td>{s.highest_score}% / {s.lowest_score}%</td>
-                              <td>{Math.round(s.average_time_seconds/60)}m {s.average_time_seconds%60}s</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
                   {/* Classes Report Table */}
                   <div className="sd-card">
                     <div className="sd-card-header">
                       <div className="sd-card-title">Class Performance Analysis</div>
-                      <button className="sd-btn-outline" onClick={() => handleExportCSV('classes')}>Export CSV</button>
+                      <div style={{ display:'flex', gap:'0.5rem', alignItems:'center' }}>
+                        <select
+                          className="sd-form-input"
+                          aria-label="Grade"
+                          style={{ width:'auto', minWidth:'130px', height:'36px', padding:'0 2rem 0 0.8rem', borderRadius:'8px', border:'1px solid #cbd5e1', fontSize:'0.82rem' }}
+                          value={classReportGrade}
+                          onChange={e => { setClassReportGrade(e.target.value); setClassReportPage(1); }}
+                        >
+                          <option value="">All Grades</option>
+                          {[3, 4, 5, 6, 7, 8].map(n => <option key={n} value={String(n)}>Class {n}</option>)}
+                        </select>
+                      </div>
                     </div>
-                    <div className="sd-table-wrap">
+                    <div className="sd-table-wrap" style={{ minHeight: '440px' }}>
                       <table className="sd-table">
                         <thead>
                           <tr>
-                            <th>Class Name</th><th>Students</th><th>Completed</th>
-                            <th>Avg Score</th><th>Pass Rate</th><th>Top Student</th><th>Weakest</th>
+                            <th>Class Name</th><th>Section</th><th>Teacher Name</th><th>Students</th><th>Top Rank</th>
+                            <th style={{ width:'90px', textAlign:'center' }}>Action</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {classesReport.map((c, i) => (
+                          {visibleClassRows.map((c, i) => (
                             <tr key={i} onClick={() => handleFetchClassDetail(c.class_id)} style={{ cursor:'pointer' }}>
-                              <td><span className="sd-name-cell-primary">{c.class_name}</span></td>
+                              <td><span className="sd-name-cell-primary">{String(c.grade_name || c.class_name).replace('Grade', 'Class')}</span></td>
+                              <td>{c.section || 'N/A'}</td>
+                              <td>{c.teacher_name || 'N/A'}</td>
                               <td>{c.total_students}</td>
-                              <td>{c.completed}</td>
-                              <td style={{ fontWeight:700, color:'#10b981' }}>{c.average_score}%</td>
-                              <td>{c.pass_rate}%</td>
-                              <td style={{ color:'#047857', fontWeight:600 }}>{c.top_student}</td>
-                              <td style={{ color:'#b91c1c' }}>{c.weakest_student}</td>
+                              <td style={{ color:'#047857', fontWeight:600 }}>
+                                {c.top_student && c.top_student !== 'N/A'
+                                  ? <>{titleName(c.top_student)}{c.top_student_score != null && <span style={{ color:'#64748b', fontWeight:500 }}> · {c.top_student_score}%</span>}</>
+                                  : <span style={{ color:'#64748b', fontWeight:500 }}>N/A</span>}
+                              </td>
+                              <td style={{ textAlign:'center' }}>
+                                <button className="sd-btn-outline" title="View class report" aria-label={`View report of ${c.class_name}`}
+                                  onClick={(e) => { e.stopPropagation(); handleFetchClassDetail(c.class_id); }}
+                                  style={{ padding:'5px 9px', display:'inline-flex', alignItems:'center' }}><FiEye /></button>
+                              </td>
                             </tr>
                           ))}
+                          {filteredClassRows.length === 0 && <tr><td colSpan="6" className="sd-empty-state">No classes found.</td></tr>}
                         </tbody>
                       </table>
                     </div>
+                    {filteredClassRows.length > CLASS_REPORT_PER_PAGE && (
+                      <div style={{ marginTop:'1rem', borderTop:'1px solid #f1f5f9', paddingTop:'1rem' }}>
+                        <Pagination
+                          total={filteredClassRows.length}
+                          perPage={CLASS_REPORT_PER_PAGE}
+                          page={classReportPageNow}
+                          onPage={setClassReportPage}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Students Report Table */}
                   <div className="sd-card">
                     <div className="sd-card-header">
                       <div className="sd-card-title">Student Performance Analysis</div>
-                      <button className="sd-btn-outline" onClick={() => handleExportCSV('students')}>Export CSV</button>
+                      <div style={{ display:'flex', gap:'0.5rem', alignItems:'center' }}>
+                        <select
+                          className="sd-form-input"
+                          aria-label="Grade"
+                          style={{ width:'auto', minWidth:'130px', height:'36px', padding:'0 2rem 0 0.8rem', borderRadius:'8px', border:'1px solid #cbd5e1', fontSize:'0.82rem' }}
+                          value={studentReportGrade}
+                          onChange={e => { setStudentReportGrade(e.target.value); setStudentReportPage(1); }}
+                        >
+                          <option value="">All Grades</option>
+                          {[3, 4, 5, 6, 7, 8].map(n => <option key={n} value={String(n)}>Class {n}</option>)}
+                        </select>
+                        <button className="sd-btn-outline" title="Download all students report (PDF)" aria-label="Download all students report as PDF"
+                          onClick={downloadStudentsPdf} disabled={studentsReport.length === 0}
+                          style={{ height:'36px', padding:'0 0.7rem', display:'inline-flex', alignItems:'center' }}><FiDownload /></button>
+                      </div>
                     </div>
-                    <div className="sd-table-wrap">
+                    <div className="sd-table-wrap" style={{ minHeight: '440px' }}>
                       <table className="sd-table">
                         <thead>
                           <tr>
-                            <th>Student</th><th>Class</th><th>Attempts</th><th>Completed</th>
-                            <th>Avg Score</th><th>Best Lesson</th><th>Worst Lesson</th><th>Last Attempt</th>
+                            <th>Student</th><th>Roll No</th><th>Class</th><th>Section</th><th style={{ width:'90px', textAlign:'center' }}>Action</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {studentsReport.map((st, i) => (
+                          {visibleStudentRows.map((st, i) => (
                             <tr key={i} onClick={() => handleFetchStudentDetail(st.student_id)} style={{ cursor:'pointer' }}>
-                              <td><span className="sd-name-cell-primary">{st.student_name}</span></td>
-                              <td>{st.class_name}</td>
-                              <td>{st.total_attempts}</td>
-                              <td>{st.completed}</td>
-                              <td style={{ fontWeight:700, color:'#3b82f6' }}>{st.average_score}%</td>
-                              <td style={{ color:'#047857' }}>{st.best_experience}</td>
-                              <td style={{ color:'#b91c1c' }}>{st.worst_experience}</td>
-                              <td>{st.last_attempt_date ? new Date(st.last_attempt_date).toLocaleDateString() : 'N/A'}</td>
+                              <td><span className="sd-name-cell-primary">{titleName(st.student_name)}</span></td>
+                              <td>{formatRollNo(st.roll_no) || 'N/A'}</td>
+                              <td>{st.grade_name || st.class_name}</td>
+                              <td>{st.section || 'N/A'}</td>
+                              <td style={{ textAlign:'center' }}>
+                                <button className="sd-btn-outline" title="View student report" aria-label={`View report of ${st.student_name}`}
+                                  onClick={(e) => { e.stopPropagation(); handleFetchStudentDetail(st.student_id); }}
+                                  style={{ padding:'5px 9px', display:'inline-flex', alignItems:'center' }}><FiEye /></button>
+                              </td>
                             </tr>
                           ))}
+                          {filteredStudentRows.length === 0 && <tr><td colSpan="5" className="sd-empty-state">No students found.</td></tr>}
                         </tbody>
                       </table>
                     </div>
+                    {filteredStudentRows.length > STUDENT_REPORT_PER_PAGE && (
+                      <div style={{ marginTop:'1rem', borderTop:'1px solid #f1f5f9', paddingTop:'1rem' }}>
+                        <Pagination
+                          total={filteredStudentRows.length}
+                          perPage={STUDENT_REPORT_PER_PAGE}
+                          page={studentReportPageNow}
+                          onPage={setStudentReportPage}
+                        />
+                      </div>
+                    )}
                   </div>
 
-                  {/* Student Experience Completion Table */}
+                  {/* Experience Report Table */}
                   <div className="sd-card">
                     <div className="sd-card-header">
-                      <div className="sd-card-title">Student Lesson Completion</div>
-                      <span className="sd-card-meta">{studentCompletionReport.length} student{studentCompletionReport.length !== 1 ? 's' : ''}</span>
+                      <div className="sd-card-title">Lesson Performance Analysis</div>
+                      <select
+                        className="sd-form-input"
+                        aria-label="Grade"
+                        style={{ width:'auto', minWidth:'130px', height:'36px', padding:'0 2rem 0 0.8rem', borderRadius:'8px', border:'1px solid #cbd5e1', fontSize:'0.82rem' }}
+                        value={lessonReportGrade}
+                        onChange={e => { setLessonReportGrade(e.target.value); setLessonReportPage(1); }}
+                      >
+                        <option value="">All Grades</option>
+                        {[3, 4, 5, 6, 7, 8].map(n => <option key={n} value={String(n)}>Class {n}</option>)}
+                      </select>
                     </div>
-                    {studentCompletionReport.length === 0 ? (
-                      <div className="sd-reports-empty" style={{ padding: '2rem 1rem' }}>
-                        <FiFileText/>
-                        <h3>No lesson assignments yet</h3>
-                        <p>Completion data will appear once lessons are assigned and synced from the LMS.</p>
+                    <div className="sd-table-wrap" style={{ minHeight: '440px' }}>
+                      <table className="sd-table">
+                        <thead>
+                          <tr>
+                            <th>Lesson Title</th><th>Class</th><th>Difficulty</th><th>Duration</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visibleLessonRows.map((s, i) => (
+                            <tr key={s.id || i}>
+                              <td><span className="sd-name-cell-primary">{s.title}</span></td>
+                              <td>{s.grade_name ? String(s.grade_name).replace('Grade', 'Class') : (s.grade && `Class ${s.grade}`) || 'N/A'}</td>
+                              <td style={{ overflow: 'visible', textOverflow: 'clip' }}>
+                                <span className={`sd-badge ${s.difficulty === 'BEGINNER' ? 'sd-badge-active' : s.difficulty === 'MASTER' ? 'sd-badge-leave' : 'sd-badge-review'}`}>
+                                  {s.difficulty_display || difficultyLabel(s.difficulty)}
+                                </span>
+                              </td>
+                              <td>{s.estimated_duration ? `${s.estimated_duration} min` : '—'}</td>
+                            </tr>
+                          ))}
+                          {filteredLessonRows.length === 0 && <tr><td colSpan="4" className="sd-empty-state">No lessons found.</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                    {filteredLessonRows.length > LESSON_REPORT_PER_PAGE && (
+                      <div style={{ marginTop:'1rem', borderTop:'1px solid #f1f5f9', paddingTop:'1rem' }}>
+                        <Pagination
+                          total={filteredLessonRows.length}
+                          perPage={LESSON_REPORT_PER_PAGE}
+                          page={lessonReportPageNow}
+                          onPage={setLessonReportPage}
+                        />
                       </div>
-                    ) : (
-                      <>
-                        <div className="sd-table-wrap">
-                          <table className="sd-table">
-                            <thead>
-                              <tr>
-                                <th>Student Profile</th>
-                                <th>Assigned Lessons</th>
-                                <th>Completed</th>
-                                <th>Completion Progress</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {(() => {
-                                const COMPLETION_PER_PAGE = 5;
-                                const paginatedCompletion = studentCompletionReport.slice(
-                                  (completionPage - 1) * COMPLETION_PER_PAGE,
-                                  completionPage * COMPLETION_PER_PAGE
-                                );
-                                return paginatedCompletion.map((row) => {
-                                  const pct = row.total_assigned_experiences > 0
-                                    ? Math.round((row.completed_experiences_count / row.total_assigned_experiences) * 100)
-                                    : 0;
-                                  const barColor = pct === 100 ? '#16a34a' : pct >= 60 ? '#f59e0b' : '#ef4444';
-                                  return (
-                                    <tr key={row.student_id}>
-                                      <td>
-                                        <span className="sd-name-cell-primary">{row.student_name}</span>
-                                      </td>
-                                      <td style={{ textAlign: 'center', fontWeight: 600 }}>
-                                        {row.total_assigned_experiences}
-                                      </td>
-                                      <td style={{ textAlign: 'center', fontWeight: 600, color: '#16a34a' }}>
-                                        {row.completed_experiences_count}
-                                      </td>
-                                      <td style={{ minWidth: 160 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                          <div style={{ flex: 1, height: 8, background: '#f3f4f6', borderRadius: 4, overflow: 'hidden' }}>
-                                            <div style={{
-                                              width: `${pct}%`, height: '100%',
-                                              background: barColor, borderRadius: 4,
-                                              transition: 'width 0.6s ease'
-                                            }}/>
-                                          </div>
-                                          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: barColor, minWidth: 34 }}>
-                                            {pct}%
-                                          </span>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  );
-                                });
-                              })()}
-                            </tbody>
-                          </table>
-                        </div>
-                        {studentCompletionReport.length > 5 && (
-                          <div style={{ marginTop: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
-                            <Pagination
-                              total={studentCompletionReport.length}
-                              perPage={5}
-                              page={completionPage}
-                              onPage={setCompletionPage}
-                            />
-                          </div>
-                        )}
-                      </>
                     )}
                   </div>
                 </>
               )}
             </>
+          )}
+
+          {activeSubTab === 'lms-hub' && !isAnyOverlayOpen && (
+            <LmsHubPanel onActivated={(msg) => {
+              setSuccessMsg(msg);
+              loadNotifications();
+            }} />
           )}
 
           {activeSubTab === 'profile' && !isAnyOverlayOpen && (
@@ -3451,22 +3472,26 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Full Name</label>
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                          Admin Name <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
                         <input className="sd-form-input" type="text"
                           value={profileForm.full_name}
                           onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
-                          placeholder="Your full name" required 
+                          placeholder="Your full name (Admin Name)" required 
                           style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                           onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
                           onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
                         />
                       </div>
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Email Address</label>
-                        <input className="sd-form-input" type="email"
-                          value={profileForm.email}
-                          onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
-                          placeholder="your@email.com" 
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                          School Name <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        <input className="sd-form-input" type="text"
+                          value={profileForm.school_name || ''}
+                          onChange={e => setProfileForm({ ...profileForm, school_name: e.target.value })}
+                          placeholder="Enter school name" required 
                           style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                           onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
                           onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
@@ -3476,12 +3501,22 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Username</label>
-                        <input className="sd-form-input" type="text" value={profileForm.username || user?.username} disabled
-                          style={{ width: '100%', height: '42px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} />
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                          Email Address <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        <input className="sd-form-input" type="email"
+                          value={profileForm.email}
+                          onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
+                          placeholder="your@email.com" required 
+                          style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
+                          onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
+                          onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
+                        />
                       </div>
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Phone Number</label>
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                          Phone Number <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
                         <input className="sd-form-input" type="tel"
                           maxLength={10}
                           value={profileForm.phone_no || ''}
@@ -3489,7 +3524,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
                             setProfileForm({ ...profileForm, phone_no: cleaned });
                           }}
-                          placeholder="Enter 10 digit phone number" 
+                          placeholder="Enter 10 digit phone number" required 
                           style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                           onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
                           onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
@@ -3497,13 +3532,13 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       </div>
                     </div>
 
-                    {(profileForm.school_name || user?.school_name) && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>School Tenant</label>
-                        <input className="sd-form-input" type="text" value={profileForm.school_name || user?.school_name} disabled
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Username (Read-Only)</label>
+                        <input className="sd-form-input" type="text" value={profileForm.username || user?.username} disabled
                           style={{ width: '100%', height: '42px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} />
                       </div>
-                    )}
+                    </div>
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '1.5rem', marginTop: '1.5rem' }}>
                       <button type="submit" className="sd-btn-primary" disabled={actionLoading} style={{ padding: '0.75rem 2rem', background: '#0b75b3', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', transition: 'background 0.2s', boxShadow: '0 4px 6px -1px rgba(11, 117, 179, 0.2)' }}>
@@ -3610,9 +3645,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               );
 
                               if (existingClass && existingClass.teacher_name) {
-                                const editingTeacherId = modalType === 'edit' && selectedEntity ? (selectedEntity.teacher_id || selectedEntity.id) : null;
+                                const editingTeacherId = modalType === 'edit' ? (editingId || selectedEntity?.teacher_id || selectedEntity?.id) : null;
                                 const assignedTeacherIds = existingClass.assigned_teacher_ids || [];
-                                if (!editingTeacherId || !assignedTeacherIds.includes(editingTeacherId)) {
+                                const isAssignedToThisTeacher = editingTeacherId && assignedTeacherIds.some(id => String(id) === String(editingTeacherId));
+                                if (!editingTeacherId || !isAssignedToThisTeacher) {
                                   setErrorMsg(`${targetClassName} is already assigned to teacher '${existingClass.teacher_name}'. A class & section can only be assigned to one teacher.`);
                                   return;
                                 }
@@ -3758,21 +3794,34 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             setStudentForm(prev => ({
                               ...prev,
                               full_name,
-                              username: modalType === 'add' ? generateLmsLoginCode(full_name, students) : prev.username
+                              username: modalType === 'add' ? generateLmsLoginCode(full_name, prev.roll_no) : prev.username
                             }));
                           }} required placeholder="e.g. Arjun Sharma"/>
                       </div>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Roll No *</label>
                         <input className="sd-form-input" type="text" value={studentForm.roll_no}
-                          onChange={e => setStudentForm({...studentForm, roll_no: e.target.value})} placeholder="e.g. 12" required/>
+                          onChange={e => {
+                            const roll_no = e.target.value;
+                            setStudentForm(prev => ({
+                              ...prev,
+                              roll_no,
+                              username: modalType === 'add' ? generateLmsLoginCode(prev.full_name, roll_no) : prev.username
+                            }));
+                          }} placeholder="e.g. 12" required/>
                       </div>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
                       <div className="sd-form-group">
-                        <label className="sd-form-label">LMS Login Code (Auto Generated)</label>
-                        <input className="sd-form-input" type="text" value={studentForm.username || ''} readOnly style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }}/>
+                        <label className="sd-form-label">LMS Login Code</label>
+                        <input
+                          className="sd-form-input"
+                          type="text"
+                          value={studentForm.username || ''}
+                          onChange={e => setStudentForm({ ...studentForm, username: e.target.value.toUpperCase().replace(/\s+/g, '') })}
+                          placeholder="e.g. ARJ_01"
+                        />
                       </div>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Class *</label>
@@ -3964,17 +4013,17 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 </div>
                 <div className="sd-table-wrap">
                   <table className="sd-table">
-                    <thead><tr><th>Student</th><th>Attempts</th><th>Completed</th><th>Avg Score</th><th>Last Attempt</th></tr></thead>
+                    <thead><tr><th>Student</th><th>Remaining</th><th>Completed</th><th>Last Attempt</th></tr></thead>
                     <tbody>
                       {selectedClassDetail.students?.map((st, i) => (
                         <tr key={i}>
-                          <td style={{ fontWeight:600 }}>{st.student_name}</td>
-                          <td>{st.total_attempts}</td>
-                          <td>{st.completed}</td>
-                          <td style={{ fontWeight:700, color:'#10b981' }}>{st.average_score}%</td>
+                          <td style={{ fontWeight:600 }}>{titleName(st.student_name)}</td>
+                          <td>{selectedClassDetail.total_lessons ? `${st.remaining_lessons} of ${selectedClassDetail.total_lessons}` : 'N/A'}</td>
+                          <td>{st.completed_lessons}</td>
                           <td>{st.last_attempt_date ? new Date(st.last_attempt_date).toLocaleDateString() : 'N/A'}</td>
                         </tr>
                       ))}
+                      {(selectedClassDetail.students || []).length === 0 && <tr><td colSpan="4" className="sd-empty-state">No students in this class.</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -3997,27 +4046,66 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
                   <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Student: {selectedStudentDetail.student_name}</h3>
                 </div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))', gap:'0.75rem', marginBottom:'1.25rem', padding:'0.85rem', background:'#f1f5f9', borderRadius:8, fontSize:'0.84rem' }}>
-                  <div><strong>Attempts:</strong> {selectedStudentDetail.total_attempts}</div>
-                  <div><strong>Completed:</strong> {selectedStudentDetail.completed}</div>
-                  <div><strong>Avg Score:</strong> {selectedStudentDetail.average_score}%</div>
-                </div>
-                <div className="sd-table-wrap">
-                  <table className="sd-table">
-                    <thead><tr><th>Experience</th><th>Class</th><th>Score</th><th>Status</th><th>Started At</th></tr></thead>
-                    <tbody>
-                      {selectedStudentDetail.attempts?.map((att, i) => (
-                        <tr key={i}>
-                          <td style={{ fontWeight:600 }}>{att.experience_title}</td>
-                          <td>{att.class_name}</td>
-                          <td style={{ fontWeight:700, color:'#3b82f6' }}>{att.percentage != null ? att.percentage+'%' : 'N/A'}</td>
-                          <td>{att.status}</td>
-                          <td>{new Date(att.started_at).toLocaleDateString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {(() => {
+                  // Lessons and assessments are listed apart; only assessments carry a score
+                  const attempts = selectedStudentDetail.attempts || [];
+                  const lessonAttempts = attempts.filter(a => a.experience_type !== 'ASSESSMENT');
+                  const assessmentAttempts = attempts.filter(a => a.experience_type === 'ASSESSMENT');
+                  const scored = assessmentAttempts.filter(a => a.status === 'COMPLETED' && a.percentage != null);
+                  const assessmentAverage = scored.length ? Math.round(scored.reduce((sum, a) => sum + a.percentage, 0) / scored.length * 10) / 10 : null;
+                  const marks = (a) => (a.score != null && a.max_score != null ? `${a.score} / ${a.max_score}` : 'N/A');
+                  return (
+                    <>
+                      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:'0.75rem', marginBottom:'1.25rem', padding:'0.85rem', background:'#f1f5f9', borderRadius:8, fontSize:'0.84rem' }}>
+                        <div><strong>Lessons completed:</strong> {lessonAttempts.filter(a => a.status === 'COMPLETED').length}</div>
+                        <div><strong>Assessments completed:</strong> {assessmentAttempts.filter(a => a.status === 'COMPLETED').length}</div>
+                        <div><strong>Avg assessment score:</strong> {assessmentAverage != null ? `${assessmentAverage}%` : 'N/A'}</div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Lessons</div>
+                        <div className="sd-table-wrap">
+                          <table className="sd-table">
+                            <thead><tr><th>Lesson</th><th>Status</th><th>Started At</th><th>Ended At</th></tr></thead>
+                            <tbody>
+                              {lessonAttempts.map((att, i) => (
+                                <tr key={i}>
+                                  <td style={{ fontWeight:600 }}>{att.experience_title}</td>
+                                  <td>{att.status}</td>
+                                  <td>{att.started_at ? new Date(att.started_at).toLocaleString() : '—'}</td>
+                                  <td>{att.completed_at ? new Date(att.completed_at).toLocaleString() : '—'}</td>
+                                </tr>
+                              ))}
+                              {lessonAttempts.length === 0 && <tr><td colSpan="4" className="sd-empty-state">No lessons played yet.</td></tr>}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>Assessments</div>
+                        <div className="sd-table-wrap">
+                          <table className="sd-table">
+                            <thead><tr><th>Assessment</th><th>Marks</th><th>Score</th><th>Status</th><th>Started At</th><th>Ended At</th></tr></thead>
+                            <tbody>
+                              {assessmentAttempts.map((att, i) => (
+                                <tr key={i}>
+                                  <td style={{ fontWeight:600 }}>{att.experience_title}</td>
+                                  <td>{marks(att)}</td>
+                                  <td style={{ fontWeight:700, color:'#3b82f6' }}>{att.percentage != null ? att.percentage+'%' : 'N/A'}</td>
+                                  <td>{att.status}</td>
+                                  <td>{att.started_at ? new Date(att.started_at).toLocaleString() : '—'}</td>
+                                  <td>{att.completed_at ? new Date(att.completed_at).toLocaleString() : '—'}</td>
+                                </tr>
+                              ))}
+                              {assessmentAttempts.length === 0 && <tr><td colSpan="6" className="sd-empty-state">No assessments taken yet.</td></tr>}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           )}
@@ -4081,10 +4169,10 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div style={{ padding: '0.5rem 0', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Full Name:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.full_name || 'N/A'}</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{titleName(selectedStudentCrudDetail.full_name) || 'N/A'}</span>
                     
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Roll Number:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.roll_no || 'N/A'}</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{formatRollNo(selectedStudentCrudDetail.roll_no) || 'N/A'}</span>
                     
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Class:</span>
                     <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.grade || 'N/A'}</span>
@@ -4232,14 +4320,21 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         setStudentForm(prev => ({
                           ...prev,
                           full_name,
-                          roll_no: modalType === 'add' ? generateRollNo(full_name, students) : prev.roll_no
+                          username: modalType === 'add' ? generateLmsLoginCode(full_name, prev.roll_no) : prev.username
                         }));
                       }} required placeholder="e.g. Arjun Sharma"/>
                   </div>
                   <div className="sd-form-group">
                     <label className="sd-form-label">Roll No *</label>
                     <input className="sd-form-input" type="text" value={studentForm.roll_no}
-                      onChange={e => setStudentForm({...studentForm, roll_no:e.target.value})} required placeholder="Auto-generated from name"/>
+                      onChange={e => {
+                        const roll_no = e.target.value;
+                        setStudentForm(prev => ({
+                          ...prev,
+                          roll_no,
+                          username: modalType === 'add' ? generateLmsLoginCode(prev.full_name, roll_no) : prev.username
+                        }));
+                      }} required placeholder="e.g. 12"/>
                   </div>
                 </div>
                 <div className="sd-form-row">

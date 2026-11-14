@@ -78,6 +78,8 @@ class StudentAttempt(models.Model):
     max_score = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     time_spent_seconds = models.IntegerField(null=True, blank=True)
+    stars = models.PositiveSmallIntegerField(null=True)
+    level_key = models.CharField(max_length=4, null=True, blank=True)
     synced_at = models.DateTimeField(auto_now=True, db_index=True)
     lms_attempt_id = models.CharField(max_length=255, unique=True)
 
