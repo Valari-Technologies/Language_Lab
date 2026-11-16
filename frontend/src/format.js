@@ -6,9 +6,6 @@ export const formatRollNo = (rollNo) => {
   return /^\d$/.test(clean) ? `0${clean}` : clean;
 };
 
-// The page numbers a pager shows: three numbers that move with the current page (no dots, no last page).
-// Page 1: 1 2 3, page 2: 2 3 4, page 3: 2 3 4, page 4: 3 4 5, page 5: 4 5 6 ...
-// From page 3 on the current page is in the middle; page 1 stays visible only while you are on it.
 // "Class 8 · Section A" for every student, whether the section was saved as "A" or as "Section A"
 export const classLabel = (s) => {
   const raw = String((s && s.section) || '').trim();
@@ -16,17 +13,12 @@ export const classLabel = (s) => {
   return [s && s.grade, section].filter(Boolean).join(' · ') || '—';
 };
 
-// The page numbers a pager shows: all numbers if 7 pages or fewer; for more pages, keeps page 1,
-// the last page, and an active window around the current page with ellipses.
+// The page numbers a pager shows: only three, no dots and no last page. They move with the current page:
+// page 1: 1 2 3, page 2: 1 2 3, page 3: 2 3 4, page 4: 3 4 5, page 5: 4 5 6 ... and the last three pages at the end.
 export const pageItems = (page, pages) => {
-  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
-  if (page <= 4) {
-    return [1, 2, 3, 4, 5, '...', pages];
-  }
-  if (page >= pages - 3) {
-    return [1, '...', pages - 4, pages - 3, pages - 2, pages - 1, pages];
-  }
-  return [1, '...', page - 1, page, page + 1, '...', pages];
+  if (pages <= 3) return Array.from({ length: Math.max(pages, 0) }, (_, i) => i + 1);
+  const start = Math.min(Math.max(page - 1, 1), pages - 2);
+  return [start, start + 1, start + 2];
 };
 
 // A person's name with a capital at the start of each word: "ravi kumar" / "RAVI KUMAR" -> "Ravi Kumar".
