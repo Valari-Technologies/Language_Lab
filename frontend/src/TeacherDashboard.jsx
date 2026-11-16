@@ -686,7 +686,15 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       setShowProfileDropdown(false);
     };
     document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
+    // the students action menu is fixed to the screen, so it closes when the page or the table scrolls or resizes
+    const closeMenu = () => setActiveDropdown(null);
+    window.addEventListener('scroll', closeMenu, true);
+    window.addEventListener('resize', closeMenu);
+    return () => {
+      document.removeEventListener('click', handler);
+      window.removeEventListener('scroll', closeMenu, true);
+      window.removeEventListener('resize', closeMenu);
+    };
   }, []);
 
   const formatDateTime = (date) => {
@@ -2270,10 +2278,15 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                   className="sd-action-trigger"
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    // the menu is placed from the button's position on the screen, so the table's own
+                                    // scroll area never clips it (it opens upward when there is no room below)
+                                    const box = e.currentTarget.getBoundingClientRect();
+                                    const opensUp = window.innerHeight - box.bottom < 190 && box.top > 190;
                                     setActiveDropdown(
                                       activeDropdown && activeDropdown.id === sid
                                         ? null
-                                        : { id: sid, type: 'students' }
+                                        : { id: sid, type: 'students', right: Math.max(8, window.innerWidth - box.right),
+                                            ...(opensUp ? { bottom: window.innerHeight - box.top + 4 } : { top: box.bottom + 4 }) }
                                     );
                                   }}
                                   style={{
@@ -2294,94 +2307,45 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                   <div
                                     className="sd-action-menu"
                                     style={{
-                                      position: 'absolute',
-                                      right: 0,
-                                      top: '100%',
+                                      position: 'fixed',
+                                      right: activeDropdown.right,
+                                      top: activeDropdown.top,
+                                      bottom: activeDropdown.bottom,
                                       background: '#ffffff',
                                       border: '1px solid #e2e8f0',
                                       borderRadius: '8px',
-                                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                                      zIndex: 100,
-                                      minWidth: '130px',
-                                      padding: '0.4rem 0'
+                                      boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                                      zIndex: 1000,
+                                      minWidth: '150px',
+                                      padding: '4px 0',
+                                      overflow: 'hidden'
                                     }}
                                   >
+                                    {[
+                                      { label: 'View', icon: <FiEye />, color: '#334155', hover: '#f8fafc', action: () => { setSelectedStudentCrudDetail(s); setShowStudentCrudDetailModal(true); } },
+                                      { label: 'Edit', icon: <FiEdit2 />, color: '#334155', hover: '#f8fafc', action: () => openEditModal(s) },
+                                      { label: s.is_active ? 'Block' : 'Unblock', icon: <FiLock />, color: '#334155', hover: '#f8fafc', action: () => toggleActiveStatus(sid, s.is_active, 'students') },
+                                    ].map(item => (
+                                      <button
+                                        key={item.label}
+                                        type="button"
+                                        className="sd-menu-item"
+                                        onMouseEnter={e => { e.currentTarget.style.background = item.hover; }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+                                        onClick={item.action}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 14px', border: 'none', background: 'none', textAlign: 'left', fontSize: '0.85rem', color: item.color, cursor: 'pointer' }}
+                                      >
+                                        {item.icon} {item.label}
+                                      </button>
+                                    ))}
+                                    <div style={{ height: '1px', background: '#f1f5f9', margin: '2px 0' }} />
                                     <button
+                                      type="button"
                                       className="sd-menu-item"
-                                      onClick={() => {
-                                        setSelectedStudentCrudDetail(s);
-                                        setShowStudentCrudDetailModal(true);
-                                      }}
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        width: '100%',
-                                        padding: '0.5rem 1rem',
-                                        border: 'none',
-                                        background: 'none',
-                                        textAlign: 'left',
-                                        fontSize: '0.85rem',
-                                        color: '#0f172a',
-                                        cursor: 'pointer'
-                                      }}
-                                    >
-                                      <FiEye style={{ color: '#0284c7' }} /> View
-                                    </button>
-                                    <button
-                                      className="sd-menu-item"
-                                      onClick={() => openEditModal(s)}
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        width: '100%',
-                                        padding: '0.5rem 1rem',
-                                        border: 'none',
-                                        background: 'none',
-                                        textAlign: 'left',
-                                        fontSize: '0.85rem',
-                                        color: '#4f46e5',
-                                        cursor: 'pointer'
-                                      }}
-                                    >
-                                      <FiEdit2 style={{ color: '#4f46e5' }} /> Edit
-                                    </button>
-                                    <button
-                                      className="sd-menu-item"
-                                      onClick={() => toggleActiveStatus(sid, s.is_active, 'students')}
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        width: '100%',
-                                        padding: '0.5rem 1rem',
-                                        border: 'none',
-                                        background: 'none',
-                                        textAlign: 'left',
-                                        fontSize: '0.85rem',
-                                        color: s.is_active ? '#ef4444' : '#16a34a',
-                                        cursor: 'pointer'
-                                      }}
-                                    >
-                                      <FiLock /> {s.is_active ? 'Block' : 'Unblock'}
-                                    </button>
-                                    <button
-                                      className="sd-menu-item"
+                                      onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; }}
+                                      onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
                                       onClick={() => openDeleteModal(sid, 'students', s.full_name || s.username)}
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        width: '100%',
-                                        padding: '0.5rem 1rem',
-                                        border: 'none',
-                                        background: 'none',
-                                        textAlign: 'left',
-                                        fontSize: '0.85rem',
-                                        color: '#dc2626',
-                                        cursor: 'pointer'
-                                      }}
+                                      style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 14px', border: 'none', background: 'none', textAlign: 'left', fontSize: '0.85rem', color: '#ef4444', cursor: 'pointer' }}
                                     >
                                       <FiTrash2 /> Delete
                                     </button>
