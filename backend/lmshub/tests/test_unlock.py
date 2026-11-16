@@ -78,6 +78,21 @@ class UnlockTests(HubTestBase):
         self.assertEqual(api.post(UNLOCK, {"key": "LMS-KEY-6B4513FFC4EA4E89"}, format="json").json()["error"], "key_disabled")
         self.assertEqual(api.post(UNLOCK, {"key": "KEY-A"}, format="json").status_code, 200)
 
+    def test_disabling_any_key_of_the_school_locks_the_hub_again(self):
+        spare = self._server(self.school_a, "LMS-KEY-SPARE")
+        self._server(self.school_a, "LMS-KEY-USED")
+        api = self._as(self.admin_a)
+        self.assertEqual(api.post(UNLOCK, {"key": "LMS-KEY-USED"}, format="json").status_code, 200)  # opened with another key
+        self.assertEqual(api.get(OVERVIEW).status_code, 200)
+        boss = User.objects.create_user(username="boss", password="x", role=User.Role.SUPER_ADMIN)
+        admin_api = APIClient()
+        admin_api.force_authenticate(boss)
+        res = admin_api.post(f"/api/cms/v1/lms-servers/{spare.installationId}/toggle-status/")  # the spare key is disabled
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(api.get(OVERVIEW).json()["error"], "lms_key_required")  # the hub is locked although USED is still valid
+        self.assertEqual(api.post(UNLOCK, {"key": "LMS-KEY-USED"}, format="json").status_code, 200)  # a valid key opens it again
+        self.assertEqual(api.get(OVERVIEW).status_code, 200)
+
     def test_a_key_works_through_the_end_of_its_expiry_day(self):
         from datetime import timedelta
         from super_admin.licensing import license_today

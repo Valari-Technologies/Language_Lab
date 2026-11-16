@@ -770,6 +770,7 @@ class DeactivateServerAPIView(APIView):
             msg = f"Server '{server.serverName}' has been activated successfully."
         else:
             server.status = LmsServer.Status.DEACTIVATED
+            _lock_lms_hub(server.school)
             msg = f"Server '{server.serverName}' has been deactivated successfully."
         server.save()
 
@@ -822,7 +823,18 @@ class LicenseStatusAPIView(APIView):
         return answer(*result)
 
 
+def _lock_lms_hub(school):
+    """A key was disabled, removed or deleted: the school's LMS Hub page closes and asks the school admin for a valid key again."""
+    try:
+        from lmshub.models import LmsHubAccess
+        LmsHubAccess.objects.filter(school=school).delete()
+    except Exception as e:
+        logger.error(f"Error locking the LMS Hub: {e}")
+
+
 def _notify_school_admin_lms_status(server, action_type="disabled"):
+    if action_type in ("disabled", "deleted") and server.school_id:
+        _lock_lms_hub(server.school)
     try:
         from content_studio.models import Notification
         school = server.school
@@ -920,6 +932,7 @@ class LmsServerViewSet(CMSBaseViewSet):
             server.status = LmsServer.Status.DEACTIVATED
             server.removedAt = timezone.now()
             server.save(update_fields=["status", "removedAt"])
+            _lock_lms_hub(server.school)
             RemovedInstallation.objects.get_or_create(
                 installationId=server.installationId, license=server.license,
                 defaults={"removedBy": request.user},
@@ -992,6 +1005,8 @@ class LmsServerViewSet(CMSBaseViewSet):
 
         if update_fields:
             server.save(update_fields=update_fields)
+            if "status" in update_fields and server.status == LmsServer.Status.DEACTIVATED:
+                _lock_lms_hub(server.school)
 
         return Response({
             "status": "success",
