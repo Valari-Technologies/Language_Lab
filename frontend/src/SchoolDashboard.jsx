@@ -161,13 +161,16 @@ const difficultyLabel = (value) => {
   return clean.charAt(0).toUpperCase() + clean.slice(1);
 };
 
-const generateLmsLoginCode = (fullName, rollNo = '') => {
+// name_Grade_RollNo, e.g. VIN_G5_01; the server builds the final code when the student is saved (it adds a letter
+// when the same code is already taken in the school, e.g. the same grade in another section).
+const generateLmsLoginCode = (fullName, rollNo = '', grade = '') => {
   const letters = (fullName || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
   if (!letters) return '';
   const prefix = letters.slice(0, 3).padEnd(3, 'X');
   const cleanRoll = String(rollNo || '').trim();
   const formattedRoll = /^\d$/.test(cleanRoll) ? `0${cleanRoll}` : cleanRoll;
-  return formattedRoll ? `${prefix}_${formattedRoll}` : `${prefix}_`;
+  const gradeNumber = (String(grade || '').match(/\d+/) || [])[0];
+  return formattedRoll ? `${prefix}_${gradeNumber ? `G${parseInt(gradeNumber, 10)}_` : ''}${formattedRoll}` : `${prefix}_`;
 };
 
 /* ─── Static chart data (reference-matched visual) ─── */
@@ -1018,7 +1021,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         body = { ...studentForm };
         if (modalType === 'add') {
           if (!body.username || body.username.endsWith('_')) {
-            body.username = generateLmsLoginCode(body.full_name, body.roll_no);
+            body.username = generateLmsLoginCode(body.full_name, body.roll_no, body.grade);
           }
           if (!body.password) body.password = body.username;
           if (!body.email) body.email = `${body.username.toLowerCase()}@lingualab.com`;
@@ -2736,7 +2739,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         </tbody>
                       </table>
                       <div style={{ padding: '0.75rem 1.25rem', background: '#fffbeb', borderTop: '1px solid #fef3c7', fontSize: '0.8rem', color: '#92400e' }}>
-                        LMS login code is auto-generated from <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>fullname</code> and <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>roll no</code> (e.g. <span style={{ fontWeight: 700 }}>ABU_07</span> or <span style={{ fontWeight: 700 }}>DHA_12</span>).
+                        LMS login code is auto-generated from <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>fullname</code>, <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>grade</code> and <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>roll no</code> (e.g. <span style={{ fontWeight: 700 }}>ABU_G5_07</span> or <span style={{ fontWeight: 700 }}>DHA_G8_12</span>).
                       </div>
                     </div>
 
@@ -2828,7 +2831,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             return code;
                           }
                           if (s.full_name && s.roll_no) {
-                            return generateLmsLoginCode(s.full_name, s.roll_no);
+                            return generateLmsLoginCode(s.full_name, s.roll_no, s.grade);
                           }
                           return 'N/A';
                         })();
@@ -3794,7 +3797,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             setStudentForm(prev => ({
                               ...prev,
                               full_name,
-                              username: modalType === 'add' ? generateLmsLoginCode(full_name, prev.roll_no) : prev.username
+                              username: modalType === 'add' ? generateLmsLoginCode(full_name, prev.roll_no, prev.grade) : prev.username
                             }));
                           }} required placeholder="e.g. Arjun Sharma"/>
                       </div>
@@ -3806,7 +3809,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             setStudentForm(prev => ({
                               ...prev,
                               roll_no,
-                              username: modalType === 'add' ? generateLmsLoginCode(prev.full_name, roll_no) : prev.username
+                              username: modalType === 'add' ? generateLmsLoginCode(prev.full_name, roll_no, prev.grade) : prev.username
                             }));
                           }} placeholder="e.g. 12" required/>
                       </div>
@@ -3826,7 +3829,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       <div className="sd-form-group">
                         <label className="sd-form-label">Class *</label>
                         <select className="sd-form-input" value={studentForm.grade || ''}
-                          onChange={e => setStudentForm({...studentForm, grade: e.target.value})} required>
+                          onChange={e => setStudentForm({...studentForm, grade: e.target.value, username: modalType === 'add' ? generateLmsLoginCode(studentForm.full_name, studentForm.roll_no, e.target.value) : studentForm.username})} required>
                           <option value="">-- Select Class --</option>
                           {[3, 4, 5, 6, 7, 8].map(num => (
                             <option key={num} value={`Class ${num}`}>Class {num}</option>
@@ -4320,7 +4323,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         setStudentForm(prev => ({
                           ...prev,
                           full_name,
-                          username: modalType === 'add' ? generateLmsLoginCode(full_name, prev.roll_no) : prev.username
+                          username: modalType === 'add' ? generateLmsLoginCode(full_name, prev.roll_no, prev.grade) : prev.username
                         }));
                       }} required placeholder="e.g. Arjun Sharma"/>
                   </div>
@@ -4332,7 +4335,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         setStudentForm(prev => ({
                           ...prev,
                           roll_no,
-                          username: modalType === 'add' ? generateLmsLoginCode(prev.full_name, roll_no) : prev.username
+                          username: modalType === 'add' ? generateLmsLoginCode(prev.full_name, roll_no, prev.grade) : prev.username
                         }));
                       }} required placeholder="e.g. 12"/>
                   </div>
@@ -4343,7 +4346,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     <select
                       className="sd-form-input"
                       value={studentForm.grade}
-                      onChange={e => setStudentForm({...studentForm, grade:e.target.value})}
+                      onChange={e => setStudentForm({...studentForm, grade: e.target.value, username: modalType === 'add' ? generateLmsLoginCode(studentForm.full_name, studentForm.roll_no, e.target.value) : studentForm.username})}
                       required
                     >
                       <option value="">-- Select Class --</option>

@@ -41,7 +41,25 @@ class RollNoUniqueTests(TestCase):
         self.api.force_authenticate(admin_b)
         self._add("lee", "01", "Class 5", "A")  # another school may reuse the number
 
-    def test_editing_checks_only_when_the_position_changes(self):
+    def test_login_code_is_name_grade_rollno(self):
+        code = lambda res: Student.objects.get(student_id=res.json()["data"]["id"]).lms_code
+        vinoth3 = self._add("Vinoth", "11", "Class 3", "A")
+        vinoth5 = self._add("Vinoth", "11", "Class 5", "A")  # same name and roll no in another grade: allowed
+        vinod5b = self._add("Vinod", "11", "Class 5", "B")   # same grade, other section: the code gets a letter
+        single = self._add("Vinay", "7", "Class 5", "A")
+        self.assertEqual((code(vinoth3), code(vinoth5), code(vinod5b), code(single)),
+                         ("VIN_G3_11", "VIN_G5_11", "VIN_G5_11B", "VIN_G5_07"))
+        self._add("Vinoth", "11", "Class 5", "A", expected=400)  # the same section still refuses a repeated roll no
+
+    def test_a_code_the_form_filled_in_is_rebuilt_but_a_hand_typed_code_is_kept(self):
+        code = lambda res: Student.objects.get(student_id=res.json()["data"]["id"]).lms_code
+        res = self.api.post(URL, {"full_name": "Kumar", "roll_no": "5", "grade": "Class 4", "section": "A", "username": "KUM_05",
+                                  "academic_year": "2026-2027"}, format="json")  # the older form preview
+        self.assertEqual(code(res), "KUM_G4_05")
+        res = self.api.post(URL, {"full_name": "Kumar", "roll_no": "6", "grade": "Class 4", "section": "A", "username": "MYCODE",
+                                  "academic_year": "2026-2027"}, format="json")
+        self.assertEqual(code(res), "MYCODE")
+
         mani = self._add("mani", "02", "Class 5", "A").json()["data"]
         url = f"{URL}{mani['id']}/"
         res = self.api.put(url, {"full_name": "Mani Two", "roll_no": "02", "grade": "Class 5", "section": "A",

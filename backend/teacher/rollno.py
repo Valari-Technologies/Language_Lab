@@ -1,6 +1,8 @@
 """A roll number identifies a student inside one class section: it may not repeat there."""
 import re
 
+from django.db.models import Q
+
 from accounts.names import title_name
 from .models import Student
 
@@ -46,6 +48,29 @@ def find_roll_conflict(school, grade, section, roll_no, exclude_student_id=None)
                 and _section_key(other.section) == section_key):
             return other
     return None
+
+
+def lms_grade_tag(grade):
+    """"G5_" for Class 5 / Grade 5, the grade part of a generated login code (VIN_G5_01); empty when there is no number."""
+    key = _grade_key(grade)
+    return f"G{key}_" if isinstance(key, int) else ""
+
+
+def lms_code_taken(school, code):
+    """Whether a student of this school already has this login code (any letter case)."""
+    return Student.objects.filter(school=school).filter(
+        Q(lms_code__iexact=code) | Q(user__username__iexact=code)).exists()
+
+
+def free_lms_code(school, base):
+    """The generated login code, e.g. VIN_G5_11. When another student of the school already has it (same first letters,
+    grade and roll number in another section), a letter is added: VIN_G5_11B, VIN_G5_11C ..."""
+    if not lms_code_taken(school, base):
+        return base
+    for suffix in [*"BCDEFGHIJKLMNOPQRSTUVWXYZ", *map(str, range(2, 100))]:
+        if not lms_code_taken(school, f"{base}{suffix}"):
+            return f"{base}{suffix}"
+    return base  # unreachable in practice; the caller's own clash check then reports it
 
 
 def roll_conflict_message(other, roll_no, grade, section):

@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Q
@@ -7,7 +9,7 @@ from accounts.names import title_name
 from accounts.scoping import get_user_school
 from super_admin.models import School
 from .models import Student
-from .rollno import find_roll_conflict, roll_conflict_message, roll_position_changed
+from .rollno import find_roll_conflict, free_lms_code, lms_grade_tag, roll_conflict_message, roll_position_changed
 
 User = get_user_model()
 
@@ -114,13 +116,16 @@ class StudentSerializer(serializers.ModelSerializer):
             if not prefix:
                 prefix = "STU"
 
-            if not raw_code or raw_code.lower() == "".join(c for c in full_name if c.isalnum()).lower() or raw_code.endswith("_") or (roll_no and raw_code == f"{prefix}_{roll_no}"):
-                if formatted_roll:
-                    lms_code = f"{prefix}_{formatted_roll}"
-                else:
-                    lms_code = f"{prefix}_01"
+            grade_tag = lms_grade_tag(attrs.get("grade"))
+            roll_part = "|".join(re.escape(r) for r in {roll_no, formatted_roll} if r)
+            # the code the form fills in itself (any earlier format too) is rebuilt here; only a code typed by hand is kept
+            generated = (not raw_code or raw_code.lower() == "".join(c for c in full_name if c.isalnum()).lower() or raw_code.endswith("_")
+                         or bool(roll_part and re.fullmatch(rf"{prefix}_(G\d+_)?({roll_part})(_\d+|[B-Z])?", raw_code, re.IGNORECASE)))
+            if generated:
+                # name_Grade_RollNo, e.g. VIN_G5_01; a code already taken in the school (same grade, other section) gets a letter
+                lms_code = free_lms_code(target_school, f"{prefix}_{grade_tag}{formatted_roll or '01'}")
             else:
-                lms_code = raw_code.upper()
+                lms_code = raw_code.upper()  # a code typed by hand is never changed: a clash is reported below
 
             # School-scoped conflict check: Is lms_code already taken in THIS school?
             conflict_in_school = Student.objects.filter(

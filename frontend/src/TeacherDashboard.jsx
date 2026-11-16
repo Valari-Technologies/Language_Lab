@@ -162,23 +162,22 @@ const generateRollNo = (fullName, existingStudents = []) => {
   return candidate;
 };
 
-const generateLmsLoginCode = (fullName, rollNo = '', existingStudents = []) => {
+// name_Grade_RollNo, e.g. VIN_G5_01. A code already taken in the school (same grade, another section) gets a letter,
+// VIN_G5_01B, the same way the server does it; the server builds the final code when the student is saved.
+const generateLmsLoginCode = (fullName, rollNo = '', existingStudents = [], grade = '') => {
   const letters = (fullName || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
   if (!letters) return '';
   const prefix = letters.slice(0, 3).padEnd(3, 'X');
   const cleanRoll = String(rollNo || '').trim();
   const formattedRoll = /^\d$/.test(cleanRoll) ? `0${cleanRoll}` : cleanRoll;
-  const baseCode = formattedRoll ? `${prefix}_${formattedRoll}` : `${prefix}_`;
+  const gradeNumber = (String(grade || '').match(/\d+/) || [])[0];
+  const baseCode = formattedRoll ? `${prefix}_${gradeNumber ? `G${parseInt(gradeNumber, 10)}_` : ''}${formattedRoll}` : `${prefix}_`;
   if (!formattedRoll) return baseCode;
 
-  const takenUsernames = new Set((existingStudents || []).map(s => (s.username || '').toUpperCase()));
-  let candidate = baseCode;
-  let suffix = 1;
-  while (takenUsernames.has(candidate.toUpperCase())) {
-    candidate = `${baseCode}_${suffix}`;
-    suffix += 1;
-  }
-  return candidate;
+  const taken = new Set((existingStudents || []).flatMap(s => [s.username, s.lms_code]).map(c => (c || '').toUpperCase()));
+  if (!taken.has(baseCode)) return baseCode;
+  const free = [...'BCDEFGHIJKLMNOPQRSTUVWXYZ'].find(letter => !taken.has(`${baseCode}${letter}`));
+  return free ? `${baseCode}${free}` : baseCode;
 };
 
 /* ─── Static chart data (same as SchoolDashboard reference) ─── */
@@ -817,7 +816,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       payload = { ...studentForm, role: 'STUDENT' };
       if (modalType === 'add') {
         if (!payload.username || payload.username.endsWith('_')) {
-          payload.username = generateLmsLoginCode(payload.full_name, payload.roll_no, students);
+          payload.username = generateLmsLoginCode(payload.full_name, payload.roll_no, students, payload.grade);
         }
         if (!payload.password) payload.password = payload.username;
         if (!payload.email) payload.email = `${payload.username.toLowerCase()}@lingualab.com`;
@@ -2147,7 +2146,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         </tbody>
                       </table>
                       <div style={{ padding: '0.75rem 1.25rem', background: '#fffbeb', borderTop: '1px solid #fef3c7', fontSize: '0.8rem', color: '#92400e' }}>
-                        LMS login code is auto-generated from <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>fullname</code> and <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>roll no</code> (e.g. <span style={{ fontWeight: 700 }}>ABU_07</span> or <span style={{ fontWeight: 700 }}>DHA_12</span>).
+                        LMS login code is auto-generated from <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>fullname</code>, <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>grade</code> and <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>roll no</code> (e.g. <span style={{ fontWeight: 700 }}>ABU_G5_07</span> or <span style={{ fontWeight: 700 }}>DHA_G8_12</span>).
                       </div>
                     </div>
 
@@ -2245,7 +2244,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               <span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>
                                 {(() => {
                                   if (s.username && s.username.toLowerCase() === (s.full_name || '').toLowerCase().replace(/[^a-z0-9]/g, '') && s.roll_no) {
-                                    return generateLmsLoginCode(s.full_name, s.roll_no, students);
+                                    return generateLmsLoginCode(s.full_name, s.roll_no, students, s.grade);
                                   }
                                   if (s.username) {
                                     if (/^([A-Z]{3})_(\d)$/.test(s.username)) {
@@ -2768,7 +2767,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             setStudentForm(prev => ({
                               ...prev,
                               full_name,
-                              username: modalType === 'add' ? generateLmsLoginCode(full_name, prev.roll_no, students) : prev.username
+                              username: modalType === 'add' ? generateLmsLoginCode(full_name, prev.roll_no, students, prev.grade) : prev.username
                             }));
                           }} required placeholder="e.g. Arjun Sharma"/>
                       </div>
@@ -2780,7 +2779,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             setStudentForm(prev => ({
                               ...prev,
                               roll_no,
-                              username: modalType === 'add' ? generateLmsLoginCode(prev.full_name, roll_no, students) : prev.username
+                              username: modalType === 'add' ? generateLmsLoginCode(prev.full_name, roll_no, students, prev.grade) : prev.username
                             }));
                           }} placeholder="e.g. 12" required/>
                       </div>
@@ -2798,13 +2797,17 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             if (val) {
                               const selectedClass = classes.find(c => String(c.class_id) === String(val));
                               if (selectedClass) {
-                                setStudentForm(prev => ({
-                                  ...prev,
-                                  class_id: val,
-                                  grade: selectedClass.grade_name ? selectedClass.grade_name.replace('Grade', 'Class') : `Class ${selectedClass.grade}`,
-                                  section: selectedClass.section || '',
-                                  academic_year: selectedClass.academic_year || '2025 - 2026'
-                                }));
+                                setStudentForm(prev => {
+                                  const grade = selectedClass.grade_name ? selectedClass.grade_name.replace('Grade', 'Class') : `Class ${selectedClass.grade}`;
+                                  return {
+                                    ...prev,
+                                    class_id: val,
+                                    grade,
+                                    section: selectedClass.section || '',
+                                    academic_year: selectedClass.academic_year || '2025 - 2026',
+                                    username: modalType === 'add' ? generateLmsLoginCode(prev.full_name, prev.roll_no, students, grade) : prev.username
+                                  };
+                                });
                               }
                             } else {
                               setStudentForm(prev => ({

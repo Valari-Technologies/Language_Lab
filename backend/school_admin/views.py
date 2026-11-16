@@ -14,7 +14,7 @@ from accounts.scoping import filter_queryset_by_school, get_user_school
 from super_admin.views import CMSBaseViewSet
 from super_admin.models import School, Grade, SchoolAdminProfile
 from teacher.models import Student
-from teacher.rollno import find_roll_conflict, roll_conflict_message
+from teacher.rollno import find_roll_conflict, free_lms_code, lms_grade_tag, roll_conflict_message
 from .models import Class, Teacher, TeacherClass
 from .serializers import ClassSerializer, TeacherClassSerializer, TeacherSerializer
 import openpyxl
@@ -552,19 +552,11 @@ class BulkUploadAPIView(APIView):
                             if not prefix:
                                 prefix = "STU"
                             clean_roll = str(roll_no).strip()
-                            if clean_roll:
-                                formatted_roll = clean_roll.zfill(2) if (clean_roll.isdigit() and len(clean_roll) == 1) else clean_roll
-                                lms_code = f"{prefix}_{formatted_roll}"
-                            else:
-                                lms_code = f"{prefix}_01"
+                            formatted_roll = (clean_roll.zfill(2) if (clean_roll.isdigit() and len(clean_roll) == 1) else clean_roll) if clean_roll else "01"
 
                             from teacher.models import Student as StudentModel
-                            # Check if lms_code already exists in THIS school
-                            clash_student = StudentModel.objects.filter(school=school).filter(
-                                Q(lms_code__iexact=lms_code) | Q(user__username__iexact=lms_code)
-                            ).exists()
-                            if clash_student:
-                                raise ValueError(f"A student with LMS login code '{lms_code}' already exists in this school.")
+                            # a code already used in THIS school gets a letter (VIN_11B): the roll no may repeat across classes
+                            lms_code = free_lms_code(school, f"{prefix}_{lms_grade_tag(grade)}{formatted_roll}")
 
                             internal_username = lms_code
                             clashing_user = User.objects.filter(username__iexact=internal_username).first()
