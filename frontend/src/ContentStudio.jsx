@@ -665,6 +665,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [filterTag, setFilterTag] = useState('');
   const [filterSearch, setFilterSearch] = useState('');
   const [activeMenuId, setActiveMenuId] = useState(null);
+  const [menuDropdownPos, setMenuDropdownPos] = useState({ top: 0, right: 0 });
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [publishPage, setPublishPage] = useState(1);
@@ -5931,6 +5932,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           flex: 1;
           padding: 1.5rem;
           overflow-y: auto;
+          overflow-x: hidden;
+          max-width: 100%;
+          box-sizing: border-box;
         }
 
         /* Override banner card to remove border */
@@ -6058,6 +6062,29 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         }
 
         /* Tables */
+        .cs-table-wrap {
+          width: 100%;
+          max-width: 100%;
+          overflow-x: auto !important;
+          -webkit-overflow-scrolling: touch;
+          position: relative;
+          padding-bottom: 0.5rem;
+        }
+        .cs-table-wrap::-webkit-scrollbar {
+          height: 6px;
+        }
+        .cs-table-wrap::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 3px;
+        }
+        .cs-table-wrap::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+        .cs-table-wrap::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 3px;
+        }
+
         .cs-table {
           width: 100%;
           border-collapse: collapse;
@@ -7130,168 +7157,256 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
 
                   {/* Main table container */}
-                  <div className="cs-card" style={{ padding: '0' }}>
-                    <table className="cs-table">
-                      <thead>
-                        <tr>
-                          {isSelectMode && (
-                            <th style={{ width: '40px', paddingLeft: '1.5rem' }}>
-                              <input
-                                type="checkbox"
-                                checked={experiences.length > 0 && experiences.every(exp => selectedExperienceIds.includes(exp.id))}
-                                onChange={handleSelectAllExperiences}
-                                style={{ cursor: 'pointer' }}
-                              />
-                            </th>
-                          )}
-                          <th style={{ width: '60px', paddingLeft: '1.25rem' }}>S.No</th>
-                          <th>Lessons</th>
-                          <th>Type</th>
-                          <th>Grade</th>
-                          <th>Difficulty</th>
-                          <th>Status</th>
-                          <th>Last Modified</th>
-                          <th style={{ textAlign: 'center' }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {experiences.length === 0 ? (
+                  <div className="cs-card" style={{ padding: '1.25rem 1.5rem' }}>
+                    <div className="cs-table-wrap" onScroll={() => activeMenuId && setActiveMenuId(null)}>
+                      <table className="cs-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: isSelectMode ? '1060px' : '980px' }}>
+                        <colgroup>
+                          {isSelectMode && <col style={{ width: '4%' }} />}
+                          <col style={{ width: isSelectMode ? '6%' : '7%' }} />
+                          <col style={{ width: isSelectMode ? '26%' : '28%' }} />
+                          <col style={{ width: isSelectMode ? '10%' : '11%' }} />
+                          <col style={{ width: isSelectMode ? '10%' : '10%' }} />
+                          <col style={{ width: isSelectMode ? '13%' : '13%' }} />
+                          <col style={{ width: isSelectMode ? '12%' : '12%' }} />
+                          <col style={{ width: isSelectMode ? '12%' : '12%' }} />
+                          <col style={{ width: isSelectMode ? '7%' : '7%' }} />
+                        </colgroup>
+                        <thead>
                           <tr>
-                            <td colSpan={isSelectMode ? "9" : "8"} style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No lessons found. Click "+ New Lesson" to create one!</td>
+                            {isSelectMode && (
+                              <th style={{ width: '40px', paddingLeft: '0.75rem', textAlign: 'center' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={experiences.length > 0 && experiences.every(exp => selectedExperienceIds.includes(exp.id))}
+                                  onChange={handleSelectAllExperiences}
+                                  style={{ cursor: 'pointer' }}
+                                />
+                              </th>
+                            )}
+                            <th style={{ paddingLeft: '0.75rem' }}>S.No</th>
+                            <th>Lessons</th>
+                            <th>Type</th>
+                            <th>Grade</th>
+                            <th>Difficulty</th>
+                            <th>Status</th>
+                            <th>Last Modified</th>
+                            <th style={{ textAlign: 'center' }}>Actions</th>
                           </tr>
-                        ) : (
-                          experiences.map((row, idx) => (
-                            <tr key={row.id} style={{ cursor: 'pointer' }} onClick={() => handleViewDetails(row.id)}>
-                              {isSelectMode && (
-                                <td style={{ paddingLeft: '1.5rem' }} onClick={e => e.stopPropagation()}>
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedExperienceIds.includes(row.id)}
-                                    onChange={() => handleSelectExperience(row.id)}
-                                    style={{ cursor: 'pointer' }}
-                                  />
-                                </td>
-                              )}
-                              <td style={{ paddingLeft: '1.25rem', fontWeight: 800, color: '#0284c7', fontSize: '0.84rem' }}>
-                                {(page - 1) * 10 + idx + 1}
-                              </td>
-                              <td>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                  <div style={{ width: 44, height: 32, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
-                                    {getThumbnailUrl(row.thumbnail) ? <img src={getThumbnailUrl(row.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
-                                  </div>
-                                  <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.86rem' }}>
-                                    {row.title}
-                                  </div>
-                                </div>
-                              </td>
-                              <td>
-                                <span style={{
-                                  display: 'inline-block',
-                                  padding: '2px 8px',
-                                  borderRadius: '12px',
-                                  fontSize: '0.72rem',
-                                  fontWeight: 600,
-                                  background: row.experience_type === 'ASSESSMENT' ? '#f3e8ff' : '#e0f2fe',
-                                  color: row.experience_type === 'ASSESSMENT' ? '#7c3aed' : '#0284c7'
-                                }}>
-                                  {row.experience_type === 'ASSESSMENT' ? 'Assessment' : 'Lesson'}
-                                </span>
-                              </td>
-                              <td>{row.grade_name || `Grade ${row.grade}`}</td>
-                              <td>
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: row.difficulty === 'BEGINNER' ? '#10b981' : row.difficulty === 'MASTER' ? '#ef4444' : '#3b82f6' }} />
-                                  {row.difficulty_display || formatDifficulty(row.difficulty)}
-                                </span>
-                              </td>
-                              <td>
-                                <span className={`cs-badge ${row.status === 'APPROVED' || row.status === 'PUBLISHED' ? 'cs-badge-approved' : row.status === 'PENDING_APPROVAL' ? 'cs-badge-pending' : row.status === 'REJECTED' ? 'cs-badge-rejected' : 'cs-badge-draft'}`}>
-                                  {row.status === 'PENDING_APPROVAL' ? 'PENDING' : row.status}
-                                </span>
-                              </td>
-                              <td>
-                                <div style={{ fontWeight: 500 }}>{new Date(row.updated_at).toLocaleDateString()}</div>
-                                <div style={{ fontSize: '0.72rem', color: '#64748b' }}>by {row.created_by_name || 'Content Creator'}</div>
-                              </td>
-                              <td style={{ textAlign: 'center', position: 'relative' }} onClick={e => e.stopPropagation()}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  <button
-                                    className="cs-icon-btn"
-                                    onClick={() => setActiveMenuId(activeMenuId === row.id ? null : row.id)}
-                                    style={{ padding: '6px', fontSize: '1.15rem', cursor: 'pointer', border: 'none', background: 'none', color: '#64748b', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                  >
-                                    <FiMoreVertical />
-                                  </button>
-                                </div>
-                                {activeMenuId === row.id && (
-                                  <div style={{
-                                    position: 'absolute', right: '50%', transform: 'translateX(50%)', top: '75%', background: '#ffffff',
-                                    border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-                                    zIndex: 100, display: 'flex', flexDirection: 'column', width: '110px', overflow: 'hidden'
-                                  }}>
-                                    <button
-                                      onClick={() => { setActiveMenuId(null); handleStartPreview(row.id); }}
-                                      style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem', textAlign: 'left', cursor: 'pointer', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}
-                                    >
-                                      <FiPlay style={{ fontSize: '0.85rem' }} /> Preview
-                                    </button>
-                                    <button
-                                      onClick={() => { setActiveMenuId(null); loadExperienceDetail(row, true); }}
-                                      style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem', textAlign: 'left', cursor: 'pointer', color: '#1e293b', display: 'flex', alignItems: 'center', gap: 6, width: '100%', borderTop: '1px solid #f1f5f9' }}
-                                    >
-                                      <FiEdit2 style={{ fontSize: '0.85rem' }} /> Edit
-                                    </button>
-                                    <button
-                                      onClick={() => { setActiveMenuId(null); handleDeleteExperience(row.id); }}
-                                      style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem', textAlign: 'left', cursor: 'pointer', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6, width: '100%', borderTop: '1px solid #f1f5f9' }}
-                                    >
-                                      <FiTrash2 style={{ fontSize: '0.85rem' }} /> Delete
-                                    </button>
-                                  </div>
-                                )}
-                              </td>
+                        </thead>
+                        <tbody>
+                          {experiences.length === 0 ? (
+                            <tr>
+                              <td colSpan={isSelectMode ? "9" : "8"} style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No lessons found. Click "+ New Lesson" to create one!</td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          ) : (
+                            experiences.map((row, idx) => (
+                              <tr key={row.id} style={{ cursor: 'pointer' }} onClick={() => handleViewDetails(row.id)}>
+                                {isSelectMode && (
+                                  <td style={{ paddingLeft: '0.75rem', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedExperienceIds.includes(row.id)}
+                                      onChange={() => handleSelectExperience(row.id)}
+                                      style={{ cursor: 'pointer' }}
+                                    />
+                                  </td>
+                                )}
+                                <td style={{ paddingLeft: '0.75rem', fontWeight: 800, color: '#0284c7', fontSize: '0.84rem' }}>
+                                  {(page - 1) * 10 + idx + 1}
+                                </td>
+                                <td>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                    <div style={{ width: 44, height: 32, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
+                                      {getThumbnailUrl(row.thumbnail) ? <img src={getThumbnailUrl(row.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
+                                    </div>
+                                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.86rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.title}>
+                                      {row.title}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <span style={{
+                                    display: 'inline-block',
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 600,
+                                    background: row.experience_type === 'ASSESSMENT' ? '#f3e8ff' : '#e0f2fe',
+                                    color: row.experience_type === 'ASSESSMENT' ? '#7c3aed' : '#0284c7',
+                                    whiteSpace: 'nowrap'
+                                  }}>
+                                    {row.experience_type === 'ASSESSMENT' ? 'Assessment' : 'Lesson'}
+                                  </span>
+                                </td>
+                                <td style={{ whiteSpace: 'nowrap' }}>{row.grade_name || `Grade ${row.grade}`}</td>
+                                <td>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: row.difficulty === 'BEGINNER' ? '#10b981' : row.difficulty === 'MASTER' ? '#ef4444' : '#3b82f6' }} />
+                                    {row.difficulty_display || formatDifficulty(row.difficulty)}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span className={`cs-badge ${row.status === 'APPROVED' || row.status === 'PUBLISHED' ? 'cs-badge-approved' : row.status === 'PENDING_APPROVAL' ? 'cs-badge-pending' : row.status === 'REJECTED' ? 'cs-badge-rejected' : 'cs-badge-draft'}`} style={{ whiteSpace: 'nowrap' }}>
+                                    {row.status === 'PENDING_APPROVAL' ? 'PENDING' : row.status}
+                                  </span>
+                                </td>
+                                <td>
+                                  <div style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{new Date(row.updated_at).toLocaleDateString()}</div>
+                                  <div style={{ fontSize: '0.72rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>by {row.created_by_name || 'Content Creator'}</div>
+                                </td>
+                                <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <button
+                                      type="button"
+                                      className="cs-icon-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (activeMenuId === row.id) {
+                                          setActiveMenuId(null);
+                                        } else {
+                                          const rect = e.currentTarget.getBoundingClientRect();
+                                          setMenuDropdownPos({
+                                            top: rect.bottom + 4,
+                                            right: Math.max(10, window.innerWidth - rect.right)
+                                          });
+                                          setActiveMenuId(row.id);
+                                        }
+                                      }}
+                                      style={{
+                                        padding: '6px',
+                                        fontSize: '1.15rem',
+                                        cursor: 'pointer',
+                                        border: 'none',
+                                        background: 'none',
+                                        color: '#64748b',
+                                        borderRadius: '50%',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        transition: 'background-color 0.15s'
+                                      }}
+                                      onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                      onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                      <FiMoreVertical />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
 
                     {/* Table Footer */}
-                    <div style={{ padding: '1rem 1.5rem' }}>
-                      <div className="cs-pagination-bar">
-                        <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Showing {experiences.length > 0 ? (page - 1) * 10 + 1 : 0} to {(page - 1) * 10 + experiences.length} of {totalCount} experiences</span>
-                        <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                    <div className="cs-pagination-bar" style={{ marginTop: '0.75rem', paddingTop: '0.5rem', borderTop: 'none' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                        Showing {experiences.length > 0 ? (page - 1) * 10 + 1 : 0} to {(page - 1) * 10 + experiences.length} of {totalCount} records
+                      </span>
+                      <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                        <button
+                          className="cs-page-link"
+                          disabled={page === 1}
+                          onClick={() => handlePageChange(page - 1)}
+                          style={{ cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.5 : 1 }}
+                        >
+                          &lt;
+                        </button>
+                        {pageItems(page, Math.max(1, Math.ceil(totalCount / 10))).map(pageNum => (
                           <button
-                            className="cs-page-link"
-                            disabled={page === 1}
-                            onClick={() => handlePageChange(page - 1)}
-                            style={{ cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.5 : 1 }}
+                            key={pageNum}
+                            className={`cs-page-link ${page === pageNum ? 'active' : ''}`}
+                            onClick={() => handlePageChange(pageNum)}
+                            style={{ cursor: 'pointer' }}
                           >
-                            &lt;
+                            {pageNum}
                           </button>
-                          {pageItems(page, Math.max(1, Math.ceil(totalCount / 10))).map(pageNum => (
-                            <button
-                              key={pageNum}
-                              className={`cs-page-link ${page === pageNum ? 'active' : ''}`}
-                              onClick={() => handlePageChange(pageNum)}
-                              style={{ cursor: 'pointer' }}
-                            >
-                              {pageNum}
-                            </button>
-                          ))}
-                          <button
-                            className="cs-page-link"
-                            disabled={page >= Math.ceil(totalCount / 10)}
-                            onClick={() => handlePageChange(page + 1)}
-                            style={{ cursor: page >= Math.ceil(totalCount / 10) ? 'not-allowed' : 'pointer', opacity: page >= Math.ceil(totalCount / 10) ? 0.5 : 1 }}
-                          >
-                            &gt;
-                          </button>
-                        </div>
+                        ))}
+                        <button
+                          className="cs-page-link"
+                          disabled={page >= Math.ceil(totalCount / 10)}
+                          onClick={() => handlePageChange(page + 1)}
+                          style={{ cursor: page >= Math.ceil(totalCount / 10) ? 'not-allowed' : 'pointer', opacity: page >= Math.ceil(totalCount / 10) ? 0.5 : 1 }}
+                        >
+                          &gt;
+                        </button>
                       </div>
                     </div>
                   </div>
+
+                  {/* Fixed-position Action Dropdown (never clipped by table scroll wrapper) */}
+                  {activeMenuId && (() => {
+                    const row = experiences.find(exp => exp.id === activeMenuId);
+                    if (!row) return null;
+                    return (
+                      <>
+                        <div
+                          style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+                          onClick={(e) => { e.stopPropagation(); setActiveMenuId(null); }}
+                        />
+                        <div
+                          style={{
+                            position: 'fixed',
+                            top: menuDropdownPos.top,
+                            right: menuDropdownPos.right,
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                            zIndex: 9999,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            width: '120px',
+                            overflow: 'hidden'
+                          }}
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => { setActiveMenuId(null); handleStartPreview(row.id); }}
+                            style={{
+                              background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem',
+                              textAlign: 'left', cursor: 'pointer', color: '#3b82f6', display: 'flex',
+                              alignItems: 'center', gap: 6, width: '100%', transition: 'background-color 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#eff6ff'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            <FiPlay style={{ fontSize: '0.85rem' }} /> Preview
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setActiveMenuId(null); loadExperienceDetail(row, true); }}
+                            style={{
+                              background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem',
+                              textAlign: 'left', cursor: 'pointer', color: '#1e293b', display: 'flex',
+                              alignItems: 'center', gap: 6, width: '100%', borderTop: '1px solid #f1f5f9',
+                              transition: 'background-color 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            <FiEdit2 style={{ fontSize: '0.85rem' }} /> Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setActiveMenuId(null); handleDeleteExperience(row.id); }}
+                            style={{
+                              background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem',
+                              textAlign: 'left', cursor: 'pointer', color: '#ef4444', display: 'flex',
+                              alignItems: 'center', gap: 6, width: '100%', borderTop: '1px solid #f1f5f9',
+                              transition: 'background-color 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fef2f2'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            <FiTrash2 style={{ fontSize: '0.85rem' }} /> Delete
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </>
               )}
             </>
