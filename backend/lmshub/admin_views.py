@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.scoping import get_user_school
+from super_admin.licensing import is_past, key_expiry
 from super_admin.models import LmsServer, School
 from . import plans
 from .core import (
@@ -21,20 +22,16 @@ def _normalize_key(key):
 
 
 def _valid_key_hashes(school):
-    """Hashes of the keys that open the school's LMS Hub: its licence key and the keys of its ACTIVE,
-    non-expired LMS servers.  A key whose expiryDate is today or in the past is treated as invalid."""
-    today = timezone.now().date()
+    """Hashes of the keys that open the school's LMS Hub: its licence key and the keys of its ACTIVE LMS servers that are not past their expiry."""
     keys = []
     lic = license_state(school)["license"]
     if lic and lic.licenseKey:
         keys.append(lic.licenseKey)
-    keys += list(
-        LmsServer.objects.filter(school=school, status=LmsServer.Status.ACTIVE)
-        .exclude(licenseKey__isnull=True).exclude(licenseKey="")
-        # Exclude servers whose expiry date has already passed (expired today counts as expired)
-        .exclude(expiryDate__isnull=False, expiryDate__lte=today)
-        .values_list("licenseKey", flat=True)
-    )
+    # A key works through the END of its own expiry day in the schools' time zone (the same cutoff as every status answer)
+    for server in LmsServer.objects.filter(school=school, status=LmsServer.Status.ACTIVE).exclude(
+            licenseKey__isnull=True).exclude(licenseKey="").select_related("license"):
+        if not is_past(key_expiry(server, lic)):
+            keys.append(server.licenseKey)
     return {sha256_hex(_normalize_key(k)) for k in keys if _normalize_key(k)}
 
 
@@ -233,15 +230,13 @@ class LmsHubUnlockAPIView(APIView):
         typed_hash = sha256_hex(typed)
         if not _matches(typed_hash, _valid_key_hashes(school)):
             # Check if this key actually belongs to the school, but is expired or deactivated
-            today = timezone.now().date()
-
             # 1. Check school's LMS servers
             matched_server = LmsServer.objects.filter(school=school, licenseKey__iexact=typed).select_related("license").first()
             if matched_server:
                 exp = matched_server.expiryDate or (matched_server.license.expiryDate if matched_server.license else None)
                 if exp:
                     exp_date = exp.date() if hasattr(exp, "date") and not isinstance(exp, timezone.datetime.date) else exp
-                    if exp_date <= today:
+                    if is_past(exp_date):
                         exp_str = exp_date.strftime("%d/%m/%Y")
                         return Response({
                             "error": "key_expired",
@@ -258,7 +253,7 @@ class LmsHubUnlockAPIView(APIView):
             if lic and lic.licenseKey and _normalize_key(lic.licenseKey) == typed:
                 if lic.expiryDate:
                     exp_date = lic.expiryDate.date() if hasattr(lic.expiryDate, "date") and not isinstance(lic.expiryDate, timezone.datetime.date) else lic.expiryDate
-                    if exp_date <= today:
+                    if is_past(exp_date):
                         exp_str = exp_date.strftime("%d/%m/%Y")
                         return Response({
                             "error": "key_expired",

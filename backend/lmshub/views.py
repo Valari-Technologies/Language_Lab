@@ -13,6 +13,7 @@ from django.db.models import Q
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
+from super_admin.licensing import key_expiry, mask_key
 from super_admin.models import School
 from teacher.models import Student
 from . import plans, progress
@@ -137,14 +138,26 @@ def whoami(request, device):
 @hub_endpoint({"GET"})
 def status_view(request, device):
     state = license_state(device.school)
-    return reply(200, {
+    answer = {
         "ok": True,
         "licenseActive": state["active"],
         "expired": state["expired"],
         "schoolName": device.school.school_name,
         "seats": {"used": seats_used(device.school), "total": seat_total(state)},
         "setupCompleted": True,
-    })
+    }
+    # traceable: which licence and which key the answer came from (keys are masked)
+    key = state.get("key")
+    logger.info(
+        "lms-hub status school=%s pc=%s licence=%s key=%s key_expires=%s keys_usable=%s -> licenseActive=%s expired=%s",
+        device.school.schoolId or device.school_id, device.pc_id,
+        state["license"].licenseId if state["license"] else None,
+        mask_key(key.licenseKey) if key else None,
+        key_expiry(key, state["license"]) if key else None,
+        len(state["usable"]) if state.get("usable") is not None else "licence-only",
+        answer["licenseActive"], answer["expired"],
+    )
+    return reply(200, answer)
 
 
 @hub_endpoint({"POST"})

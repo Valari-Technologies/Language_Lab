@@ -74,15 +74,27 @@ class UnlockTests(HubTestBase):
         # the server is deactivated -> its key no longer opens the page
         LmsServer.objects.filter(pk=server.pk).update(status=LmsServer.Status.DEACTIVATED)
         self.assertEqual(api.get(OVERVIEW).json()["error"], "lms_key_required")
-        self.assertEqual(api.post(UNLOCK, {"key": "LMS-KEY-6B4513FFC4EA4E89"}, format="json").json()["error"], "wrong_key")
+        # the school's own disabled key gets its own message, not "wrong key"
+        self.assertEqual(api.post(UNLOCK, {"key": "LMS-KEY-6B4513FFC4EA4E89"}, format="json").json()["error"], "key_disabled")
         self.assertEqual(api.post(UNLOCK, {"key": "KEY-A"}, format="json").status_code, 200)
+
+    def test_a_key_works_through_the_end_of_its_expiry_day(self):
+        from datetime import timedelta
+        from super_admin.licensing import license_today
+        server = self._server(self.school_a, "LMS-KEY-DAYEND")
+        api = self._as(self.admin_a)
+        LmsServer.objects.filter(pk=server.pk).update(expiryDate=license_today())  # expires today: still valid today
+        self.assertEqual(api.post(UNLOCK, {"key": "LMS-KEY-DAYEND"}, format="json").status_code, 200)
+        LmsServer.objects.filter(pk=server.pk).update(expiryDate=license_today() - timedelta(days=1))
+        self.assertEqual(api.get(OVERVIEW).json()["error"], "lms_key_required")
+        self.assertEqual(api.post(UNLOCK, {"key": "LMS-KEY-DAYEND"}, format="json").json()["error"], "key_expired")
 
     def test_other_schools_server_key_refused(self):
         self._server(self.school_b, "LMS-KEY-SCHOOLB")
         self._server(self.school_a, "LMS-KEY-OFF", status=LmsServer.Status.DEACTIVATED)
         api = self._as(self.admin_a)
         self.assertEqual(api.post(UNLOCK, {"key": "LMS-KEY-SCHOOLB"}, format="json").json()["error"], "wrong_key")
-        self.assertEqual(api.post(UNLOCK, {"key": "LMS-KEY-OFF"}, format="json").json()["error"], "wrong_key")
+        self.assertEqual(api.post(UNLOCK, {"key": "LMS-KEY-OFF"}, format="json").json()["error"], "key_disabled")  # this school's own, disabled
         self.assertEqual(api.get(OVERVIEW).status_code, 403)
 
     def test_remove_computer_needs_unlock(self):

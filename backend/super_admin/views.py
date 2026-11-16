@@ -14,6 +14,7 @@ from django.db import transaction
 
 from accounts.permissions import IsSuperAdmin, IsSuperAdminOrReadOnlyStaff
 from accounts.scoping import filter_queryset_by_school
+from .licensing import is_past, key_expiry, mask_key
 from .models import Grade, School, SchoolAdminProfile, PublishContent, License, LmsServer, RemovedInstallation
 from .serializers import (
     GradeDetailSerializer,
@@ -521,7 +522,11 @@ class ActivateServerAPIView(APIView):
         if license_obj.expiryDate is None:
             return Response({"error": "License has no expiry date configured."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if license_obj.expiryDate < timezone.now().date():
+        # a key with its own expiry date is judged by that date; otherwise by the licence's
+        if server_obj and server_obj.expiryDate:
+            if is_past(server_obj.expiryDate):
+                return Response({"error": "This license key has expired."}, status=status.HTTP_400_BAD_REQUEST)
+        elif is_past(license_obj.expiryDate):
             license_obj.status = License.Status.EXPIRED
             license_obj.save(update_fields=["status"])
             return Response({"error": "License has expired."}, status=status.HTTP_400_BAD_REQUEST)
@@ -678,7 +683,7 @@ class LmsServerCreateAPIView(APIView):
         if license_obj.status != License.Status.ACTIVE:
             return Response({"error": f"Cannot create server. School license status is {license_obj.status}."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if license_obj.expiryDate and license_obj.expiryDate < timezone.now().date():
+        if is_past(license_obj.expiryDate):
             license_obj.status = License.Status.EXPIRED
             license_obj.save()
             return Response({"error": "Cannot create server. School license has expired."}, status=status.HTTP_400_BAD_REQUEST)
@@ -801,17 +806,20 @@ class LicenseStatusAPIView(APIView):
         server = LmsServer.objects.filter(installationId=installation_id, license=license_obj).first()
         if not server:
             return answer("UNKNOWN", "This computer is not registered on the licence.")
-        if license_obj.status == License.Status.EXPIRED or (
-            license_obj.expiryDate and license_obj.expiryDate < timezone.now().date()
-        ):
-            return answer("EXPIRED", "The school licence has expired.")
-        if license_obj.status != License.Status.ACTIVE:
-            return answer("SUSPENDED", f"The school licence is {license_obj.status.lower()}.")
-        if server.status != LmsServer.Status.ACTIVE:
-            return answer("SUSPENDED", "This computer is disabled in the CMS.")
-
-        LmsServer.objects.filter(pk=server.pk).update(lastSeenAt=timezone.now(), publicIp=_client_ip(request))
-        return answer("ACTIVE", "Licence is active.")
+        # this computer's own key decides: its own expiry date (else the licence's), its own on/off switch, and the
+        # licence row can still suspend or revoke everything
+        if license_obj.status in (License.Status.SUSPENDED, License.Status.REVOKED):
+            result = ("SUSPENDED", f"The school licence is {license_obj.status.lower()}.")
+        elif server.status != LmsServer.Status.ACTIVE:
+            result = ("SUSPENDED", "This computer is disabled in the CMS.")
+        elif is_past(key_expiry(server, license_obj)):
+            result = ("EXPIRED", "The LMS key of this computer has expired.")
+        else:
+            result = ("ACTIVE", "Licence is active.")
+            LmsServer.objects.filter(pk=server.pk).update(lastSeenAt=timezone.now(), publicIp=_client_ip(request))
+        logger.info("licensing status installation=%s licence=%s key=%s key_expires=%s -> %s",
+                    installation_id, license_id, mask_key(server.licenseKey), key_expiry(server, license_obj), result[0])
+        return answer(*result)
 
 
 def _notify_school_admin_lms_status(server, action_type="disabled"):

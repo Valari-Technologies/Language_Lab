@@ -53,6 +53,10 @@ REPORT_THRESHOLD_GOOD = config("REPORT_THRESHOLD_GOOD", default=70, cast=int)
 REPORT_THRESHOLD_AVERAGE = config("REPORT_THRESHOLD_AVERAGE", default=50, cast=int)
 REPORT_INACTIVE_AFTER_DAYS = config("REPORT_INACTIVE_AFTER_DAYS", default=14, cast=int)
 
+# LMS licence and key expiry: a key or licence is valid through the END of its expiry day in the schools' time zone,
+# given as minutes from UTC (India, UTC+05:30 = 330; no daylight saving). One cutoff for every status answer.
+LICENSE_UTC_OFFSET_MINUTES = config("LICENSE_UTC_OFFSET_MINUTES", default=330, cast=int)
+
 
 # Application definition
 

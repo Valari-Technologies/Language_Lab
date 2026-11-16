@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from django.db import IntegrityError
 
+from super_admin.licensing import is_past, key_expiry, license_today
 from super_admin.models import License, LmsServer
 from .models import LmsDevice, LmsPairingCode, LmsSession, LmsThrottle
 
@@ -181,20 +182,40 @@ def rate_limit(key, limit, window_seconds):
 # ---------------------------------------------------------------- licence, seats, sessions
 
 def license_state(school):
+    """
+    The school's licence state for the student PCs. The school has one licence row (its status can suspend or
+    revoke everything) and LMS server keys, each with its own expiry date (else the licence's). The school is
+    licensed while at least one key is ACTIVE and not past its own expiry; the keys that are deactivated or
+    expired are ignored. A school with no keys at all is judged by the licence row alone.
+    "key" is the usable key with the latest expiry (the one a status answer is traced to); "usable" lists them all.
+    """
     lic = License.objects.filter(school=school).first()
     if not lic:
-        return {"license": None, "active": False, "expired": False}
-    expired = lic.status == License.Status.EXPIRED or bool(lic.expiryDate and lic.expiryDate < timezone.now().date())
-    active = lic.status == License.Status.ACTIVE and not expired and school.is_active
-    return {"license": lic, "active": active, "expired": expired}
+        return {"license": None, "active": False, "expired": False, "key": None, "usable": None}
+    today = license_today()
+    servers = list(lic.lms_servers.all())
+    if lic.status in (License.Status.SUSPENDED, License.Status.REVOKED):
+        return {"license": lic, "active": False, "expired": False, "key": None, "usable": []}
+    if not servers:
+        expired = lic.status == License.Status.EXPIRED or is_past(lic.expiryDate, today)
+        active = lic.status == License.Status.ACTIVE and not expired and school.is_active
+        return {"license": lic, "active": active, "expired": expired, "key": None, "usable": None}
+    usable = [s for s in servers if s.status == LmsServer.Status.ACTIVE and not is_past(key_expiry(s, lic), today)]
+    # expired: keys are switched on but every one of them is past its own date (a disabled key is not "expired")
+    expired = not usable and any(s.status == LmsServer.Status.ACTIVE for s in servers)
+    key = max(usable, key=lambda s: (key_expiry(s, lic), s.installationId)) if usable else None
+    return {"license": lic, "active": bool(usable) and school.is_active, "expired": expired, "key": key, "usable": usable}
 
 
 def seat_total(state):
-    """Sum of the user capacity of the licence's ACTIVE LMS servers; the licence capacity when it has none."""
+    """Sum of the user capacity of the school's usable LMS servers; the licence capacity when it has none."""
     lic = state["license"]
     if not lic:
         return None
-    capacities = list(lic.lms_servers.filter(status=LmsServer.Status.ACTIVE).values_list("maxUsers", flat=True))
+    if state.get("usable") is not None:
+        capacities = [s.maxUsers for s in state["usable"]]
+    else:
+        capacities = list(lic.lms_servers.filter(status=LmsServer.Status.ACTIVE).values_list("maxUsers", flat=True))
     total = sum(c for c in capacities if c and c > 0) if capacities else lic.concurrentUsersPerServer
     return total if total and total > 0 else None
 

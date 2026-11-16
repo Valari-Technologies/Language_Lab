@@ -909,7 +909,8 @@ def _check_and_generate_lms_expiry_notifications(user):
         from django.utils import timezone
         from super_admin.models import School, LmsServer, License, SchoolAdminProfile
         from accounts.scoping import get_user_school
-        today = timezone.now().date()
+        from super_admin.licensing import license_today
+        today = license_today()  # the same cutoff as the status answers: the end of the expiry day in the schools' time zone
 
         def _notify_admins_for_key(school, key_display, diff_days, exp_date):
             admin_users = set()
@@ -922,7 +923,12 @@ def _check_and_generate_lms_expiry_notifications(user):
                 title = "LMS License Expiring Soon"
                 msg = f"Your LMS license key ({key_display}) is due to expire tomorrow ({exp_date}). Please renew it to avoid service interruption."
                 notif_type = Notification.NotificationType.WARNING
-            elif diff_days <= 0:
+            elif diff_days == 0:
+                # a key works through the end of its expiry day: on that day it expires today, it is not expired yet
+                title = "LMS License Expires Today"
+                msg = f"Your LMS license key ({key_display}) expires today ({exp_date}). It will stop working at the end of today. Please renew it to avoid service interruption."
+                notif_type = Notification.NotificationType.WARNING
+            elif diff_days < 0:
                 title = "LMS License Expired"
                 msg = f"Your LMS license key ({key_display}) expired on {exp_date}. Access has been suspended. Please contact your administrator to renew."
                 notif_type = Notification.NotificationType.ERROR
@@ -976,7 +982,17 @@ def _check_and_generate_lms_expiry_notifications(user):
                             message=msg,
                             notification_type=Notification.NotificationType.WARNING,
                         )
-                elif diff <= 0:
+                elif diff == 0:
+                    title = "LMS License Expires Today"
+                    msg = f"The LMS license key ({key_display}) for school '{school_name}' expires today ({exp}). It will stop working at the end of today."
+                    if not Notification.objects.filter(user=user, title=title, message=msg, created_at__date=today).exists():
+                        Notification.objects.create(
+                            user=user,
+                            title=title,
+                            message=msg,
+                            notification_type=Notification.NotificationType.WARNING,
+                        )
+                elif diff < 0:
                     title = "LMS License Expired"
                     msg = f"The LMS license key ({key_display}) for school '{school_name}' has expired. Access has been suspended. Please renew to restore service."
                     if not Notification.objects.filter(user=user, title=title, message=msg, created_at__date=today).exists():
