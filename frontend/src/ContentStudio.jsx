@@ -6085,6 +6085,27 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           border-radius: 3px;
         }
 
+        .cs-activity-scroll::-webkit-scrollbar {
+          width: 5px;
+        }
+        .cs-activity-scroll::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 3px;
+        }
+        .cs-activity-scroll::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+        .cs-activity-scroll::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 3px;
+        }
+
+        .cs-dashboard-grid {
+          display: grid;
+          grid-template-columns: 1.5fr 1fr;
+          gap: 1.25rem;
+        }
+
         .cs-table {
           width: 100%;
           border-collapse: collapse;
@@ -6380,6 +6401,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           }
           .cs-card {
             padding: 1rem !important;
+          }
+          .cs-dashboard-grid {
+            grid-template-columns: 1fr !important;
           }
         }
 
@@ -6774,7 +6798,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               </div>
 
               {/* Main Grid row */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '1.25rem' }}>
+              <div className="cs-dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1.25rem' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   {/* Recent Experiences Card */}
                   <div className="cs-card">
@@ -6782,15 +6806,22 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <h3 className="cs-card-title">Recent Lessons</h3>
                       <button className="cs-btn-outline" style={{ padding: '0.25rem 0.6rem', fontSize: '0.72rem' }} onClick={() => setView('experiences')}>View All</button>
                     </div>
-                    <div className="cs-table-wrap" style={{ overflowX: 'auto' }}>
-                      <table className="cs-table">
+                    <div className="cs-table-wrap">
+                      <table className="cs-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: '560px' }}>
+                        <colgroup>
+                          <col style={{ width: '38%' }} />
+                          <col style={{ width: '16%' }} />
+                          <col style={{ width: '18%' }} />
+                          <col style={{ width: '18%' }} />
+                          <col style={{ width: '10%' }} />
+                        </colgroup>
                         <thead>
                           <tr>
                             <th>Lessons Name</th>
                             <th>Grade</th>
                             <th>Status</th>
                             <th>Last Modified</th>
-                            <th>Action</th>
+                            <th style={{ textAlign: 'center' }}>Action</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -6803,24 +6834,26 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               <tr key={idx}>
                                 <td>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <div style={{ width: 36, height: 26, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <div style={{ width: 36, height: 26, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                       {getThumbnailUrl(row.thumbnail) ? (
                                         <img src={getThumbnailUrl(row.thumbnail)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                       ) : (
                                         <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>📖</span>
                                       )}
                                     </div>
-                                    <span style={{ fontWeight: 600 }}>{row.title}</span>
+                                    <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.title}>
+                                      {row.title}
+                                    </span>
                                   </div>
                                 </td>
-                                <td>{row.grade_name || `Grade ${row.grade}`}</td>
+                                <td style={{ whiteSpace: 'nowrap' }}>{row.grade_name || `Grade ${row.grade}`}</td>
                                 <td>
-                                  <span className={`cs-badge ${row.status === 'APPROVED' || row.status === 'PUBLISHED' ? 'cs-badge-approved' : row.status === 'PENDING_APPROVAL' ? 'cs-badge-pending' : row.status === 'REJECTED' ? 'cs-badge-rejected' : 'cs-badge-draft'}`}>
+                                  <span className={`cs-badge ${row.status === 'APPROVED' || row.status === 'PUBLISHED' ? 'cs-badge-approved' : row.status === 'PENDING_APPROVAL' ? 'cs-badge-pending' : row.status === 'REJECTED' ? 'cs-badge-rejected' : 'cs-badge-draft'}`} style={{ whiteSpace: 'nowrap' }}>
                                     {row.status === 'PENDING_APPROVAL' ? 'PENDING' : row.status}
                                   </span>
                                 </td>
-                                <td>{new Date(row.updated_at).toLocaleDateString()}</td>
-                                <td>
+                                <td style={{ whiteSpace: 'nowrap' }}>{new Date(row.updated_at).toLocaleDateString()}</td>
+                                <td style={{ textAlign: 'center' }}>
                                   <button
                                     className="cs-btn-outline"
                                     style={{ padding: '0.35rem 0.55rem', fontSize: '0.85rem', color: '#0b57d0', border: '1px solid #cbd5e1', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
@@ -6849,19 +6882,29 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <h3 className="cs-card-title">Recent Activity</h3>
                       <button className="cs-btn-outline" style={{ padding: '0.25rem 0.6rem', fontSize: '0.72rem' }} onClick={() => setShowRecentActivityModal(true)}>View All</button>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div
+                      className="cs-activity-scroll"
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.85rem',
+                        maxHeight: '275px',
+                        overflowY: 'auto',
+                        paddingRight: '0.25rem'
+                      }}
+                    >
                       {recentActivities.length === 0 ? (
                         <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>No recent activity.</div>
                       ) : (
-                        recentActivities.slice(0, 6).map((item, idx) => {
+                        recentActivities.slice(0, 10).map((item, idx) => {
                           const isEdit = item.activity_type === 'experience_edited';
                           return (
                             <div key={idx} style={{ display: 'flex', gap: '0.65rem', alignItems: 'flex-start' }}>
-                              <div style={{ background: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0284c7' : '#ea580c', padding: '0.45rem', borderRadius: '50%', display: 'flex' }}>
+                              <div style={{ background: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0284c7' : '#ea580c', padding: '0.45rem', borderRadius: '50%', display: 'flex', flexShrink: 0 }}>
                                 {isEdit ? <FiEdit2 /> : <FiUpload />}
                               </div>
-                              <div>
-                                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1e293b' }}>{item.message}</div>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1e293b', wordBreak: 'break-word' }}>{item.message}</div>
                                 <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>{new Date(item.timestamp).toLocaleDateString()}</div>
                               </div>
                             </div>
