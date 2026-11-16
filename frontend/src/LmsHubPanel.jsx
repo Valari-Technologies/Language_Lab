@@ -100,6 +100,13 @@ const LmsHubPanel = ({ onActivated }) => {
     return () => clearInterval(tick);
   }, [load, locked]);
 
+  // the green message ("LMS Hub activated successfully.", "Computer removed.") shows for 3 seconds
+  useEffect(() => {
+    if (!message) return undefined;
+    const timer = setTimeout(() => setMessage(''), 3000);
+    return () => clearTimeout(timer);
+  }, [message]);
+
   const removeDevice = async (device) => {
     setConfirmId(null);
     const res = await apiFetch(`/api/cms/v1/lms-hub/devices/${device.id}/remove/`, { method: 'POST' });
@@ -173,9 +180,10 @@ const LmsHubPanel = ({ onActivated }) => {
           {/* LMS servers: key activation, expiry and user capacity */}
           <div style={card}>
             <h3 style={cardTitle}><FiServer /> LMS Servers</h3>
-            {data.lmsServers.length === 0 ? <p style={muted}>No LMS server key for this school yet.</p> : (
+            {/* only the servers that were activated: a deactivated or not yet activated key is not listed */}
+            {data.lmsServers.filter(s => s.status === 'ACTIVE' && s.activated).length === 0 ? <p style={muted}>No activated LMS server yet.</p> : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {data.lmsServers.map((s, i) => {
+                {data.lmsServers.filter(s => s.status === 'ACTIVE' && s.activated).map((s, i) => {
                   const off = s.status !== 'ACTIVE';
                   const isExpired = s.expiryDate && new Date(`${s.expiryDate}T23:59:59`) <= new Date();
                   const badge = off
