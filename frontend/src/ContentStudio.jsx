@@ -1806,6 +1806,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [selectedAsset, setSelectedAsset] = useState(null);
 
   // Local Form states
+  const [levelMissing, setLevelMissing] = useState(false); // "Save & Continue" was pressed without a valid Level
   const [experienceForm, setExperienceForm] = useState({
     title: '',
     description: '',
@@ -7585,10 +7586,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       const band = levelBand(experienceForm.experience_type, experienceForm.difficulty);
                       const typed = String(experienceForm.level ?? '');
                       const partial = typed !== '' && !levelFits(typed, band); // e.g. "1" on the way to 11
+                      const missing = levelMissing && !levelFits(typed, band); // Save & Continue was pressed without a valid level
                       const numbers = Array.from({ length: band[1] - band[0] + 1 }, (_, i) => String(band[0] + i));
                       return (
                         <div className="cs-form-group">
-                          <label className="cs-form-label">Level ({band[0]}-{band[1]})</label>
+                          <label className="cs-form-label">Level ({band[0]}-{band[1]}) <span style={{ color: '#ef4444' }}>*</span></label>
                           <input
                             className="cs-form-input"
                             data-testid="lesson-level-input"
@@ -7596,17 +7598,18 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                             inputMode="numeric"
                             placeholder={`LMS level ${band[0]} to ${band[1]}`}
                             value={typed}
-                            style={partial ? { borderColor: '#ef4444' } : undefined}
+                            style={partial || missing ? { borderColor: '#ef4444' } : undefined}
                             onChange={e => {
+                              setLevelMissing(false);
                               const digits = e.target.value.replace(/\D/g, '').slice(0, 2);
                               if (digits === '') { setExperienceForm({ ...experienceForm, level: '' }); return; }
                               // only numbers of this difficulty can be typed (a start such as "1" for 11 is allowed on the way)
                               if (numbers.some(n => n.startsWith(digits))) setExperienceForm({ ...experienceForm, level: digits });
                             }}
                           />
-                          {partial && (
+                          {(partial || missing) && (
                             <span style={{ display: 'block', marginTop: '0.25rem', fontSize: '0.7rem', color: '#b91c1c' }}>
-                              Enter a level from {band[0]} to {band[1]}.
+                              {missing && typed === '' ? `Level is required: enter a level from ${band[0]} to ${band[1]}.` : `Enter a level from ${band[0]} to ${band[1]}.`}
                             </span>
                           )}
                         </div>
@@ -7695,6 +7698,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       onClick={async () => {
                         if ((experienceForm.description?.length || 0) > 200) {
                           showFeedback('Description must not exceed 200 characters.', 'error');
+                          return;
+                        }
+                        // the Level is required: without a number of this difficulty's range the page stays here
+                        const band = levelBand(experienceForm.experience_type, experienceForm.difficulty);
+                        if (!levelFits(experienceForm.level, band)) {
+                          setLevelMissing(true);
+                          showFeedback(`Please enter the Level (${band[0]} to ${band[1]}) before continuing.`, 'error');
                           return;
                         }
                         const savedExp = await handleSaveExperience();
