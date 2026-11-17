@@ -124,3 +124,42 @@ class RollNoUniqueTests(TestCase):
         res = self.api.put(f"{URL}{legacy.student_id}/", {"full_name": "Old New", "roll_no": "1", "grade": "Class 7",
                                                           "section": "A", "academic_year": "2026-2027"}, format="json")
         self.assertEqual(res.status_code, 200, res.content)
+
+    def _put(self, student_id, **fields):
+        body = {"full_name": "Ravi", "roll_no": "3", "grade": "Class 3", "section": "A", "academic_year": "2026-2027", **fields}
+        return self.api.put(f"{URL}{student_id}/", body, format="json")
+
+    def _code(self, student_id):
+        return Student.objects.get(student_id=student_id).lms_code
+
+    def test_changing_the_grade_and_roll_no_rebuilds_the_login_code(self):
+        ravi = self._add("Ravi", "3", "Class 3", "A").json()["data"]["id"]
+        self.assertEqual(self._code(ravi), "RAV_G3_03")
+        # the edit form sends the current code back with the new roll no and grade
+        res = self._put(ravi, roll_no="7", grade="Class 5", section="A", username="RAV_G3_03")
+        self.assertEqual(res.status_code, 200, res.content)
+        student = Student.objects.get(student_id=ravi)
+        self.assertEqual((student.lms_code, student.user.username), ("RAV_G5_07", "RAV_G5_07"))
+        # only the roll no changes: the grade part stays
+        self._put(ravi, roll_no="9", grade="Class 5", section="A", username="RAV_G5_07")
+        self.assertEqual(self._code(ravi), "RAV_G5_09")
+
+    def test_a_save_that_changes_nothing_in_the_code_keeps_it(self):
+        ravi = self._add("Ravi", "3", "Class 3", "A").json()["data"]["id"]
+        self._put(ravi, username="RAV_G3_03", is_active=False)            # only the status
+        self.assertEqual(self._code(ravi), "RAV_G3_03")
+        self._put(ravi, full_name="Ravindra", username="RAV_G3_03")         # same first letters
+        self.assertEqual(self._code(ravi), "RAV_G3_03")
+
+    def test_a_code_typed_by_hand_or_a_custom_code_is_kept(self):
+        ravi = self._add("Ravi", "3", "Class 3", "A").json()["data"]["id"]
+        self._put(ravi, roll_no="8", username="MYCODE1")                    # a new code typed in the form wins
+        self.assertEqual(self._code(ravi), "MYCODE1")
+        self._put(ravi, roll_no="9", username="MYCODE1")                    # then a custom code is never rebuilt
+        self.assertEqual(self._code(ravi), "MYCODE1")
+
+    def test_a_rebuilt_code_that_is_taken_gets_a_letter(self):
+        other = self._add("Ravi", "7", "Class 5", "B").json()["data"]["id"]  # RAV_G5_07
+        ravi = self._add("Ravi", "3", "Class 3", "A").json()["data"]["id"]
+        self._put(ravi, roll_no="7", grade="Class 5", section="A", username="RAV_G3_03")
+        self.assertEqual((self._code(other), self._code(ravi)), ("RAV_G5_07", "RAV_G5_07B"))

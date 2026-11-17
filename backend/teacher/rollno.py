@@ -95,19 +95,47 @@ def lms_grade_tag(grade):
     return f"G{key}_" if isinstance(key, int) else ""
 
 
-def lms_code_taken(school, code):
-    """Whether a student of this school already has this login code (any letter case)."""
-    return Student.objects.filter(school=school).filter(
-        Q(lms_code__iexact=code) | Q(user__username__iexact=code)).exists()
+def lms_code_taken(school, code, exclude_student_id=None):
+    """Whether a student of this school (other than exclude_student_id) already has this login code (any letter case)."""
+    others = Student.objects.filter(school=school)
+    if exclude_student_id:
+        others = others.exclude(student_id=exclude_student_id)
+    return others.filter(Q(lms_code__iexact=code) | Q(user__username__iexact=code)).exists()
 
 
-def free_lms_code(school, base):
+def name_prefix(full_name):
+    """The first three letters of the name, upper case (padded with X; STU when there are none)."""
+    letters = "".join(c for c in str(full_name or "") if c.isalpha()).upper()
+    return letters[:3].ljust(3, "X") if letters else "STU"
+
+
+def padded_roll(roll_no):
+    text = str(roll_no or "").strip()
+    return text.zfill(2) if text.isdigit() and len(text) == 1 else text
+
+
+def login_code_base(full_name, grade, roll_no):
+    """name_Grade_RollNo, e.g. VIN_G5_01."""
+    return f"{name_prefix(full_name)}_{lms_grade_tag(grade)}{padded_roll(roll_no) or '01'}"
+
+
+def is_generated_code(code, full_name, roll_no):
+    """Whether this login code is the one the system builds from the name and roll no (any earlier format, with or
+    without a grade part or a clash letter); a code typed by hand does not match."""
+    rolls = {r for r in (str(roll_no or "").strip(), padded_roll(roll_no)) if r}
+    if not rolls:
+        return False
+    options = "|".join(re.escape(r) for r in rolls)
+    return bool(re.fullmatch(rf"{name_prefix(full_name)}_(G\d+_)?({options})(_\d+|[B-Z])?", str(code or "").strip(), re.IGNORECASE))
+
+
+def free_lms_code(school, base, exclude_student_id=None):
     """The generated login code, e.g. VIN_G5_11. When another student of the school already has it (same first letters,
     grade and roll number in another section), a letter is added: VIN_G5_11B, VIN_G5_11C ..."""
-    if not lms_code_taken(school, base):
+    if not lms_code_taken(school, base, exclude_student_id):
         return base
     for suffix in [*"BCDEFGHIJKLMNOPQRSTUVWXYZ", *map(str, range(2, 100))]:
-        if not lms_code_taken(school, f"{base}{suffix}"):
+        if not lms_code_taken(school, f"{base}{suffix}", exclude_student_id):
             return f"{base}{suffix}"
     return base  # unreachable in practice; the caller's own clash check then reports it
 

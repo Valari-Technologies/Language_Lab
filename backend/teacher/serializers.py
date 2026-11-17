@@ -10,8 +10,8 @@ from accounts.scoping import get_user_school
 from super_admin.models import School
 from .models import Student
 from .rollno import (
-    class_position_changed, find_roll_conflict, free_lms_code, has_teacher_for, lms_grade_tag, no_teacher_message,
-    roll_conflict_message, roll_position_changed,
+    _grade_key, _roll_key, class_position_changed, find_roll_conflict, free_lms_code, has_teacher_for, is_generated_code,
+    lms_grade_tag, login_code_base, name_prefix, no_teacher_message, roll_conflict_message, roll_position_changed,
 )
 
 User = get_user_model()
@@ -207,8 +207,22 @@ class StudentSerializer(serializers.ModelSerializer):
         is_active = validated_data.pop("is_active", None)
         raw_code = validated_data.pop("username", None)
         validated_data.pop("password", None)
-
         user = instance.user
+
+        # The form sends the current login code back with every save. When the name, roll no or grade changed and the
+        # current code is the system-built one (VIN_G3_03), the code is rebuilt (VIN_G5_07); a new code typed by hand,
+        # or a custom code that was never system-built, is kept as it is.
+        current_code = (instance.lms_code or (user.username if user else "") or "").strip()
+        if user and (raw_code is None or raw_code.strip().upper() == current_code.upper()):
+            old_name = user.full_name
+            new_name = title_name(full_name) if full_name is not None else old_name
+            new_roll = validated_data.get("roll_no", instance.roll_no)
+            new_grade = validated_data.get("grade", instance.grade)
+            moved = (name_prefix(new_name), _roll_key(new_roll), _grade_key(new_grade)) != (
+                name_prefix(old_name), _roll_key(instance.roll_no), _grade_key(instance.grade))
+            if moved and is_generated_code(current_code, old_name, instance.roll_no):
+                raw_code = free_lms_code(instance.school, login_code_base(new_name, new_grade, new_roll), instance.student_id)
+
         if user:
             if email is not None:
                 user.email = email
