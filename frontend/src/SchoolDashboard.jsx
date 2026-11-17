@@ -727,8 +727,26 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       setShowProfileDropdown(false);
     };
     document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
+    // the row action menus are fixed to the screen, so they close when the page or the table scrolls or resizes
+    const closeMenu = () => setActiveDropdown(null);
+    window.addEventListener('scroll', closeMenu, true);
+    window.addEventListener('resize', closeMenu);
+    return () => {
+      document.removeEventListener('click', handler);
+      window.removeEventListener('scroll', closeMenu, true);
+      window.removeEventListener('resize', closeMenu);
+    };
   }, []);
+
+  // A row's three-dot menu is placed from the button's position on the screen, so the table's own scroll area never
+  // clips it (no scroll bars appear); it opens upward when there is no room below.
+  const openRowMenu = (e, id, type) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    const opensUp = window.innerHeight - box.bottom < 190 && box.top > 190;
+    setActiveDropdown(prev => (prev?.id === id && prev?.type === type)
+      ? null
+      : { id, type, right: Math.max(8, window.innerWidth - box.right), ...(opensUp ? { bottom: window.innerHeight - box.top + 4 } : { top: box.bottom + 4 }) });
+  };
 
   const formatDateTime = (date) => {
     return date.toLocaleString('en-US', {
@@ -2459,7 +2477,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                     }}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setActiveDropdown(activeDropdown?.id === tid && activeDropdown?.type === 'teacher' ? null : { id: tid, type: 'teacher' });
+                                      openRowMenu(e, tid, 'teacher');
                                     }}
                                   >
                                     <FiMoreVertical />
@@ -2467,14 +2485,15 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                   {activeDropdown?.id === tid && activeDropdown?.type === 'teacher' && (
                                     <div
                                       style={{
-                                        position: 'absolute',
-                                        right: 0,
-                                        top: '100%',
+                                        position: 'fixed',
+                                        right: activeDropdown.right,
+                                        top: activeDropdown.top,
+                                        bottom: activeDropdown.bottom,
                                         backgroundColor: '#ffffff',
                                         border: '1px solid #e2e8f0',
                                         borderRadius: '8px',
-                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-                                        zIndex: 100,
+                                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                                        zIndex: 1000,
                                         minWidth: '120px',
                                         padding: '4px 0',
                                         display: 'flex',
@@ -2880,7 +2899,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                     }}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setActiveDropdown(activeDropdown?.id === sid && activeDropdown?.type === 'student' ? null : { id: sid, type: 'student' });
+                                      openRowMenu(e, sid, 'student');
                                     }}
                                   >
                                     <FiMoreVertical />
@@ -2888,14 +2907,15 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                   {activeDropdown?.id === sid && activeDropdown?.type === 'student' && (
                                     <div
                                       style={{
-                                        position: 'absolute',
-                                        right: 0,
-                                        top: '100%',
+                                        position: 'fixed',
+                                        right: activeDropdown.right,
+                                        top: activeDropdown.top,
+                                        bottom: activeDropdown.bottom,
                                         backgroundColor: '#ffffff',
                                         border: '1px solid #e2e8f0',
                                         borderRadius: '8px',
-                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-                                        zIndex: 100,
+                                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                                        zIndex: 1000,
                                         minWidth: '120px',
                                         padding: '4px 0',
                                         display: 'flex',
