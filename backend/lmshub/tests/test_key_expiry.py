@@ -82,3 +82,38 @@ class KeyExpiryTests(HubTestBase):
         self.assertEqual((ask(old), ask(new)), ("EXPIRED", "ACTIVE"))
         LmsServer.objects.filter(pk=new.pk).update(status=LmsServer.Status.DEACTIVATED)
         self.assertEqual(ask(new), "SUSPENDED")
+
+    def test_offline_data_carries_the_moment_the_key_stops_working(self):
+        from super_admin.licensing import expiry_moment
+        today = license_today()
+        self._key("SOON7", today + timedelta(days=3))
+        self._key("LATE7", today + timedelta(days=40))   # the latest expiry of the active keys is sent
+        self._key("OFF7", today + timedelta(days=900), status=LmsServer.Status.DEACTIVATED)  # a disabled key never counts
+        token = self.pair()
+        body = self.get("offline-data", token).json()
+        expected = expiry_moment(today + timedelta(days=40)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.assertEqual(body["licenseExpiresAt"], expected)
+        self.assertRegex(body["licenseExpiresAt"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+        # a key that "expires on" 2026-12-05 works through the end of that day in India: 2026-12-05T18:30:00Z
+        self.assertEqual(expiry_moment(datetime(2026, 12, 5).date()).strftime("%Y-%m-%dT%H:%M:%SZ"), "2026-12-05T18:30:00Z")
+
+    def test_offline_data_without_keys_uses_the_licence_date(self):
+        from super_admin.licensing import expiry_moment
+        body = self.get("offline-data", self.pair()).json()
+        self.assertEqual(body["licenseExpiresAt"],
+                         expiry_moment(self.license_a.expiryDate).strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+    def test_online_and_offline_agree_at_the_exact_moment(self):
+        from super_admin.licensing import expiry_moment
+        day = datetime(2026, 12, 5).date()
+        self._key("EDGE8", day)
+        License.objects.filter(pk="LIC-A").update(expiryDate=day)
+        token = self.pair()
+        moment = expiry_moment(day)
+        with mock.patch("super_admin.licensing.timezone.now", return_value=moment - timedelta(seconds=1)):
+            self.assertEqual(self.get("status", token).json()["expired"], False)
+            self.assertEqual(self.login(token, "AAR_1001").status_code, 200)
+        with mock.patch("super_admin.licensing.timezone.now", return_value=moment):  # now >= licenseExpiresAt
+            self.assertEqual(self.get("status", token).json()["expired"], True)
+            response = self.login(token, "KAB_8001")
+            self.assertEqual((response.status_code, response.json()["error"]), (403, "license_expired"))

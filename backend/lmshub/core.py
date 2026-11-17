@@ -14,7 +14,7 @@ from django.utils import timezone
 
 from django.db import IntegrityError
 
-from super_admin.licensing import is_past, key_expiry, license_today
+from super_admin.licensing import expiry_moment, is_past, key_expiry, license_today
 from super_admin.models import License, LmsServer
 from .models import LmsDevice, LmsPairingCode, LmsSession, LmsThrottle
 
@@ -205,6 +205,17 @@ def license_state(school):
     expired = not usable and any(s.status == LmsServer.Status.ACTIVE for s in servers)
     key = max(usable, key=lambda s: (key_expiry(s, lic), s.installationId)) if usable else None
     return {"license": lic, "active": bool(usable) and school.is_active, "expired": expired, "key": key, "usable": usable}
+
+
+def license_expires_at(state):
+    """
+    "2026-12-31T18:29:59Z"-style UTC moment after which the school's key no longer works (null: no expiry): the
+    expiry of the usable key that lasts longest, else the licence's date. A PC refuses offline logins when now >= it.
+    """
+    lic = state.get("license")
+    key = state.get("key")
+    date = key_expiry(key, lic) if key else (lic.expiryDate if lic else None)
+    return expiry_moment(date).strftime("%Y-%m-%dT%H:%M:%SZ") if date else None
 
 
 def seat_total(state):

@@ -18,7 +18,7 @@ from super_admin.models import School
 from teacher.models import Student
 from . import plans, progress
 from .core import (
-    BodyError, PC_ID_RE, active_session, client_ip, current_pairing_code, device_for_token, error, expire_stale, hub_name, license_state, new_token, open_sessions, rate_limit, read_json, reply, seat_total,
+    BodyError, PC_ID_RE, active_session, client_ip, current_pairing_code, device_for_token, error, expire_stale, hub_name, license_expires_at, license_state, new_token, open_sessions, rate_limit, read_json, reply, seat_total,
     seats_used, session_for, sha256_hex, student_payload_grade, throttle_clear, throttle_fail, throttle_wait,
     touch_device,
 )
@@ -364,6 +364,7 @@ def offline_data(request, device):
         "ok": True,
         "generatedAt": timezone.now().isoformat(),
         "schoolName": device.school.school_name,
+        "licenseExpiresAt": license_expires_at(state),  # the PC refuses offline logins from this moment on (now >= it)
         "students": students,
         "plans": plans_by_grade,
     })
