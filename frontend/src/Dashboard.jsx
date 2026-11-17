@@ -658,7 +658,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     school_name: '', school_code: '', phone: '', lan: '', address: '', city: '', state: '', pincode: '',
     academic_year: '2026-2027',
     admin_name: '', email: '', password: '',
-    maxLmsServers: 2, concurrentUsersPerServer: 40, licenseDuration: '1 Year', expiryDate: ''
+    maxLmsServers: 1, concurrentUsersPerServer: 20, licenseDuration: '1 Year', expiryDate: ''
   });
 
   const generateSchoolAdminPassword = (name) => {
@@ -681,7 +681,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     show: false,
     schoolId: null,
     serverName: '',
-    maxUsers: 40,
+    maxUsers: 20,
     licenseDuration: '1 Year',
     expiryDate: ''
   });
@@ -692,7 +692,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     installationId: '',
     serverName: '',
     licenseKey: '',
-    maxUsers: 40,
+    maxUsers: 20,
     licenseDuration: '1 Year',
     expiryDate: ''
   });
@@ -706,7 +706,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         method: 'POST',
         body: JSON.stringify({
           serverName: newLmsServerName.trim() || undefined,
-          maxUsers: parseInt(newLmsServerUsers, 10) || 40,
+          maxUsers: parseInt(newLmsServerUsers, 10) || 20,
           licenseDuration: newLmsServerDuration,
           expiryDate: newLmsServerDuration === 'Custom' ? newLmsServerExpiryDate : undefined
         })
@@ -744,14 +744,14 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         method: 'POST',
         body: JSON.stringify({
           serverName: newServerModal.serverName.trim() || undefined,
-          maxUsers: parseInt(newServerModal.maxUsers, 10) || 40,
+          maxUsers: parseInt(newServerModal.maxUsers, 10) || 20,
           licenseDuration: newServerModal.licenseDuration,
           expiryDate: newServerModal.licenseDuration === 'Custom' ? newServerModal.expiryDate : undefined
         })
       });
       const resData = await res.json();
       if (res.ok) {
-        setNewServerModal({ show: false, schoolId: null, serverName: '', maxUsers: 40, licenseDuration: '1 Year', expiryDate: '' });
+        setNewServerModal({ show: false, schoolId: null, serverName: '', maxUsers: 20, licenseDuration: '1 Year', expiryDate: '' });
         showFeedback("New LMS server license provisioned successfully!", null);
         await loadSchools();
         if (selectedSchoolDetail) {
@@ -1572,13 +1572,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         school_name: entity.school_name || '', school_code: entity.school_code || '', address: entity.address || '',
         phone: entity.phone || '', email: entity.email || entity.contactEmail || '', logo: entity.logo || '',
         is_active: entity.is_active !== undefined ? entity.is_active : true,
-        maxLmsServers: entity.license?.maxLmsServers ?? entity.maxLmsServers ?? 2,
-        concurrentUsersPerServer: entity.license?.concurrentUsersPerServer ?? entity.concurrentUsersPerServer ?? 40,
+        maxLmsServers: entity.license?.maxLmsServers ?? entity.maxLmsServers ?? 1,
+        concurrentUsersPerServer: entity.license?.concurrentUsersPerServer ?? entity.concurrentUsersPerServer ?? 20,
         licenseDuration: entity.license?.licenseDuration || entity.licenseDuration || '1 Year',
         expiryDate: entity.license?.expiryDate || entity.expiryDate || ''
       } : {
         school_name: '', school_code: '', address: '', phone: '', email: '', logo: '', is_active: true,
-        maxLmsServers: 2, concurrentUsersPerServer: 40, licenseDuration: '1 Year', expiryDate: ''
+        maxLmsServers: 1, concurrentUsersPerServer: 20, licenseDuration: '1 Year', expiryDate: ''
       });
     } else if (tab === 'publish-contents' || tab === 'reports') {
       setPublishForm(entity ? {
@@ -1645,8 +1645,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       if (activeTab === 'schools') {
         body = {
           ...schoolForm,
-          maxLmsServers: parseInt(schoolForm.maxLmsServers, 10) || 2,
-          concurrentUsersPerServer: parseInt(schoolForm.concurrentUsersPerServer, 10) || 40
+          maxLmsServers: parseInt(schoolForm.maxLmsServers, 10) || 1,
+          concurrentUsersPerServer: parseInt(schoolForm.concurrentUsersPerServer, 10) || 20
         };
       } else if (activeTab === 'publish-contents' || activeTab === 'reports') {
         body = { ...publishForm, grade: parseInt(publishForm.grade), total_experiences: parseInt(publishForm.total_experiences) };
@@ -1936,8 +1936,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         admin_password: adminPassword,
 
         // Quota settings
-        maxLmsServers: parseInt(newSchoolForm.maxLmsServers || 2, 10),
-        concurrentUsersPerServer: parseInt(newSchoolForm.concurrentUsersPerServer || 40, 10),
+        maxLmsServers: parseInt(newSchoolForm.maxLmsServers || 1, 10),
+        concurrentUsersPerServer: parseInt(newSchoolForm.concurrentUsersPerServer || 20, 10),
         licenseDuration: newSchoolForm.licenseDuration || '1 Year',
         expiryDate: newSchoolForm.expiryDate || ''
       };
@@ -1956,7 +1956,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setNewSchoolForm({
           school_name: '', school_code: '', phone: '', lan: '', address: '', city: '', state: '', pincode: '',
           admin_name: '', email: '', password: '',
-          maxLmsServers: 2, concurrentUsersPerServer: 40, licenseDuration: '1 Year', expiryDate: ''
+          maxLmsServers: 1, concurrentUsersPerServer: 20, licenseDuration: '1 Year', expiryDate: ''
         });
         await loadSchools();
         await loadSchoolAdmins();
@@ -2671,7 +2671,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             return;
                           }
                           setNewLmsServerName(`LMS Server ${activeCount + 1}`);
-                          setNewLmsServerUsers(selectedSchoolDetail.license?.concurrentUsersPerServer || 40);
+                          setNewLmsServerUsers(selectedSchoolDetail.license?.concurrentUsersPerServer || 20);
                           setNewLmsServerDuration(selectedSchoolDetail.license?.licenseDuration || '1 Year');
                           setNewLmsServerExpiryDate('');
                           setIsAddingLmsServer(true);
@@ -2953,7 +2953,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                               <span style={{ color: '#64748b' }}>Server License:</span>
-                              <strong style={{ color: '#16a34a' }}>{newLmsServerUsers || 40} Users • {newLmsServerDuration}</strong>
+                              <strong style={{ color: '#16a34a' }}>{newLmsServerUsers || 20} Users • {newLmsServerDuration}</strong>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                               <span style={{ color: '#64748b' }}>Installation Key:</span>
@@ -3148,14 +3148,14 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                           <div className="sd-form-group" style={{ marginBottom: 0 }}>
                             <label className="sd-form-label">Max LMS Servers <span style={{ color: '#ef4444' }}>*</span></label>
                             <input className="sd-form-input" type="number" min="1" required
-                              value={newSchoolForm.maxLmsServers || 2}
+                              value={newSchoolForm.maxLmsServers || 1}
                               onChange={e => setNewSchoolForm({ ...newSchoolForm, maxLmsServers: e.target.value })}
                             />
                           </div>
                           <div className="sd-form-group" style={{ marginBottom: 0 }}>
                             <label className="sd-form-label">Concurrent Users Per Server <span style={{ color: '#ef4444' }}>*</span></label>
-                            <input className="sd-form-input" type="number" min="1" required
-                              value={newSchoolForm.concurrentUsersPerServer || 40}
+                            <input className="sd-form-input sd-no-spinner" type="number" min="1" required
+                              value={newSchoolForm.concurrentUsersPerServer || 20}
                               onChange={e => setNewSchoolForm({ ...newSchoolForm, concurrentUsersPerServer: e.target.value })}
                             />
                           </div>
@@ -3185,7 +3185,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         <div style={{ marginTop: '1.25rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', fontSize: '0.8rem', color: '#475569' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
                             <span>
-                              <strong>Total Capacity:</strong> {(parseInt(newSchoolForm.maxLmsServers, 10) || 1) * (parseInt(newSchoolForm.concurrentUsersPerServer, 10) || 40)} Concurrent Users ({newSchoolForm.maxLmsServers || 2} servers × {newSchoolForm.concurrentUsersPerServer || 40} users)
+                              <strong>Total Capacity:</strong> {(parseInt(newSchoolForm.maxLmsServers, 10) || 1) * (parseInt(newSchoolForm.concurrentUsersPerServer, 10) || 20)} Concurrent Users ({newSchoolForm.maxLmsServers || 1} servers × {newSchoolForm.concurrentUsersPerServer || 20} users)
                             </span>
                             <span>
                               <strong>Term:</strong> {newSchoolForm.licenseDuration || '1 Year'}
@@ -3201,15 +3201,15 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <FiCheckCircle style={{ color: '#16a34a', fontSize: '1.2rem', flexShrink: 0 }} />
                             <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#166534' }}>
-                              Auto-Generated Installation License Key ({newSchoolForm.concurrentUsersPerServer || 40} Concurrent Users)
+                              Auto-Generated Installation License Key ({newSchoolForm.concurrentUsersPerServer || 20} Concurrent Users)
                             </div>
                           </div>
                           <div style={{ fontSize: '0.78rem', color: '#15803d' }}>
-                            Upon saving, a Primary LMS Server installation key with <strong>{newSchoolForm.concurrentUsersPerServer || 40} Users Capacity</strong> and valid through <strong>{computeLicenseExpiry(newSchoolForm.licenseDuration, newSchoolForm.expiryDate)}</strong> will be automatically generated and ready to copy.
+                            Upon saving, a Primary LMS Server installation key with <strong>{newSchoolForm.concurrentUsersPerServer || 20} Users Capacity</strong> and valid through <strong>{computeLicenseExpiry(newSchoolForm.licenseDuration, newSchoolForm.expiryDate)}</strong> will be automatically generated and ready to copy.
                           </div>
                           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', fontSize: '0.75rem', marginTop: '2px' }}>
                             <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
-                              👥 {newSchoolForm.concurrentUsersPerServer || 40} Users / Server
+                              👥 {newSchoolForm.concurrentUsersPerServer || 20} Users / Server
                             </span>
                             <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '4px' }}>
                               📅 Created: Today ({formatDisplayDate(new Date())})
@@ -4357,7 +4357,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             type="number"
                             min="1"
                             required
-                            value={schoolForm.maxLmsServers ?? 2}
+                            value={schoolForm.maxLmsServers ?? 1}
                             onChange={e => setSchoolForm({ ...schoolForm, maxLmsServers: e.target.value })}
                           />
                         </div>
@@ -4367,11 +4367,11 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             Concurrent Users Per Server <span style={{ color: '#ef4444' }}>*</span>
                           </label>
                           <input
-                            className="sd-form-input"
+                            className="sd-form-input sd-no-spinner"
                             type="number"
                             min="1"
                             required
-                            value={schoolForm.concurrentUsersPerServer ?? 40}
+                            value={schoolForm.concurrentUsersPerServer ?? 20}
                             onChange={e => setSchoolForm({ ...schoolForm, concurrentUsersPerServer: e.target.value })}
                           />
                         </div>
@@ -4412,13 +4412,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       {modalType === 'edit' ? (() => {
                         const currentSchool = schools.find(s => (s.school_id || s.id) === editingId);
                         const servers = currentSchool?.lms_servers || [];
-                        const maxAllowed = parseInt(schoolForm.maxLmsServers, 10) || 2;
+                        const maxAllowed = parseInt(schoolForm.maxLmsServers, 10) || 1;
                         const activeCount = servers.filter(s => s.status === 'ACTIVE').length;
                         const canAddMore = servers.length < maxAllowed;
-                        const effectiveCapacity = schoolForm.concurrentUsersPerServer || 40;
+                        const effectiveCapacity = schoolForm.concurrentUsersPerServer || 20;
 
                         const openProvisionModal = () => {
-                          const defaultCapacity = schoolForm.concurrentUsersPerServer || 40;
+                          const defaultCapacity = schoolForm.concurrentUsersPerServer || 20;
                           const defaultDuration = schoolForm.licenseDuration || '1 Year';
                           const defaultExpiry = schoolForm.expiryDate || '';
                           if (!canAddMore) {
@@ -4698,11 +4698,11 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <FiCheckCircle style={{ color: '#16a34a', fontSize: '1.25rem', flexShrink: 0 }} />
                             <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#166534' }}>
-                              Auto-Generated Installation License Key ({schoolForm.concurrentUsersPerServer || 40} Concurrent Users)
+                              Auto-Generated Installation License Key ({schoolForm.concurrentUsersPerServer || 20} Concurrent Users)
                             </div>
                           </div>
                           <div style={{ fontSize: '0.8rem', color: '#15803d' }}>
-                            Upon saving this school, a Primary LMS Server key will be automatically generated with <strong>{schoolForm.concurrentUsersPerServer || 40} Users Capacity</strong> and valid through <strong>{computeLicenseExpiry(schoolForm.licenseDuration, schoolForm.expiryDate)}</strong> ({schoolForm.licenseDuration || '1 Year'}).
+                            Upon saving this school, a Primary LMS Server key will be automatically generated with <strong>{schoolForm.concurrentUsersPerServer || 20} Users Capacity</strong> and valid through <strong>{computeLicenseExpiry(schoolForm.licenseDuration, schoolForm.expiryDate)}</strong> ({schoolForm.licenseDuration || '1 Year'}).
                           </div>
                         </div>
                       )}
@@ -6155,7 +6155,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
               <div style={{ background: '#f8fafc', padding: '0.9rem 1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '5px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                   <span style={{ color: '#64748b' }}>Provisioned License:</span>
-                  <strong style={{ color: '#16a34a' }}>{newServerModal.maxUsers || 40} Users • {newServerModal.licenseDuration}</strong>
+                  <strong style={{ color: '#16a34a' }}>{newServerModal.maxUsers || 20} Users • {newServerModal.licenseDuration}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                   <span style={{ color: '#64748b' }}>Installation Key:</span>

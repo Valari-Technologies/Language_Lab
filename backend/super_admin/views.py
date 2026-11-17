@@ -206,8 +206,8 @@ class SchoolViewSet(CMSBaseViewSet):
         admin_username = data.get("admin_username")
         admin_password = data.get("admin_password")
         
-        max_servers = int(data.get("maxLmsServers", 2))
-        concurrent_users = int(data.get("concurrentUsersPerServer", 40))
+        max_servers = int(data.get("maxLmsServers", 1))
+        concurrent_users = int(data.get("concurrentUsersPerServer", 20))
         duration = data.get("licenseDuration", "1 Year")
         
         issue_date = timezone.now().date()
@@ -276,7 +276,7 @@ class SchoolViewSet(CMSBaseViewSet):
             school.licenseId = license_obj
             school.save()
 
-            # Auto-generate initial LMS server installation license (40 users capacity)
+            # Auto-generate initial LMS server installation license (20 users capacity by default)
             first_inst_id = "INST-" + uuid.uuid4().hex[:8].upper()
             first_lic_key = "LMS-KEY-" + uuid.uuid4().hex[:16].upper()
             LmsServer.objects.create(
@@ -286,7 +286,7 @@ class SchoolViewSet(CMSBaseViewSet):
                 school=school,
                 license=license_obj,
                 status=LmsServer.Status.ACTIVE,
-                maxUsers=concurrent_users or 40,
+                maxUsers=concurrent_users or 20,
                 licenseDuration=duration or "1 Year",
                 expiryDate=expiry_date
             )
