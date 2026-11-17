@@ -9,7 +9,10 @@ from accounts.names import title_name
 from accounts.scoping import get_user_school
 from super_admin.models import School
 from .models import Student
-from .rollno import find_roll_conflict, free_lms_code, lms_grade_tag, roll_conflict_message, roll_position_changed
+from .rollno import (
+    class_position_changed, find_roll_conflict, free_lms_code, has_teacher_for, lms_grade_tag, no_teacher_message,
+    roll_conflict_message, roll_position_changed,
+)
 
 User = get_user_model()
 
@@ -95,6 +98,17 @@ class StudentSerializer(serializers.ModelSerializer):
         if other:
             raise serializers.ValidationError({"roll_no": roll_conflict_message(other, roll_no, grade, section)})
 
+    def _check_teacher(self, attrs, school):
+        """A student needs a teacher: one must be assigned to a class of this grade and section (checked when the
+        student is added, or moved to another grade or section)."""
+        current = self.instance
+        grade = attrs.get("grade", current.grade if current else None)
+        section = attrs.get("section", current.section if current else None)
+        if current and not class_position_changed(current, grade, section):
+            return  # editing other details of a student already in a class is not blocked
+        if school is not None and not has_teacher_for(school, grade, section):
+            raise serializers.ValidationError({"teacher": no_teacher_message(grade, section)})
+
     def validate(self, attrs):
         request = self.context.get("request")
         if not self.instance:
@@ -157,6 +171,7 @@ class StudentSerializer(serializers.ModelSerializer):
             attrs["password"] = lms_code
             attrs["email"] = f"{lms_code.lower()}_{target_school.school_id}@languagelab.com"
             self._check_roll_no(attrs, attrs.get("school"))
+            self._check_teacher(attrs, attrs.get("school"))
         else:
             if request and request.user.role in ["SCHOOL_ADMIN", "TEACHER"]:
                 admin_school = get_user_school(request.user)
@@ -164,6 +179,8 @@ class StudentSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({"school": "You can only manage students in your own school."})
             if {"roll_no", "grade", "section"} & set(attrs):
                 self._check_roll_no(attrs, self.instance.school)
+            if {"grade", "section"} & set(attrs):
+                self._check_teacher(attrs, self.instance.school)
         return attrs
 
     def create(self, validated_data):

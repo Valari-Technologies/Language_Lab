@@ -50,6 +50,45 @@ def find_roll_conflict(school, grade, section, roll_no, exclude_student_id=None)
     return None
 
 
+def _class_section_letter(class_name):
+    """"Class 5-A" -> "A"; "" when the class name has no section letter (such a class covers its whole grade)."""
+    name = str(class_name or "").strip().upper()
+    if "-" in name:
+        name = name.split("-")[-1].strip()
+    if len(name) == 1 and name.isalpha():
+        return name
+    if len(name) > 1 and name[-1].isalpha() and not name[-2].isalpha():
+        return name[-1]
+    return ""
+
+
+def has_teacher_for(school, grade, section):
+    """Whether an active teacher of this school is assigned to an active class of this grade and section."""
+    from school_admin.models import TeacherClass
+    grade_key, section_key = _grade_key(grade), _section_key(section)
+    assigned = TeacherClass.objects.filter(
+        class_obj__school=school, class_obj__is_active=True, teacher__user__is_active=True,
+    ).select_related("class_obj__grade")
+    for link in assigned:
+        klass = link.class_obj
+        if not klass.grade_id or _grade_key(klass.grade.grade_name) != grade_key:
+            continue
+        letter = _class_section_letter(klass.class_name)
+        if not letter or not section_key or letter == section_key:
+            return True
+    return False
+
+
+def class_position_changed(student, grade, section):
+    """Whether an edit moves the student to another grade or section."""
+    return (_grade_key(grade), _section_key(section)) != (_grade_key(student.grade), _section_key(student.section))
+
+
+def no_teacher_message(grade, section):
+    return (f"No teacher is assigned to {grade} Section {_section_key(section) or '-'}. "
+            "Go create a teacher for this grade and section.")
+
+
 def lms_grade_tag(grade):
     """"G5_" for Class 5 / Grade 5, the grade part of a generated login code (VIN_G5_01); empty when there is no number."""
     key = _grade_key(grade)
