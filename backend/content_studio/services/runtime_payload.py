@@ -240,6 +240,11 @@ def build_runtime_payload(experience, request=None):
                         raw_u = el_content.get(media_key)
                         if raw_u:
                             el_content[media_key] = resolve_absolute_url(raw_u, request)
+                if el_type == "dictation":
+                    # the Runtime contract: content.url (the first clip), content.question and items[].targetText
+                    from .dictation import normalize_dictation_content
+                    el["type"] = "dictation"
+                    el["content"] = el_content = normalize_dictation_content(el_content)
                 if el_type == "roleplay_simulation" and el_content:
                     conv = el_content.get("conversation") or el_content.get("steps") or el_content.get("dialogue_lines") or el_content.get("lines") or el_content.get("turns") or []
                     if conv:

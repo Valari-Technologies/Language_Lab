@@ -1126,11 +1126,15 @@ class ContentStudioAPITests(APITestCase):
         self.assertEqual(response.data["status"], "stopped")
 
     def test_preview_permissions(self):
-        """Verify School Admin is blocked with 403, and Anon is blocked with 401."""
+        """A School Admin sees no draft lesson (404; they may preview only lessons that are approved or already
+        published for their school), a student is refused with 403, and Anon is blocked with 401."""
         self.client.force_authenticate(user=self.school_admin)
         url_preview = reverse("experience-preview", args=[self.experience1.id])
         response = self.client.get(url_preview)
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+        self.client.force_authenticate(user=self.student)
+        self.assertEqual(self.client.get(url_preview).status_code, status.HTTP_403_FORBIDDEN)
 
         self.client.logout()
         response = self.client.get(url_preview)

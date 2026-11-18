@@ -7,6 +7,8 @@ data into the Runtime JSON contract.
 CMS → Runtime Contract → Electron Runtime
 """
 
+from .dictation import normalize_dictation_elements
+
 RUNTIME_VERSION = "1.0.0"
 
 
@@ -60,6 +62,9 @@ def build_runtime_experience(experience, preview_payload):
         for screen in activity.get("screens", []):
 
             content = dict(screen.get("content") or {})
+            if isinstance(content.get("elements"), list):
+                # every Dictation card carries content.url, content.question and items[].targetText
+                content["elements"] = normalize_dictation_elements(content["elements"])
 
             runtime_type = (
                 content.pop("runtime_type", None)

@@ -9775,11 +9775,18 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                     showFeedback={showFeedback}
                                                   />
 
+                                                  {(() => {
+                                                    // when the student types the answer, the text the audio says is required: the app checks the answer against it
+                                                    const typing = !(selectedBlock.content?.responseType === 'quiz' || (selectedBlock.content?.options && selectedBlock.content.options.length > 0 && selectedBlock.content?.responseType !== 'text'));
+                                                    const missing = typing && !String(item.text || item.targetText || '').trim();
+                                                    return (
                                                   <div className="cs-form-group" style={{ marginBottom: 0 }}>
-                                                    <label className="cs-form-label" style={{ fontSize: '0.6rem', color: '#059669', fontWeight: 600 }}>Target Correct Text (Optional)</label>
+                                                    <label className="cs-form-label" style={{ fontSize: '0.6rem', color: '#059669', fontWeight: 600 }}>
+                                                      Correct text {typing ? <span style={{ color: '#ef4444' }}>*</span> : '(not needed for a quiz)'}
+                                                    </label>
                                                     <input
                                                       className="cs-form-input"
-                                                      style={{ height: '26px', fontSize: '0.72rem' }}
+                                                      style={{ height: '26px', fontSize: '0.72rem', ...(missing ? { borderColor: '#ef4444' } : {}) }}
                                                       type="text"
                                                       value={item.text || item.targetText || ''}
                                                       onChange={e => {
@@ -9787,9 +9794,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                         updated[idx] = { ...updated[idx], text: e.target.value, targetText: e.target.value };
                                                         handleUpdateBlockContent('items', updated);
                                                       }}
-                                                      placeholder="e.g. Expected text transcription..."
+                                                      placeholder="What the audio says, e.g. Hi, hello! How are you?"
                                                     />
+                                                    {missing && (
+                                                      <span style={{ display: 'block', marginTop: '2px', fontSize: '0.6rem', color: '#b91c1c' }}>
+                                                        Required: type what the audio says. The lesson cannot be published without it.
+                                                      </span>
+                                                    )}
                                                   </div>
+                                                    );
+                                                  })()}
                                                 </div>
                                               ))}
                                             </div>
