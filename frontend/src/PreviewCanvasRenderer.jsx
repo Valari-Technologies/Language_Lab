@@ -1405,8 +1405,8 @@ export default function PreviewCanvasRenderer({
           
           words.forEach(word => {
             const cleanWord = word.toUpperCase().replace(/[^A-Z]/g, '');
-            if (!cleanWord) return;
-            
+            if (!cleanWord || cleanWord.length > gridSize) return; // a word wider than the grid cannot be placed
+
             let placed = false;
             let attempts = 0;
             

@@ -3542,7 +3542,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
           words.forEach(wStr => {
             const cleanWord = (wStr || '').toUpperCase().replace(/[^A-Z]/g, '');
-            if (!cleanWord) return;
+            if (!cleanWord || cleanWord.length > gridSize) return; // a word wider than the grid cannot be placed
             let placed = false;
             let attempts = 0;
             while (!placed && attempts < 80) {
@@ -10255,20 +10255,28 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                </button>
                                              </div>
 
+                                             <div style={{ fontSize: '0.64rem', color: '#64748b', marginTop: '-0.25rem' }}>
+                                               Each word can have up to {selectedBlock.content?.gridSize || 10} letters (the grid is {selectedBlock.content?.gridSize || 10} x {selectedBlock.content?.gridSize || 10}).
+                                             </div>
                                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
                                                {(() => {
                                                  const rawWords = selectedBlock.content?.words || selectedBlock.content?.targetWords || ['ROAD', 'BOAT', 'GAMING'];
-                                                 return rawWords.map((w, wIdx) => (
-                                                   <div key={wIdx} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                 const maxLetters = selectedBlock.content?.gridSize || 10;
+                                                 return rawWords.map((w, wIdx) => {
+                                                   const tooLong = String(w || '').length > maxLetters; // e.g. a word saved before the grid was made smaller
+                                                   return (
+                                                   <div key={wIdx} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                      <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b', minWidth: '24px' }}>#{wIdx + 1}</span>
                                                      <input
                                                        className="cs-form-input"
-                                                       style={{ height: '28px', fontSize: '0.72rem', textTransform: 'uppercase', flex: 1 }}
+                                                       style={{ height: '28px', fontSize: '0.72rem', textTransform: 'uppercase', flex: 1, ...(tooLong ? { borderColor: '#ef4444' } : {}) }}
                                                        type="text"
                                                        value={w}
+                                                       maxLength={maxLetters}
                                                        onChange={e => {
                                                          const updated = [...rawWords];
-                                                         updated[wIdx] = e.target.value.toUpperCase();
+                                                         updated[wIdx] = e.target.value.toUpperCase().slice(0, maxLetters);
                                                          handleUpdateBlockMultipleContent({ words: updated, targetWords: updated });
                                                        }}
                                                        placeholder="ENTER WORD"
@@ -10284,7 +10292,14 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                        <FiTrash2 style={{ fontSize: '0.75rem' }} />
                                                      </button>
                                                    </div>
-                                                 ));
+                                                   {tooLong && (
+                                                     <span style={{ marginLeft: '30px', fontSize: '0.62rem', color: '#b91c1c' }}>
+                                                       Too long for this grid: use {maxLetters} letters or fewer.
+                                                     </span>
+                                                   )}
+                                                   </div>
+                                                   );
+                                                 });
                                                })()}
                                              </div>
                                            </div>
