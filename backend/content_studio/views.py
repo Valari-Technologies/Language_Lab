@@ -1732,6 +1732,19 @@ class SuperAdminExperienceViewSet(viewsets.ViewSet):
         if grade_param:
             queryset = queryset.filter(grade_id=grade_param)
 
+        # The lessons that still need a decision come first: waiting for approval, then rejected, then the rest;
+        # approved lessons go to the back. Inside each group the most recently updated comes first.
+        from django.db.models import Case, IntegerField, Value, When
+        queryset = queryset.annotate(
+            queue_rank=Case(
+                When(status="PENDING_APPROVAL", then=Value(0)),
+                When(status="REJECTED", then=Value(1)),
+                When(status__in=["APPROVED", "PUBLISHED"], then=Value(3)),
+                default=Value(2),
+                output_field=IntegerField(),
+            )
+        ).order_by("queue_rank", "-updated_at", "-id")
+
         # Serializer
         serializer = ExperienceSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
