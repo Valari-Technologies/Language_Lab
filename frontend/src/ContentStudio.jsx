@@ -5580,10 +5580,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       if (res.status === 200 || res.status === 201) {
         showFeedback('Experience submitted to Super Admin for approval.');
         setPublishVersion('');
+        setJustPublishedId(selectedExperience.id);
         loadPublishData(selectedExperience.id);
         loadExperiencesData();
       } else {
         const errData = await res.json().catch(() => ({}));
+        if (errData.code === 'package_name_exists') {
+          triggerAlert(errData.error, 'Package Name Already Exists', 'error');
+          return;
+        }
         // Handle empty-screen error with detailed list
         if (errData.empty_screens && errData.empty_screens.length > 0) {
           const screenList = errData.empty_screens

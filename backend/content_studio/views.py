@@ -1204,6 +1204,29 @@ def version_name_used(experience, name):
     return any(str(used).strip().lower() == key for used in used_version_names(experience))
 
 
+def package_name_taken_by(experience):
+    """
+    Another lesson that already owns this lesson's package name (the lesson title, trimmed, any case): one that is
+    published (has a build), waiting for approval or approved. A draft with the same title does not own the name.
+    """
+    from django.db.models import Q
+    title = (experience.title or "").strip()
+    if not title:
+        return None
+    return (
+        Experience.objects.filter(is_deleted=False, title__iexact=title)
+        .exclude(pk=experience.pk)
+        .filter(Q(status__in=["PENDING_APPROVAL", "APPROVED", "PUBLISHED"]) | Q(published_package__versions__isnull=False))
+        .distinct()
+        .first()
+    )
+
+
+def package_name_message(experience):
+    return (f"A package named \"{(experience.title or '').strip()}\" already exists (published or waiting for approval). "
+            "Rename this lesson in the Lesson Builder, then publish it again.")
+
+
 def _parse_level(experience, raw):
     return parse_level(experience.experience_type, raw)
 
@@ -1234,6 +1257,12 @@ class PublishViewSet(viewsets.ViewSet):
 
         version = request.data.get("version")  # optional
         release_notes = request.data.get("release_notes", "")
+
+        # The package name (the lesson title) is used once: another lesson that is already published or waiting
+        # for approval under the same name blocks this one
+        if package_name_taken_by(experience):
+            return Response({"error": package_name_message(experience), "code": "package_name_exists"},
+                            status=status.HTTP_409_CONFLICT)
 
         # The level is normally set in the Lesson Builder (pending_level); a "level" in the request overrides it
         raw_level = request.data.get("level") if "level" in request.data else experience.pending_level
