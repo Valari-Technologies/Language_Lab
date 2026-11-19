@@ -2060,6 +2060,31 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
   }, [view, selectedExperience?.id]);
 
+  // A lesson was just published: once the creator leaves the Publish Center, the builders start clean for the next
+  // lesson (a blank Lesson Builder form, no lesson, activity or screen kept from the published one).
+  const [justPublishedId, setJustPublishedId] = useState(null);
+  useEffect(() => {
+    if (!justPublishedId || view === 'publish' || view === 'validation-report') return;
+    setJustPublishedId(null);
+    if (selectedExperience?.id !== justPublishedId) return; // another lesson is already open: leave it alone
+    setIsNewExperience(true);
+    setSelectedExperience(null);
+    setExperienceForm({
+      title: '', description: '', grade: '', subject: [], language: 'English', difficulty: 'BEGINNER',
+      duration: 15, tags: [], experience_type: 'LESSON', mastery_threshold: 70
+    });
+    setLearningOutcomes([]);
+    setOriginalOutcomes([]);
+    setOutcomesText('');
+    setLevelMissing(false);
+    setSelectedActivity(null);
+    setActivities([]);
+    setSelectedScreen(null);
+    setScreens([]);
+    setIsEditingScreen(false);
+    setValidationReport(null);
+  }, [view, justPublishedId]);
+
   const executeDeleteAction = async () => {
     const { id, type, isConflict } = deleteConfirm;
     if (id === 'profile-avatar') {
