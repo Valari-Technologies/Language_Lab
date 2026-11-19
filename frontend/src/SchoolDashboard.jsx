@@ -2518,29 +2518,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                         }}
                                         onClick={() => {
                                           setActiveDropdown(null);
-                                          setSelectedTeacherDetail(t);
-                                          setShowTeacherDetailModal(true);
-                                        }}
-                                      >
-                                        <FiEye style={{ fontSize: '0.95rem' }} /> View
-                                      </button>
-                                      <button
-                                        type="button"
-                                        style={{
-                                          padding: '8px 12px',
-                                          textAlign: 'left',
-                                          background: 'none',
-                                          border: 'none',
-                                          fontSize: '0.85rem',
-                                          color: '#334155',
-                                          cursor: 'pointer',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '8px',
-                                          width: '100%'
-                                        }}
-                                        onClick={() => {
-                                          setActiveDropdown(null);
                                           handleOpenEdit(t);
                                         }}
                                       >
@@ -2923,29 +2900,6 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                       }}
                                       onClick={(e) => e.stopPropagation()}
                                     >
-                                      <button
-                                        type="button"
-                                        style={{
-                                          padding: '8px 12px',
-                                          textAlign: 'left',
-                                          background: 'none',
-                                          border: 'none',
-                                          fontSize: '0.85rem',
-                                          color: '#334155',
-                                          cursor: 'pointer',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '8px',
-                                          width: '100%'
-                                        }}
-                                        onClick={() => {
-                                          setActiveDropdown(null);
-                                          setSelectedStudentCrudDetail(s);
-                                          setShowStudentCrudDetailModal(true);
-                                        }}
-                                      >
-                                        <FiEye style={{ fontSize: '0.95rem' }} /> View
-                                      </button>
                                       <button
                                         type="button"
                                         style={{
