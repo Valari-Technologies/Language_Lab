@@ -5581,6 +5581,20 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     && ((publishStatus && publishStatus.experience_id === selectedExperience.id && publishStatus.used_versions) || [])
       .some(name => String(name || '').trim().toLowerCase() === publishVersion.trim().toLowerCase()));
 
+  // Edits in the Lesson Builder that were not saved yet. The Publish Center shows, and publishes, the SAVED lesson,
+  // so it says what is still unsaved (for example a new name) instead of silently showing the old one.
+  const unsavedLessonChanges = (() => {
+    if (!selectedExperience?.id || experienceForm.id !== selectedExperience.id) return [];
+    const text = v => String(v ?? '').trim();
+    const changed = [];
+    if (text(experienceForm.title) !== text(selectedExperience.title)) changed.push(`the name "${text(experienceForm.title)}"`);
+    if (String(experienceForm.level ?? '') !== String((selectedExperience.pending_level ?? selectedExperience.level) ?? '')) changed.push('the level');
+    if (text(experienceForm.description) !== text(selectedExperience.description)) changed.push('the description');
+    if (String(experienceForm.grade || '') !== String(selectedExperience.grade || '')) changed.push('the grade');
+    if (text(experienceForm.difficulty) !== text(selectedExperience.difficulty)) changed.push('the difficulty');
+    return changed;
+  })();
+
   const handlePublishExperience = async () => {
     if (!selectedExperience || !selectedExperience.id) {
       triggerAlert('No active experience selected.', 'No Experience Selected', 'warning');
@@ -12976,6 +12990,30 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         🔍 Check Validation
                       </button>
                     </div>
+
+                    {unsavedLessonChanges.length > 0 && (
+                      <div data-testid="publish-unsaved-notice" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '0.6rem 0.8rem', margin: '0 0 1rem 0', fontSize: '0.74rem', color: '#92400e' }}>
+                        <span style={{ flex: 1, minWidth: '220px' }}>
+                          The Lesson Builder has changes that are not saved yet ({unsavedLessonChanges.join(', ')}). This page shows, and publishes, the saved lesson "{selectedExperience?.title}".
+                        </span>
+                        <button
+                          type="button"
+                          className="cs-btn-outline"
+                          disabled={actionLoading}
+                          style={{ padding: '0.3rem 0.7rem', fontSize: '0.72rem', fontWeight: 700, color: '#92400e', borderColor: '#f59e0b', background: '#ffffff', cursor: 'pointer' }}
+                          onClick={async () => {
+                            const band = levelBand(experienceForm.experience_type, experienceForm.difficulty);
+                            if (!levelFits(experienceForm.level, band)) {
+                              showFeedback(`Open the Lesson Builder and enter the Level (${band[0]} to ${band[1]}) first.`, 'error');
+                              return;
+                            }
+                            await handleSaveExperience();
+                          }}
+                        >
+                          Save these changes
+                        </button>
+                      </div>
+                    )}
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                       <div className="cs-form-group">
