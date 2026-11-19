@@ -5595,6 +5595,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     return changed;
   })();
 
+  // The Lesson Builder edits of this lesson (a new name, level ...) are saved when the Publish Center opens, so the
+  // name shown here is the one just typed and nobody has to create another lesson. Not saved while the Level is
+  // missing or out of range: the notice below says what is still unsaved.
+  useEffect(() => {
+    if (view !== 'publish' || unsavedLessonChanges.length === 0 || actionLoading) return;
+    if (!levelFits(experienceForm.level, levelBand(experienceForm.experience_type, experienceForm.difficulty))) return;
+    handleSaveExperience();
+  }, [view, selectedExperience?.id]);
+
   const handlePublishExperience = async () => {
     if (!selectedExperience || !selectedExperience.id) {
       triggerAlert('No active experience selected.', 'No Experience Selected', 'warning');
@@ -5607,6 +5616,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     if (!publishVersion || !publishVersion.trim()) {
       triggerAlert('Please enter a valid version number (e.g. 1.0.0).', 'Version Required', 'warning');
       return;
+    }
+    if (unsavedLessonChanges.length > 0) {
+      // Lesson Builder edits not saved yet (the page could not save them on opening, e.g. the Level was missing)
+      if (!levelFits(experienceForm.level, levelBand(experienceForm.experience_type, experienceForm.difficulty))) {
+        showFeedback('Open the Lesson Builder and enter a valid Level before publishing.', 'error');
+        return;
+      }
+      const saved = await handleSaveExperience();
+      if (!saved) return;
     }
     setActionLoading(true);
     try {
