@@ -1189,14 +1189,13 @@ DUPLICATE_VERSION_MESSAGE = "This version name already exists. Please enter a di
 
 
 def used_version_names(experience):
-    """Every version name this lesson has used: built, waiting for approval, or rejected."""
-    names = list(
+    """
+    The version names a new submission may not use: the builds the Super Admin approved. A name that is only waiting
+    for approval, or was rejected, is not used yet, so the creator can change the lesson and submit it again with it.
+    """
+    return list(
         PublishVersion.objects.filter(published_package__experience=experience).values_list("version_number", flat=True)
     )
-    names += list(experience.submitted_versions or [])
-    if experience.pending_version:
-        names.append(experience.pending_version)
-    return names
 
 
 def version_name_used(experience, name):
@@ -1304,15 +1303,17 @@ class PublishViewSet(viewsets.ViewSet):
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
-        # Duplicate version check: a name is used once per lesson (trimmed, any case), whether the earlier
-        # build was approved, is waiting for approval, or was rejected
+        # Duplicate version check: an approved build keeps its name (trimmed, any case). A name that is only waiting
+        # for approval or was rejected can be submitted again, e.g. after the lesson was changed.
         version = (str(version).strip() if version is not None else "") or "1.0"
         if version_name_used(experience, version):
             return Response({"error": DUPLICATE_VERSION_MESSAGE, "code": "version_exists"}, status=status.HTTP_409_CONFLICT)
 
         experience.status = "PENDING_APPROVAL"
         experience.pending_version = version
-        experience.submitted_versions = [*(experience.submitted_versions or []), version]
+        experience.submitted_versions = [
+            *(v for v in (experience.submitted_versions or []) if str(v).strip().lower() != version.lower()), version
+        ]
         experience.pending_release_notes = release_notes
         experience.pending_level = level
         experience.save(update_fields=["status", "pending_version", "submitted_versions", "pending_release_notes", "pending_level"])

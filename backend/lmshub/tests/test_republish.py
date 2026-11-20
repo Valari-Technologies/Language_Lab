@@ -76,7 +76,7 @@ class RepublishTests(HubTestBase):
         return self.api.post(reverse("publish-experience", kwargs={"experience_id": exp.id}),
                              {"version": version, "level": level}, format="json")
 
-    def test_a_version_name_already_used_by_the_lesson_is_refused(self):
+    def test_a_version_name_already_approved_by_the_lesson_is_refused(self):
         message = "This version name already exists. Please enter a different name."
         self._submit("Version 1")
         self._approve()
@@ -88,27 +88,6 @@ class RepublishTests(HubTestBase):
         self.exp.refresh_from_db()
         self.assertEqual(self.exp.pending_version, "Version 2")
 
-        # a build waiting for approval cannot be submitted again under the same name
-        for same in ("Version 2", " VERSION 2"):
-            self.assertEqual(self._submit_level(self.exp, same, "").status_code, 409, same)
-        self.assertEqual(self.exp.status, "PENDING_APPROVAL")
-
-        # a rejected name stays used
-        self.api.force_authenticate(self.root)
-        self.api.post(f"/api/v1/super-admin/experiences/{self.exp.id}/reject/", {"review_remark": "fix it"}, format="json")
-        self.exp.refresh_from_db()
-        self.assertEqual((self.exp.status, self.exp.pending_version), ("REJECTED", None))
-        self.assertEqual(self._submit_level(self.exp, "version 2", "").status_code, 409)
-        self.assertEqual(self.api.get(f"/api/v1/content/publish/{self.exp.id}/").status_code, 200)
-        self.api.force_authenticate(self.creator)
-        status_data = self.api.get(f"/api/v1/content/publish/{self.exp.id}/").data
-        self.assertEqual(sorted(n.lower() for n in set(status_data["used_versions"])), ["version 1", "version 2"])
-        self.assertEqual(self._submit_level(self.exp, "Version 3", "").status_code, 200)
-
-        # no name given means "1.0": that is a name too
-        self.assertEqual(self._submit_level(self.exp, "", "").status_code, 200)
-        self.assertEqual(self._submit_level(self.exp, "1.0", "").status_code, 409)
-
         # another lesson may use the same name
         other = Experience.objects.create(
             title="Other", description="d", grade=self.grade3, subject="English", language="English",
@@ -119,6 +98,36 @@ class RepublishTests(HubTestBase):
                               estimated_duration=30, content={"elements": [{"id": "1", "type": "text", "props": {"value": "x"}}]})
         self.assertEqual(self._submit_level(other, "Version 1", "").status_code, 200)
 
+    def test_a_name_not_approved_yet_can_be_submitted_again(self):
+        # waiting for approval: the creator changes the lesson and submits it again with the same name
+        self._submit("V1")
+        self._add_screen(2)                                  # the change made while it waits
+        again = self._submit_level(self.exp, "V1", "")
+        self.assertEqual(again.status_code, 200, again.data)
+        self.assertEqual(self._submit_level(self.exp, " v1 ", "").status_code, 200)  # any case, any edge spaces
+        self.exp.refresh_from_db()
+        self.assertEqual((self.exp.status, self.exp.pending_version), ("PENDING_APPROVAL", " v1 ".strip()))
+        self.assertEqual([v.lower() for v in self.exp.submitted_versions], ["v1"])      # recorded once
+
+        # rejected: the same name can be used again
+        self.api.force_authenticate(self.root)
+        self.api.post(f"/api/v1/super-admin/experiences/{self.exp.id}/reject/", {"review_remark": "fix it"}, format="json")
+        self.exp.refresh_from_db()
+        self.assertEqual(self.exp.status, "REJECTED")
+        self.assertEqual(self._submit_level(self.exp, "V1", "").status_code, 200)
+
+        # no name given means "1.0": that is a name too, and it also stays free until it is approved
+        self.assertEqual(self._submit_level(self.exp, "", "").status_code, 200)
+        self.assertEqual(self._submit_level(self.exp, "1.0", "").status_code, 200)
+
+        # the Publish Center only warns about approved names
+        self.api.force_authenticate(self.root)
+        self._approve()                                      # "1.0" is approved now
+        self.api.force_authenticate(self.creator)
+        used = self.api.get(f"/api/v1/content/publish/{self.exp.id}/").data["used_versions"]
+        self.assertEqual([n.lower() for n in used], ["1.0"])
+        self.assertEqual(self._submit_level(self.exp, "1.0", "").status_code, 409)
+        self.assertEqual(self._submit_level(self.exp, "V1", "").status_code, 200)  # "V1" was never approved
     def test_level_places_the_lesson_in_that_lms_slot(self):
         for bad in (0, 31, "abc", -2):
             response = self._submit_level(self.exp, "1.0", bad)
