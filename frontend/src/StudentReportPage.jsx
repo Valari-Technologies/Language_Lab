@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { FiArrowLeft, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import { apiFetch } from './api';
-import { formatRollNo } from './format';
 
 // Teacher Reports: the report of one student across the 6 zones, their levels, assessments, progress and activity.
 // Missing data is shown as "Not captured" / "—" and never as a 0.
@@ -134,20 +133,6 @@ const StudentReportPage = ({ student, initialTab = 'overview', onBack, onOpenDay
           <div style={{ ...card, marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: '220px' }}>
               <h2 style={{ margin: 0, fontSize: '1.3rem', color: '#0f172a' }}>{o.name}</h2>
-              <div style={{ ...muted, display: 'flex', flexWrap: 'wrap', columnGap: '0.35rem', rowGap: '0.15rem', marginTop: '0.2rem' }}>
-                {[
-                  ['Student ID', o.loginCode],
-                  ['Roll No', formatRollNo(o.rollNo) || '—'],
-                  ['Class', o.grade || '—'],
-                  ['Section', String(o.section || '').replace(/^section\s*/i, '').trim() || '—'],
-                  ['School', o.schoolName || report.schoolName],
-                  ['Teacher', o.teacherName || report.teacherName],
-                ].filter(([, value]) => value).map(([label, value], i, all) => (
-                  <span key={label}>
-                    {label}: <strong style={{ color: '#334155', fontWeight: 600 }}>{value}</strong>{i < all.length - 1 ? ',' : ''}
-                  </span>
-                ))}
-              </div>
             </div>
             <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
               <span style={badge(perf[1], perf[2])}>{perf[0]}</span>
