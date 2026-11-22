@@ -2942,7 +2942,7 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                           toggleActiveStatus(sid, s.is_active, 'students');
                                         }}
                                       >
-                                        <FiLock style={{ fontSize: '0.95rem' }} /> {s.is_active ? 'Block' : 'Unblock'}
+                                        <FiLock style={{ fontSize: '0.95rem' }} /> {s.is_active ? 'Deactive' : 'Activate'}
                                       </button>
                                       <div style={{ height: '1px', backgroundColor: '#e2e8f0', margin: '4px 0' }}></div>
                                       <button

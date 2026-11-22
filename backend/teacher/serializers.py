@@ -249,5 +249,11 @@ class StudentSerializer(serializers.ModelSerializer):
                             internal_username = f"sch{instance.school_id}_{new_code}_{timezone.now().strftime('%m%d%H%M%S')}"
                     user.username = internal_username
             user.save()
+            if is_active is False:
+                # a deactivated student is logged out of the LMS PCs they are working on right now
+                from django.utils import timezone as _tz
+                from lmshub.models import LmsSession
+                LmsSession.objects.filter(student=instance, ended_at__isnull=True).update(
+                    ended_at=_tz.now(), end_reason="student_deactivated")
 
         return super().update(instance, validated_data)

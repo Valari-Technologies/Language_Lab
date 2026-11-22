@@ -46,7 +46,7 @@ class LoginTests(HubTestBase):
         self.assertEqual(self.login(token, "OTH_0001").json()["error"], "invalid_code")
         self.s3.user.is_active = False
         self.s3.user.save()
-        self.assertEqual(self.login(token, "KAB_8001").json()["error"], "invalid_code")
+        self.assertEqual(self.login(token, "KAB_8001").json()["error"], "student_deactivated")  # inactive: its own answer
 
     def test_licence_states(self):
         token = self.pair()

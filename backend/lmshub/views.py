@@ -22,7 +22,7 @@ from .core import (
     seats_used, session_for, sha256_hex, student_payload_grade, throttle_clear, throttle_fail, throttle_wait,
     touch_device,
 )
-from .models import LmsDevice, LmsSession
+from .models import DeletedStudent, LmsDevice, LmsSession
 
 logger = logging.getLogger(__name__)
 
@@ -178,15 +178,24 @@ def login(request, device):
     if not state["active"]:
         return error(403, "not_activated")
 
-    # Only active students of this PC's school, by login code (lms_code or username)
+    # Students of this PC's school, by login code (lms_code or username); an active one is preferred
     student = (
         Student.objects.select_related("user")
-        .filter(school=device.school, user__is_active=True)
+        .filter(school=device.school)
         .filter(Q(lms_code__iexact=code) | Q(user__username__iexact=code))
-        .order_by("student_id")
+        .order_by("-user__is_active", "student_id")
         .first()
     )
+    if student and not student.user.is_active:
+        # deactivated by the school admin: not a wrong code, so it does not count towards the lock
+        return error(403, "student_deactivated", studentId=student.student_id,
+                     message="This student is deactivated. Please contact your school administrator.")
     if not student:
+        gone = DeletedStudent.objects.filter(school_id=device.school_id, login_code__iexact=code).order_by("-deleted_at").first()
+        if gone:
+            # deleted in the CMS: the PC removes this student's local data
+            return error(404, "student_deleted", studentId=gone.student_id,
+                         message="This student was deleted. Please contact your school administrator.")
         locked, retry_after, remaining = throttle_fail(key, MAX_LOGIN_FAILURES, LOGIN_LOCK_SECONDS)
         if locked:
             return error(429, "locked", retryAfterSec=retry_after)
@@ -360,9 +369,28 @@ def offline_data(request, device):
             "codeKeys": list(set([code_key(token, student.user.username)] + ([code_key(token, student.lms_code)] if getattr(student, "lms_code", None) else []))),
             "progress": progress.snapshot(student),
         })
+    # Students the PC must no longer serve (codeKeys only, like the active students): deactivated ones are refused with
+    # "student_deactivated"; deleted ones are removed from the PC's local data.
+    def keys_for(*codes):
+        return sorted({code_key(token, c) for c in codes if c})
+
+    deactivated = [
+        {"id": s.student_id, "codeKeys": keys_for(s.user.username, s.lms_code)}
+        for s in Student.objects.select_related("user").filter(school=device.school, user__is_active=False).order_by("student_id")
+    ]
+    DeletedStudent.objects.filter(deleted_at__lt=timezone.now() - timedelta(days=365)).delete()
+    live_codes = {c.lower() for c in Student.objects.filter(school=device.school).values_list("lms_code", flat=True) if c}
+    live_codes |= {u.lower() for u in Student.objects.filter(school=device.school).values_list("user__username", flat=True)}
+    deleted = [
+        {"id": d.student_id, "codeKeys": keys_for(d.login_code)}
+        for d in DeletedStudent.objects.filter(school_id=device.school_id).order_by("student_id")
+        if d.login_code.lower() not in live_codes  # a code given to a new student again is not "deleted"
+    ]
     return reply(200, {
         "ok": True,
         "generatedAt": timezone.now().isoformat(),
+        "deactivatedStudents": deactivated,
+        "deletedStudents": deleted,
         "schoolName": device.school.school_name,
         "licenseExpiresAt": license_expires_at(state),  # the PC refuses offline logins from this moment on (now >= it)
         "students": students,

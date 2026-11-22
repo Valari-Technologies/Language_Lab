@@ -132,6 +132,22 @@ class LmsHubAccess(models.Model):
         db_table = "lmshub_access"
 
 
+class DeletedStudent(models.Model):
+    """
+    A student deleted in the CMS. The student's data is gone from the CMS (it cascades), but the LMS PCs of the school
+    still hold a local copy: the offline-data reply and the login answer name this student so the PC deletes it.
+    school_id is a plain number (not a link) so a deleted school does not have to wait for these rows.
+    """
+    school_id = models.IntegerField(db_index=True)
+    student_id = models.IntegerField()
+    login_code = models.CharField(max_length=100)
+    deleted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "lmshub_deleted_student"
+        ordering = ["-deleted_at"]
+
+
 class LmsThrottle(models.Model):
     """Wrong pairing codes / logins and offline-data calls, shared by all server processes."""
     key = models.CharField(max_length=120, unique=True)
@@ -141,3 +157,15 @@ class LmsThrottle(models.Model):
 
     class Meta:
         db_table = "lmshub_throttle"
+
+
+from django.db.models.signals import pre_delete  # noqa: E402
+from django.dispatch import receiver  # noqa: E402
+
+
+@receiver(pre_delete, sender="teacher.Student", dispatch_uid="lmshub_remember_deleted_student")
+def remember_deleted_student(sender, instance, **kwargs):
+    """Every way a student is deleted (the delete button, bulk delete, a cascade) leaves a DeletedStudent record."""
+    code = (instance.lms_code or (instance.user.username if instance.user_id else "") or "").strip()
+    if code:
+        DeletedStudent.objects.create(school_id=instance.school_id, student_id=instance.student_id, login_code=code)
