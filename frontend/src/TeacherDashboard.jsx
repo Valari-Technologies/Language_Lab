@@ -2322,7 +2322,6 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                     }}
                                   >
                                     {[
-                                      { label: 'View', icon: <FiEye />, color: '#334155', hover: '#f8fafc', action: () => { setSelectedStudentCrudDetail(s); setShowStudentCrudDetailModal(true); } },
                                       { label: 'Edit', icon: <FiEdit2 />, color: '#334155', hover: '#f8fafc', action: () => openEditModal(s) },
                                       { label: s.is_active ? 'Deactive' : 'Activate', icon: <FiLock />, color: '#334155', hover: '#f8fafc', action: () => toggleActiveStatus(sid, s.is_active, 'students') },
                                     ].map(item => (
