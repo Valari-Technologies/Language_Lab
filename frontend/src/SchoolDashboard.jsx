@@ -719,6 +719,21 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     };
   }, []);
 
+  /* ── Keep the students list in step with the other portal ──
+     The School Admin and Teacher portals read the same students. A student activated or deactivated in one portal
+     shows in the other within about 20 seconds, or at once when the tab is opened again. */
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === 'visible') loadStudents(); };
+    const timer = setInterval(refresh, 20000);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, []);
+
   /* ── Dismiss notification and action dropdown on outside click ── */
   useEffect(() => {
     const handler = () => {
