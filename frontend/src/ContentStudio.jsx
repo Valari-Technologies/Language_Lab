@@ -2103,6 +2103,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         await Promise.all(ids.map(itemId => apiFetch(`/api/v1/content/experiences/${itemId}/`, options)));
         showFeedback(`${ids.length} experiences deleted successfully!`);
         setSelectedExperienceIds([]);
+        setIsSelectMode(false);
         setDeleteConfirm({ show: false, id: null, type: '', title: '', message: '', isConflict: false, usages: [] });
         loadExperiencesData();
         loadRecentExperiences();
@@ -7191,47 +7192,29 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
                       {/* Right Side: Action Button */}
                       <div style={{ paddingBottom: '4px', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                        <button
-                          onClick={() => {
-                            setIsSelectMode(!isSelectMode);
-                            if (isSelectMode) setSelectedExperienceIds([]);
-                          }}
-                          style={{
-                            background: isSelectMode ? '#e2e8f0' : '#ffffff',
-                            border: '1px solid #d1d5db',
-                            color: '#374151',
-                            fontSize: '0.82rem',
-                            fontWeight: 600,
-                            padding: '0.55rem 1.25rem',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                          }}
-                        >
-                          {isSelectMode ? '✓ Done Selecting' : 'Select'}
-                        </button>
-                        {selectedExperienceIds.length > 0 && (
-                          <button
-                            style={{
-                              background: '#fee2e2',
-                              color: '#dc2626',
-                              border: '1px solid #fca5a5',
-                              fontWeight: 600,
-                              fontSize: '0.82rem',
-                              padding: '0.55rem 1.25rem',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px'
-                            }}
-                            onClick={handleBulkDeleteExperiences}
-                          >
-                            <FiTrash2 /> Delete Selected ({selectedExperienceIds.length})
-                          </button>
-                        )}
+                        {/* Select -> (nobody ticked) Unselect, (someone ticked) Delete (n); after the delete it is Select again */}
+                        {(() => {
+                          const base = { fontSize: '0.82rem', fontWeight: 600, padding: '0.55rem 1.25rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' };
+                          if (isSelectMode && selectedExperienceIds.length === 0) {
+                            return (
+                              <button onClick={() => setIsSelectMode(false)} style={{ ...base, background: '#e2e8f0', border: '1px solid #d1d5db', color: '#374151' }}>
+                                Unselect
+                              </button>
+                            );
+                          }
+                          if (isSelectMode) {
+                            return (
+                              <button onClick={handleBulkDeleteExperiences} style={{ ...base, background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5' }}>
+                                <FiTrash2 /> Delete ({selectedExperienceIds.length})
+                              </button>
+                            );
+                          }
+                          return (
+                            <button onClick={() => { setSelectedExperienceIds([]); setIsSelectMode(true); }} style={{ ...base, background: '#ffffff', border: '1px solid #d1d5db', color: '#374151' }}>
+                              Select
+                            </button>
+                          );
+                        })()}
                         <button
                           className="cs-btn-primary"
                           style={{ background: '#0b57d0', color: '#ffffff', fontWeight: 600, fontSize: '0.82rem', padding: '0.55rem 1.25rem', borderRadius: '8px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}

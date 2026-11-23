@@ -1235,11 +1235,13 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           await Promise.all(ids.map(id => apiFetch(`/api/cms/v1/teachers/${id}/`, { method: 'DELETE' })));
           showFeedback(`Successfully deleted ${count} teacher(s).`, null);
           setSelectedTeacherIds([]);
+          setIsSelectModeTeachers(false);
           await loadTeachers();
         } else if (bulkType === 'bulk-students') {
           await Promise.all(ids.map(id => apiFetch(`/api/cms/v1/students/${id}/`, { method: 'DELETE' })));
           showFeedback(`Successfully deleted ${count} student(s).`, null);
           setSelectedStudentIds([]);
+          setIsSelectModeStudents(false);
           await loadStudents();
         } else if (bulkType === 'bulk-classes') {
           await Promise.all(ids.map(id => apiFetch(`/api/cms/v1/classes/${id}/`, { method: 'DELETE' })));
@@ -2239,23 +2241,18 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     </select>
                   </div>
                   <div className="sd-table-actions">
-                    <button
-                      className="sd-btn-outline"
-                      style={{
-                        background: isSelectModeTeachers ? '#e2e8f0' : '#ffffff',
-                        color: '#374151',
-                        borderColor: '#cbd5e1'
-                      }}
-                      onClick={() => {
-                        setIsSelectModeTeachers(!isSelectModeTeachers);
-                        if (isSelectModeTeachers) setSelectedTeacherIds([]);
-                      }}
-                    >
-                      {isSelectModeTeachers ? '✓ Done Selecting' : 'Select'}
-                    </button>
-                    {selectedTeacherIds.length > 0 && (
-                      <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteTeachers}>
-                        <FiTrash2/> Delete Selected ({selectedTeacherIds.length})
+                    {/* Select -> (nobody ticked) Unselect, (someone ticked) Delete (n); after the delete it is Select again */}
+                    {isSelectModeTeachers && selectedTeacherIds.length === 0 ? (
+                      <button className="sd-btn-outline" style={{ background: '#e2e8f0', color: '#374151', borderColor: '#cbd5e1' }} onClick={() => setIsSelectModeTeachers(false)}>
+                        Unselect
+                      </button>
+                    ) : isSelectModeTeachers ? (
+                      <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }} onClick={handleBulkDeleteTeachers}>
+                        <FiTrash2 /> Delete ({selectedTeacherIds.length})
+                      </button>
+                    ) : (
+                      <button className="sd-btn-outline" style={{ background: '#ffffff', color: '#374151', borderColor: '#cbd5e1' }} onClick={() => { setIsSelectModeTeachers(true); setSelectedTeacherIds([]); }}>
+                        Select
                       </button>
                     )}
                     <button className="sd-btn-outline" onClick={() => { setImportActive(!importActive); setUploadSummary(null); }}>
@@ -2646,23 +2643,18 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     ))}
                   </select>
                   <div className="sd-table-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <button
-                      className="sd-btn-outline"
-                      style={{
-                        background: isSelectModeStudents ? '#e2e8f0' : '#ffffff',
-                        color: '#374151',
-                        borderColor: '#cbd5e1'
-                      }}
-                      onClick={() => {
-                        setIsSelectModeStudents(!isSelectModeStudents);
-                        if (isSelectModeStudents) setSelectedStudentIds([]);
-                      }}
-                    >
-                      {isSelectModeStudents ? '✓ Done Selecting' : 'Select'}
-                    </button>
-                    {selectedStudentIds.length > 0 && (
-                      <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteStudents}>
-                        <FiTrash2/> Delete Selected ({selectedStudentIds.length})
+                    {/* Select -> (nobody ticked) Unselect, (someone ticked) Delete (n); after the delete it is Select again */}
+                    {isSelectModeStudents && selectedStudentIds.length === 0 ? (
+                      <button className="sd-btn-outline" style={{ background: '#e2e8f0', color: '#374151', borderColor: '#cbd5e1' }} onClick={() => setIsSelectModeStudents(false)}>
+                        Unselect
+                      </button>
+                    ) : isSelectModeStudents ? (
+                      <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }} onClick={handleBulkDeleteStudents}>
+                        <FiTrash2 /> Delete ({selectedStudentIds.length})
+                      </button>
+                    ) : (
+                      <button className="sd-btn-outline" style={{ background: '#ffffff', color: '#374151', borderColor: '#cbd5e1' }} onClick={() => { setIsSelectModeStudents(true); setSelectedStudentIds([]); }}>
+                        Select
                       </button>
                     )}
                     <button className="sd-btn-outline" onClick={() => { setImportActive(!importActive); setUploadSummary(null); }}>

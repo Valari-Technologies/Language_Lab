@@ -1746,6 +1746,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           await Promise.all(ids.map(id => apiFetch(`/api/cms/v1/schools/${id}/`, { method: 'DELETE' })));
           showFeedback(`Successfully deleted ${count} school(s).`, null);
           setSelectedSchoolIds([]);
+          setIsSelectModeSchools(false);
           await loadSchools();
           await loadDashboardStats();
           await loadRecentActivities();
@@ -1764,6 +1765,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           await Promise.all(ids.map(id => apiFetch(`/api/v1/content/experiences/${id}/`, { method: 'DELETE' })));
           showFeedback(`Successfully deleted ${count} lesson(s).`, null);
           setSelectedExpIds([]);
+          setIsSelectMode(false);
           await loadExperiences();
           await loadSuperAdminExperiences();
           await loadDashboardStats();
@@ -3246,23 +3248,18 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         />
                       </div>
                       <div className="sd-table-actions">
-                        <button
-                          className="sd-btn-outline"
-                          style={{
-                            background: isSelectModeSchools ? '#e2e8f0' : '#ffffff',
-                            color: '#374151',
-                            borderColor: '#d1d5db'
-                          }}
-                          onClick={() => {
-                            setIsSelectModeSchools(!isSelectModeSchools);
-                            if (isSelectModeSchools) setSelectedSchoolIds([]);
-                          }}
-                        >
-                          {isSelectModeSchools ? '✓ Done Selecting' : 'Select'}
-                        </button>
-                        {selectedSchoolIds.length > 0 && (
-                          <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteSchools}>
-                            <FiTrash2 /> Delete Selected ({selectedSchoolIds.length})
+                        {/* Select -> (nobody ticked) Unselect, (someone ticked) Delete (n); after the delete it is Select again */}
+                        {isSelectModeSchools && selectedSchoolIds.length === 0 ? (
+                          <button className="sd-btn-outline" style={{ background: '#e2e8f0', color: '#374151', borderColor: '#d1d5db' }} onClick={() => setIsSelectModeSchools(false)}>
+                            Unselect
+                          </button>
+                        ) : isSelectModeSchools ? (
+                          <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }} onClick={handleBulkDeleteSchools}>
+                            <FiTrash2 /> Delete ({selectedSchoolIds.length})
+                          </button>
+                        ) : (
+                          <button className="sd-btn-outline" style={{ background: '#ffffff', color: '#374151', borderColor: '#d1d5db' }} onClick={() => { setIsSelectModeSchools(true); setSelectedSchoolIds([]); }}>
+                            Select
                           </button>
                         )}
                         <button className="sd-btn-primary" onClick={() => setIsAddingSchool(true)}><FiPlus />Add School</button>
@@ -3790,62 +3787,45 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     />
                   </div>
                   <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                    {selectedExpIds.length > 0 && (
-                      <button
-                        className="sd-btn-outline"
-                        style={{
-                          borderColor: '#ef4444',
-                          color: '#ef4444',
-                          background: '#fef2f2',
-                          padding: '0.35rem 0.75rem',
-                          fontSize: '0.82rem',
-                          borderRadius: '8px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.35rem',
-                          marginRight: '0.5rem'
-                        }}
-                        onClick={() => {
-                          setDeleteConfirm({
-                            show: true,
-                            id: 'bulk-experiences',
-                            type: 'lessons',
-                            isBulk: true,
-                            count: selectedExpIds.length,
-                            ids: [...selectedExpIds]
-                          });
-                        }}
-                      >
-                        🗑️ Delete Selected ({selectedExpIds.length})
-                      </button>
-                    )}
-                    <button
-                      className="sd-btn-outline"
-                      style={{
-                        padding: '0.45rem 1rem',
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        borderRadius: '8px',
-                        backgroundColor: isSelectMode ? '#e2e8f0' : '#fff',
-                        border: '1px solid #cbd5e1',
-                        color: '#1e293b',
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        minWidth: '70px',
-                        height: '38px',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                      }}
-                      onClick={() => {
-                        if (isSelectMode) {
-                          setSelectedExpIds([]);
-                        }
-                        setIsSelectMode(!isSelectMode);
-                      }}
-                    >
-                      {isSelectMode ? '✓ Done Selecting' : 'Select'}
-                    </button>
+                    {/* Select -> (nobody ticked) Unselect, (someone ticked) Delete (n); after the delete it is Select again */}
+                    {(() => {
+                      const base = {
+                        padding: '0.45rem 1rem', fontSize: '0.85rem', fontWeight: 600, borderRadius: '8px', cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                        minWidth: '70px', height: '38px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      };
+                      if (isSelectMode && selectedExpIds.length === 0) {
+                        return (
+                          <button className="sd-btn-outline" style={{ ...base, background: '#e2e8f0', border: '1px solid #cbd5e1', color: '#1e293b' }}
+                            onClick={() => setIsSelectMode(false)}>
+                            Unselect
+                          </button>
+                        );
+                      }
+                      if (isSelectMode) {
+                        return (
+                          <button className="sd-btn-outline" style={{ ...base, background: '#fef2f2', border: '1px solid #ef4444', color: '#ef4444' }}
+                            onClick={() => {
+                              setDeleteConfirm({
+                                show: true,
+                                id: 'bulk-experiences',
+                                type: 'lessons',
+                                isBulk: true,
+                                count: selectedExpIds.length,
+                                ids: [...selectedExpIds]
+                              });
+                            }}>
+                            <FiTrash2 /> Delete ({selectedExpIds.length})
+                          </button>
+                        );
+                      }
+                      return (
+                        <button className="sd-btn-outline" style={{ ...base, background: '#fff', border: '1px solid #cbd5e1', color: '#1e293b' }}
+                          onClick={() => { setSelectedExpIds([]); setIsSelectMode(true); }}>
+                          Select
+                        </button>
+                      );
+                    })()}
 
                     <select
                       className="sd-form-input"
