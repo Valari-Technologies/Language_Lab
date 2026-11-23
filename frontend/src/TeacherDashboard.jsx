@@ -881,6 +881,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           await Promise.all(ids.map(id => apiFetch(`/api/cms/v1/students/${id}/`, { method: 'DELETE' })));
           showFeedback(`Successfully deleted ${count} student(s).`, null);
           setSelectedStudentIds([]);
+          setIsSelectModeStudents(false);  // back to the normal list: the Delete button is Select again
           await loadStudents();
         } else if (bulkType === 'bulk-classes') {
           await Promise.all(ids.map(id => apiFetch(`/api/cms/v1/classes/${id}/`, { method: 'DELETE' })));
@@ -2065,23 +2066,26 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                   </select>
 
                   <div className="sd-table-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <button
-                      className="sd-btn-outline"
-                      style={{
-                        background: isSelectModeStudents ? '#e2e8f0' : '#ffffff',
-                        color: '#374151',
-                        borderColor: '#cbd5e1'
-                      }}
-                      onClick={() => {
-                        setIsSelectModeStudents(!isSelectModeStudents);
-                        if (isSelectModeStudents) setSelectedStudentIds([]);
-                      }}
-                    >
-                      {isSelectModeStudents ? '✓ Done Selecting' : 'Select'}
-                    </button>
-                    {selectedStudentIds.length > 0 && (
-                      <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteStudents}>
-                        <FiTrash2/> Delete Selected ({selectedStudentIds.length})
+                    {/* Select turns into Delete while students are being picked, and back into Select after the delete */}
+                    {isSelectModeStudents ? (
+                      <button
+                        className="sd-btn-outline"
+                        style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                        title={selectedStudentIds.length === 0 ? 'Nobody is selected: this leaves selecting' : 'Delete the selected students'}
+                        onClick={() => {
+                          if (selectedStudentIds.length === 0) { setIsSelectModeStudents(false); return; }
+                          handleBulkDeleteStudents();
+                        }}
+                      >
+                        <FiTrash2 /> Delete{selectedStudentIds.length > 0 ? ` (${selectedStudentIds.length})` : ''}
+                      </button>
+                    ) : (
+                      <button
+                        className="sd-btn-outline"
+                        style={{ background: '#ffffff', color: '#374151', borderColor: '#cbd5e1' }}
+                        onClick={() => { setIsSelectModeStudents(true); setSelectedStudentIds([]); }}
+                      >
+                        Select
                       </button>
                     )}
                     <button className="sd-btn-outline" onClick={() => { setImportActive(!importActive); setUploadSummary(null); }}>
