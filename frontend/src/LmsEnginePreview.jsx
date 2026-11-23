@@ -72,6 +72,7 @@ const LmsEnginePreview = ({ experienceId }) => {
       </div>
       {experience && (
         <iframe key={frameKey} ref={frameRef} title="LMS preview" src={src} allow="microphone; autoplay"
+          referrerPolicy="origin" /* the engine reads the embedding page's origin from the referrer, whatever the page's own policy */
           style={{ flex: 1, width: '100%', border: 'none', background: '#0f172a' }} />
       )}
     </div>
