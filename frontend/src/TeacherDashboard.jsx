@@ -2066,18 +2066,22 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                   </select>
 
                   <div className="sd-table-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    {/* Select turns into Delete while students are being picked, and back into Select after the delete */}
-                    {isSelectModeStudents ? (
+                    {/* Select -> (nobody ticked) Unselect, (someone ticked) Delete (n); after the delete it is Select again */}
+                    {isSelectModeStudents && selectedStudentIds.length === 0 ? (
+                      <button
+                        className="sd-btn-outline"
+                        style={{ background: '#e2e8f0', color: '#374151', borderColor: '#cbd5e1' }}
+                        onClick={() => setIsSelectModeStudents(false)}
+                      >
+                        Unselect
+                      </button>
+                    ) : isSelectModeStudents ? (
                       <button
                         className="sd-btn-outline"
                         style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
-                        title={selectedStudentIds.length === 0 ? 'Nobody is selected: this leaves selecting' : 'Delete the selected students'}
-                        onClick={() => {
-                          if (selectedStudentIds.length === 0) { setIsSelectModeStudents(false); return; }
-                          handleBulkDeleteStudents();
-                        }}
+                        onClick={handleBulkDeleteStudents}
                       >
-                        <FiTrash2 /> Delete{selectedStudentIds.length > 0 ? ` (${selectedStudentIds.length})` : ''}
+                        <FiTrash2 /> Delete ({selectedStudentIds.length})
                       </button>
                     ) : (
                       <button
