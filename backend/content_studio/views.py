@@ -292,6 +292,10 @@ class ExperienceViewSet(viewsets.ModelViewSet):
         experience = self.get_object()
         from content_studio.services.preview_service import get_experience_preview_payload
         payload = get_experience_preview_payload(experience, request)
+        if request.query_params.get("format") == "runtime":
+            # The same JSON the package carries as experience.json, with absolute media URLs, for the LMS Engine preview.
+            from content_studio.services.runtime_contact import build_runtime_experience
+            return Response(build_runtime_experience(experience, payload), status=status.HTTP_200_OK)
         return Response(payload, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="learning-outcomes")

@@ -13,7 +13,8 @@ import {
 import PreviewCanvasRenderer from './PreviewCanvasRenderer';
 import './Dashboard.css';
 import { apiFetch } from './api';
-import { API_BASE_URL } from './config';
+import { API_BASE_URL, LMS_PREVIEW_URL } from './config';
+import LmsEnginePreview from './LmsEnginePreview';
 import { pageItems } from './format';
 import dashboardHeaderBanner from './assets/1.jpeg';
 import superAdminBg from './assets/superadminbg.png';
@@ -607,6 +608,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [students, setStudents] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({ total_schools: 0, total_school_admins: 0, total_publish_contents: 0, total_grades: 0, total_experiences: 0, draft_experiences: 0, published_experiences: 0 });
   const [previewExperience, setPreviewExperience] = useState(null);
+  const [lmsPreviewOn, setLmsPreviewOn] = useState(false); // show the lesson in the real LMS Engine instead of the CMS simulator
 
   // Interactive widget states for Super Admin preview
   const [previewAnswers, setPreviewAnswers] = useState({});
@@ -1211,6 +1213,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     setSelectedQuizOption(null);
     setQuizChecked(false);
     setAudioPlaying(false);
+    setLmsPreviewOn(!!LMS_PREVIEW_URL); // opens in the LMS view when the engine is configured
     try {
       const res = await apiFetch(`/api/v1/content/experiences/${experience.id}/preview/`);
       if (res.ok) {
@@ -5064,6 +5067,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                {LMS_PREVIEW_URL && (
+                  <button type="button" onClick={() => setLmsPreviewOn(v => !v)}
+                    style={{ padding: '0.5rem 1rem', background: '#fff', border: '1px solid #cbd5e1', color: '#334155', fontSize: '0.85rem', fontWeight: 600, borderRadius: '6px', cursor: 'pointer' }}>
+                    {lmsPreviewOn ? 'Show CMS preview' : 'Show LMS preview'}
+                  </button>
+                )}
                 {previewExperience.status === 'PENDING_APPROVAL' && (
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
                     <button
@@ -5099,7 +5108,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             </div>
 
             {/* Modal Body: Split view */}
-            <div style={{ display: 'flex', flex: 1, overflow: 'hidden', backgroundColor: '#f1f5f9' }}>
+            {lmsPreviewOn && LMS_PREVIEW_URL && (
+              <div style={{ display: 'flex', flex: 1, overflow: 'hidden', backgroundColor: '#0f172a' }}>
+                <LmsEnginePreview experienceId={previewExperience.id} />
+              </div>
+            )}
+            <div style={{ display: (lmsPreviewOn && LMS_PREVIEW_URL) ? 'none' : 'flex', flex: 1, overflow: 'hidden', backgroundColor: '#f1f5f9' }}>
 
               {/* Left Sidebar: Navigator */}
               <div style={{ width: '280px', borderRight: '1px solid #e2e8f0', backgroundColor: '#ffffff', overflowY: 'auto', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem', flexShrink: 0 }}>
