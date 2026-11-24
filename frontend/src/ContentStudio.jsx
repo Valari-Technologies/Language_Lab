@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from './api';
-import { API_BASE_URL } from './config';
+import { API_BASE_URL, LMS_PREVIEW_URL } from './config';
+import LmsEnginePreview from './LmsEnginePreview';
 import { pageItems } from './format';
 import PreviewCanvasRenderer from './PreviewCanvasRenderer';
 import {
@@ -1057,6 +1058,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   // Previewer session payload track
   const [previewPayload, setPreviewPayload] = useState(null);
+  const [lmsPreviewOn, setLmsPreviewOn] = useState(!!LMS_PREVIEW_URL); // Runtime Preview shows the real LMS Engine when it is configured
   const [previewActivityIndex, setPreviewActivityIndex] = useState(0);
   const [previewScreenIndex, setPreviewScreenIndex] = useState(0);
   const [previewAnswerIndex, setPreviewAnswerIndex] = useState(null);
@@ -12679,6 +12681,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
 
                   <div style={{ display: 'flex', gap: '0.65rem' }}>
+                    {LMS_PREVIEW_URL && (
+                      <button
+                        className="cs-btn-outline"
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '0.5rem 1rem', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', color: '#374151' }}
+                        onClick={() => setLmsPreviewOn(v => !v)}
+                      >
+                        {lmsPreviewOn ? 'Show CMS preview' : 'Show LMS preview'}
+                      </button>
+                    )}
                     <button
                       className="cs-btn-outline"
                       style={{ display: 'flex', alignItems: 'center', gap: '6px', background: isPreviewFullscreen ? '#eff6ff' : '#ffffff', border: '1px solid #0b57d0', borderRadius: '10px', padding: '0.5rem 1rem', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', color: '#0b57d0' }}
@@ -12708,8 +12719,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
                 </div>
 
+                {/* The real LMS Engine (same cards and zone themes as the student app) */}
+                {lmsPreviewOn && LMS_PREVIEW_URL && (previewPayload?.experience?.id || selectedExperience?.id) && (
+                  <div style={{ display: 'flex', flex: 1, overflow: 'hidden', height: 'calc(100vh - 64px)', background: '#0f172a' }}>
+                    <LmsEnginePreview experienceId={previewPayload?.experience?.id || selectedExperience.id} />
+                  </div>
+                )}
+
                 {/* Main Preview layout - side outline + center workspace */}
-                <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 0, flex: 1, overflow: 'hidden', height: 'calc(100vh - 64px)' }}>
+                <div style={{ display: (lmsPreviewOn && LMS_PREVIEW_URL) ? 'none' : 'grid', gridTemplateColumns: '280px 1fr', gap: 0, flex: 1, overflow: 'hidden', height: 'calc(100vh - 64px)' }}>
 
                   {/* Left Side: Experience outline navigation */}
                   <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', background: '#ffffff', borderRight: '1px solid #cbd5e1', overflowY: 'auto', boxSizing: 'border-box' }}>
