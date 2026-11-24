@@ -26,7 +26,7 @@ const LmsEnginePreview = ({ experienceId }) => {
     setStatus('Loading the lesson…');
     (async () => {
       try {
-        const res = await apiFetch(`/api/v1/content/experiences/${experienceId}/preview/?format=runtime`);
+        const res = await apiFetch(`/api/v1/content/experiences/${experienceId}/preview/?runtime=1`);
         if (!alive) return;
         if (!res.ok) { setStatus('This lesson could not be loaded for the LMS preview.'); return; }
         setExperience(await res.json());

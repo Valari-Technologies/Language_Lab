@@ -292,7 +292,8 @@ class ExperienceViewSet(viewsets.ModelViewSet):
         experience = self.get_object()
         from content_studio.services.preview_service import get_experience_preview_payload
         payload = get_experience_preview_payload(experience, request)
-        if request.query_params.get("format") == "runtime":
+        # not "?format=": Django REST Framework reserves that name for the response format and answers 404 to unknown ones
+        if request.query_params.get("runtime") == "1":
             # The same JSON the package carries as experience.json, with absolute media URLs, for the LMS Engine preview.
             from content_studio.services.runtime_contact import build_runtime_experience
             from content_studio.services.runtime_payload import absolutize_media_urls

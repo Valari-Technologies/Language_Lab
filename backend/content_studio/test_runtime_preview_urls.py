@@ -1,6 +1,33 @@
-from django.test import RequestFactory, SimpleTestCase
+from django.contrib.auth import get_user_model
+from django.test import RequestFactory, SimpleTestCase, TestCase
+from rest_framework.test import APIClient
 
+from super_admin.models import Grade
+from .models import Experience
 from .services.runtime_payload import absolutize_media_urls
+
+User = get_user_model()
+
+
+class RuntimePreviewEndpointTests(TestCase):
+    """The LMS Engine preview asks for ?runtime=1 (not ?format=, which Django REST Framework reserves and answers 404)."""
+
+    def test_runtime_json_is_returned(self):
+        author = User.objects.create_user(username="author", password="x", role=User.Role.CONTENT_CREATOR)
+        grade = Grade.objects.create(grade_name="Grade 5", sort_order=5)
+        lesson = Experience.objects.create(title="Five", description="d", grade=grade, subject="English",
+                                           language="English", difficulty="BEGINNER", estimated_duration=10,
+                                           status="DRAFT", created_by=author)
+        api = APIClient()
+        api.force_authenticate(author)
+        response = api.get(f"/api/v1/content/experiences/{lesson.id}/preview/?runtime=1")
+        self.assertEqual(response.status_code, 200, response.content)
+        data = response.json()
+        self.assertEqual((data["title"], data["id"]), ("Five", str(lesson.id)))
+        self.assertIn("activities", data)
+        # the normal preview is unchanged
+        normal = api.get(f"/api/v1/content/experiences/{lesson.id}/preview/").json()
+        self.assertIn("experience", normal)
 
 
 class AbsolutizeMediaUrlsTests(SimpleTestCase):
