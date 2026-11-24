@@ -295,7 +295,10 @@ class ExperienceViewSet(viewsets.ModelViewSet):
         if request.query_params.get("format") == "runtime":
             # The same JSON the package carries as experience.json, with absolute media URLs, for the LMS Engine preview.
             from content_studio.services.runtime_contact import build_runtime_experience
-            return Response(build_runtime_experience(experience, payload), status=status.HTTP_200_OK)
+            from content_studio.services.runtime_payload import absolutize_media_urls
+            runtime = build_runtime_experience(experience, payload)
+            # every "/media/..." path (including images inside Drag and Drop pairs, Flashcards and so on) becomes a full URL
+            return Response(absolutize_media_urls(runtime, request), status=status.HTTP_200_OK)
         return Response(payload, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="learning-outcomes")

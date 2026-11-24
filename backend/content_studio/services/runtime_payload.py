@@ -17,6 +17,20 @@ def resolve_absolute_url(url_path, request=None):
     return f"{settings.MEDIA_URL.rstrip('/')}/{url_path.lstrip('/')}"
 
 
+def absolutize_media_urls(data, request=None):
+    """
+    A copy of any JSON-like data in which every string that is a server media path ("/media/...") becomes a full URL.
+    Used for the LMS Engine preview, which runs on another origin and cannot open relative paths.
+    """
+    if isinstance(data, dict):
+        return {key: absolutize_media_urls(value, request) for key, value in data.items()}
+    if isinstance(data, list):
+        return [absolutize_media_urls(value, request) for value in data]
+    if isinstance(data, str) and data.startswith("/media/"):
+        return resolve_absolute_url(data, request)
+    return data
+
+
 def build_runtime_payload(experience, request=None):
     """
     Assembles a complete Experience hierarchy (Experience -> Activities -> Screens -> resolved Media)
