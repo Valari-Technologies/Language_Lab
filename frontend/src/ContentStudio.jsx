@@ -12722,7 +12722,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 {/* The real LMS Engine (same cards and zone themes as the student app) */}
                 {lmsPreviewOn && LMS_PREVIEW_URL && (previewPayload?.experience?.id || selectedExperience?.id) && (
                   <div style={{ display: 'flex', flex: 1, overflow: 'hidden', height: 'calc(100vh - 64px)', background: '#0f172a' }}>
-                    <LmsEnginePreview experienceId={previewPayload?.experience?.id || selectedExperience.id} />
+                    <LmsEnginePreview canEdit experienceId={previewPayload?.experience?.id || selectedExperience.id} />
                   </div>
                 )}
 
