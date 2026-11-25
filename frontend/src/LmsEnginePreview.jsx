@@ -15,6 +15,7 @@ import { LMS_PREVIEW_URL } from './config';
 //   CMS -> engine  lms-preview:style     {id, props:{width, height, x, y, fontSize, brightness, opacity}}
 //   CMS -> engine  lms-preview:highlight {id}              outline the selected part (null = none)
 //   CMS -> engine  lms-preview:reset     {}                remove every override
+//   CMS -> engine  lms-preview:goto      {activityId, screenId, activityIndex, screenIndex}   open that card (list of all cards)
 // Units: width, height, x, y and fontSize are px; brightness and opacity are percent (100 = unchanged).
 
 const ZONES = [
@@ -45,6 +46,7 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
   const [selectedId, setSelectedId] = useState(null);
   const [changes, setChanges] = useState({});        // {zone: {cardType: {elementId: {prop: value}}}}
   const [copied, setCopied] = useState(false);
+  const [openCardId, setOpenCardId] = useState(null);
 
   const previewOrigin = (() => { try { return new URL(LMS_PREVIEW_URL).origin; } catch { return ''; } })();
 
@@ -115,6 +117,22 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
 
   // Changing the zone reloads the page so the engine starts again with the new theme.
   const changeZone = (z) => { setZone(z); setFrameKey((k) => k + 1); setInfo(null); setSelectedId(null); if (editing) setSupported(null); };
+
+  // Every card (screen) of the lesson, in play order, read from the experience.json already loaded.
+  const cards = [];
+  ((experience && experience.activities) || []).forEach((a, activityIndex) => {
+    (a.screens || []).forEach((s, screenIndex) => {
+      cards.push({ id: s.id, title: s.title, type: s.type || 'card', activityId: a.id, activityIndex, screenIndex });
+    });
+  });
+
+  // Asks the engine to open that card (message lms-preview:goto; the engine must support it).
+  const openCard = (c) => {
+    setOpenCardId(c.id);
+    setSelectedId(null);
+    post({ type: 'lms-preview:highlight', id: null });
+    post({ type: 'lms-preview:goto', activityId: c.activityId, screenId: c.id, activityIndex: c.activityIndex, screenIndex: c.screenIndex });
+  };
 
   const selectElement = (id) => { setSelectedId(id); post({ type: 'lms-preview:highlight', id }); };
 
@@ -190,6 +208,26 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
               <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>Layout editor</div>
               <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Zone {zone} ({zoneName}){info ? ` · card: ${info.cardType}` : ''}. Changes show live and are not saved.</div>
             </div>
+
+            {cards.length > 0 && (
+              <div>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>All cards in this lesson ({cards.length})</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '220px', overflowY: 'auto' }}>
+                  {cards.map((c, n) => {
+                    const edited = Object.keys(((changes[zone] || {})[c.type]) || {}).length > 0;
+                    return (
+                      <button key={c.id} type="button" onClick={() => openCard(c)}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', padding: '0.4rem 0.6rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.78rem',
+                          border: c.id === openCardId ? '1px solid #0b57d0' : '1px solid #e2e8f0', background: c.id === openCardId ? '#eff6ff' : '#ffffff', color: '#1e293b' }}>
+                        <span>{n + 1}. {c.title || 'Untitled'} <span style={{ color: '#64748b' }}>· {c.type}</span></span>
+                        {edited && <span style={{ fontSize: '0.65rem', color: '#0b57d0', fontWeight: 700 }}>edited</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '4px' }}>Click a card to open it in the player. Layout changes apply to every card of the same type.</div>
+              </div>
+            )}
 
             {supported === false && (
               <div style={{ fontSize: '0.8rem', color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '0.7rem' }}>
