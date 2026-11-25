@@ -287,6 +287,39 @@ class ExperienceViewSet(viewsets.ModelViewSet):
         serializer = ActivitySerializer(activities, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=["get", "put"])
+    def layout(self, request, pk=None):
+        """The LMS layout (element positions and sizes) of this lesson. Saved with the lesson, so the Super Admin's
+        approval of the lesson approves it and the published package carries it."""
+        experience = self.get_object()
+        if request.method == "GET":
+            return Response({"layout": experience.layout or {}}, status=status.HTTP_200_OK)
+        if experience.status == Experience.Status.PENDING_APPROVAL:
+            return Response({"detail": "This lesson is waiting for approval; its layout cannot change now."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        data = request.data.get("layout")
+        if not isinstance(data, dict):
+            return Response({"detail": "layout must be an object."}, status=status.HTTP_400_BAD_REQUEST)
+        # {zone: {cardType: {elementId: {prop: number}}}}
+        allowed = {"width", "height", "x", "y", "fontSize", "brightness", "opacity"}
+        clean = {}
+        for zone, cards in data.items():
+            if not isinstance(cards, dict):
+                return Response({"detail": "Invalid layout."}, status=status.HTTP_400_BAD_REQUEST)
+            for card_type, elements in cards.items():
+                if not isinstance(elements, dict):
+                    return Response({"detail": "Invalid layout."}, status=status.HTTP_400_BAD_REQUEST)
+                for element_id, props in elements.items():
+                    if not isinstance(props, dict):
+                        return Response({"detail": "Invalid layout."}, status=status.HTTP_400_BAD_REQUEST)
+                    for key, value in props.items():
+                        if key not in allowed or isinstance(value, bool) or not isinstance(value, (int, float)):
+                            return Response({"detail": f"Invalid layout value: {key}."}, status=status.HTTP_400_BAD_REQUEST)
+                    clean.setdefault(str(zone), {}).setdefault(str(card_type), {})[str(element_id)] = props
+        experience.layout = clean
+        experience.save(update_fields=["layout", "updated_at"])
+        return Response({"layout": experience.layout}, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=["get"])
     def preview(self, request, pk=None):
         experience = self.get_object()

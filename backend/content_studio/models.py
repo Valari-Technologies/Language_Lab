@@ -117,6 +117,12 @@ class Experience(models.Model):
         blank=True,
         verbose_name=_("Tags")
     )
+    layout = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name=_("LMS Layout"),
+        help_text=_("Element positions and sizes set in the Runtime Preview layout editor: {zone: {cardType: {elementId: {prop: value}}}}. Goes into experience.json as 'layout'.")
+    )
     is_deleted = models.BooleanField(
         default=False,
         null=True,

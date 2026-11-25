@@ -45,6 +45,10 @@ def build_runtime_experience(experience, preview_payload):
         "activities": []
     }
 
+    # positions and sizes set in the layout editor; the LMS applies them to the same elements
+    if experience.layout:
+        runtime["layout"] = experience.layout
+
     for activity in preview_payload.get("activities", []):
 
         runtime_activity = {
