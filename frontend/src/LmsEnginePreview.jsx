@@ -251,6 +251,8 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
     setSelectedId(b.id); setSelectedType(`screen:${currentCard.id}`);
     post({ type: 'lms-preview:highlight', id: b.id, kind: 'block' });
     post({ type: 'lms-preview:block-parts', id: b.id }); // the parts this block really has (heading text, picture, button...)
+    // no answer: an older player build does not know the message
+    setTimeout(() => setBlockParts((prev) => (prev[b.id] ? prev : { ...prev, [b.id]: [] })), 3000);
   };
   // a part inside a block has the id "<blockId>/<partId>"
   const selectPart = (partId) => {
@@ -426,7 +428,12 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
             {supported && blockSel && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Parts of: {blockLabel(blockSel)}</div>
-                {partList.length === 0 && <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Reading the parts…</div>}
+                {blockParts[blockSel.id] === undefined && <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Reading the parts…</div>}
+                {blockParts[blockSel.id] && partList.length === 0 && (
+                  <div style={{ fontSize: '0.72rem', color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '0.5rem' }}>
+                    The LMS player did not list the parts of this element. The player on the server is probably an older build: upload the newest player build, then hard-refresh (Ctrl+F5). You can still edit the whole card below.
+                  </div>
+                )}
                 {partList.map((p) => listButton(
                   p.label || p.id,
                   selectedId === p.id,
