@@ -55,7 +55,8 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
   const [catalog, setCatalog] = useState({});             // {cardType: elements[]} reported by the player
   const [typeOf, setTypeOf] = useState({});               // {screenId: cardType} the player's name for each lesson card
   const [walkLeft, setWalkLeft] = useState(0);            // cards still to open while collecting every element
-  const [walked, setWalked] = useState(false);
+  const [walked, setWalked] = useState(true);              // the panel follows the open screen; it no longer walks every card
+  const [blockParts, setBlockParts] = useState({});       // {blockId: parts the player reported for that block}
   const [saveMsg, setSaveMsg] = useState('');
   const [savedText, setSavedText] = useState('{}');       // the layout as last saved (or loaded)
   const gotoRef = useRef(null);                           // the card last opened from the list
@@ -126,6 +127,8 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
         setStatus('');
       } else if (m.type === 'lms-preview:error') {
         setStatus(`The LMS player could not play this lesson: ${m.message || 'unknown error'}`);
+      } else if (m.type === 'lms-preview:block-elements') {
+        setBlockParts((prev) => ({ ...prev, [m.id]: Array.isArray(m.elements) ? m.elements : [] }));
       } else if (m.type === 'lms-preview:catalog') {
         // every card type the player has, with its parts, even those this lesson does not use
         setSupported(true);
@@ -181,7 +184,7 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
   };
 
   // Changing the zone reloads the page so the engine starts again with the new theme.
-  const changeZone = (z) => { setZone(z); setFrameKey((k) => k + 1); setInfo(null); setSelectedId(null); setSelectedType(null); setWalked(false); walkRef.current = []; setWalkLeft(0); if (editing) setSupported(null); };
+  const changeZone = (z) => { setZone(z); setFrameKey((k) => k + 1); setInfo(null); setSelectedId(null); setSelectedType(null); walkRef.current = []; setWalkLeft(0); if (editing) setSupported(null); };
 
   // Every card (screen) of the lesson, in play order, read from the experience.json already loaded.
   const cards = [];
@@ -247,6 +250,12 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
   const selectBlock = (b) => {
     setSelectedId(b.id); setSelectedType(`screen:${currentCard.id}`);
     post({ type: 'lms-preview:highlight', id: b.id, kind: 'block' });
+    post({ type: 'lms-preview:block-parts', id: b.id }); // the parts this block really has (heading text, picture, button...)
+  };
+  // a part inside a block has the id "<blockId>/<partId>"
+  const selectPart = (partId) => {
+    setSelectedId(partId);
+    post({ type: 'lms-preview:highlight', id: partId, kind: 'block' });
   };
 
   const saveLayout = async () => {
@@ -296,13 +305,21 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
 
   if (!LMS_PREVIEW_URL) return null;
   const src = `${LMS_PREVIEW_URL}${LMS_PREVIEW_URL.includes('?') ? '&' : '?'}preview=1&zone=${zone}`;
-  const blockSel = selectedType && String(selectedType).startsWith('screen:') ? blocks.find((b) => b.id === selectedId) : null;
+  const baseBlockId = selectedType && String(selectedType).startsWith('screen:') ? String(selectedId).split('/')[0] : null;
+  const blockSel = baseBlockId ? blocks.find((b) => b.id === baseBlockId) : null;
+  const partList = blockSel ? (blockParts[blockSel.id] || []) : [];
   const selected = blockSel
-    ? { id: blockSel.id, label: blockLabel(blockSel), props: PROP_FIELDS.map((f) => f.key), values: {} }
+    ? (partList.find((p) => p.id === selectedId) || { id: blockSel.id, label: 'Whole card', props: PROP_FIELDS.map((f) => f.key), values: {} })
     : (selectedType && selectedId ? ((selectedType === (info && info.cardType) ? info.elements : catalog[selectedType]) || []).find((el) => el.id === selectedId) : null);
-  const usedTypes = Object.values(typeOf);
   const inputStyle = { width: '84px', padding: '0.25rem 0.4rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.8rem' };
-  const plainBlock = Boolean(blockSel) && ['heading', 'text', 'image', 'video', 'audio'].includes(String(blockSel.type).toLowerCase());
+  const listButton = (label, on, changed, onClick, key) => (
+    <button key={key} type="button" onClick={onClick}
+      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', padding: '0.45rem 0.65rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem',
+        border: on ? '1px solid #0b57d0' : '1px solid #e2e8f0', background: on ? '#eff6ff' : '#ffffff', color: '#1e293b', fontWeight: on ? 700 : 500 }}>
+      <span>{label}</span>
+      {changed && <span style={{ fontSize: '0.65rem', color: '#0b57d0', fontWeight: 700 }}>edited</span>}
+    </button>
+  );
   const editorBox = selected && (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.8rem' }}>
       <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>{selected.label || selected.id}</div>
@@ -383,57 +400,45 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
               <div style={{ fontSize: '0.8rem', color: '#64748b' }}>The player reported no editable parts for this card.</div>
             )}
 
-            {supported && currentCard && blocks.length > 0 && (
+            {/* 1. the top-level elements of the screen: the screen sign, then each Screen Builder block */}
+            {supported && currentCard && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Elements on this screen (from Screen Builder)</div>
-                <div style={{ fontSize: '0.68rem', color: '#64748b' }}>Screen: {currentCard.title || 'Untitled'}. Pick a card in the list above to see its elements.</div>
-                {blocks.map((b) => {
-                  const key = `screen:${currentCard.id}`;
-                  const changed = Object.keys((((changes[zone] || {})[key] || {})[b.id]) || {}).length > 0;
-                  const on = b.id === selectedId && selectedType === key;
-                  return (
-                    <button key={b.id} type="button" onClick={() => selectBlock(b)}
-                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', padding: '0.45rem 0.65rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem',
-                        border: on ? '1px solid #0b57d0' : '1px solid #e2e8f0', background: on ? '#eff6ff' : '#ffffff', color: '#1e293b', fontWeight: on ? 700 : 500 }}>
-                      <span>{blockLabel(b)}</span>
-                      {changed && <span style={{ fontSize: '0.65rem', color: '#0b57d0', fontWeight: 700 }}>edited</span>}
-                    </button>
-                  );
-                })}
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Elements on this screen</div>
+                <div style={{ fontSize: '0.68rem', color: '#64748b' }}>Screen: {currentCard.title || 'Untitled'}. Click one to edit it.</div>
+                {info && info.elements.some((el) => el.id === 'screen-sign') && listButton(
+                  'Screen sign',
+                  selectedType === info.cardType && selectedId === 'screen-sign',
+                  Object.keys((((changes[zone] || {})[info.cardType] || {})['screen-sign']) || {}).length > 0,
+                  () => selectElement(info.cardType, 'screen-sign'),
+                  'screen-sign'
+                )}
+                {blocks.map((b) => listButton(
+                  blockLabel(b),
+                  Boolean(blockSel) && blockSel.id === b.id,
+                  Object.keys((changes[zone] || {})[`screen:${currentCard.id}`] || {}).some((k) => k === b.id || k.startsWith(`${b.id}/`)),
+                  () => selectBlock(b),
+                  b.id
+                ))}
               </div>
             )}
 
-            {supported && walkLeft > 0 && (
-              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Reading every card of the lesson… {walkLeft} left</div>
-            )}
-
-            {/* a heading / text / image / video block has no inner parts: its own fields come right under the list */}
-            {supported && plainBlock && selected && editorBox}
-
-            {supported && !plainBlock && Object.keys(catalog).length > 0 && (
-              <>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Elements of the lesson, by card type</div>
-                {Object.entries(catalog).map(([type, els]) => (
-                  <div key={type} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>{type}{type === (info && info.cardType) ? ' (on screen)' : (walkLeft === 0 && !usedTypes.includes(type) ? ' (not in this lesson)' : '')}</div>
-                    {els.map((el) => {
-                      const changed = Object.keys((((changes[zone] || {})[type] || {})[el.id]) || {}).length > 0;
-                      const on = el.id === selectedId && type === selectedType;
-                      return (
-                        <button key={el.id} type="button" onClick={() => selectElement(type, el.id)}
-                          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', padding: '0.45rem 0.65rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem',
-                            border: on ? '1px solid #0b57d0' : '1px solid #e2e8f0', background: on ? '#eff6ff' : '#ffffff', color: '#1e293b', fontWeight: on ? 700 : 500 }}>
-                          <span>{el.label || el.id}</span>
-                          {changed && <span style={{ fontSize: '0.65rem', color: '#0b57d0', fontWeight: 700 }}>edited</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
+            {/* 2. only the parts of the clicked block (its whole card, then the text, picture, button... it really has) */}
+            {supported && blockSel && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Parts of: {blockLabel(blockSel)}</div>
+                {partList.length === 0 && <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Reading the parts…</div>}
+                {partList.map((p) => listButton(
+                  p.label || p.id,
+                  selectedId === p.id,
+                  Object.keys((((changes[zone] || {})[`screen:${currentCard.id}`] || {})[p.id]) || {}).length > 0,
+                  () => selectPart(p.id),
+                  p.id
                 ))}
-
-                {selected && editorBox}
-              </>
+              </div>
             )}
+
+            {/* 3. the fields (size, position, text size...) of what was clicked */}
+            {supported && selected && editorBox}
 
             {supported && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.8rem' }}>
