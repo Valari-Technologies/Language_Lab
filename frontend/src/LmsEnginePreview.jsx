@@ -144,7 +144,7 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
   };
 
   const zoneName = (ZONES.find((z) => z.id === zone) || {}).name;
-  const settingsText = JSON.stringify({ zone, zoneName, layouts: changes[zone] || {} }, null, 2);
+  const settingsText = JSON.stringify({ version: 1, zone, zoneName, layouts: changes[zone] || {} }, null, 2);
   const hasChanges = Object.keys(changes[zone] || {}).length > 0;
 
   const copySettings = () => {
