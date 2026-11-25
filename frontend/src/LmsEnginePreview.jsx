@@ -14,8 +14,12 @@ import { LMS_PREVIEW_URL } from './config';
 //                                        sent when inspect is on, after an inspect request and whenever the card changes
 //   CMS -> engine  lms-preview:style     {id, props:{width, height, x, y, fontSize, brightness, opacity}}
 //   CMS -> engine  lms-preview:highlight {id}              outline the selected part (null = none)
+//   For a block the creator placed in Screen Builder (heading, text, image, video, quiz...) style and highlight carry
+//   kind:'block' and id = the block's own id (experience.json screens[].content.elements[].id). Layout key: "screen:<screenId>".
 //   CMS -> engine  lms-preview:reset     {}                remove every override
-//   CMS -> engine  lms-preview:goto      {activityId, screenId, activityIndex, screenIndex}   open that card (list of all cards)
+//   CMS -> engine  lms-preview:catalog   {}                ask for every card type of the player with its parts
+//   engine -> CMS  lms-preview:catalog   {cards:[{cardType, elements:[{id, label, props:[...], values:{...}}]}]}
+//   CMS -> engine  lms-preview:goto     {activityId, screenId, activityIndex, screenIndex}   open that card (list of all cards)
 // Units: width, height, x, y and fontSize are px; brightness and opacity are percent (100 = unchanged).
 
 const ZONES = [
@@ -104,6 +108,11 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
   const reapply = (cardType) => {
     const saved = (changes[zone] || {})[cardType] || {};
     Object.entries(saved).forEach(([id, props]) => post({ type: 'lms-preview:style', id, props }));
+    // the blocks of the screens (heading, video...) too
+    Object.entries(changes[zone] || {}).forEach(([key, els]) => {
+      if (!key.startsWith('screen:')) return;
+      Object.entries(els).forEach(([id, props]) => post({ type: 'lms-preview:style', id, props, kind: 'block' }));
+    });
   };
 
   useEffect(() => {
@@ -113,10 +122,20 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
       const m = e.data || {};
       if (m.type === 'lms-preview:ready') {
         post({ type: 'lms-preview:load', experience, zone });
-        if (editing) post({ type: 'lms-preview:inspect', on: true });
+        if (editing) { post({ type: 'lms-preview:inspect', on: true }); post({ type: 'lms-preview:catalog' }); }
         setStatus('');
       } else if (m.type === 'lms-preview:error') {
         setStatus(`The LMS player could not play this lesson: ${m.message || 'unknown error'}`);
+      } else if (m.type === 'lms-preview:catalog') {
+        // every card type the player has, with its parts, even those this lesson does not use
+        setSupported(true);
+        setCatalog((prev) => {
+          const next = { ...prev };
+          (Array.isArray(m.cards) ? m.cards : []).forEach((c) => {
+            if (c && c.cardType && !next[c.cardType]) next[c.cardType] = Array.isArray(c.elements) ? c.elements : [];
+          });
+          return next;
+        });
       } else if (m.type === 'lms-preview:elements') {
         const cardType = m.cardType || 'card';
         const elements = Array.isArray(m.elements) ? m.elements : [];
@@ -157,7 +176,7 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
     setEditing(next);
     setSelectedId(null); setSelectedType(null);
     walkRef.current = []; setWalkLeft(0);
-    if (next) { setSupported(null); post({ type: 'lms-preview:inspect', on: true }); }
+    if (next) { setSupported(null); post({ type: 'lms-preview:inspect', on: true }); post({ type: 'lms-preview:catalog' }); }
     else { post({ type: 'lms-preview:highlight', id: null }); post({ type: 'lms-preview:inspect', on: false }); }
   };
 
@@ -186,7 +205,7 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
   useEffect(() => {
     if (!editing || supported !== true || walked || cards.length === 0) return;
     setWalked(true);
-    walkRef.current = cards.slice();
+    walkRef.current = cards.concat(cards.slice(0, 1)); // ends on the first card again
     const first = walkRef.current.shift();
     setWalkLeft(walkRef.current.length);
     gotoRef.current = first;
@@ -205,9 +224,29 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
   const selectElement = (type, id) => {
     if (type === (info && info.cardType)) { setSelectedId(id); setSelectedType(type); post({ type: 'lms-preview:highlight', id }); return; }
     const card = cards.find((c) => typeOf[c.id] === type);
-    if (!card) return;
+    if (!card) {
+      // a card type this lesson does not use: its values can be set and saved, but it cannot be shown here
+      setSelectedId(id); setSelectedType(type); post({ type: 'lms-preview:highlight', id: null });
+      return;
+    }
     pendingSelectRef.current = { type, id };
     openCard(card);
+  };
+
+  // The blocks the creator put on a screen in Screen Builder (heading, text, image, video, quiz...) are layout elements too.
+  // They are stored under the key "screen:<screenId>" and the block's own id.
+  const currentCard = cards.find((c) => c.id === openCardId) || cards[0];
+  const blocks = currentCard
+    ? ((((((experience.activities || [])[currentCard.activityIndex] || {}).screens || [])[currentCard.screenIndex] || {}).content || {}).elements || []).filter((b) => b && b.id)
+    : [];
+  const blockLabel = (b) => {
+    const c = b.content || {};
+    const text = String(c.text || c.title || c.question || c.caption || '').trim();
+    return `${String(b.type || 'block').replace(/_/g, ' ')}${text ? `: ${text.slice(0, 28)}` : ''}`;
+  };
+  const selectBlock = (b) => {
+    setSelectedId(b.id); setSelectedType(`screen:${currentCard.id}`);
+    post({ type: 'lms-preview:highlight', id: b.id, kind: 'block' });
   };
 
   const saveLayout = async () => {
@@ -222,7 +261,7 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
   const setValue = (el, key, raw) => {
     if (raw === '' || Number.isNaN(Number(raw))) return;
     const value = Number(raw);
-    const cardType = info.cardType;
+    const cardType = selectedType || info.cardType;
     setChanges((prev) => {
       const zoneChanges = { ...(prev[zone] || {}) };
       const cardChanges = { ...(zoneChanges[cardType] || {}) };
@@ -230,11 +269,11 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
       zoneChanges[cardType] = cardChanges;
       return { ...prev, [zone]: zoneChanges };
     });
-    post({ type: 'lms-preview:style', id: el.id, props: { [key]: value } });
+    post({ type: 'lms-preview:style', id: el.id, props: { [key]: value }, ...(String(cardType).startsWith('screen:') ? { kind: 'block' } : {}) });
   };
 
   const valueOf = (el) => {
-    const saved = ((changes[zone] || {})[info.cardType] || {})[el.id] || {};
+    const saved = ((changes[zone] || {})[selectedType || info.cardType] || {})[el.id] || {};
     return { ...(el.values || {}), ...saved };
   };
 
@@ -257,7 +296,11 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
 
   if (!LMS_PREVIEW_URL) return null;
   const src = `${LMS_PREVIEW_URL}${LMS_PREVIEW_URL.includes('?') ? '&' : '?'}preview=1&zone=${zone}`;
-  const selected = info && selectedType === info.cardType ? info.elements.find((el) => el.id === selectedId) : null;
+  const blockSel = selectedType && String(selectedType).startsWith('screen:') ? blocks.find((b) => b.id === selectedId) : null;
+  const selected = blockSel
+    ? { id: blockSel.id, label: blockLabel(blockSel), props: PROP_FIELDS.map((f) => f.key), values: {} }
+    : (selectedType && selectedId ? ((selectedType === (info && info.cardType) ? info.elements : catalog[selectedType]) || []).find((el) => el.id === selectedId) : null);
+  const usedTypes = Object.values(typeOf);
   const unsaved = JSON.stringify(changes) !== savedText;
   const inputStyle = { width: '84px', padding: '0.25rem 0.4rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.8rem' };
 
@@ -324,6 +367,26 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
               <div style={{ fontSize: '0.8rem', color: '#64748b' }}>The player reported no editable parts for this card.</div>
             )}
 
+            {supported && currentCard && blocks.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Elements on this screen (from Screen Builder)</div>
+                <div style={{ fontSize: '0.68rem', color: '#64748b' }}>Screen: {currentCard.title || 'Untitled'}. Pick a card in the list above to see its elements.</div>
+                {blocks.map((b) => {
+                  const key = `screen:${currentCard.id}`;
+                  const changed = Object.keys((((changes[zone] || {})[key] || {})[b.id]) || {}).length > 0;
+                  const on = b.id === selectedId && selectedType === key;
+                  return (
+                    <button key={b.id} type="button" onClick={() => selectBlock(b)}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', padding: '0.45rem 0.65rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem',
+                        border: on ? '1px solid #0b57d0' : '1px solid #e2e8f0', background: on ? '#eff6ff' : '#ffffff', color: '#1e293b', fontWeight: on ? 700 : 500 }}>
+                      <span>{blockLabel(b)}</span>
+                      {changed && <span style={{ fontSize: '0.65rem', color: '#0b57d0', fontWeight: 700 }}>edited</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {supported && walkLeft > 0 && (
               <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Reading every card of the lesson… {walkLeft} left</div>
             )}
@@ -333,7 +396,7 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Elements of the lesson, by card type</div>
                 {Object.entries(catalog).map(([type, els]) => (
                   <div key={type} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>{type}{type === (info && info.cardType) ? ' (on screen)' : ''}</div>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>{type}{type === (info && info.cardType) ? ' (on screen)' : (walkLeft === 0 && !usedTypes.includes(type) ? ' (not in this lesson)' : '')}</div>
                     {els.map((el) => {
                       const changed = Object.keys((((changes[zone] || {})[type] || {})[el.id]) || {}).length > 0;
                       const on = el.id === selectedId && type === selectedType;
@@ -357,7 +420,7 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
                         {f.label}
                         <span>
                           <input type="number" style={inputStyle} min={f.min} max={f.max}
-                            value={valueOf(selected)[f.key] ?? ''} onChange={(e) => setValue(selected, f.key, e.target.value)} />
+                            placeholder="auto" value={valueOf(selected)[f.key] ?? ''} onChange={(e) => setValue(selected, f.key, e.target.value)} />
                           <span style={{ marginLeft: '4px', color: '#94a3b8' }}>{f.unit}</span>
                         </span>
                       </label>
