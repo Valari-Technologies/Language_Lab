@@ -301,8 +301,24 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
     ? { id: blockSel.id, label: blockLabel(blockSel), props: PROP_FIELDS.map((f) => f.key), values: {} }
     : (selectedType && selectedId ? ((selectedType === (info && info.cardType) ? info.elements : catalog[selectedType]) || []).find((el) => el.id === selectedId) : null);
   const usedTypes = Object.values(typeOf);
-  const unsaved = JSON.stringify(changes) !== savedText;
   const inputStyle = { width: '84px', padding: '0.25rem 0.4rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.8rem' };
+  const plainBlock = Boolean(blockSel) && ['heading', 'text', 'image', 'video', 'audio'].includes(String(blockSel.type).toLowerCase());
+  const editorBox = selected && (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.8rem' }}>
+      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>{selected.label || selected.id}</div>
+      {PROP_FIELDS.filter((f) => (selected.props || []).includes(f.key)).map((f) => (
+        <label key={f.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', color: '#475569' }}>
+          {f.label}
+          <span>
+            <input type="number" style={inputStyle} min={f.min} max={f.max}
+              placeholder="auto" value={valueOf(selected)[f.key] ?? ''} onChange={(e) => setValue(selected, f.key, e.target.value)} />
+            <span style={{ marginLeft: '4px', color: '#94a3b8' }}>{f.unit}</span>
+          </span>
+        </label>
+      ))}
+    </div>
+  );
+  const unsaved = JSON.stringify(changes) !== savedText;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, height: '100%' }}>
@@ -391,7 +407,10 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
               <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Reading every card of the lesson… {walkLeft} left</div>
             )}
 
-            {supported && Object.keys(catalog).length > 0 && (
+            {/* a heading / text / image / video block has no inner parts: its own fields come right under the list */}
+            {supported && plainBlock && selected && editorBox}
+
+            {supported && !plainBlock && Object.keys(catalog).length > 0 && (
               <>
                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Elements of the lesson, by card type</div>
                 {Object.entries(catalog).map(([type, els]) => (
@@ -412,21 +431,7 @@ const LmsEnginePreview = ({ experienceId, canEdit = false }) => {
                   </div>
                 ))}
 
-                {selected && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.8rem' }}>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>{selected.label || selected.id}</div>
-                    {PROP_FIELDS.filter((f) => (selected.props || []).includes(f.key)).map((f) => (
-                      <label key={f.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', color: '#475569' }}>
-                        {f.label}
-                        <span>
-                          <input type="number" style={inputStyle} min={f.min} max={f.max}
-                            placeholder="auto" value={valueOf(selected)[f.key] ?? ''} onChange={(e) => setValue(selected, f.key, e.target.value)} />
-                          <span style={{ marginLeft: '4px', color: '#94a3b8' }}>{f.unit}</span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                )}
+                {selected && editorBox}
               </>
             )}
 
