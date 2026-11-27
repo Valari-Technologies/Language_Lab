@@ -37,7 +37,7 @@ class LoginAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        username_input = serializer.validated_data["username"]
+        username_input = serializer.validated_data["username"].strip()
         password = serializer.validated_data["password"]
 
         # Support logging in by email or username
@@ -46,8 +46,21 @@ class LoginAPIView(APIView):
         user_by_email = User.objects.filter(email__iexact=username_input).first()
         if user_by_email:
             username = user_by_email.username
+            candidate_user = user_by_email
         else:
             username = username_input
+            candidate_user = User.objects.filter(username__iexact=username_input).first()
+
+        # If the account exists but has been deactivated, reject with Access Denied
+        if candidate_user and not candidate_user.is_active:
+            if candidate_user.role == User.Role.TEACHER:
+                msg = "Access denied. Your account has been deactivated. Please contact your school administrator."
+            else:
+                msg = "Access denied. This account has been deactivated. Please contact your administrator."
+            return Response(
+                {"message": msg},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         user = authenticate(username=username, password=password)
 
@@ -58,8 +71,13 @@ class LoginAPIView(APIView):
             )
 
         if not user.is_active:
+            msg = (
+                "Access denied. Your account has been deactivated. Please contact your school administrator."
+                if user.role == User.Role.TEACHER
+                else "Access denied. This account has been deactivated. Please contact your administrator."
+            )
             return Response(
-                {"message": "This account has been deactivated."},
+                {"message": msg},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -211,11 +229,45 @@ class SchoolDashboardAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        school_classes = Class.objects.filter(school=school, is_active=True)
+        school_grade_ids = list(school_classes.exclude(grade__isnull=True).values_list("grade_id", flat=True).distinct())
+
+        from assessments.models import ExperienceAssignment
+        assignments = ExperienceAssignment.objects.filter(school=school)
+        assigned_grade_ids = list(assignments.exclude(grade__isnull=True).values_list("grade_id", flat=True).distinct())
+        assigned_refs = list(assignments.values_list("experience_ref", flat=True).distinct())
+
+        assigned_exp_ids = []
+        for ref in assigned_refs:
+            if ref and str(ref).isdigit():
+                assigned_exp_ids.append(int(ref))
+            elif ref and str(ref).startswith("EXP-") and str(ref)[4:].isdigit():
+                assigned_exp_ids.append(int(str(ref)[4:]))
+
+        all_grades = set(school_grade_ids + assigned_grade_ids)
+        if not all_grades and not assigned_exp_ids and not assigned_refs:
+            total_lessons = 0
+        else:
+            from content_studio.models import Experience
+            from django.db.models import Q
+            filter_q = Q()
+            if all_grades:
+                filter_q |= Q(grade_id__in=all_grades)
+            if assigned_exp_ids:
+                filter_q |= Q(id__in=assigned_exp_ids)
+            if assigned_refs:
+                filter_q |= Q(title__in=assigned_refs)
+            total_lessons = Experience.objects.filter(
+                is_deleted=False,
+                status__in=["APPROVED", "PUBLISHED"]
+            ).filter(filter_q).count()
+
         data = {
             "school_name": school.school_name,
             "total_teachers": Teacher.objects.filter(school=school).count(),
             "total_students": Student.objects.filter(school=school).count(),
-            "active_classes": Class.objects.filter(school=school, is_active=True).count(),
+            "active_classes": school_classes.count(),
+            "total_lessons": total_lessons,
             # No engagement-metric, activity-log, or announcement models exist yet in
             # this codebase -- returning empty/null instead of inventing fake numbers.
             "monthly_engagement_rate": None,
@@ -261,6 +313,7 @@ class TeacherDashboardAPIView(APIView):
         ).count()
 
         data = {
+            "school_name": teacher.school.school_name if (teacher and teacher.school) else "",
             "assigned_classes": assigned_classes,
             "active_experiences": active_experiences_count,
             # No Submission/grading model exists in this codebase yet -- returning an
@@ -532,26 +585,44 @@ class GoogleLoginAPIView(APIView):
 
         try:
             if code:
-                # Exchange auth code for ID Token using Flow
-                from google_auth_oauthlib.flow import Flow
-                flow = Flow.from_client_config(
-                    client_config={
-                        "web": {
+                # Exchange auth code for ID Token using Flow (or fallback to HTTP request)
+                try:
+                    from google_auth_oauthlib.flow import Flow
+                    flow = Flow.from_client_config(
+                        client_config={
+                            "web": {
+                                "client_id": settings.GOOGLE_CLIENT_ID,
+                                "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                                "token_uri": "https://oauth2.googleapis.com/token",
+                            }
+                        },
+                        scopes=[
+                            "https://www.googleapis.com/auth/userinfo.profile",
+                            "https://www.googleapis.com/auth/userinfo.email",
+                            "openid"
+                        ],
+                        redirect_uri="postmessage"
+                    )
+                    flow.fetch_token(code=code)
+                    id_token_jwt = flow.credentials.id_token
+                except ImportError:
+                    import requests
+                    token_resp = requests.post(
+                        "https://oauth2.googleapis.com/token",
+                        data={
+                            "code": code,
                             "client_id": settings.GOOGLE_CLIENT_ID,
                             "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                            "token_uri": "https://oauth2.googleapis.com/token",
-                        }
-                    },
-                    scopes=[
-                        "https://www.googleapis.com/auth/userinfo.profile",
-                        "https://www.googleapis.com/auth/userinfo.email",
-                        "openid"
-                    ],
-                    redirect_uri="postmessage"
-                )
-                flow.fetch_token(code=code)
-                id_token_jwt = flow.credentials.id_token
+                            "redirect_uri": "postmessage",
+                            "grant_type": "authorization_code",
+                        },
+                        timeout=10
+                    )
+                    if not token_resp.ok:
+                        err_msg = token_resp.json().get("error_description", "Failed to exchange authorization code")
+                        return Response({"error": f"Google auth error: {err_msg}"}, status=status.HTTP_400_BAD_REQUEST)
+                    id_token_jwt = token_resp.json().get("id_token")
             else:
                 id_token_jwt = token
 
@@ -605,8 +676,13 @@ class GoogleLoginAPIView(APIView):
             )
 
         if not user.is_active:
+            msg = (
+                "Access denied. Your account has been deactivated. Please contact your school administrator."
+                if user.role == User.Role.TEACHER
+                else "Access denied. This account has been deactivated. Please contact your administrator."
+            )
             return Response(
-                {"message": "This account has been deactivated."},
+                {"message": msg},
                 status=status.HTTP_403_FORBIDDEN
             )
 

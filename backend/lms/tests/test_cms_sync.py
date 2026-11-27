@@ -178,3 +178,49 @@ class LMSCMSSyncTests(TestCase):
         self.assertEqual(response.data["updates"][0]["experience_id"], self.experience.id)
         self.assertEqual(response.data["updates"][0]["version"], "1.0.0")
         self.assertEqual(response.data["updates"][0]["checksum"], "dummy_checksum_123")
+
+    def test_bootstrap_sync_missing_school_id(self):
+        """Omitting school_id returns HTTP 400 with strict prohibition message."""
+        res = self.client.get("/api/v1/sync/bootstrap/")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", res.data)
+        self.assertEqual(
+            res.data["error"],
+            "school_id parameter or X-School-ID header is required for school synchronization. Global student fetching is prohibited."
+        )
+
+    def test_bootstrap_sync_with_string_school_id(self):
+        """String school_id does not cause ValueError/PostgreSQL cast error and retrieves school data."""
+        self.school.schoolId = "SCH-C2D86280"
+        self.school.save()
+
+        res = self.client.get("/api/v1/sync/bootstrap/", {"school_id": "SCH-C2D86280"})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data["success"])
+        self.assertEqual(res.data["school_id"], "SCH-C2D86280")
+        self.assertEqual(res.data["schoolId"], "SCH-C2D86280")
+        self.assertEqual(res.data["school_name"], "LMS Sync Academy")
+        self.assertEqual(len(res.data["students"]), 1)
+        self.assertEqual(res.data["students"][0]["login_code"], "STU-SYNC-001")
+
+    def test_bootstrap_sync_with_header(self):
+        """X-School-ID header is respected."""
+        self.school.schoolId = "SCH-HEADER-01"
+        self.school.save()
+
+        res = self.client.get("/api/v1/sync/bootstrap/", HTTP_X_SCHOOL_ID="SCH-HEADER-01")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["school_id"], "SCH-HEADER-01")
+        self.assertEqual(len(res.data["students"]), 1)
+
+    def test_bootstrap_sync_with_numeric_school_id(self):
+        """Numeric AutoField school_id is resolved correctly."""
+        res = self.client.get("/api/v1/sync/bootstrap/", {"school_id": str(self.school.school_id)})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res.data["students"]), 1)
+
+    def test_bootstrap_sync_school_not_found(self):
+        """Non-existent school_id returns HTTP 404."""
+        res = self.client.get("/api/v1/sync/bootstrap/", {"school_id": "SCH-NONEXISTENT"})
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(res.data["error"], "School 'SCH-NONEXISTENT' not found.")

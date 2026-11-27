@@ -12,6 +12,13 @@ import {
 import './SchoolDashboard.css';
 import { apiFetch } from './api';
 import { API_BASE_URL } from './config';
+import { formatRollNo, pageItems, titleName } from './format';
+
+// Difficulty as shown to users: BEGINNER / INTERMEDIATE / MASTER (or "Intermediate") -> "Beginner" / "Intermediate" / "Master".
+const difficultyLabel = (value) => {
+  const clean = String(value || 'INTERMEDIATE').trim().toLowerCase();
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+};
 
 const resolveMediaUrl = (url) => {
   if (!url) return '';
@@ -26,6 +33,8 @@ import logoIcon from './assets/icon.png';
 import roundLogo from './assets/favicon.png';
 import AvatarCropperModal from './AvatarCropperModal';
 import HelpSupportModal from './HelpSupportModal';
+import TeacherReportsPanel from './TeacherReportsPanel';
+import LessonPreview from './LessonPreview';
 
 const sortClasses = (classesList) => {
   if (!Array.isArray(classesList)) return [];
@@ -153,17 +162,22 @@ const generateRollNo = (fullName, existingStudents = []) => {
   return candidate;
 };
 
-const generateLmsLoginCode = (fullName, existingStudents = []) => {
-  const cleanName = (fullName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!cleanName) return '';
-  const takenUsernames = new Set((existingStudents || []).map(s => (s.username || '').toLowerCase()));
-  let candidate = cleanName;
-  let suffix = 1;
-  while (takenUsernames.has(candidate)) {
-    candidate = `${cleanName}${suffix}`;
-    suffix += 1;
-  }
-  return candidate;
+// name_Grade_RollNo, e.g. VIN_G5_01. A code already taken in the school (same grade, another section) gets a letter,
+// VIN_G5_01B, the same way the server does it; the server builds the final code when the student is saved.
+const generateLmsLoginCode = (fullName, rollNo = '', existingStudents = [], grade = '') => {
+  const letters = (fullName || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
+  if (!letters) return '';
+  const prefix = letters.slice(0, 3).padEnd(3, 'X');
+  const cleanRoll = String(rollNo || '').trim();
+  const formattedRoll = /^\d$/.test(cleanRoll) ? `0${cleanRoll}` : cleanRoll;
+  const gradeNumber = (String(grade || '').match(/\d+/) || [])[0];
+  const baseCode = formattedRoll ? `${prefix}_${gradeNumber ? `G${parseInt(gradeNumber, 10)}_` : ''}${formattedRoll}` : `${prefix}_`;
+  if (!formattedRoll) return baseCode;
+
+  const taken = new Set((existingStudents || []).flatMap(s => [s.username, s.lms_code]).map(c => (c || '').toUpperCase()));
+  if (!taken.has(baseCode)) return baseCode;
+  const free = [...'BCDEFGHIJKLMNOPQRSTUVWXYZ'].find(letter => !taken.has(`${baseCode}${letter}`));
+  return free ? `${baseCode}${free}` : baseCode;
 };
 
 /* ─── Static chart data (same as SchoolDashboard reference) ─── */
@@ -245,7 +259,7 @@ const LineChart = ({ lines = CHART_LINES }) => {
 /* ─── Pagination ─── */
 const Pagination = ({ total, perPage = 4, page, onPage }) => {
   const pages = Math.max(1, Math.ceil(total / perPage));
-  const items = pages <= 5 ? Array.from({ length: pages }, (_, i) => i + 1) : [1, 2, 3, '...', pages];
+  const items = pageItems(page, pages);
   const from = total === 0 ? 0 : (page - 1) * perPage + 1;
   const to = Math.min(page * perPage, total);
   return (
@@ -259,8 +273,8 @@ const Pagination = ({ total, perPage = 4, page, onPage }) => {
         </button>
         {items.map((it, i) =>
           it === '...'
-            ? <span key={i} className="sd-page-btn ellipsis">…</span>
-            : <button key={it} className={`sd-page-btn${page === it ? ' active' : ''}`} onClick={() => onPage(it)}>{it}</button>
+            ? <span key={`gap-${i}`} className="sd-page-btn ellipsis">…</span>
+            : <button key={`page-${it}`} className={`sd-page-btn${page === it ? ' active' : ''}`} onClick={() => onPage(it)}>{it}</button>
         )}
         <button className="sd-page-btn arrow" disabled={page === pages} onClick={() => onPage(page + 1)}>
           <FiChevronRight/>
@@ -440,6 +454,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [showClassCrudDetailModal, setShowClassCrudDetailModal] = useState(false);
   const [classDetailTab, setClassDetailTab] = useState('lessons'); // 'lessons' | 'overview'
   const [classLessonSearch, setClassLessonSearch] = useState('');
+  const [viewLesson, setViewLesson] = useState(null); // the lesson card opened with its View button: { id, title }
   const [selectedStudentCrudDetail, setSelectedStudentCrudDetail] = useState(null);
   const [showStudentCrudDetailModal, setShowStudentCrudDetailModal] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null); // { id, type }
@@ -459,6 +474,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const [profileForm, setProfileForm] = useState({
     username: user?.username || '', email: user?.email || '',
     full_name: user?.full_name || '', phone_no: user?.phone_no || '',
+    school_name: localStorage.getItem('teacher_school_name') || user?.school_name || '',
     current_password: '', password: ''
   });
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
@@ -483,6 +499,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           d.recent_activities = await actRes.json();
         }
         setData(d);
+        if (d.school_name) {
+          setProfileForm(prev => ({ ...prev, school_name: d.school_name }));
+          try { localStorage.setItem('teacher_school_name', d.school_name); } catch {}
+        }
       }
     } catch (e) { console.error('Failed to load teacher dashboard data.', e); }
   };
@@ -623,11 +643,15 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         const data = await res.json();
         setUser(data);
         if (onUpdateUser) onUpdateUser(data);
+        if (data.school_name) {
+          try { localStorage.setItem('teacher_school_name', data.school_name); } catch {}
+        }
         setProfileForm({
           username: data.username || '',
           email: data.email || '',
           full_name: data.full_name || '',
           phone_no: data.phone_no || '',
+          school_name: data.school_name || localStorage.getItem('teacher_school_name') || '',
           current_password: '',
           password: ''
         });
@@ -655,6 +679,21 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     return () => clearInterval(timer);
   }, []);
 
+  /* ── Keep the students list in step with the other portal ──
+     The School Admin and Teacher portals read the same students. A student activated or deactivated in one portal
+     shows in the other within about 20 seconds, or at once when the tab is opened again. */
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === 'visible') loadStudents(); };
+    const timer = setInterval(refresh, 20000);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, []);
+
   useEffect(() => {
     const handler = () => {
       setShowNotifDropdown(false);
@@ -662,7 +701,15 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       setShowProfileDropdown(false);
     };
     document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
+    // the students action menu is fixed to the screen, so it closes when the page or the table scrolls or resizes
+    const closeMenu = () => setActiveDropdown(null);
+    window.addEventListener('scroll', closeMenu, true);
+    window.addEventListener('resize', closeMenu);
+    return () => {
+      document.removeEventListener('click', handler);
+      window.removeEventListener('scroll', closeMenu, true);
+      window.removeEventListener('resize', closeMenu);
+    };
   }, []);
 
   const formatDateTime = (date) => {
@@ -791,9 +838,11 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
       endpoint = modalType === 'add' ? '/api/cms/v1/students/' : `/api/cms/v1/students/${editingId}/`;
       payload = { ...studentForm, role: 'STUDENT' };
       if (modalType === 'add') {
-        if (!payload.username) payload.username = payload.roll_no;
-        if (!payload.password) payload.password = payload.roll_no;
-        if (!payload.email) payload.email = `${payload.roll_no}@school.com`;
+        if (!payload.username || payload.username.endsWith('_')) {
+          payload.username = generateLmsLoginCode(payload.full_name, payload.roll_no, students, payload.grade);
+        }
+        if (!payload.password) payload.password = payload.username;
+        if (!payload.email) payload.email = `${payload.username.toLowerCase()}@lingualab.com`;
       } else if (modalType === 'edit' && !payload.password) {
         delete payload.password;
       }
@@ -832,6 +881,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           await Promise.all(ids.map(id => apiFetch(`/api/cms/v1/students/${id}/`, { method: 'DELETE' })));
           showFeedback(`Successfully deleted ${count} student(s).`, null);
           setSelectedStudentIds([]);
+          setIsSelectModeStudents(false);  // back to the normal list: the Delete button is Select again
           await loadStudents();
         } else if (bulkType === 'bulk-classes') {
           await Promise.all(ids.map(id => apiFetch(`/api/cms/v1/classes/${id}/`, { method: 'DELETE' })));
@@ -998,15 +1048,38 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setErrorMsg('');
-    if (profileForm.phone_no && profileForm.phone_no.replace(/\D/g, '').length !== 10) {
+
+    const trimmedFullName = (profileForm.full_name || '').trim();
+    const trimmedEmail = (profileForm.email || '').trim();
+    const cleanedPhone = (profileForm.phone_no || '').replace(/\D/g, '');
+
+    if (!trimmedFullName) {
+      setErrorMsg('Full Name is required.');
+      return;
+    }
+    if (!trimmedEmail) {
+      setErrorMsg('Email Address is required.');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+    if (!cleanedPhone) {
+      setErrorMsg('Phone number is required.');
+      return;
+    }
+    if (cleanedPhone.length !== 10) {
       setErrorMsg('Phone number must be exactly 10 numeric digits.');
       return;
     }
+
     setActionLoading(true);
     try {
       const res = await apiFetch('/api/users/profile/', {
         method: 'PATCH',
-        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no })
+        body: JSON.stringify({ full_name: trimmedFullName, email: trimmedEmail, phone_no: cleanedPhone })
       });
       let resData = {};
       try { resData = await res.json(); } catch { resData = {}; }
@@ -1024,14 +1097,24 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         setErrorMsg(msg);
         return;
       }
-      const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
+      const updatedUser = resData.user || { ...user, full_name: trimmedFullName, email: trimmedEmail, phone_no: cleanedPhone };
       if (onUpdateUser) onUpdateUser(updatedUser);
+      setUser(updatedUser);
+      setProfileForm(prev => ({ ...prev, full_name: trimmedFullName, email: trimmedEmail, phone_no: cleanedPhone }));
       showFeedback('Profile updated successfully', null);
     } catch (err) {
       console.error('Profile update error:', err);
       setErrorMsg('Failed to update profile.');
     } finally { setActionLoading(false); }
   };
+
+  // The filter drop-downs offer only the classes and sections the teacher is assigned to
+  const gradeOf = (c) => (String(c.class_name || '').match(/\d+/) || [])[0] || '';
+  const sectionOf = (c) => String(c.section || '').replace('Section', '').trim().toUpperCase();
+  const assignedGrades = [...new Set(classes.map(gradeOf).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
+  const assignedSections = (grade) => [...new Set(
+    classes.filter(c => !grade || gradeOf(c) === String(grade)).map(sectionOf).filter(Boolean)
+  )].sort();
 
   const getFilteredClasses = () => {
     return classes.filter(c => {
@@ -1089,9 +1172,11 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
     };
     
     const rows = list.map(s => {
-      const fullName = s.full_name || s.username || 'N/A';
-      const rollNo = s.roll_no || 'N/A';
-      const loginCode = s.username || 'N/A';
+      const fullName = titleName(s.full_name) || s.username || 'N/A';
+      const rollNo = formatRollNo(s.roll_no) || 'N/A';
+      const loginCode = (s.username && /^([A-Z]{3})_(\d)$/.test(s.username))
+        ? s.username.replace(/^([A-Z]{3})_(\d)$/, '$1_0$2')
+        : (s.username || 'N/A');
       const className = s.grade ? (String(s.grade).startsWith('Class') || String(s.grade).startsWith('Grade') ? String(s.grade).replace('Grade', 'Class') : `Class ${s.grade}`) : 'N/A';
       const section = s.section ? (String(s.section).startsWith('Section') ? s.section : `Section ${s.section}`) : 'N/A';
       const academicYear = s.academic_year || '2025 - 2026';
@@ -1545,7 +1630,18 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               <img src={logoIcon} alt="Logo" style={{ width: '48px', height: '76px', objectFit: 'contain' }} />
               <div>
                 <div className="sd-brand-name">LinguaLab</div>
-                <div className="sd-brand-sub">Teacher Portal</div>
+                <div 
+                  className="sd-brand-sub" 
+                  title={data?.school_name || profileForm.school_name || user?.school_name || ''}
+                  style={{
+                    maxWidth: '150px',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                >
+                  {data?.school_name || profileForm.school_name || user?.school_name || 'Teacher Portal'}
+                </div>
               </div>
             </div>
           ) : (
@@ -1949,10 +2045,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     className="sd-form-input"
                     style={{ width: '130px', height: '38px', padding: '0 0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.82rem' }}
                     value={studentClassFilter}
-                    onChange={e => { setStudentClassFilter(e.target.value); setStudentPage(1); }}
+                    onChange={e => { setStudentClassFilter(e.target.value); setStudentSectionFilter(''); setStudentPage(1); }}
                   >
                     <option value="">All Classes</option>
-                    {[3, 4, 5, 6, 7, 8].map(num => (
+                    {assignedGrades.map(num => (
                       <option key={num} value={`Class ${num}`}>Class {num}</option>
                     ))}
                   </select>
@@ -1964,29 +2060,36 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     onChange={e => { setStudentSectionFilter(e.target.value); setStudentPage(1); }}
                   >
                     <option value="">All Sections</option>
-                    {['A', 'B', 'C', 'D', 'E', 'F'].map(sec => (
+                    {assignedSections(String(studentClassFilter || '').replace(/\D/g, '')).map(sec => (
                       <option key={sec} value={sec}>Section {sec}</option>
                     ))}
                   </select>
 
                   <div className="sd-table-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <button
-                      className="sd-btn-outline"
-                      style={{
-                        background: isSelectModeStudents ? '#e2e8f0' : '#ffffff',
-                        color: '#374151',
-                        borderColor: '#cbd5e1'
-                      }}
-                      onClick={() => {
-                        setIsSelectModeStudents(!isSelectModeStudents);
-                        if (isSelectModeStudents) setSelectedStudentIds([]);
-                      }}
-                    >
-                      {isSelectModeStudents ? '✓ Done Selecting' : 'Select'}
-                    </button>
-                    {selectedStudentIds.length > 0 && (
-                      <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteStudents}>
-                        <FiTrash2/> Delete Selected ({selectedStudentIds.length})
+                    {/* Select -> (nobody ticked) Unselect, (someone ticked) Delete (n); after the delete it is Select again */}
+                    {isSelectModeStudents && selectedStudentIds.length === 0 ? (
+                      <button
+                        className="sd-btn-outline"
+                        style={{ background: '#e2e8f0', color: '#374151', borderColor: '#cbd5e1' }}
+                        onClick={() => setIsSelectModeStudents(false)}
+                      >
+                        Unselect
+                      </button>
+                    ) : isSelectModeStudents ? (
+                      <button
+                        className="sd-btn-outline"
+                        style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                        onClick={handleBulkDeleteStudents}
+                      >
+                        <FiTrash2 /> Delete ({selectedStudentIds.length})
+                      </button>
+                    ) : (
+                      <button
+                        className="sd-btn-outline"
+                        style={{ background: '#ffffff', color: '#374151', borderColor: '#cbd5e1' }}
+                        onClick={() => { setIsSelectModeStudents(true); setSelectedStudentIds([]); }}
+                      >
+                        Select
                       </button>
                     )}
                     <button className="sd-btn-outline" onClick={() => { setImportActive(!importActive); setUploadSummary(null); }}>
@@ -2074,7 +2177,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         </tbody>
                       </table>
                       <div style={{ padding: '0.75rem 1.25rem', background: '#fffbeb', borderTop: '1px solid #fef3c7', fontSize: '0.8rem', color: '#92400e' }}>
-                        LMS login code is auto-generated from <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>fullname</code>.
+                        LMS login code is auto-generated from <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>fullname</code>, <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>grade</code> and <code style={{ background: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>roll no</code> (e.g. <span style={{ fontWeight: 700 }}>ABU_G5_07</span> or <span style={{ fontWeight: 700 }}>DHA_G8_12</span>).
                       </div>
                     </div>
 
@@ -2165,10 +2268,25 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                               </td>
                             )}
                             <td>
-                              <span className="sd-name-cell-primary">{s.full_name || 'N/A'}</span>
+                              <span className="sd-name-cell-primary">{titleName(s.full_name) || 'N/A'}</span>
                             </td>
-                            <td>{s.roll_no || 'N/A'}</td>
-                            <td><span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>{s.username || 'N/A'}</span></td>
+                            <td>{formatRollNo(s.roll_no) || 'N/A'}</td>
+                            <td>
+                              <span style={{ fontWeight: 600, color: '#0b75b3', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>
+                                {(() => {
+                                  if (s.username && s.username.toLowerCase() === (s.full_name || '').toLowerCase().replace(/[^a-z0-9]/g, '') && s.roll_no) {
+                                    return generateLmsLoginCode(s.full_name, s.roll_no, students, s.grade);
+                                  }
+                                  if (s.username) {
+                                    if (/^([A-Z]{3})_(\d)$/.test(s.username)) {
+                                      return s.username.replace(/^([A-Z]{3})_(\d)$/, '$1_0$2');
+                                    }
+                                    return s.username;
+                                  }
+                                  return 'N/A';
+                                })()}
+                              </span>
+                            </td>
                             <td>{s.grade ? (String(s.grade).startsWith('Class') || String(s.grade).startsWith('Grade') ? String(s.grade).replace('Grade', 'Class') : `Class ${s.grade}`) : 'N/A'}</td>
                             <td>{s.section ? (String(s.section).startsWith('Section') ? s.section : `Section ${s.section}`) : 'N/A'}</td>
                             <td style={{ textAlign: 'center' }}>{s.academic_year || '2025 - 2026'}</td>
@@ -2183,10 +2301,15 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                   className="sd-action-trigger"
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    // the menu is placed from the button's position on the screen, so the table's own
+                                    // scroll area never clips it (it opens upward when there is no room below)
+                                    const box = e.currentTarget.getBoundingClientRect();
+                                    const opensUp = window.innerHeight - box.bottom < 190 && box.top > 190;
                                     setActiveDropdown(
                                       activeDropdown && activeDropdown.id === sid
                                         ? null
-                                        : { id: sid, type: 'students' }
+                                        : { id: sid, type: 'students', right: Math.max(8, window.innerWidth - box.right),
+                                            ...(opensUp ? { bottom: window.innerHeight - box.top + 4 } : { top: box.bottom + 4 }) }
                                     );
                                   }}
                                   style={{
@@ -2207,94 +2330,44 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                   <div
                                     className="sd-action-menu"
                                     style={{
-                                      position: 'absolute',
-                                      right: 0,
-                                      top: '100%',
+                                      position: 'fixed',
+                                      right: activeDropdown.right,
+                                      top: activeDropdown.top,
+                                      bottom: activeDropdown.bottom,
                                       background: '#ffffff',
                                       border: '1px solid #e2e8f0',
                                       borderRadius: '8px',
-                                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                                      zIndex: 100,
-                                      minWidth: '130px',
-                                      padding: '0.4rem 0'
+                                      boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                                      zIndex: 1000,
+                                      minWidth: '150px',
+                                      padding: '4px 0',
+                                      overflow: 'hidden'
                                     }}
                                   >
+                                    {[
+                                      { label: 'Edit', icon: <FiEdit2 />, color: '#334155', hover: '#f8fafc', action: () => openEditModal(s) },
+                                      { label: s.is_active ? 'Deactive' : 'Activate', icon: <FiLock />, color: '#334155', hover: '#f8fafc', action: () => toggleActiveStatus(sid, s.is_active, 'students') },
+                                    ].map(item => (
+                                      <button
+                                        key={item.label}
+                                        type="button"
+                                        className="sd-menu-item"
+                                        onMouseEnter={e => { e.currentTarget.style.background = item.hover; }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+                                        onClick={item.action}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 14px', border: 'none', background: 'none', textAlign: 'left', fontSize: '0.85rem', color: item.color, cursor: 'pointer' }}
+                                      >
+                                        {item.icon} {item.label}
+                                      </button>
+                                    ))}
+                                    <div style={{ height: '1px', background: '#f1f5f9', margin: '2px 0' }} />
                                     <button
+                                      type="button"
                                       className="sd-menu-item"
-                                      onClick={() => {
-                                        setSelectedStudentCrudDetail(s);
-                                        setShowStudentCrudDetailModal(true);
-                                      }}
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        width: '100%',
-                                        padding: '0.5rem 1rem',
-                                        border: 'none',
-                                        background: 'none',
-                                        textAlign: 'left',
-                                        fontSize: '0.85rem',
-                                        color: '#0f172a',
-                                        cursor: 'pointer'
-                                      }}
-                                    >
-                                      <FiEye style={{ color: '#0284c7' }} /> View
-                                    </button>
-                                    <button
-                                      className="sd-menu-item"
-                                      onClick={() => openEditModal(s)}
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        width: '100%',
-                                        padding: '0.5rem 1rem',
-                                        border: 'none',
-                                        background: 'none',
-                                        textAlign: 'left',
-                                        fontSize: '0.85rem',
-                                        color: '#4f46e5',
-                                        cursor: 'pointer'
-                                      }}
-                                    >
-                                      <FiEdit2 style={{ color: '#4f46e5' }} /> Edit
-                                    </button>
-                                    <button
-                                      className="sd-menu-item"
-                                      onClick={() => toggleActiveStatus(sid, s.is_active, 'students')}
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        width: '100%',
-                                        padding: '0.5rem 1rem',
-                                        border: 'none',
-                                        background: 'none',
-                                        textAlign: 'left',
-                                        fontSize: '0.85rem',
-                                        color: s.is_active ? '#ef4444' : '#16a34a',
-                                        cursor: 'pointer'
-                                      }}
-                                    >
-                                      <FiLock /> {s.is_active ? 'Block' : 'Unblock'}
-                                    </button>
-                                    <button
-                                      className="sd-menu-item"
+                                      onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; }}
+                                      onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
                                       onClick={() => openDeleteModal(sid, 'students', s.full_name || s.username)}
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        width: '100%',
-                                        padding: '0.5rem 1rem',
-                                        border: 'none',
-                                        background: 'none',
-                                        textAlign: 'left',
-                                        fontSize: '0.85rem',
-                                        color: '#dc2626',
-                                        cursor: 'pointer'
-                                      }}
+                                      style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 14px', border: 'none', background: 'none', textAlign: 'left', fontSize: '0.85rem', color: '#ef4444', cursor: 'pointer' }}
                                     >
                                       <FiTrash2 /> Delete
                                     </button>
@@ -2343,10 +2416,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       className="sd-form-input"
                       style={{ width: '130px', height: '38px', padding: '0 0.5rem', fontSize: '0.82rem', borderRadius: '8px' }}
                       value={tchClassFilter}
-                      onChange={e => { setTchClassFilter(e.target.value); setClassPage(1); }}
+                      onChange={e => { setTchClassFilter(e.target.value); setTchSectionFilter(''); setClassPage(1); }}
                     >
                       <option value="">All Classes</option>
-                      {[3, 4, 5, 6, 7, 8].map(n => (
+                      {assignedGrades.map(n => (
                         <option key={n} value={String(n)}>Class {n}</option>
                       ))}
                     </select>
@@ -2358,7 +2431,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                       onChange={e => { setTchSectionFilter(e.target.value); setClassPage(1); }}
                     >
                       <option value="">All Sections</option>
-                      {['A', 'B', 'C', 'D', 'E', 'F'].map(sec => (
+                      {assignedSections(tchClassFilter).map(sec => (
                         <option key={sec} value={sec}>Section {sec}</option>
                       ))}
                     </select>
@@ -2451,20 +2524,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
           {/* ══════════ REPORTS TAB ══════════ */}
           {activeSubTab === 'reports' && !isAnyOverlayOpen && (
-            <>
-              <div className="sd-page-header">
-                <h1 className="sd-page-title">Student Performance Reports</h1>
-                <p className="sd-page-sub">Monitor evaluation metrics and student progression.</p>
-              </div>
-
-              <div className="sd-card" style={{ padding: '3rem 1.5rem', textAlign: 'center' }}>
-                <FiBarChart2 style={{ fontSize: '3rem', color: '#94a3b8', marginBottom: '1rem' }} />
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#1e293b', marginBottom: '0.5rem' }}>No Reports Available</h3>
-                <p style={{ color: '#64748b', maxWidth: '450px', margin: '0 auto' }}>
-                  Student progression and evaluation reports will appear here once assignments are completed and submitted.
-                </p>
-              </div>
-            </>
+            <TeacherReportsPanel 
+              user={user} 
+              schoolName={data?.school_name || profileForm.school_name || user?.school_name} 
+            />
           )}
 
 {/* ══════════ PROFILE TAB ══════════ */}
@@ -2586,7 +2649,9 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Full Name</label>
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                          Full Name <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
                         <input className="sd-form-input" type="text"
                           value={profileForm.full_name}
                           onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
@@ -2597,11 +2662,13 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         />
                       </div>
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Email Address</label>
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                          Email Address <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
                         <input className="sd-form-input" type="email"
                           value={profileForm.email}
                           onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
-                          placeholder="your@email.com" 
+                          placeholder="your@email.com" required 
                           style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                           onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
                           onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
@@ -2611,12 +2678,14 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Username</label>
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Username (Read-Only)</label>
                         <input className="sd-form-input" type="text" value={profileForm.username || user?.username} disabled
                           style={{ width: '100%', height: '42px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} />
                       </div>
                       <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Phone Number</label>
+                        <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                          Phone Number <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
                         <input className="sd-form-input" type="tel"
                           maxLength={10}
                           value={profileForm.phone_no || ''}
@@ -2624,7 +2693,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
                             setProfileForm({ ...profileForm, phone_no: cleaned });
                           }}
-                          placeholder="Enter 10 digit phone number" 
+                          placeholder="Enter 10 digit phone number" required 
                           style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                           onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
                           onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
@@ -2684,14 +2753,21 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             setStudentForm(prev => ({
                               ...prev,
                               full_name,
-                              username: modalType === 'add' ? generateRollNo(full_name, students) : prev.username
+                              username: modalType === 'add' ? generateLmsLoginCode(full_name, prev.roll_no, students, prev.grade) : prev.username
                             }));
                           }} required placeholder="e.g. Arjun Sharma"/>
                       </div>
                       <div className="sd-form-group">
                         <label className="sd-form-label">Roll No *</label>
                         <input className="sd-form-input" type="text" value={studentForm.roll_no}
-                          onChange={e => setStudentForm({...studentForm, roll_no: e.target.value})} placeholder="e.g. 12" required/>
+                          onChange={e => {
+                            const roll_no = e.target.value;
+                            setStudentForm(prev => ({
+                              ...prev,
+                              roll_no,
+                              username: modalType === 'add' ? generateLmsLoginCode(prev.full_name, roll_no, students, prev.grade) : prev.username
+                            }));
+                          }} placeholder="e.g. 12" required/>
                       </div>
                     </div>
                     <div className="sd-form-row">
@@ -2707,13 +2783,17 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             if (val) {
                               const selectedClass = classes.find(c => String(c.class_id) === String(val));
                               if (selectedClass) {
-                                setStudentForm(prev => ({
-                                  ...prev,
-                                  class_id: val,
-                                  grade: selectedClass.grade_name ? selectedClass.grade_name.replace('Grade', 'Class') : `Class ${selectedClass.grade}`,
-                                  section: selectedClass.section || '',
-                                  academic_year: selectedClass.academic_year || '2025 - 2026'
-                                }));
+                                setStudentForm(prev => {
+                                  const grade = selectedClass.grade_name ? selectedClass.grade_name.replace('Grade', 'Class') : `Class ${selectedClass.grade}`;
+                                  return {
+                                    ...prev,
+                                    class_id: val,
+                                    grade,
+                                    section: selectedClass.section || '',
+                                    academic_year: selectedClass.academic_year || '2025 - 2026',
+                                    username: modalType === 'add' ? generateLmsLoginCode(prev.full_name, prev.roll_no, students, grade) : prev.username
+                                  };
+                                });
                               }
                             } else {
                               setStudentForm(prev => ({
@@ -2855,7 +2935,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', minHeight: '600px', backgroundColor: 'transparent', zIndex: 900, display: 'flex', flexDirection: 'column', padding: '1.5rem' }}>
                 <div style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <button
-                    onClick={() => setShowClassCrudDetailModal(false)}
+                    onClick={() => { setViewLesson(null); setShowClassCrudDetailModal(false); }}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#4f46e5', fontWeight: 600, fontSize: '0.9rem', padding: 0 }}
                   >
                     ← Back to Classes
@@ -2912,7 +2992,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         {selectedClassCrudDetail.is_active ? 'Active Class' : 'Inactive'}
                       </span>
                     </div>
-                    {classDetailTab === 'lessons' && (
+                    {classDetailTab === 'lessons' && !viewLesson && (
                       <div style={{ position: 'relative' }}>
                         <FiSearch style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: '0.85rem' }} />
                         <input
@@ -2954,7 +3034,9 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                      {filteredLessons.length > 0 ? (
+                      {viewLesson ? (
+                        <LessonPreview experienceId={viewLesson.id} title={viewLesson.title} onBack={() => setViewLesson(null)} />
+                      ) : filteredLessons.length > 0 ? (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
                           {filteredLessons.map((lesson, idx) => (
                             <div
@@ -2986,7 +3068,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                 <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', gap: '8px', alignItems: 'center' }}>
                                   <span>Subject: {lesson.subject || 'General'}</span>
                                   <span>•</span>
-                                  <span>Level: {lesson.difficulty || 'Intermediate'}</span>
+                                  <span>Level: {lesson.difficulty_display || difficultyLabel(lesson.difficulty)}</span>
                                 </div>
                               </div>
 
@@ -2994,6 +3076,15 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                                 <span>Ref: {lesson.experience_ref}</span>
                                 <span>Assigned: {lesson.assigned_at ? new Date(lesson.assigned_at).toLocaleDateString() : 'N/A'}</span>
                               </div>
+                              {lesson.experience_id && (
+                                <button
+                                  type="button"
+                                  onClick={() => setViewLesson({ id: lesson.experience_id, title: lesson.experience_title })}
+                                  style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '0.4rem 0.9rem', fontSize: '0.8rem', fontWeight: 700, color: '#4f46e5', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: '8px', cursor: 'pointer' }}
+                                >
+                                  <FiEye /> View
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -3037,10 +3128,10 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                 <div style={{ padding: '0.5rem 0', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem', alignItems: 'center' }}>
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Full Name:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.full_name || 'N/A'}</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{titleName(selectedStudentCrudDetail.full_name) || 'N/A'}</span>
                     
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Roll No:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.roll_no || 'N/A'}</span>
+                    <span style={{ color: '#0f172a', fontWeight: 500 }}>{formatRollNo(selectedStudentCrudDetail.roll_no) || 'N/A'}</span>
                     
                     <span style={{ color: '#64748b', fontWeight: 600 }}>Class:</span>
                     <span style={{ color: '#0f172a', fontWeight: 500 }}>{selectedStudentCrudDetail.grade || 'N/A'}</span>

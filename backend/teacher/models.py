@@ -7,6 +7,7 @@ class Student(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     school = models.ForeignKey("super_admin.School", on_delete=models.CASCADE)
     roll_no = models.CharField(max_length=50, blank=True, null=True)
+    lms_code = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     grade = models.CharField(max_length=50, blank=True, null=True)
     section = models.CharField(max_length=50, blank=True, null=True)
     academic_year = models.CharField(max_length=20, blank=True, null=True)

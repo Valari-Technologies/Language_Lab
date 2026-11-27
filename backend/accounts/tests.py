@@ -571,3 +571,149 @@ class ForgotPasswordTests(TestCase):
         self.assertFalse(response.data["valid"])
 
 
+class ProfileSettingsValidationTests(TestCase):
+    """
+    Tests for Profile Settings:
+    - Mandatory email & phone number (10 digits)
+    - School Admin updating school_name directly syncs to the School model
+    """
+    def setUp(self):
+        from rest_framework.test import APIClient
+        self.client = APIClient()
+        self.school = School.objects.create(
+            school_name="Original School Name",
+            address="123 Test St",
+            phone="9876543210",
+            email="school@test.edu"
+        )
+        self.school_admin = User.objects.create_user(
+            username="admin_user",
+            password="Password@123",
+            email="admin@test.edu",
+            phone_no="9876543210",
+            full_name="John Doe Admin",
+            role=User.Role.SCHOOL_ADMIN
+        )
+        SchoolAdminProfile.objects.create(user=self.school_admin, school=self.school)
+        self.profile_url = reverse("user-profile")
+
+    def test_profile_update_fails_without_email(self):
+        token = str(RefreshToken.for_user(self.school_admin).access_token)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        response = self.client.patch(
+            self.profile_url,
+            {"full_name": "John Doe", "email": "", "phone_no": "9876543210"},
+            format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", response.data)
+
+    def test_profile_update_fails_without_valid_phone(self):
+        token = str(RefreshToken.for_user(self.school_admin).access_token)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        # Empty phone
+        response = self.client.patch(
+            self.profile_url,
+            {"full_name": "John Doe", "email": "valid@test.edu", "phone_no": ""},
+            format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("phone_no", response.data)
+
+        # Invalid phone length
+        response = self.client.patch(
+            self.profile_url,
+            {"full_name": "John Doe", "email": "valid@test.edu", "phone_no": "12345"},
+            format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("phone_no", response.data)
+
+    def test_profile_update_success_and_syncs_school_name(self):
+        token = str(RefreshToken.for_user(self.school_admin).access_token)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        response = self.client.patch(
+            self.profile_url,
+            {
+                "full_name": "Updated Admin Name",
+                "email": "updated_admin@test.edu",
+                "phone_no": "9123456789",
+                "school_name": "Bolleni International School"
+            },
+            format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Verify user was updated
+        self.school_admin.refresh_from_db()
+        self.assertEqual(self.school_admin.full_name, "Updated Admin Name")
+        self.assertEqual(self.school_admin.email, "updated_admin@test.edu")
+        self.assertEqual(self.school_admin.phone_no, "9123456789")
+
+        # Verify school was updated
+        self.school.refresh_from_db()
+        self.assertEqual(self.school.school_name, "Bolleni International School")
+        self.assertEqual(self.school.schoolAdminId, self.school_admin)
+
+
+class DeactivatedUserLoginTests(TestCase):
+    """
+    Tests for login behavior when an account (e.g. Teacher) is deactivated.
+    Ensures HTTP 403 with appropriate 'Access denied' message is returned instead of 'Invalid username or password'.
+    """
+    def setUp(self):
+        from rest_framework.test import APIClient
+        self.client = APIClient()
+        self.school = School.objects.create(
+            school_name="Greenwood High School",
+            address="456 Academic Way",
+            phone="9876543210",
+            email="info@greenwood.edu",
+            is_active=True
+        )
+        self.teacher_user = User.objects.create_user(
+            username="madhu_teacher",
+            email="Madhu@gmail.com",
+            password="password123",
+            full_name="Madhu Teacher",
+            role=User.Role.TEACHER,
+            is_active=False  # Deactivated teacher account
+        )
+        Teacher.objects.create(user=self.teacher_user, school=self.school)
+        self.login_url = reverse("login")
+
+    def test_deactivated_teacher_login_by_email_returns_access_denied(self):
+        response = self.client.post(
+            self.login_url,
+            {"username": "Madhu@gmail.com", "password": "password123"},
+            format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("Access denied", response.data.get("message", ""))
+        self.assertIn("deactivated", response.data.get("message", "").lower())
+
+    def test_deactivated_teacher_login_by_username_returns_access_denied(self):
+        response = self.client.post(
+            self.login_url,
+            {"username": "madhu_teacher", "password": "password123"},
+            format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("Access denied", response.data.get("message", ""))
+        self.assertIn("deactivated", response.data.get("message", "").lower())
+
+    def test_active_teacher_invalid_password_returns_401(self):
+        self.teacher_user.is_active = True
+        self.teacher_user.save()
+
+        response = self.client.post(
+            self.login_url,
+            {"username": "Madhu@gmail.com", "password": "wrongpassword"},
+            format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data.get("message"), "Invalid username or password")
+
+
+
+

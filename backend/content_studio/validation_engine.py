@@ -268,6 +268,36 @@ def check_screen_media_references(screen):
     return results
 
 
+def check_dictation_correct_text(screen):
+    """Every typing Dictation card needs the text the clip says, or the app cannot check what the student types."""
+    from .services.dictation import tracks_without_text
+    results = []
+    content = screen.content or {}
+    elements = content.get("elements") if isinstance(content.get("elements"), list) else []
+    for element in elements:
+        if not isinstance(element, dict) or str(element.get("type") or "").lower() != "dictation":
+            continue
+        missing = tracks_without_text(element.get("content"))
+        title = screen.title or "(Untitled)"
+        if missing:
+            tracks = ", ".join(f"#{n}" for n in missing)
+            results.append({
+                "rule": "dictation_correct_text_required",
+                "severity": "ERROR",
+                "message": f"Screen '{title}': the Dictation card has no Correct text for audio track {tracks}. "
+                           "Type what the audio says; the app uses it to check the student's answer.",
+                "item": f"screen-{screen.id}"
+            })
+        else:
+            results.append({
+                "rule": "dictation_correct_text_required",
+                "severity": "PASSED",
+                "message": f"Screen '{title}': the Dictation card has its Correct text.",
+                "item": f"screen-{screen.id}"
+            })
+    return results
+
+
 # Validation Runner Engine
 def run_validation_engine(experience):
     all_results = []
@@ -297,6 +327,8 @@ def run_validation_engine(experience):
             all_results.extend(check_screen_content_required(scr))
             # Check broken media
             all_results.extend(check_screen_media_references(scr))
+            # Check the Correct text of Dictation cards
+            all_results.extend(check_dictation_correct_text(scr))
             
     # Compute counts
     total_checks = len(all_results)

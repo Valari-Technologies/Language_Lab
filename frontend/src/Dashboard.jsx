@@ -8,12 +8,14 @@ import {
   FiAward, FiLock,
   FiChevronLeft, FiChevronRight, FiEye, FiEyeOff,
   FiCornerDownRight, FiXCircle, FiMoreVertical, FiAlertTriangle, FiInfo, FiRefreshCw, FiUpload, FiClock, FiActivity,
-  FiHome, FiUserCheck, FiLayers
+  FiHome, FiUserCheck, FiLayers, FiKey, FiCopy, FiSlash, FiPower, FiCheck, FiServer
 } from 'react-icons/fi';
 import PreviewCanvasRenderer from './PreviewCanvasRenderer';
 import './Dashboard.css';
 import { apiFetch } from './api';
-import { API_BASE_URL } from './config';
+import { API_BASE_URL, LMS_PREVIEW_URL } from './config';
+import LmsEnginePreview from './LmsEnginePreview';
+import { pageItems } from './format';
 import dashboardHeaderBanner from './assets/1.jpeg';
 import superAdminBg from './assets/superadminbg.png';
 
@@ -44,6 +46,32 @@ const resolvePreviewUrl = (url) => {
   const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
   const path = url.startsWith('/') ? url : '/' + url;
   return `${base}${path}`;
+};
+
+const computeLicenseExpiry = (duration, customDate, baseDate = new Date()) => {
+  if (duration === 'Custom' && customDate) {
+    try {
+      return new Date(customDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch {
+      return customDate;
+    }
+  }
+  const d = new Date(baseDate);
+  if (duration === '2 Years') {
+    d.setFullYear(d.getFullYear() + 2);
+  } else {
+    d.setFullYear(d.getFullYear() + 1);
+  }
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
+const formatDisplayDate = (dateVal) => {
+  if (!dateVal) return '—';
+  try {
+    return new Date(dateVal).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch {
+    return String(dateVal);
+  }
 };
 
 const UserAvatar = ({ user, size = 'small', initials = 'U' }) => {
@@ -464,7 +492,7 @@ const ActivityLineChart = () => {
 /* ─── Pagination ─── */
 const Pagination = ({ total, perPage = 4, page, onPage }) => {
   const pages = Math.max(1, Math.ceil(total / perPage));
-  const items = pages <= 5 ? Array.from({ length: pages }, (_, i) => i + 1) : [1, 2, 3, '...', pages];
+  const items = pageItems(page, pages);
   const from = total === 0 ? 0 : (page - 1) * perPage + 1;
   const to = Math.min(page * perPage, total);
   return (
@@ -478,8 +506,8 @@ const Pagination = ({ total, perPage = 4, page, onPage }) => {
         </button>
         {items.map((it, i) =>
           it === '...'
-            ? <span key={i} className="sd-page-btn ellipsis">…</span>
-            : <button key={it} className={`sd-page-btn${page === it ? ' active' : ''}`} onClick={() => onPage(it)}>{it}</button>
+            ? <span key={`gap-${i}`} className="sd-page-btn ellipsis">…</span>
+            : <button key={`page-${it}`} className={`sd-page-btn${page === it ? ' active' : ''}`} onClick={() => onPage(it)}>{it}</button>
         )}
         <button className="sd-page-btn arrow" disabled={page === pages} onClick={() => onPage(page + 1)}>
           <FiChevronRight />
@@ -580,6 +608,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [students, setStudents] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({ total_schools: 0, total_school_admins: 0, total_publish_contents: 0, total_grades: 0, total_experiences: 0, draft_experiences: 0, published_experiences: 0 });
   const [previewExperience, setPreviewExperience] = useState(null);
+  const [lmsPreviewOn, setLmsPreviewOn] = useState(false); // show the lesson in the real LMS Engine instead of the CMS simulator
 
   // Interactive widget states for Super Admin preview
   const [previewAnswers, setPreviewAnswers] = useState({});
@@ -631,7 +660,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     school_name: '', school_code: '', phone: '', lan: '', address: '', city: '', state: '', pincode: '',
     academic_year: '2026-2027',
     admin_name: '', email: '', password: '',
-    maxLmsServers: 2, concurrentUsersPerServer: 40, licenseDuration: '1 Year', expiryDate: ''
+    maxLmsServers: 1, concurrentUsersPerServer: 20, licenseDuration: '1 Year', expiryDate: ''
   });
 
   const generateSchoolAdminPassword = (name) => {
@@ -640,6 +669,276 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     const capitalized = prefix.charAt(0).toUpperCase() + prefix.slice(1);
     const digits = Math.floor(1000 + Math.random() * 9000);
     return `${capitalized}@${digits}!`;
+  };
+
+  const [isAddingLmsServer, setIsAddingLmsServer] = useState(false);
+  const [newLmsServerName, setNewLmsServerName] = useState('');
+  const [newLmsServerUsers, setNewLmsServerUsers] = useState(40);
+  const [newLmsServerDuration, setNewLmsServerDuration] = useState('1 Year');
+  const [newLmsServerExpiryDate, setNewLmsServerExpiryDate] = useState('');
+  const [newLmsServerLoading, setNewLmsServerLoading] = useState(false);
+
+  /* Modal state for provisioning a new LMS server with custom capacity/duration */
+  const [newServerModal, setNewServerModal] = useState({
+    show: false,
+    schoolId: null,
+    serverName: '',
+    maxUsers: 20,
+    licenseDuration: '1 Year',
+    expiryDate: ''
+  });
+
+  /* Modal state for editing an existing LMS server's capacity/duration/name */
+  const [editingServerModal, setEditingServerModal] = useState({
+    show: false,
+    installationId: '',
+    serverName: '',
+    licenseKey: '',
+    maxUsers: 20,
+    licenseDuration: '1 Year',
+    expiryDate: ''
+  });
+
+  const handleCreateLmsServer = async (e) => {
+    e.preventDefault();
+    if (!selectedSchoolDetail) return;
+    setNewLmsServerLoading(true);
+    try {
+      const res = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/lms-servers/`, {
+        method: 'POST',
+        body: JSON.stringify({
+          serverName: newLmsServerName.trim() || undefined,
+          maxUsers: parseInt(newLmsServerUsers, 10) || 20,
+          licenseDuration: newLmsServerDuration,
+          expiryDate: newLmsServerDuration === 'Custom' ? newLmsServerExpiryDate : undefined
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsAddingLmsServer(false);
+        setNewLmsServerName('');
+        setNewLmsServerUsers(40);
+        setNewLmsServerDuration('1 Year');
+        setNewLmsServerExpiryDate('');
+        triggerAlert("LMS Server installation license generated successfully!", "Success", "success");
+        const sRes = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/`);
+        if (sRes.ok) {
+          const updated = await sRes.json();
+          setSelectedSchoolDetail(updated);
+        }
+        await loadSchools();
+      } else {
+        triggerAlert(data.error || "Failed to generate LMS server license.", "Error", "error");
+      }
+    } catch (err) {
+      triggerAlert("Error creating LMS server: " + err.message, "Error", "error");
+    } finally {
+      setNewLmsServerLoading(false);
+    }
+  };
+
+  const handleProvisionServerSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!newServerModal.schoolId) return;
+    setServerActionLoading(true);
+    try {
+      const res = await apiFetch(`/api/cms/v1/schools/${newServerModal.schoolId}/lms-servers/`, {
+        method: 'POST',
+        body: JSON.stringify({
+          serverName: newServerModal.serverName.trim() || undefined,
+          maxUsers: parseInt(newServerModal.maxUsers, 10) || 20,
+          licenseDuration: newServerModal.licenseDuration,
+          expiryDate: newServerModal.licenseDuration === 'Custom' ? newServerModal.expiryDate : undefined
+        })
+      });
+      const resData = await res.json();
+      if (res.ok) {
+        setNewServerModal({ show: false, schoolId: null, serverName: '', maxUsers: 20, licenseDuration: '1 Year', expiryDate: '' });
+        showFeedback("New LMS server license provisioned successfully!", null);
+        await loadSchools();
+        if (selectedSchoolDetail) {
+          const sRes = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/`);
+          if (sRes.ok) setSelectedSchoolDetail(await sRes.json());
+        }
+      } else {
+        showFeedback(null, resData.error || "Failed to provision server license.");
+      }
+    } catch (err) {
+      showFeedback(null, err.message);
+    } finally {
+      setServerActionLoading(false);
+    }
+  };
+
+  const handleSaveEditingServerModal = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!editingServerModal.serverName.trim()) {
+      showFeedback(null, "Server name cannot be empty.");
+      return;
+    }
+    const targetUsers = parseInt(editingServerModal.maxUsers, 10) || 40;
+    setServerActionLoading(true);
+    try {
+      const res = await apiFetch(`/api/cms/v1/lms-servers/${editingServerModal.installationId}/`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          serverName: editingServerModal.serverName.trim(),
+          maxUsers: targetUsers,
+          licenseDuration: editingServerModal.licenseDuration,
+          expiryDate: editingServerModal.licenseDuration === 'Custom' ? editingServerModal.expiryDate : undefined
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setEditingServerModal({ show: false, installationId: '', serverName: '', licenseKey: '', maxUsers: 40, licenseDuration: '1 Year', expiryDate: '' });
+        showFeedback(`Server "${editingServerModal.serverName}" license updated successfully.`, null);
+        await loadSchools();
+        if (selectedSchoolDetail) {
+          const sRes = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/`);
+          if (sRes.ok) setSelectedSchoolDetail(await sRes.json());
+        }
+      } else {
+        showFeedback(null, data.error || "Failed to update server.");
+      }
+    } catch (err) {
+      showFeedback(null, err.message);
+    } finally {
+      setServerActionLoading(false);
+    }
+  };
+
+  /* ── LMS Server CRUD Handlers ── */
+  const [editingServerId, setEditingServerId] = useState(null);
+  const [editingServerName, setEditingServerName] = useState('');
+  const [editingServerUsers, setEditingServerUsers] = useState(40);
+  const [serverActionLoading, setServerActionLoading] = useState(false);
+
+  const handleToggleServerStatus = (srv) => {
+    const isActivating = srv.status !== 'ACTIVE';
+    const actionLabel = isActivating ? 'enable' : 'disable';
+
+    setServerConfirm({
+      show: true,
+      title: isActivating ? 'Enable LMS Server?' : 'Disable LMS Server?',
+      message: isActivating
+        ? `Are you sure you want to enable server "${srv.serverName}"? Clients will be able to connect and authenticate.`
+        : `Are you sure you want to disable server "${srv.serverName}"? Clients connecting to this server will be restricted from accessing LMS features.`,
+      icon: isActivating ? <FiCheck /> : <FiSlash />,
+      iconBg: isActivating ? '#dcfce7' : '#fee2e2',
+      iconColor: isActivating ? '#16a34a' : '#dc2626',
+      confirmText: isActivating ? 'Enable Server' : 'Disable Server',
+      confirmBg: isActivating ? '#16a34a' : '#dc2626',
+      onConfirm: async () => {
+        setServerConfirm(prev => ({ ...prev, show: false }));
+        setServerActionLoading(true);
+        try {
+          let res = await apiFetch(`/api/cms/v1/lms-servers/${srv.installationId}/toggle-status/`, {
+            method: 'POST'
+          });
+          if (!res.ok) {
+            res = await apiFetch(`/api/v1/licensing/deactivate-server`, {
+              method: 'POST',
+              body: JSON.stringify({
+                installationId: srv.installationId,
+                action: isActivating ? 'activate' : 'deactivate'
+              })
+            });
+          }
+          const data = await res.json();
+          if (res.ok) {
+            showFeedback(data.message || `Server ${isActivating ? 'enabled' : 'disabled'} successfully.`, null);
+            await loadSchools();
+            if (selectedSchoolDetail) {
+              const sRes = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/`);
+              if (sRes.ok) {
+                setSelectedSchoolDetail(await sRes.json());
+              }
+            }
+          } else {
+            showFeedback(null, data.error || `Failed to ${actionLabel} server.`);
+          }
+        } catch (err) {
+          showFeedback(null, err.message);
+        } finally {
+          setServerActionLoading(false);
+        }
+      }
+    });
+  };
+
+  const handleDeleteServer = (srv) => {
+    setServerConfirm({
+      show: true,
+      title: 'Delete LMS Server?',
+      message: `Are you sure you want to delete server "${srv.serverName}"? This will permanently revoke its installation license key.`,
+      icon: <FiTrash2 />,
+      iconBg: '#fee2e2',
+      iconColor: '#ef4444',
+      confirmText: 'Delete Server',
+      confirmBg: '#ef4444',
+      onConfirm: async () => {
+        setServerConfirm(prev => ({ ...prev, show: false }));
+        setServerActionLoading(true);
+        try {
+          const res = await apiFetch(`/api/cms/v1/lms-servers/${srv.installationId}/`, {
+            method: 'DELETE'
+          });
+          if (res.ok) {
+            showFeedback(`Server "${srv.serverName}" deleted successfully.`, null);
+            await loadSchools();
+            if (selectedSchoolDetail) {
+              const sRes = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/`);
+              if (sRes.ok) {
+                setSelectedSchoolDetail(await sRes.json());
+              }
+            }
+          } else {
+            const data = await res.json().catch(() => ({}));
+            showFeedback(null, data.error || "Failed to delete server.");
+          }
+        } catch (err) {
+          showFeedback(null, err.message);
+        } finally {
+          setServerActionLoading(false);
+        }
+      }
+    });
+  };
+
+  const handleSaveEditServer = async (installationId) => {
+    if (!editingServerName.trim()) {
+      showFeedback(null, "Server name cannot be empty.");
+      return;
+    }
+    const newMaxUsers = parseInt(editingServerUsers, 10) || 40;
+    setServerActionLoading(true);
+    try {
+      const res = await apiFetch(`/api/cms/v1/lms-servers/${installationId}/`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          serverName: editingServerName.trim(),
+          maxUsers: newMaxUsers
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showFeedback("Server details updated successfully.", null);
+        setEditingServerId(null);
+        await loadSchools();
+        if (selectedSchoolDetail) {
+          const sRes = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/`);
+          if (sRes.ok) {
+            setSelectedSchoolDetail(await sRes.json());
+          }
+        }
+      } else {
+        showFeedback(null, data.error || "Failed to update server.");
+      }
+    } catch (err) {
+      showFeedback(null, err.message);
+    } finally {
+      setServerActionLoading(false);
+    }
   };
 
   /* ── Forms ── */
@@ -738,7 +1037,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [schoolForm, setSchoolForm] = useState({ school_name: '', school_code: '', address: '', phone: '', email: '', logo: '', is_active: true });
   const [publishForm, setPublishForm] = useState({ release_name: '', grade: '', total_experiences: 0, status: 'DRAFT', export_file: '', checksum: '' });
   const [gradeForm, setGradeForm] = useState({ grade_name: '', description: '', sort_order: 1 });
-  const [experienceForm, setExperienceForm] = useState({ grade: '', title: '', description: '', objective: '', estimated_duration: 15, difficulty: 'INTERMEDIATE', status: 'DRAFT', thumbnail: '' });
+  const [experienceForm, setExperienceForm] = useState({ grade: '', title: '', description: '', objective: '', estimated_duration: 15, difficulty: 'BEGINNER', status: 'DRAFT', thumbnail: '' });
   const [experienceBuilderForm, setExperienceBuilderForm] = useState({ experience: '', block_type: 'VIDEO', title: '', content: '', media_url: '', display_order: 1, settings: '{}' });
   const [schoolAdminForm, setSchoolAdminForm] = useState({ username: '', email: '', full_name: '', is_active: true, school: '', password: '', role: 'school-admins' });
   const [teacherForm, setTeacherForm] = useState({ username: '', full_name: '', email: '', is_active: true, school: '', qualification: '', experience_years: 0, password: '' });
@@ -781,6 +1080,17 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
   const [pwModalError, setPwModalError] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, type: '' });
+  const [serverConfirm, setServerConfirm] = useState({
+    show: false,
+    title: '',
+    message: '',
+    icon: null,
+    iconBg: '#fee2e2',
+    iconColor: '#ef4444',
+    confirmText: 'OK',
+    confirmBg: '#ef4444',
+    onConfirm: null
+  });
   const [activePreviewScreen, setActivePreviewScreen] = useState(null);
   const [selectedQuizOption, setSelectedQuizOption] = useState(null);
   const [quizChecked, setQuizChecked] = useState(false);
@@ -903,6 +1213,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
     setSelectedQuizOption(null);
     setQuizChecked(false);
     setAudioPlaying(false);
+    setLmsPreviewOn(!!LMS_PREVIEW_URL); // opens in the LMS view when the engine is configured
     try {
       const res = await apiFetch(`/api/v1/content/experiences/${experience.id}/preview/`);
       if (res.ok) {
@@ -1264,13 +1575,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         school_name: entity.school_name || '', school_code: entity.school_code || '', address: entity.address || '',
         phone: entity.phone || '', email: entity.email || entity.contactEmail || '', logo: entity.logo || '',
         is_active: entity.is_active !== undefined ? entity.is_active : true,
-        maxLmsServers: entity.license?.maxLmsServers ?? entity.maxLmsServers ?? 2,
-        concurrentUsersPerServer: entity.license?.concurrentUsersPerServer ?? entity.concurrentUsersPerServer ?? 40,
+        maxLmsServers: entity.license?.maxLmsServers ?? entity.maxLmsServers ?? 1,
+        concurrentUsersPerServer: entity.license?.concurrentUsersPerServer ?? entity.concurrentUsersPerServer ?? 20,
         licenseDuration: entity.license?.licenseDuration || entity.licenseDuration || '1 Year',
         expiryDate: entity.license?.expiryDate || entity.expiryDate || ''
       } : {
         school_name: '', school_code: '', address: '', phone: '', email: '', logo: '', is_active: true,
-        maxLmsServers: 2, concurrentUsersPerServer: 40, licenseDuration: '1 Year', expiryDate: ''
+        maxLmsServers: 1, concurrentUsersPerServer: 20, licenseDuration: '1 Year', expiryDate: ''
       });
     } else if (tab === 'publish-contents' || tab === 'reports') {
       setPublishForm(entity ? {
@@ -1287,11 +1598,11 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
       setExperienceForm(entity ? {
         grade: entity.grade?.id || entity.grade || '', title: entity.title || '',
         description: entity.description || '', objective: entity.objective || '',
-        estimated_duration: entity.estimated_duration || 15, difficulty: entity.difficulty || 'INTERMEDIATE',
+        estimated_duration: entity.estimated_duration || 15, difficulty: entity.difficulty || 'BEGINNER',
         status: entity.status || 'DRAFT', thumbnail: entity.thumbnail || ''
       } : {
         grade: selectedGradeFilter || (grades[0]?.id || ''), title: '', description: '',
-        objective: '', estimated_duration: 15, difficulty: 'INTERMEDIATE', status: 'DRAFT', thumbnail: ''
+        objective: '', estimated_duration: 15, difficulty: 'BEGINNER', status: 'DRAFT', thumbnail: ''
       });
     } else if (tab === 'experience-builders') {
       setExperienceBuilderForm(entity ? {
@@ -1335,7 +1646,11 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
     try {
       if (activeTab === 'schools') {
-        body = { ...schoolForm };
+        body = {
+          ...schoolForm,
+          maxLmsServers: parseInt(schoolForm.maxLmsServers, 10) || 1,
+          concurrentUsersPerServer: parseInt(schoolForm.concurrentUsersPerServer, 10) || 20
+        };
       } else if (activeTab === 'publish-contents' || activeTab === 'reports') {
         body = { ...publishForm, grade: parseInt(publishForm.grade), total_experiences: parseInt(publishForm.total_experiences) };
       } else if (activeTab === 'grades') {
@@ -1362,6 +1677,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         if (targetTab === 'schools') {
           if (modalType === 'add') {
             addRecentActivity(`School "${schoolForm.school_name}" registered`, 'School', '#dcfce7', '#15803d', <FiGrid />, '#3b82f6', '#eff6ff');
+            if (resData.data?.lms_servers?.[0]?.licenseKey) {
+              copyToClipboard(resData.data.lms_servers[0].licenseKey, "Primary LMS server installation key copied!");
+            }
           } else {
             addRecentActivity(`School "${schoolForm.school_name}" details updated`, 'School', '#dcfce7', '#15803d', <FiEdit2 />, '#3b82f6', '#eff6ff');
           }
@@ -1431,6 +1749,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           await Promise.all(ids.map(id => apiFetch(`/api/cms/v1/schools/${id}/`, { method: 'DELETE' })));
           showFeedback(`Successfully deleted ${count} school(s).`, null);
           setSelectedSchoolIds([]);
+          setIsSelectModeSchools(false);
           await loadSchools();
           await loadDashboardStats();
           await loadRecentActivities();
@@ -1449,6 +1768,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
           await Promise.all(ids.map(id => apiFetch(`/api/v1/content/experiences/${id}/`, { method: 'DELETE' })));
           showFeedback(`Successfully deleted ${count} lesson(s).`, null);
           setSelectedExpIds([]);
+          setIsSelectMode(false);
           await loadExperiences();
           await loadSuperAdminExperiences();
           await loadDashboardStats();
@@ -1505,15 +1825,38 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setErrorMsg('');
-    if (profileForm.phone_no && profileForm.phone_no.replace(/\D/g, '').length !== 10) {
+
+    const trimmedFullName = (profileForm.full_name || '').trim();
+    const trimmedEmail = (profileForm.email || '').trim();
+    const cleanedPhone = (profileForm.phone_no || '').replace(/\D/g, '');
+
+    if (!trimmedFullName) {
+      setErrorMsg('Full Name is required.');
+      return;
+    }
+    if (!trimmedEmail) {
+      setErrorMsg('Email Address is required.');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+    if (!cleanedPhone) {
+      setErrorMsg('Phone number is required.');
+      return;
+    }
+    if (cleanedPhone.length !== 10) {
       setErrorMsg('Phone number must be exactly 10 numeric digits.');
       return;
     }
+
     setActionLoading(true);
     try {
       const res = await apiFetch('/api/users/profile/', {
         method: 'PATCH',
-        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no })
+        body: JSON.stringify({ full_name: trimmedFullName, email: trimmedEmail, phone_no: cleanedPhone })
       });
       let resData = {};
       try { resData = await res.json(); } catch { resData = {}; }
@@ -1531,8 +1874,10 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setErrorMsg(msg);
         return;
       }
-      const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
+      const updatedUser = resData.user || { ...user, full_name: trimmedFullName, email: trimmedEmail, phone_no: cleanedPhone };
       if (onUpdateUser) onUpdateUser(updatedUser);
+      setUser(updatedUser);
+      setProfileForm(prev => ({ ...prev, full_name: trimmedFullName, email: trimmedEmail, phone_no: cleanedPhone }));
       showFeedback('Profile updated successfully', null);
       addRecentActivity("Super Admin profile settings updated", 'Profile', '#f3e8ff', '#6b21a8', <FiUser />, '#8b5cf6', '#f5f3ff');
     } catch (err) {
@@ -1596,8 +1941,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         admin_password: adminPassword,
 
         // Quota settings
-        maxLmsServers: parseInt(newSchoolForm.maxLmsServers || 2, 10),
-        concurrentUsersPerServer: parseInt(newSchoolForm.concurrentUsersPerServer || 40, 10),
+        maxLmsServers: parseInt(newSchoolForm.maxLmsServers || 1, 10),
+        concurrentUsersPerServer: parseInt(newSchoolForm.concurrentUsersPerServer || 20, 10),
         licenseDuration: newSchoolForm.licenseDuration || '1 Year',
         expiryDate: newSchoolForm.expiryDate || ''
       };
@@ -1616,7 +1961,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
         setNewSchoolForm({
           school_name: '', school_code: '', phone: '', lan: '', address: '', city: '', state: '', pincode: '',
           admin_name: '', email: '', password: '',
-          maxLmsServers: 2, concurrentUsersPerServer: 40, licenseDuration: '1 Year', expiryDate: ''
+          maxLmsServers: 1, concurrentUsersPerServer: 20, licenseDuration: '1 Year', expiryDate: ''
         });
         await loadSchools();
         await loadSchoolAdmins();
@@ -2310,94 +2655,51 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     </div>
                   </div>
 
-                  {/* License Overview Card */}
-                  <div className="sd-card" style={{ padding: '2rem', marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
-                      <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>License Management</h3>
-                      {selectedSchoolDetail.license ? (
-                        <span className={`sd-badge sd-badge-${selectedSchoolDetail.license.status?.toLowerCase()}`} style={{ display: 'inline-flex' }}>
-                          {selectedSchoolDetail.license.status}
-                        </span>
-                      ) : (
-                        <span className="sd-badge sd-badge-inactive">No License</span>
-                      )}
-                    </div>
-
-                    {selectedSchoolDetail.license ? (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.55rem', fontSize: '0.85rem', color: '#334155' }}>
-                        <div>
-                          <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>License ID</span>
-                          <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.license.licenseId}</strong>
-                        </div>
-                        <div>
-                          <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>License Key</span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <strong style={{ fontSize: '0.9rem', color: '#0f172a', fontFamily: 'monospace' }}>{selectedSchoolDetail.license.licenseKey}</strong>
-                            <button
-                              onClick={() => copyToClipboard(selectedSchoolDetail.license.licenseKey, "License key copied to clipboard!")}
-                              className="sd-btn-outline"
-                              style={{ padding: '2px 8px', fontSize: '0.75rem' }}
-                            >
-                              Copy
-                            </button>
-                          </div>
-                        </div>
-                        <div>
-                          <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Issue Date</span>
-                          <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.license.issueDate}</strong>
-                        </div>
-                        <div>
-                          <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600 }}>Expiry Date</span>
-                          <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{selectedSchoolDetail.license.expiryDate}</strong>
-                        </div>
-
-                        {/* Quota Progress Indicators */}
-                        <div style={{ gridColumn: 'span 2', marginTop: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
-                          <span style={{ display: 'block', color: '#0f172a', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.75rem' }}>Quota Usage</span>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                            <div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#475569', marginBottom: '4px' }}>
-                                <span>Registered LMS Servers:</span>
-                                <strong>
-                                  {(selectedSchoolDetail.lms_servers?.filter(s => s.status === 'ACTIVE').length || 0)} / {selectedSchoolDetail.license.maxLmsServers} Servers Used
-                                </strong>
-                              </div>
-                              <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
-                                <div style={{
-                                  height: '100%',
-                                  backgroundColor: '#3b82f6',
-                                  width: `${Math.min(100, ((selectedSchoolDetail.lms_servers?.filter(s => s.status === 'ACTIVE').length || 0) / selectedSchoolDetail.license.maxLmsServers) * 100)}%`
-                                }} />
-                              </div>
-                            </div>
-                            <div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#475569', marginBottom: '4px' }}>
-                                <span>Concurrent Users:</span>
-                                <strong>{selectedSchoolDetail.license.concurrentUsersPerServer} Users Per Server</strong>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>No license details available.</p>
-                    )}
-                  </div>
-
                   {/* Registered LMS Servers Card */}
                   <div className="sd-card" style={{ padding: '2rem', marginTop: '1.5rem' }}>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
-                      Registered LMS Servers (Installations)
-                    </h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                      <div>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                          Registered LMS Servers (Installations)
+                        </h3>
+                        <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+                          Each LMS server has a dedicated installation license key with 40 concurrent users capacity.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const activeCount = selectedSchoolDetail.lms_servers?.filter(s => s.status === 'ACTIVE').length || 0;
+                          const maxAllowed = selectedSchoolDetail.license?.maxLmsServers || 2;
+                          if (activeCount >= maxAllowed) {
+                            triggerAlert(`Maximum server limit (${maxAllowed}) reached for this school license.`, "Limit Reached", "warning");
+                            return;
+                          }
+                          setNewLmsServerName(`LMS Server ${activeCount + 1}`);
+                          setNewLmsServerUsers(selectedSchoolDetail.license?.concurrentUsersPerServer || 20);
+                          setNewLmsServerDuration(selectedSchoolDetail.license?.licenseDuration || '1 Year');
+                          setNewLmsServerExpiryDate('');
+                          setIsAddingLmsServer(true);
+                        }}
+                        className="sd-btn-primary"
+                        style={{ padding: '6px 14px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <FiPlus /> Add LMS Server
+                      </button>
+                    </div>
+
                     <div style={{ overflowX: 'auto' }}>
                       <table className="sd-table">
                         <thead>
                           <tr>
                             <th>Server Name</th>
                             <th>Installation ID</th>
+                            <th>License Key (Installation)</th>
+                            <th>User Capacity</th>
                             <th>Status</th>
-                            <th>Activation Date</th>
-                            <th>Last Sync Time</th>
+                            <th>Created Date</th>
+                            <th>Expiry Date</th>
+                            <th>Last Sync</th>
                             <th>Actions</th>
                           </tr>
                         </thead>
@@ -2406,56 +2708,124 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             selectedSchoolDetail.lms_servers.map(server => (
                               <tr key={server.installationId}>
                                 <td style={{ fontWeight: 600 }}>{server.serverName}</td>
-                                <td style={{ fontFamily: 'monospace' }}>{server.installationId}</td>
+                                <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{server.installationId}</td>
                                 <td>
-                                  <span className={`sd-badge sd-badge-${server.status?.toLowerCase()}`}>
-                                    {server.status}
+                                  {server.licenseKey ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      <code style={{ fontSize: '0.82rem', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', color: '#0f172a' }}>
+                                        {server.licenseKey}
+                                      </code>
+                                      <button
+                                        type="button"
+                                        onClick={() => copyToClipboard(server.licenseKey, "Server license key copied to clipboard!")}
+                                        className="sd-btn-outline"
+                                        style={{ padding: '2px 6px', fontSize: '0.72rem' }}
+                                        title="Copy installation license key"
+                                      >
+                                        Copy
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                                      {selectedSchoolDetail.license?.licenseKey || '—'}
+                                    </span>
+                                  )}
+                                </td>
+                                <td>
+                                  <span className="sd-badge sd-badge-active" style={{ fontSize: '0.75rem' }}>
+                                    {server.maxUsers || 40} Users
                                   </span>
                                 </td>
-                                <td>{new Date(server.activationDate).toLocaleDateString()}</td>
-                                <td>{server.lastSyncTime ? new Date(server.lastSyncTime).toLocaleString() : '—'}</td>
                                 <td>
-                                  {server.status === 'ACTIVE' ? (
+                                  <span className={`sd-badge ${server.status === 'ACTIVE' ? 'sd-badge-active' : 'sd-badge-inactive'}`}>
+                                    {server.status === 'ACTIVE' ? 'Active' : (server.status === 'DEACTIVATED' ? 'Disabled' : server.status)}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span style={{ fontSize: '0.8rem', color: '#334155', whiteSpace: 'nowrap' }}>
+                                    {formatDisplayDate(server.activationDate || server.createdDate || server.created_at || selectedSchoolDetail.created_at)}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span style={{ fontSize: '0.8rem', color: '#92400e', background: '#fef3c7', padding: '2px 6px', borderRadius: '4px', whiteSpace: 'nowrap' }}>
+                                    {(server.expiryDate && formatDisplayDate(server.expiryDate) !== '—')
+                                      ? formatDisplayDate(server.expiryDate)
+                                      : (selectedSchoolDetail.license?.expiryDate && formatDisplayDate(selectedSchoolDetail.license?.expiryDate) !== '—')
+                                      ? formatDisplayDate(selectedSchoolDetail.license?.expiryDate)
+                                      : computeLicenseExpiry(server.licenseDuration || selectedSchoolDetail.license?.licenseDuration, selectedSchoolDetail.license?.expiryDate, server.activationDate || selectedSchoolDetail.created_at)}
+                                  </span>
+                                </td>
+                                <td>{server.lastSyncTime ? new Date(server.lastSyncTime).toLocaleString() : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Not yet used</span>}</td>
+                                <td>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <button
-                                      onClick={async () => {
-                                        if (window.confirm(`Are you sure you want to deactivate server "${server.serverName}"?`)) {
-                                          try {
-                                            const res = await apiFetch('/api/v1/licensing/deactivate-server', {
-                                              method: 'POST',
-                                              body: JSON.stringify({ installationId: server.installationId })
-                                            });
-                                            if (res.ok) {
-                                              triggerAlert(`Server deactivated successfully.`, "Success", "success");
-                                              const sRes = await apiFetch(`/api/cms/v1/schools/${selectedSchoolDetail.school_id}/`);
-                                              if (sRes.ok) {
-                                                const updatedData = await sRes.json();
-                                                setSelectedSchoolDetail(updatedData);
-                                              }
-                                              await loadSchools();
-                                            } else {
-                                              const errData = await res.json();
-                                              triggerAlert(errData.error || "Failed to deactivate server.", "Error", "error");
-                                            }
-                                          } catch (e) {
-                                            triggerAlert("Deactivation error: " + e.message, "Error", "error");
-                                          }
-                                        }
+                                      type="button"
+                                      disabled={serverActionLoading}
+                                      onClick={() => {
+                                        setEditingServerModal({
+                                          show: true,
+                                          installationId: server.installationId,
+                                          serverName: server.serverName || '',
+                                          licenseKey: server.licenseKey || selectedSchoolDetail.license?.licenseKey || '',
+                                          maxUsers: server.maxUsers || 40,
+                                          licenseDuration: server.licenseDuration || '1 Year',
+                                          expiryDate: server.expiryDate ? String(server.expiryDate).slice(0, 10) : ''
+                                        });
                                       }}
                                       className="sd-btn-outline"
-                                      style={{ padding: '4px 8px', fontSize: '0.75rem', borderColor: '#ef4444', color: '#ef4444' }}
+                                      style={{
+                                        padding: '4px 8px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 600,
+                                        borderColor: '#c7d2fe',
+                                        color: '#4338ca',
+                                        backgroundColor: '#eef2ff',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                      }}
+                                      title="Edit Server (Customize capacity or duration)"
                                     >
-                                      Deactivate Server
+                                      <FiEdit2 /> Edit
                                     </button>
-                                  ) : (
-                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Deactivated</span>
-                                  )}
+                                    <button
+                                      type="button"
+                                      disabled={serverActionLoading}
+                                      onClick={() => handleToggleServerStatus(server)}
+                                      className="sd-btn-outline"
+                                      style={{
+                                        padding: '4px 8px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 600,
+                                        borderColor: server.status === 'ACTIVE' ? '#fca5a5' : '#86efac',
+                                        color: server.status === 'ACTIVE' ? '#b91c1c' : '#15803d',
+                                        backgroundColor: server.status === 'ACTIVE' ? '#ffffff' : '#f0fdf4',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                      }}
+                                      title={server.status === 'ACTIVE' ? "Disable server" : "Enable server"}
+                                    >
+                                      {server.status === 'ACTIVE' ? <><FiSlash /> Disable</> : <><FiCheck /> Enable</>}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={serverActionLoading}
+                                      onClick={() => handleDeleteServer(server)}
+                                      className="sd-btn-outline"
+                                      style={{ padding: '4px 6px', fontSize: '0.75rem', borderColor: '#fca5a5', color: '#ef4444' }}
+                                      title="Delete / Revoke Server"
+                                    >
+                                      <FiTrash2 />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))
                           ) : (
                             <tr>
-                              <td colSpan="6" style={{ textAlign: 'center', color: '#64748b', padding: '2rem' }}>
-                                No LMS servers registered yet.
+                              <td colSpan="8" style={{ textAlign: 'center', color: '#64748b', padding: '2rem' }}>
+                                No LMS servers registered yet. Click "+ Add LMS Server" above to auto-generate an installation license.
                               </td>
                             </tr>
                           )}
@@ -2463,6 +2833,161 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                       </table>
                     </div>
                   </div>
+
+                  {/* Add LMS Server Modal */}
+                  {isAddingLmsServer && (
+                    <div style={{
+                      position: 'fixed',
+                      top: 0, left: 0, right: 0, bottom: 0,
+                      backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                      backdropFilter: 'blur(4px)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 99999,
+                      padding: '1rem'
+                    }}>
+                      <div style={{
+                        backgroundColor: '#ffffff',
+                        borderRadius: '16px',
+                        maxWidth: '520px',
+                        width: '100%',
+                        padding: '2rem',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #e2e8f0'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.5rem' }}>
+                          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#e0e7ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                            <FiServer />
+                          </div>
+                          <div>
+                            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                              Add LMS Server & Generate License
+                            </h3>
+                            <p style={{ fontSize: '0.82rem', color: '#64748b', margin: 0 }}>
+                              Configure separate user capacity and duration for this installation
+                            </p>
+                          </div>
+                        </div>
+
+                        <form onSubmit={handleCreateLmsServer}>
+                          <div className="sd-form-group" style={{ marginBottom: '1rem' }}>
+                            <label className="sd-form-label">Server Name / Location *</label>
+                            <input
+                              type="text"
+                              className="sd-form-input"
+                              required
+                              placeholder="e.g. Computer Lab 1, English Room B"
+                              value={newLmsServerName}
+                              onChange={(e) => setNewLmsServerName(e.target.value)}
+                              disabled={newLmsServerLoading}
+                            />
+                          </div>
+
+                          <div className="sd-form-group" style={{ marginBottom: '1rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <label className="sd-form-label" style={{ margin: 0 }}>Concurrent Users Capacity *</label>
+                              <span style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: 600 }}>Independent per server</span>
+                            </div>
+                            <input
+                              type="number"
+                              min="1"
+                              max="1000"
+                              className="sd-form-input"
+                              required
+                              value={newLmsServerUsers}
+                              onChange={(e) => setNewLmsServerUsers(e.target.value)}
+                              disabled={newLmsServerLoading}
+                            />
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                              {[10, 15, 20, 25, 30, 40, 50, 60].map(cnt => (
+                                <button
+                                  key={cnt}
+                                  type="button"
+                                  onClick={() => setNewLmsServerUsers(cnt)}
+                                  style={{
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '12px',
+                                    padding: '2px 9px',
+                                    fontSize: '0.74rem',
+                                    fontWeight: 600,
+                                    background: parseInt(newLmsServerUsers, 10) === cnt ? '#4f46e5' : '#f8fafc',
+                                    color: parseInt(newLmsServerUsers, 10) === cnt ? '#ffffff' : '#475569',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  {cnt} Users
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="sd-form-group" style={{ marginBottom: '1rem' }}>
+                            <label className="sd-form-label">License Duration *</label>
+                            <select
+                              className="sd-form-input"
+                              value={newLmsServerDuration}
+                              onChange={(e) => setNewLmsServerDuration(e.target.value)}
+                              disabled={newLmsServerLoading}
+                            >
+                              <option value="6 Months">6 Months</option>
+                              <option value="1 Year">1 Year</option>
+                              <option value="2 Years">2 Years</option>
+                              <option value="Custom">Custom Expiry Date</option>
+                            </select>
+                          </div>
+
+                          {newLmsServerDuration === 'Custom' && (
+                            <div className="sd-form-group" style={{ marginBottom: '1rem' }}>
+                              <label className="sd-form-label">Custom Expiry Date *</label>
+                              <input
+                                type="date"
+                                className="sd-form-input"
+                                required
+                                value={newLmsServerExpiryDate}
+                                onChange={(e) => setNewLmsServerExpiryDate(e.target.value)}
+                                disabled={newLmsServerLoading}
+                              />
+                            </div>
+                          )}
+
+                          <div style={{ background: '#f8fafc', padding: '0.9rem 1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                              <span style={{ color: '#64748b' }}>Target School:</span>
+                              <strong style={{ color: '#0f172a' }}>{selectedSchoolDetail?.school_name}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                              <span style={{ color: '#64748b' }}>Server License:</span>
+                              <strong style={{ color: '#16a34a' }}>{newLmsServerUsers || 20} Users • {newLmsServerDuration}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                              <span style={{ color: '#64748b' }}>Installation Key:</span>
+                              <span style={{ color: '#6366f1', fontStyle: 'italic' }}>Auto-generated upon save</span>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                            <button
+                              type="button"
+                              className="sd-btn-outline"
+                              onClick={() => setIsAddingLmsServer(false)}
+                              disabled={newLmsServerLoading}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              className="sd-btn-primary"
+                              style={{ background: '#4f46e5', padding: '7px 18px' }}
+                              disabled={newLmsServerLoading}
+                            >
+                              {newLmsServerLoading ? 'Generating...' : 'Generate & Save License'}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : null}
             </div>
@@ -2615,23 +3140,31 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
                       {/* License Configuration Card */}
                       <div className="sd-card" style={{ padding: '1.5rem 2rem' }}>
-                        <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.25rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>License Configuration</h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                          <div className="sd-form-group">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <div>
+                            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>License Configuration</h3>
+                            <p style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: '#64748b' }}>
+                              Configure LMS servers, license duration, and user capacity directly correlated with generated installation keys.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
+                          <div className="sd-form-group" style={{ marginBottom: 0 }}>
                             <label className="sd-form-label">Max LMS Servers <span style={{ color: '#ef4444' }}>*</span></label>
                             <input className="sd-form-input" type="number" min="1" required
-                              value={newSchoolForm.maxLmsServers || 2}
+                              value={newSchoolForm.maxLmsServers || 1}
                               onChange={e => setNewSchoolForm({ ...newSchoolForm, maxLmsServers: e.target.value })}
                             />
                           </div>
-                          <div className="sd-form-group">
+                          <div className="sd-form-group" style={{ marginBottom: 0 }}>
                             <label className="sd-form-label">Concurrent Users Per Server <span style={{ color: '#ef4444' }}>*</span></label>
-                            <input className="sd-form-input" type="number" min="1" required
-                              value={newSchoolForm.concurrentUsersPerServer || 40}
+                            <input className="sd-form-input sd-no-spinner" type="number" min="1" required
+                              value={newSchoolForm.concurrentUsersPerServer || 20}
                               onChange={e => setNewSchoolForm({ ...newSchoolForm, concurrentUsersPerServer: e.target.value })}
                             />
                           </div>
-                          <div className="sd-form-group">
+                          <div className="sd-form-group" style={{ marginBottom: 0 }}>
                             <label className="sd-form-label">License Duration <span style={{ color: '#ef4444' }}>*</span></label>
                             <select className="sd-form-input" required
                               value={newSchoolForm.licenseDuration || '1 Year'}
@@ -2643,7 +3176,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             </select>
                           </div>
                           {(newSchoolForm.licenseDuration === 'Custom') && (
-                            <div className="sd-form-group">
+                            <div className="sd-form-group" style={{ marginBottom: 0 }}>
                               <label className="sd-form-label">Custom Expiry Date <span style={{ color: '#ef4444' }}>*</span></label>
                               <input className="sd-form-input" type="date" required
                                 value={newSchoolForm.expiryDate || ''}
@@ -2651,6 +3184,45 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                               />
                             </div>
                           )}
+                        </div>
+
+                        {/* Correlated Capacity Summary Ribbon */}
+                        <div style={{ marginTop: '1.25rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', fontSize: '0.8rem', color: '#475569' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+                            <span>
+                              <strong>Total Capacity:</strong> {(parseInt(newSchoolForm.maxLmsServers, 10) || 1) * (parseInt(newSchoolForm.concurrentUsersPerServer, 10) || 20)} Concurrent Users ({newSchoolForm.maxLmsServers || 1} servers × {newSchoolForm.concurrentUsersPerServer || 20} users)
+                            </span>
+                            <span>
+                              <strong>Term:</strong> {newSchoolForm.licenseDuration || '1 Year'}
+                            </span>
+                            <span>
+                              <strong>Expiry:</strong> {computeLicenseExpiry(newSchoolForm.licenseDuration, newSchoolForm.expiryDate)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* LMS Auto Generation Notice with Correlated Dates & Capacity */}
+                        <div style={{ marginTop: '1rem', padding: '0.9rem 1.1rem', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <FiCheckCircle style={{ color: '#16a34a', fontSize: '1.2rem', flexShrink: 0 }} />
+                            <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#166534' }}>
+                              Auto-Generated Installation License Key ({newSchoolForm.concurrentUsersPerServer || 20} Concurrent Users)
+                            </div>
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: '#15803d' }}>
+                            Upon saving, a Primary LMS Server installation key with <strong>{newSchoolForm.concurrentUsersPerServer || 20} Users Capacity</strong> and valid through <strong>{computeLicenseExpiry(newSchoolForm.licenseDuration, newSchoolForm.expiryDate)}</strong> will be automatically generated and ready to copy.
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', fontSize: '0.75rem', marginTop: '2px' }}>
+                            <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
+                              👥 {newSchoolForm.concurrentUsersPerServer || 20} Users / Server
+                            </span>
+                            <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '4px' }}>
+                              📅 Created: Today ({formatDisplayDate(new Date())})
+                            </span>
+                            <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '4px' }}>
+                              ⏳ Expires: {computeLicenseExpiry(newSchoolForm.licenseDuration, newSchoolForm.expiryDate)}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
@@ -2679,31 +3251,26 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         />
                       </div>
                       <div className="sd-table-actions">
-                        <button
-                          className="sd-btn-outline"
-                          style={{
-                            background: isSelectModeSchools ? '#e2e8f0' : '#ffffff',
-                            color: '#374151',
-                            borderColor: '#d1d5db'
-                          }}
-                          onClick={() => {
-                            setIsSelectModeSchools(!isSelectModeSchools);
-                            if (isSelectModeSchools) setSelectedSchoolIds([]);
-                          }}
-                        >
-                          {isSelectModeSchools ? '✓ Done Selecting' : 'Select'}
-                        </button>
-                        {selectedSchoolIds.length > 0 && (
-                          <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' }} onClick={handleBulkDeleteSchools}>
-                            <FiTrash2 /> Delete Selected ({selectedSchoolIds.length})
+                        {/* Select -> (nobody ticked) Unselect, (someone ticked) Delete (n); after the delete it is Select again */}
+                        {isSelectModeSchools && selectedSchoolIds.length === 0 ? (
+                          <button className="sd-btn-outline" style={{ background: '#e2e8f0', color: '#374151', borderColor: '#d1d5db' }} onClick={() => setIsSelectModeSchools(false)}>
+                            Unselect
+                          </button>
+                        ) : isSelectModeSchools ? (
+                          <button className="sd-btn-outline" style={{ background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }} onClick={handleBulkDeleteSchools}>
+                            <FiTrash2 /> Delete ({selectedSchoolIds.length})
+                          </button>
+                        ) : (
+                          <button className="sd-btn-outline" style={{ background: '#ffffff', color: '#374151', borderColor: '#d1d5db' }} onClick={() => { setIsSelectModeSchools(true); setSelectedSchoolIds([]); }}>
+                            Select
                           </button>
                         )}
                         <button className="sd-btn-primary" onClick={() => setIsAddingSchool(true)}><FiPlus />Add School</button>
                       </div>
                     </div>
 
-                    <div className="sd-table-wrap" style={{ overflow: 'visible' }}>
-                      <table className="sd-table" style={{ tableLayout: 'fixed', width: '100%' }}>
+                    <div className="sd-table-wrap">
+                      <table className="sd-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: '850px' }}>
                         <colgroup>
                           {isSelectModeSchools && <col style={{ width: '4%' }} />}
                           <col style={{ width: '28%' }} />
@@ -3223,62 +3790,45 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     />
                   </div>
                   <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                    {selectedExpIds.length > 0 && (
-                      <button
-                        className="sd-btn-outline"
-                        style={{
-                          borderColor: '#ef4444',
-                          color: '#ef4444',
-                          background: '#fef2f2',
-                          padding: '0.35rem 0.75rem',
-                          fontSize: '0.82rem',
-                          borderRadius: '8px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.35rem',
-                          marginRight: '0.5rem'
-                        }}
-                        onClick={() => {
-                          setDeleteConfirm({
-                            show: true,
-                            id: 'bulk-experiences',
-                            type: 'lessons',
-                            isBulk: true,
-                            count: selectedExpIds.length,
-                            ids: [...selectedExpIds]
-                          });
-                        }}
-                      >
-                        🗑️ Delete Selected ({selectedExpIds.length})
-                      </button>
-                    )}
-                    <button
-                      className="sd-btn-outline"
-                      style={{
-                        padding: '0.45rem 1rem',
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        borderRadius: '8px',
-                        backgroundColor: isSelectMode ? '#e2e8f0' : '#fff',
-                        border: '1px solid #cbd5e1',
-                        color: '#1e293b',
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        minWidth: '70px',
-                        height: '38px',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                      }}
-                      onClick={() => {
-                        if (isSelectMode) {
-                          setSelectedExpIds([]);
-                        }
-                        setIsSelectMode(!isSelectMode);
-                      }}
-                    >
-                      {isSelectMode ? '✓ Done Selecting' : 'Select'}
-                    </button>
+                    {/* Select -> (nobody ticked) Unselect, (someone ticked) Delete (n); after the delete it is Select again */}
+                    {(() => {
+                      const base = {
+                        padding: '0.45rem 1rem', fontSize: '0.85rem', fontWeight: 600, borderRadius: '8px', cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                        minWidth: '70px', height: '38px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      };
+                      if (isSelectMode && selectedExpIds.length === 0) {
+                        return (
+                          <button className="sd-btn-outline" style={{ ...base, background: '#e2e8f0', border: '1px solid #cbd5e1', color: '#1e293b' }}
+                            onClick={() => setIsSelectMode(false)}>
+                            Unselect
+                          </button>
+                        );
+                      }
+                      if (isSelectMode) {
+                        return (
+                          <button className="sd-btn-outline" style={{ ...base, background: '#fef2f2', border: '1px solid #ef4444', color: '#ef4444' }}
+                            onClick={() => {
+                              setDeleteConfirm({
+                                show: true,
+                                id: 'bulk-experiences',
+                                type: 'lessons',
+                                isBulk: true,
+                                count: selectedExpIds.length,
+                                ids: [...selectedExpIds]
+                              });
+                            }}>
+                            <FiTrash2 /> Delete ({selectedExpIds.length})
+                          </button>
+                        );
+                      }
+                      return (
+                        <button className="sd-btn-outline" style={{ ...base, background: '#fff', border: '1px solid #cbd5e1', color: '#1e293b' }}
+                          onClick={() => { setSelectedExpIds([]); setIsSelectMode(true); }}>
+                          Select
+                        </button>
+                      );
+                    })()}
 
                     <select
                       className="sd-form-input"
@@ -3306,12 +3856,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                   </div>
                 </div>
 
-                <div className="sd-table-wrap" style={{ overflow: 'visible' }}>
-                  <table className="sd-table sd-table-compact" style={{ width: '100%', tableLayout: 'fixed', overflow: 'visible' }}>
+                <div className="sd-table-wrap">
+                  <table className="sd-table" style={{ width: '100%', minWidth: isSelectMode ? '820px' : '760px' }}>
                     <thead>
-                      <tr style={{ overflow: 'visible' }}>
+                      <tr>
                         {isSelectMode && (
-                          <th style={{ width: '50px', textAlign: 'center', verticalAlign: 'middle', padding: '0.75rem 0' }}>
+                          <th className="sd-checkbox-cell" style={{ width: '40px', minWidth: '40px', textAlign: 'center', verticalAlign: 'middle', padding: '0.75rem 0' }}>
                             <input
                               type="checkbox"
                               style={{ cursor: 'pointer', transform: 'scale(1.1)', verticalAlign: 'middle' }}
@@ -3331,14 +3881,15 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             />
                           </th>
                         )}
-                        <th style={{ width: isSelectMode ? '35%' : '39%' }}>Title</th>
-                        <th style={{ width: '15%' }}>Grade</th>
-                        <th style={{ width: '15%' }}>Duration</th>
-                        <th style={{ width: '15%' }}>Status</th>
-                        <th style={{ width: isSelectMode ? '15%' : '16%' }}>Date Submitted</th>
-                        <th style={{ textAlign: 'center', width: isSelectMode ? '10%' : '15%' }}>Actions</th>                      </tr>
+                        <th style={{ minWidth: '220px' }}>Title</th>
+                        <th style={{ minWidth: '100px' }}>Grade</th>
+                        <th style={{ minWidth: '110px' }}>Duration</th>
+                        <th style={{ minWidth: '130px' }}>Status</th>
+                        <th style={{ minWidth: '140px' }}>Date Submitted</th>
+                        <th style={{ textAlign: 'center', minWidth: '80px' }}>Actions</th>
+                      </tr>
                     </thead>
-                    <tbody style={{ overflow: 'visible' }}>
+                    <tbody>
                       {submittedExperiences.length === 0 ? (
                         <tr>
                           <td colSpan={isSelectMode ? 7 : 6} style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
@@ -3349,9 +3900,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         </tr>
                       ) : (
                         paginate(filterList(submittedExperiences), saExpPage).map((exp, idx) => (
-                          <tr key={exp.id || idx} style={{ overflow: 'visible' }}>
+                          <tr key={exp.id || idx} style={{ cursor: isSelectMode ? 'default' : 'pointer' }} onClick={() => { if (!isSelectMode) handlePreviewExperience(exp); }}>
                             {isSelectMode && (
-                              <td style={{ width: '50px', textAlign: 'center', verticalAlign: 'middle', padding: '0.75rem 0' }}>
+                              <td className="sd-checkbox-cell" onClick={(e) => e.stopPropagation()} style={{ width: '40px', minWidth: '40px', textAlign: 'center', verticalAlign: 'middle', padding: '0.75rem 0' }}>
                                 <input
                                   type="checkbox"
                                   style={{ cursor: 'pointer', transform: 'scale(1.1)', verticalAlign: 'middle' }}
@@ -3367,22 +3918,22 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                                 />
                               </td>
                             )}
-                            <td style={{ width: isSelectMode ? '35%' : '39%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <td style={{ minWidth: '220px' }}>
                               <div style={{ display: 'flex', flexDirection: 'column' }}>
                                 <span style={{ fontWeight: 600, color: '#1e293b' }}>{exp.title ? exp.title.toUpperCase() : ''}</span>
                               </div>
                             </td>
-                            <td style={{ width: '15%' }}>{exp.grade_name || `Grade ${exp.grade}`}</td>
-                            <td style={{ width: '15%' }}>{exp.estimated_duration ? `${exp.estimated_duration} mins` : 'N/A'}</td>
-                            <td style={{ width: '15%' }}>
+                            <td style={{ minWidth: '100px', whiteSpace: 'nowrap' }}>{exp.grade_name || `Grade ${exp.grade}`}</td>
+                            <td style={{ minWidth: '110px', whiteSpace: 'nowrap' }}>{exp.estimated_duration ? `${exp.estimated_duration} mins` : 'N/A'}</td>
+                            <td style={{ minWidth: '130px', whiteSpace: 'nowrap' }}>
                               <span className={`sd-badge ${exp.status === 'APPROVED' ? 'sd-badge-published' :
                                 exp.status === 'PENDING_APPROVAL' ? 'sd-badge-review' : 'sd-badge-draft'
                                 }`}>
                                 {exp.status === 'PENDING_APPROVAL' ? 'PENDING' : exp.status}
                               </span>
                             </td>
-                            <td style={{ width: isSelectMode ? '15%' : '16%' }}>{new Date(exp.updated_at).toLocaleDateString()}</td>
-                            <td style={{ textAlign: 'center', width: isSelectMode ? '10%' : '15%' }}>
+                            <td style={{ minWidth: '140px', whiteSpace: 'nowrap' }}>{new Date(exp.updated_at).toLocaleDateString()}</td>
+                            <td style={{ textAlign: 'center', minWidth: '80px' }}>
                               <button
                                 style={{
                                   border: 'none',
@@ -3566,7 +4117,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
                         <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Full Name</label>
+                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                            Full Name <span style={{ color: '#ef4444' }}>*</span>
+                          </label>
                           <input className="sd-form-input" type="text"
                             value={profileForm.full_name}
                             onChange={e => setProfileForm({ ...profileForm, full_name: e.target.value })}
@@ -3577,11 +4130,13 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                           />
                         </div>
                         <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Email Address</label>
+                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                            Email Address <span style={{ color: '#ef4444' }}>*</span>
+                          </label>
                           <input className="sd-form-input" type="email"
                             value={profileForm.email}
                             onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
-                            placeholder="your@email.com"
+                            placeholder="your@email.com" required
                             style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                             onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
                             onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
@@ -3591,12 +4146,14 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
                         <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Username</label>
+                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Username (Read-Only)</label>
                           <input className="sd-form-input" type="text" value={profileForm.username || user?.username} disabled
                             style={{ width: '100%', height: '42px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', background: '#f8fafc', color: '#64748b', cursor: 'not-allowed' }} />
                         </div>
                         <div className="sd-form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Phone Number</label>
+                          <label className="sd-form-label" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>
+                            Phone Number <span style={{ color: '#ef4444' }}>*</span>
+                          </label>
                           <input className="sd-form-input" type="tel"
                             maxLength={10}
                             value={profileForm.phone_no || ''}
@@ -3604,7 +4161,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                               const cleaned = e.target.value.replace(/\D/g, '').slice(0, 10);
                               setProfileForm({ ...profileForm, phone_no: cleaned });
                             }}
-                            placeholder="+91 98765 43210"
+                            placeholder="Enter 10 digit phone number" required
                             style={{ width: '100%', height: '42px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0 0.85rem', fontSize: '0.85rem', transition: 'border-color 0.2s', outline: 'none' }}
                             onFocus={e => e.currentTarget.style.borderColor = '#0b75b3'}
                             onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
@@ -3768,35 +4325,44 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                     </label>
 
                     {/* License Configuration */}
-                    <div style={{ marginTop: '1.5rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem' }}>
-                      <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '1rem' }}>License Configuration</h4>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
+                    <div style={{ marginTop: '1.5rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem', marginBottom: '1.25rem' }}>
+                      <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1rem 0' }}>
+                        License Configuration
+                      </h4>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
                         <div className="sd-form-group" style={{ marginBottom: 0 }}>
-                          <label className="sd-form-label">Max LMS Servers *</label>
+                          <label className="sd-form-label" style={{ fontSize: '0.82rem' }}>
+                            Max LMS Servers <span style={{ color: '#ef4444' }}>*</span>
+                          </label>
                           <input
                             className="sd-form-input"
                             type="number"
                             min="1"
                             required
-                            value={schoolForm.maxLmsServers ?? 2}
+                            value={schoolForm.maxLmsServers ?? 1}
                             onChange={e => setSchoolForm({ ...schoolForm, maxLmsServers: e.target.value })}
                           />
                         </div>
+
                         <div className="sd-form-group" style={{ marginBottom: 0 }}>
-                          <label className="sd-form-label">Concurrent Users Per Server *</label>
+                          <label className="sd-form-label" style={{ fontSize: '0.82rem' }}>
+                            Concurrent Users Per Server <span style={{ color: '#ef4444' }}>*</span>
+                          </label>
                           <input
-                            className="sd-form-input"
+                            className="sd-form-input sd-no-spinner"
                             type="number"
                             min="1"
                             required
-                            value={schoolForm.concurrentUsersPerServer ?? 40}
+                            value={schoolForm.concurrentUsersPerServer ?? 20}
                             onChange={e => setSchoolForm({ ...schoolForm, concurrentUsersPerServer: e.target.value })}
                           />
                         </div>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+
                         <div className="sd-form-group" style={{ marginBottom: 0 }}>
-                          <label className="sd-form-label">License Duration *</label>
+                          <label className="sd-form-label" style={{ fontSize: '0.82rem' }}>
+                            License Duration <span style={{ color: '#ef4444' }}>*</span>
+                          </label>
                           <select
                             className="sd-form-input"
                             required
@@ -3808,9 +4374,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             <option value="Custom">Custom Expiry Date</option>
                           </select>
                         </div>
+
                         {schoolForm.licenseDuration === 'Custom' && (
                           <div className="sd-form-group" style={{ marginBottom: 0 }}>
-                            <label className="sd-form-label">Custom Expiry Date *</label>
+                            <label className="sd-form-label" style={{ fontSize: '0.82rem' }}>
+                              Custom Expiry Date <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
                             <input
                               className="sd-form-input"
                               type="date"
@@ -3821,6 +4390,305 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                           </div>
                         )}
                       </div>
+
+                      {/* Correlated LMS Server Installation Keys */}
+                      {modalType === 'edit' ? (() => {
+                        const currentSchool = schools.find(s => (s.school_id || s.id) === editingId);
+                        const servers = currentSchool?.lms_servers || [];
+                        const maxAllowed = parseInt(schoolForm.maxLmsServers, 10) || 1;
+                        const activeCount = servers.filter(s => s.status === 'ACTIVE').length;
+                        const canAddMore = servers.length < maxAllowed;
+                        const effectiveCapacity = schoolForm.concurrentUsersPerServer || 20;
+
+                        const openProvisionModal = () => {
+                          const defaultCapacity = schoolForm.concurrentUsersPerServer || 20;
+                          const defaultDuration = schoolForm.licenseDuration || '1 Year';
+                          const defaultExpiry = schoolForm.expiryDate || '';
+                          if (!canAddMore) {
+                            setServerConfirm({
+                              show: true,
+                              title: 'Server Limit Reached',
+                              message: `Limit of ${maxAllowed} servers reached. Would you like to increase Max LMS Servers to ${maxAllowed + 1} and configure another server?`,
+                              icon: <FiPlus />,
+                              iconBg: '#e0e7ff',
+                              iconColor: '#4f46e5',
+                              confirmText: 'Increase Limit & Configure',
+                              confirmBg: '#4f46e5',
+                              onConfirm: () => {
+                                setServerConfirm(prev => ({ ...prev, show: false }));
+                                setSchoolForm(prev => ({ ...prev, maxLmsServers: maxAllowed + 1 }));
+                                setNewServerModal({
+                                  show: true,
+                                  schoolId: editingId,
+                                  serverName: `${schoolForm.school_name || 'School'} - LMS Server ${servers.length + 1}`,
+                                  maxUsers: defaultCapacity,
+                                  licenseDuration: defaultDuration,
+                                  expiryDate: defaultExpiry
+                                });
+                              }
+                            });
+                            return;
+                          }
+                          setNewServerModal({
+                            show: true,
+                            schoolId: editingId,
+                            serverName: `${schoolForm.school_name || 'School'} - LMS Server ${servers.length + 1}`,
+                            maxUsers: defaultCapacity,
+                            licenseDuration: defaultDuration,
+                            expiryDate: defaultExpiry
+                          });
+                        };
+
+                        return (
+                          <div>
+                            {/* LMS Server Installation Keys Header Row */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '0.92rem', fontWeight: 700, color: '#0f172a' }}>
+                                  LMS Server Installation Keys
+                                </span>
+                                <span
+                                  className="sd-badge"
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 600,
+                                    backgroundColor: '#dcfce7',
+                                    color: '#15803d'
+                                  }}
+                                >
+                                  ● {activeCount} Active • {servers.length}/{maxAllowed} Provisioned
+                                </span>
+                              </div>
+
+                              <button
+                                type="button"
+                                disabled={serverActionLoading || actionLoading}
+                                onClick={openProvisionModal}
+                                className="sd-btn-primary"
+                                style={{ padding: '6px 14px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px' }}
+                              >
+                                <FiPlus /> Add LMS Server
+                              </button>
+                            </div>
+
+                            <p style={{ margin: '0 0 1rem 0', fontSize: '0.78rem', color: '#64748b' }}>
+                              Each installation key authorizes 1 LMS server instance with customized concurrent users capacity and license duration.
+                            </p>
+
+                            {servers.length > 0 ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                {servers.map((srv, idx) => {
+                                  const isActive = srv.status === 'ACTIVE';
+                                  const serverCapacity = srv.maxUsers || 40;
+                                  const serverDuration = srv.licenseDuration || schoolForm.licenseDuration || '1 Year';
+                                  const serverCreatedDate = formatDisplayDate(srv.activationDate || srv.createdDate || srv.created_at || currentSchool?.created_at || new Date());
+                                  const serverExpiryDate = (srv.expiryDate && formatDisplayDate(srv.expiryDate) !== '—')
+                                    ? formatDisplayDate(srv.expiryDate)
+                                    : computeLicenseExpiry(serverDuration, schoolForm.expiryDate || currentSchool?.license?.expiryDate, srv.activationDate || currentSchool?.created_at);
+
+                                  const openEditModal = () => {
+                                    setEditingServerModal({
+                                      show: true,
+                                      installationId: srv.installationId,
+                                      serverName: srv.serverName || '',
+                                      licenseKey: srv.licenseKey || currentSchool?.license?.licenseKey || '',
+                                      maxUsers: serverCapacity,
+                                      licenseDuration: serverDuration,
+                                      expiryDate: srv.expiryDate ? String(srv.expiryDate).slice(0, 10) : ''
+                                    });
+                                  };
+
+                                  return (
+                                    <div
+                                      key={srv.installationId || idx}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        padding: '0.85rem 1.1rem',
+                                        backgroundColor: isActive ? '#f8fafc' : '#fef2f2',
+                                        borderRadius: '8px',
+                                        border: `1px solid ${isActive ? '#e2e8f0' : '#fecaca'}`,
+                                        gap: '0.85rem',
+                                        flexWrap: 'wrap',
+                                        transition: 'all 0.2s ease'
+                                      }}
+                                    >
+                                      {/* Left: Server Name & ID */}
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '180px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                          <span style={{ fontSize: '0.9rem', fontWeight: 700, color: isActive ? '#0f172a' : '#64748b', textDecoration: isActive ? 'none' : 'line-through' }}>
+                                            {srv.serverName || `LMS Server ${idx + 1}`}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={openEditModal}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#4f46e5', display: 'flex', alignItems: 'center' }}
+                                            title="Edit Server Name & Customize Capacity / Duration"
+                                          >
+                                            <FiEdit2 style={{ fontSize: '0.82rem' }} />
+                                          </button>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.74rem', color: '#64748b' }}>
+                                          <span style={{ fontFamily: 'monospace' }}>ID: {srv.installationId}</span>
+                                          {serverCreatedDate && serverCreatedDate !== '—' && (
+                                            <span>• {serverCreatedDate}</span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Middle: License Key Box & Copy */}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '1 1 240px', minWidth: '220px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#ffffff', padding: '5px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', flex: 1, opacity: isActive ? 1 : 0.65 }}>
+                                          <FiKey style={{ color: isActive ? '#6366f1' : '#94a3b8', fontSize: '0.85rem', flexShrink: 0 }} />
+                                          <code style={{ fontSize: '0.82rem', fontWeight: 600, color: '#0f172a', letterSpacing: '0.5px', wordBreak: 'break-all' }}>
+                                            {srv.licenseKey || currentSchool?.license?.licenseKey || 'Auto-generated'}
+                                          </code>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => copyToClipboard(srv.licenseKey || currentSchool?.license?.licenseKey, "Server license key copied!")}
+                                          className="sd-btn-outline"
+                                          style={{ padding: '5px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+                                          title="Copy installation key"
+                                        >
+                                          <FiCopy /> Copy
+                                        </button>
+                                      </div>
+
+                                      {/* Right: Badges & CRUD Action Buttons */}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                        <span
+                                          className="sd-badge"
+                                          style={{
+                                            fontSize: '0.75rem',
+                                            fontWeight: 600,
+                                            backgroundColor: '#dcfce7',
+                                            color: '#15803d'
+                                          }}
+                                        >
+                                          ● {serverCapacity} Users Capacity
+                                        </span>
+                                        <span
+                                          className="sd-badge"
+                                          style={{
+                                            fontSize: '0.72rem',
+                                            fontWeight: 600,
+                                            backgroundColor: '#eff6ff',
+                                            color: '#1d4ed8'
+                                          }}
+                                        >
+                                          ⏳ {serverDuration} (Expires: {serverExpiryDate})
+                                        </span>
+                                        <span
+                                          className="sd-badge"
+                                          style={{
+                                            fontSize: '0.72rem',
+                                            fontWeight: 700,
+                                            backgroundColor: isActive ? '#dcfce7' : '#fee2e2',
+                                            color: isActive ? '#15803d' : '#b91c1c'
+                                          }}
+                                        >
+                                          {isActive ? '●● ACTIVE' : '●● DISABLED'}
+                                        </span>
+
+                                        {/* Edit Server Button */}
+                                        <button
+                                          type="button"
+                                          disabled={serverActionLoading}
+                                          onClick={openEditModal}
+                                          className="sd-btn-outline"
+                                          style={{
+                                            padding: '4px 10px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 600,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            color: '#4338ca',
+                                            borderColor: '#c7d2fe',
+                                            backgroundColor: '#eef2ff'
+                                          }}
+                                          title="Edit server name, lessen capacity, or change duration"
+                                        >
+                                          <FiEdit2 /> Edit
+                                        </button>
+
+                                        {/* Disable / Enable Button */}
+                                        <button
+                                          type="button"
+                                          disabled={serverActionLoading}
+                                          onClick={() => handleToggleServerStatus(srv)}
+                                          className="sd-btn-outline"
+                                          style={{
+                                            padding: '4px 10px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 600,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            color: isActive ? '#b91c1c' : '#15803d',
+                                            borderColor: isActive ? '#fca5a5' : '#86efac',
+                                            backgroundColor: isActive ? '#ffffff' : '#f0fdf4'
+                                          }}
+                                          title={isActive ? "Disable this server" : "Enable this server"}
+                                        >
+                                          {isActive ? <><FiSlash /> Disable</> : <><FiCheck /> Enable</>}
+                                        </button>
+
+                                        {/* Delete Button */}
+                                        <button
+                                          type="button"
+                                          disabled={serverActionLoading}
+                                          onClick={() => handleDeleteServer(srv)}
+                                          className="sd-btn-outline"
+                                          style={{
+                                            padding: '4px 8px',
+                                            fontSize: '0.75rem',
+                                            color: '#ef4444',
+                                            borderColor: '#fca5a5',
+                                            background: '#ffffff'
+                                          }}
+                                          title="Delete Server"
+                                        >
+                                          <FiTrash2 />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div style={{ padding: '0.85rem 1rem', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.82rem', color: '#92400e' }}>
+                                  No installation license key provisioned for this school yet.
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={serverActionLoading || actionLoading}
+                                  onClick={openProvisionModal}
+                                  className="sd-btn-primary"
+                                  style={{ padding: '5px 12px', fontSize: '0.78rem' }}
+                                >
+                                  ⚡ Provision Primary Server Key
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })() : (
+                        <div style={{ marginTop: '1.25rem', padding: '1rem 1.25rem', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <FiCheckCircle style={{ color: '#16a34a', fontSize: '1.25rem', flexShrink: 0 }} />
+                            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#166534' }}>
+                              Auto-Generated Installation License Key ({schoolForm.concurrentUsersPerServer || 20} Concurrent Users)
+                            </div>
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#15803d' }}>
+                            Upon saving this school, a Primary LMS Server key will be automatically generated with <strong>{schoolForm.concurrentUsersPerServer || 20} Users Capacity</strong> and valid through <strong>{computeLicenseExpiry(schoolForm.licenseDuration, schoolForm.expiryDate)}</strong> ({schoolForm.licenseDuration || '1 Year'}).
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </>)}
 
@@ -4199,6 +5067,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                {LMS_PREVIEW_URL && (
+                  <button type="button" onClick={() => setLmsPreviewOn(v => !v)}
+                    style={{ padding: '0.5rem 1rem', background: '#fff', border: '1px solid #cbd5e1', color: '#334155', fontSize: '0.85rem', fontWeight: 600, borderRadius: '6px', cursor: 'pointer' }}>
+                    {lmsPreviewOn ? 'Show CMS preview' : 'Show LMS preview'}
+                  </button>
+                )}
                 {previewExperience.status === 'PENDING_APPROVAL' && (
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
                     <button
@@ -4234,7 +5108,12 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
             </div>
 
             {/* Modal Body: Split view */}
-            <div style={{ display: 'flex', flex: 1, overflow: 'hidden', backgroundColor: '#f1f5f9' }}>
+            {lmsPreviewOn && LMS_PREVIEW_URL && (
+              <div style={{ display: 'flex', flex: 1, overflow: 'hidden', backgroundColor: '#0f172a' }}>
+                <LmsEnginePreview experienceId={previewExperience.id} />
+              </div>
+            )}
+            <div style={{ display: (lmsPreviewOn && LMS_PREVIEW_URL) ? 'none' : 'flex', flex: 1, overflow: 'hidden', backgroundColor: '#f1f5f9' }}>
 
               {/* Left Sidebar: Navigator */}
               <div style={{ width: '280px', borderRight: '1px solid #e2e8f0', backgroundColor: '#ffffff', overflowY: 'auto', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem', flexShrink: 0 }}>
@@ -4345,37 +5224,112 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         overflow: 'visible'
                       }}
                     >
-                      {activePreviewScreen.elements && activePreviewScreen.elements.length > 0 ? (
-                        <div 
-                          className="preview-canvas-viewport"
-                          style={{
-                            width: '100%',
-                            minHeight: '100%',
-                            padding: '2rem',
-                            boxSizing: 'border-box',
-                            background: '#ffffff',
-                            fontFamily: activePreviewScreen.content?.font || 'Poppins',
-                            display: 'flex',
-                            flexDirection: 'column'
-                          }}
-                        >
-                          <PreviewCanvasRenderer
-                            elements={activePreviewScreen.elements || []}
-                            activeScreenId={activePreviewScreen.id || ''}
-                            previewAnswers={previewAnswers}
-                            setPreviewAnswers={setPreviewAnswers}
-                            voiceRecordingStates={voiceRecordingStates}
-                            setVoiceRecordingStates={setVoiceRecordingStates}
-                            dragDropSelections={dragDropSelections}
-                            setDragDropSelections={setDragDropSelections}
-                            blankAnswers={blankAnswers}
-                            setBlankAnswers={setBlankAnswers}
-                            flippedCards={flippedCards}
-                            setFlippedCards={setFlippedCards}
-                            resolveUrl={resolvePreviewUrl}
-                          />
-                        </div>
-                      ) : (
+                    {(() => {
+                      const screenContent = activePreviewScreen.content || {};
+                      const scrType = (activePreviewScreen.screen_type || '').toUpperCase();
+                      
+                      let screenElements = activePreviewScreen.elements && activePreviewScreen.elements.length > 0 
+                        ? activePreviewScreen.elements 
+                        : [];
+
+                      // If elements array is empty, synthesize block for PreviewCanvasRenderer
+                      if (screenElements.length === 0) {
+                        const isMultimedia = screenContent.mediaType === 'multimedia' || 
+                          ['multimedia_reading_assessment', 'multimedia reading assessment', 'multimedia_reading', 'multimedia'].includes((screenContent.type || '').toLowerCase()) || 
+                          ((screenContent.audioUrl || screenContent.videoUrl) && Array.isArray(screenContent.questions) && screenContent.questions.length > 0);
+
+                        const isQuiz = scrType === 'QUIZ' || 
+                          scrType === 'ASSESSMENT' || 
+                          !!screenContent.quiz_question || 
+                          (Array.isArray(screenContent.questions) && screenContent.questions.length > 0 && !isMultimedia);
+
+                        if (isMultimedia) {
+                          screenElements = [{
+                            id: `block-synth-${activePreviewScreen.id}-multimedia`,
+                            type: 'multimedia_reading_assessment',
+                            content: {
+                              mediaType: screenContent.mediaType || (screenContent.videoUrl ? 'video' : 'audio'),
+                              audioUrl: screenContent.audioUrl || (screenContent.media_type === 'AUDIO' ? screenContent.media_url : ''),
+                              videoUrl: screenContent.videoUrl || (screenContent.media_type === 'VIDEO' ? screenContent.media_url : ''),
+                              scenario: screenContent.scenario || '',
+                              documentText: screenContent.documentText || '',
+                              questions: screenContent.questions || []
+                            }
+                          }];
+                        } else if (isQuiz) {
+                          screenElements = [{
+                            id: `block-synth-${activePreviewScreen.id}-quiz`,
+                            type: 'quiz',
+                            content: {
+                              question: screenContent.quiz_question || (screenContent.questions?.[0]?.question) || screenContent.question || 'Quiz question',
+                              options: screenContent.quiz_options || (screenContent.questions?.[0]?.options) || screenContent.options || ['', '', '', ''],
+                              correctAnswerIndex: screenContent.quiz_correct_index ?? (screenContent.questions?.[0]?.correctAnswerIndex) ?? 0,
+                              questions: screenContent.questions && screenContent.questions.length > 0 ? screenContent.questions : undefined
+                            }
+                          }];
+                        } else if (scrType === 'IMAGE' || (screenContent.media_url && screenContent.media_type === 'IMAGE')) {
+                          screenElements = [{
+                            id: `block-synth-${activePreviewScreen.id}-image`,
+                            type: 'image',
+                            content: {
+                              url: screenContent.media_url || '',
+                              caption: screenContent.caption || screenContent.text || '',
+                              hasQuestion: screenContent.hasQuestion,
+                              questionText: screenContent.questionText,
+                              questionOptions: screenContent.questionOptions,
+                              correctAnswer: screenContent.correctAnswer
+                            }
+                          }];
+                        } else if (scrType === 'VIDEO' || (screenContent.media_url && screenContent.media_type === 'VIDEO')) {
+                          screenElements = [{
+                            id: `block-synth-${activePreviewScreen.id}-video`,
+                            type: 'video',
+                            content: { url: screenContent.media_url || '' }
+                          }];
+                        } else if (scrType === 'SPEAKING' || (screenContent.media_url && screenContent.media_type === 'AUDIO')) {
+                          screenElements = [{
+                            id: `block-synth-${activePreviewScreen.id}-audio`,
+                            type: 'audio',
+                            content: { title: screenContent.title || 'Audio Practice', url: screenContent.media_url || '' }
+                          }];
+                        }
+                      }
+
+                      if (screenElements && screenElements.length > 0) {
+                        return (
+                          <div 
+                            className="preview-canvas-viewport"
+                            style={{
+                              width: '100%',
+                              minHeight: '100%',
+                              padding: '2rem',
+                              boxSizing: 'border-box',
+                              background: '#ffffff',
+                              fontFamily: activePreviewScreen.content?.font || 'Poppins',
+                              display: 'flex',
+                              flexDirection: 'column'
+                            }}
+                          >
+                            <PreviewCanvasRenderer
+                              elements={screenElements}
+                              activeScreenId={activePreviewScreen.id || ''}
+                              previewAnswers={previewAnswers}
+                              setPreviewAnswers={setPreviewAnswers}
+                              voiceRecordingStates={voiceRecordingStates}
+                              setVoiceRecordingStates={setVoiceRecordingStates}
+                              dragDropSelections={dragDropSelections}
+                              setDragDropSelections={setDragDropSelections}
+                              blankAnswers={blankAnswers}
+                              setBlankAnswers={setBlankAnswers}
+                              flippedCards={flippedCards}
+                              setFlippedCards={setFlippedCards}
+                              resolveUrl={resolvePreviewUrl}
+                            />
+                          </div>
+                        );
+                      }
+
+                      return (
                         <div style={{ flex: 1, padding: '2.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                           <div style={{ maxWidth: '800px', width: '100%', margin: '0 auto' }}>
                             {activePreviewScreen.screen_type === 'INFORMATION' && (
@@ -4489,7 +5443,7 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                               </div>
                             )}
 
-                            {activePreviewScreen.screen_type === 'QUIZ' && (
+                            {(activePreviewScreen.screen_type === 'QUIZ' || activePreviewScreen.screen_type === 'ASSESSMENT' || !!activePreviewScreen.content?.quiz_question || (Array.isArray(activePreviewScreen.content?.questions) && activePreviewScreen.content.questions.length > 0)) && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                 <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem', lineHeight: 1.5 }}>
                                   ❓ {activePreviewScreen.elements?.[0]?.content?.question || activePreviewScreen.content?.quiz_question || 'Choose the correct answer.'}
@@ -4616,7 +5570,8 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                             )}
                           </div>
                         </div>
-                      )}
+                      );
+                    })()}
                     </div>
                     </div>
                   </div>
@@ -4945,6 +5900,462 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                 {loading ? 'Deleting...' : 'OK'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Server Action / Deletion / Disable Confirmation Modal ── */}
+      {serverConfirm.show && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100000,
+            padding: '1rem'
+          }}
+          onClick={() => setServerConfirm(prev => ({ ...prev, show: false }))}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '400px',
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              padding: '1.75rem 1.5rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              textAlign: 'center',
+              border: '1px solid #e2e8f0'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Symbol */}
+            <div
+              style={{
+                width: '54px',
+                height: '54px',
+                borderRadius: '50%',
+                backgroundColor: serverConfirm.iconBg || '#fee2e2',
+                color: serverConfirm.iconColor || '#ef4444',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1.1rem',
+                fontSize: '1.5rem'
+              }}
+            >
+              {serverConfirm.icon || <FiAlertTriangle />}
+            </div>
+
+            {/* Title & Warning */}
+            <h3 style={{ fontSize: '1.18rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.45rem' }}>
+              {serverConfirm.title}
+            </h3>
+            <p style={{ fontSize: '0.86rem', color: '#64748b', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+              {serverConfirm.message}
+            </p>
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button
+                type="button"
+                style={{
+                  flex: 1,
+                  padding: '0.65rem 1rem',
+                  borderRadius: '10px',
+                  backgroundColor: '#f1f5f9',
+                  color: '#475569',
+                  border: '1px solid #e2e8f0',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer'
+                }}
+                onClick={() => setServerConfirm(prev => ({ ...prev, show: false }))}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                style={{
+                  flex: 1,
+                  padding: '0.65rem 1rem',
+                  borderRadius: '10px',
+                  backgroundColor: serverConfirm.confirmBg || '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+                onClick={() => {
+                  if (typeof serverConfirm.onConfirm === 'function') {
+                    serverConfirm.onConfirm();
+                  } else {
+                    setServerConfirm(prev => ({ ...prev, show: false }));
+                  }
+                }}
+                disabled={serverActionLoading}
+              >
+                {serverActionLoading ? 'Processing...' : (serverConfirm.confirmText || 'OK')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Provision New LMS Server Modal ── */}
+      {newServerModal.show && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            width: '100vw', height: '100vh',
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100000,
+            padding: '1rem'
+          }}
+          onClick={() => !serverActionLoading && setNewServerModal(prev => ({ ...prev, show: false }))}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '520px',
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              padding: '2rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              border: '1px solid #e2e8f0'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.25rem' }}>
+              <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#e0e7ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem' }}>
+                <FiServer />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: '1.22rem', fontWeight: 700, color: '#0f172a', margin: '0 0 2px 0' }}>
+                  Provision LMS Server
+                </h3>
+                <p style={{ fontSize: '0.82rem', color: '#64748b', margin: 0 }}>
+                  Configure separate user capacity and license duration for this server
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !serverActionLoading && setNewServerModal(prev => ({ ...prev, show: false }))}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.2rem', padding: '4px' }}
+              >
+                <FiX />
+              </button>
+            </div>
+
+            <form onSubmit={handleProvisionServerSubmit}>
+              <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                <label className="sd-form-label">Server Name / Identifier *</label>
+                <input
+                  type="text"
+                  className="sd-form-input"
+                  required
+                  placeholder="e.g. Science Lab 2, English Room B"
+                  value={newServerModal.serverName}
+                  onChange={e => setNewServerModal({ ...newServerModal, serverName: e.target.value })}
+                  disabled={serverActionLoading}
+                />
+              </div>
+
+              <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label className="sd-form-label" style={{ margin: 0 }}>Concurrent Users Capacity *</label>
+                  <span style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: 600 }}>Independent per server</span>
+                </div>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  className="sd-form-input"
+                  required
+                  value={newServerModal.maxUsers}
+                  onChange={e => setNewServerModal({ ...newServerModal, maxUsers: e.target.value })}
+                  disabled={serverActionLoading}
+                />
+                <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                  {[10, 15, 20, 25, 30, 40, 50, 60].map(cnt => (
+                    <button
+                      key={cnt}
+                      type="button"
+                      onClick={() => setNewServerModal(prev => ({ ...prev, maxUsers: cnt }))}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '12px',
+                        padding: '2px 9px',
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        background: parseInt(newServerModal.maxUsers, 10) === cnt ? '#4f46e5' : '#f8fafc',
+                        color: parseInt(newServerModal.maxUsers, 10) === cnt ? '#ffffff' : '#475569',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {cnt} Users
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                <label className="sd-form-label">License Duration *</label>
+                <select
+                  className="sd-form-input"
+                  value={newServerModal.licenseDuration}
+                  onChange={e => setNewServerModal({ ...newServerModal, licenseDuration: e.target.value })}
+                  disabled={serverActionLoading}
+                >
+                  <option value="6 Months">6 Months</option>
+                  <option value="1 Year">1 Year</option>
+                  <option value="2 Years">2 Years</option>
+                  <option value="Custom">Custom Expiry Date</option>
+                </select>
+              </div>
+
+              {newServerModal.licenseDuration === 'Custom' && (
+                <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                  <label className="sd-form-label">Custom Expiry Date *</label>
+                  <input
+                    type="date"
+                    className="sd-form-input"
+                    required
+                    value={newServerModal.expiryDate}
+                    onChange={e => setNewServerModal({ ...newServerModal, expiryDate: e.target.value })}
+                    disabled={serverActionLoading}
+                  />
+                </div>
+              )}
+
+              <div style={{ background: '#f8fafc', padding: '0.9rem 1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                  <span style={{ color: '#64748b' }}>Provisioned License:</span>
+                  <strong style={{ color: '#16a34a' }}>{newServerModal.maxUsers || 20} Users • {newServerModal.licenseDuration}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                  <span style={{ color: '#64748b' }}>Installation Key:</span>
+                  <span style={{ color: '#6366f1', fontStyle: 'italic' }}>Auto-generated upon save</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  className="sd-btn-outline"
+                  onClick={() => setNewServerModal(prev => ({ ...prev, show: false }))}
+                  disabled={serverActionLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="sd-btn-primary"
+                  style={{ background: '#4f46e5', padding: '7px 18px' }}
+                  disabled={serverActionLoading}
+                >
+                  {serverActionLoading ? 'Provisioning...' : 'Provision Server Key'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit LMS Server Modal (Customize / Lessen Capacity & Duration) ── */}
+      {editingServerModal.show && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            width: '100vw', height: '100vh',
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100000,
+            padding: '1rem'
+          }}
+          onClick={() => !serverActionLoading && setEditingServerModal(prev => ({ ...prev, show: false }))}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '520px',
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              padding: '2rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              border: '1px solid #e2e8f0'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.25rem' }}>
+              <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#e0e7ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem' }}>
+                <FiEdit2 />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: '1.22rem', fontWeight: 700, color: '#0f172a', margin: '0 0 2px 0' }}>
+                  Edit LMS Server License
+                </h3>
+                <p style={{ fontSize: '0.82rem', color: '#64748b', margin: 0 }}>
+                  Adjust user capacity or license duration particularly for this server
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !serverActionLoading && setEditingServerModal(prev => ({ ...prev, show: false }))}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.2rem', padding: '4px' }}
+              >
+                <FiX />
+              </button>
+            </div>
+
+            {/* Server Key & ID Info Box */}
+            <div style={{ background: '#f8fafc', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: '#64748b' }}>
+                <span>Installation ID:</span>
+                <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#334155' }}>{editingServerModal.installationId}</span>
+              </div>
+              {editingServerModal.licenseKey && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', fontSize: '0.8rem' }}>
+                  <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>License Key:</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', maxWidth: '280px' }}>
+                    <code style={{ fontSize: '0.78rem', background: '#ffffff', padding: '2px 6px', borderRadius: '4px', border: '1px solid #cbd5e1', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {editingServerModal.licenseKey}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(editingServerModal.licenseKey, "Server license key copied!")}
+                      className="sd-btn-outline"
+                      style={{ padding: '2px 6px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '3px' }}
+                    >
+                      <FiCopy />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleSaveEditingServerModal}>
+              <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                <label className="sd-form-label">Server Name *</label>
+                <input
+                  type="text"
+                  className="sd-form-input"
+                  required
+                  value={editingServerModal.serverName}
+                  onChange={e => setEditingServerModal({ ...editingServerModal, serverName: e.target.value })}
+                  disabled={serverActionLoading}
+                />
+              </div>
+
+              <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label className="sd-form-label" style={{ margin: 0 }}>Concurrent Users Capacity *</label>
+                  <span style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: 600 }}>Lessen or increase for this server</span>
+                </div>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  className="sd-form-input"
+                  required
+                  value={editingServerModal.maxUsers}
+                  onChange={e => setEditingServerModal({ ...editingServerModal, maxUsers: e.target.value })}
+                  disabled={serverActionLoading}
+                />
+                <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                  {[10, 15, 20, 25, 30, 40, 50, 60].map(cnt => (
+                    <button
+                      key={cnt}
+                      type="button"
+                      onClick={() => setEditingServerModal(prev => ({ ...prev, maxUsers: cnt }))}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '12px',
+                        padding: '2px 9px',
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        background: parseInt(editingServerModal.maxUsers, 10) === cnt ? '#4f46e5' : '#f8fafc',
+                        color: parseInt(editingServerModal.maxUsers, 10) === cnt ? '#ffffff' : '#475569',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {cnt} Users
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                <label className="sd-form-label">License Duration *</label>
+                <select
+                  className="sd-form-input"
+                  value={editingServerModal.licenseDuration}
+                  onChange={e => setEditingServerModal({ ...editingServerModal, licenseDuration: e.target.value })}
+                  disabled={serverActionLoading}
+                >
+                  <option value="6 Months">6 Months</option>
+                  <option value="1 Year">1 Year</option>
+                  <option value="2 Years">2 Years</option>
+                  <option value="Custom">Custom Expiry Date</option>
+                </select>
+              </div>
+
+              {editingServerModal.licenseDuration === 'Custom' && (
+                <div className="sd-form-group" style={{ marginBottom: '1.1rem' }}>
+                  <label className="sd-form-label">Custom Expiry Date *</label>
+                  <input
+                    type="date"
+                    className="sd-form-input"
+                    required
+                    value={editingServerModal.expiryDate}
+                    onChange={e => setEditingServerModal({ ...editingServerModal, expiryDate: e.target.value })}
+                    disabled={serverActionLoading}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+                <button
+                  type="button"
+                  className="sd-btn-outline"
+                  onClick={() => setEditingServerModal(prev => ({ ...prev, show: false }))}
+                  disabled={serverActionLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="sd-btn-primary"
+                  style={{ background: '#16a34a', padding: '7px 18px' }}
+                  disabled={serverActionLoading}
+                >
+                  {serverActionLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

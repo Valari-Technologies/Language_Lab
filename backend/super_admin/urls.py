@@ -7,6 +7,8 @@ from .views import (
     DashboardStatsAPIView,
     SchoolAdminViewSet,
     PublishContentViewSet,
+    LmsServerCreateAPIView,
+    LmsServerViewSet,
 )
 
 
@@ -16,9 +18,12 @@ router.register(r"grades", GradeViewSet, basename="grade")
 router.register(r"schools", SchoolViewSet, basename="school")
 router.register(r"school-admins", SchoolAdminViewSet, basename="school-admin")
 router.register(r"publish-contents", PublishContentViewSet, basename="publish-contents")
+router.register(r"lms-servers", LmsServerViewSet, basename="lms-server")
 
 
 urlpatterns = [
     path("dashboard-stats/", DashboardStatsAPIView.as_view(), name="dashboard-stats"),
+    path("schools/<int:school_id>/lms-servers/", LmsServerCreateAPIView.as_view(), name="school-create-lms-server"),
+    path("lms-servers/create/", LmsServerCreateAPIView.as_view(), name="create-lms-server"),
     path("", include(router.urls)),
 ]

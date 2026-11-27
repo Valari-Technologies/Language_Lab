@@ -36,6 +36,7 @@ def generate_ai_content(topic: str, target_level: str, content_type: str) -> dic
             "properties": {
                 "title": {"type": "string"},
                 "scenario": {"type": "string"},
+                "targetAnswer": {"type": "string"},
                 "objectives": {
                     "type": "array",
                     "items": {"type": "string"}
@@ -50,6 +51,8 @@ def generate_ai_content(topic: str, target_level: str, content_type: str) -> dic
                             "speaker": {"type": "string"},
                             "text": {"type": "string"},
                             "prompt": {"type": "string"},
+                            "targetAnswer": {"type": "string"},
+                            "expectedResponse": {"type": "string"},
                             "recordingRequired": {"type": "boolean"}
                         }
                     }

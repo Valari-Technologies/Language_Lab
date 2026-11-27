@@ -1,9 +1,18 @@
+import re
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.db.models import Q
+from django.utils import timezone
 from rest_framework import serializers
+from accounts.names import title_name
 from accounts.scoping import get_user_school
 from super_admin.models import School
 from .models import Student
+from .rollno import (
+    _grade_key, _roll_key, class_position_changed, find_roll_conflict, free_lms_code, has_teacher_for, is_generated_code,
+    lms_grade_tag, login_code_base, name_prefix, no_teacher_message, roll_conflict_message, roll_position_changed,
+)
 
 User = get_user_model()
 
@@ -50,7 +59,15 @@ class StudentSerializer(serializers.ModelSerializer):
             if m:
                 ret["grade"] = f"Class {m.group(0)}"
         if instance.user:
-            ret["username"] = instance.user.username
+            lms_code = getattr(instance, "lms_code", None)
+            if not lms_code:
+                raw_u = instance.user.username or ""
+                if raw_u.startswith("sch") and "_" in raw_u:
+                    lms_code = raw_u.split("_", 1)[1]
+                else:
+                    lms_code = raw_u
+            ret["username"] = lms_code
+            ret["lms_code"] = lms_code
             ret["email"] = instance.user.email
             ret["full_name"] = instance.user.full_name
             ret["is_active"] = instance.user.is_active
@@ -69,27 +86,32 @@ class StudentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Invalid Class/Grade. Grade 3 to 8 required.")
         return value
 
+    def _check_roll_no(self, attrs, school):
+        """No two students of one school, grade and section may share a roll number (1 and 01 are the same)."""
+        current = self.instance
+        roll_no = attrs.get("roll_no", current.roll_no if current else None)
+        grade = attrs.get("grade", current.grade if current else None)
+        section = attrs.get("section", current.section if current else None)
+        if current and not roll_position_changed(current, roll_no, grade, section):
+            return  # an existing duplicate does not block editing the student's other details
+        other = find_roll_conflict(school, grade, section, roll_no, current.student_id if current else None)
+        if other:
+            raise serializers.ValidationError({"roll_no": roll_conflict_message(other, roll_no, grade, section)})
+
+    def _check_teacher(self, attrs, school):
+        """A student needs a teacher: one must be assigned to a class of this grade and section (checked when the
+        student is added, or moved to another grade or section)."""
+        current = self.instance
+        grade = attrs.get("grade", current.grade if current else None)
+        section = attrs.get("section", current.section if current else None)
+        if current and not class_position_changed(current, grade, section):
+            return  # editing other details of a student already in a class is not blocked
+        if school is not None and not has_teacher_for(school, grade, section):
+            raise serializers.ValidationError({"teacher": no_teacher_message(grade, section)})
+
     def validate(self, attrs):
         request = self.context.get("request")
         if not self.instance:
-            roll_no = attrs.get("roll_no", "").strip()
-            username = attrs.get("username", "").strip()
-            if not username:
-                full_name = attrs.get("full_name", "")
-                clean_name = "".join(c for c in full_name if c.isalnum()).lower()
-                if not clean_name:
-                    clean_name = "student"
-                username = clean_name
-
-            counter = 1
-            base_username = username
-            while User.objects.filter(username=username).exists():
-                username = f"{base_username}_{counter}"
-                counter += 1
-            attrs["username"] = username
-            attrs["password"] = username
-            attrs["email"] = f"{username}@languagelab.com"
-
             if request and request.user.role in ["SCHOOL_ADMIN", "TEACHER"]:
                 admin_school = get_user_school(request.user)
                 if not admin_school:
@@ -97,18 +119,77 @@ class StudentSerializer(serializers.ModelSerializer):
                 attrs["school"] = admin_school
             elif "school" not in attrs or attrs["school"] is None:
                 raise serializers.ValidationError({"school": "This field is required."})
-        elif request and request.user.role in ["SCHOOL_ADMIN", "TEACHER"]:
-            admin_school = get_user_school(request.user)
-            if admin_school and attrs.get("school") and attrs["school"] != admin_school:
-                raise serializers.ValidationError({"school": "You can only manage students in your own school."})
+
+            target_school = attrs.get("school")
+            roll_no = str(attrs.get("roll_no") or "").strip()
+            formatted_roll = roll_no.zfill(2) if (roll_no.isdigit() and len(roll_no) == 1) else roll_no
+            raw_code = attrs.get("username", "").strip()
+            full_name = attrs.get("full_name", "").strip()
+            clean_name = "".join(c for c in full_name if c.isalpha()).upper()
+            prefix = clean_name[:3] if len(clean_name) >= 3 else clean_name.ljust(3, "X")
+            if not prefix:
+                prefix = "STU"
+
+            grade_tag = lms_grade_tag(attrs.get("grade"))
+            roll_part = "|".join(re.escape(r) for r in {roll_no, formatted_roll} if r)
+            # the code the form fills in itself (any earlier format too) is rebuilt here; only a code typed by hand is kept
+            generated = (not raw_code or raw_code.lower() == "".join(c for c in full_name if c.isalnum()).lower() or raw_code.endswith("_")
+                         or bool(roll_part and re.fullmatch(rf"{prefix}_(G\d+_)?({roll_part})(_\d+|[B-Z])?", raw_code, re.IGNORECASE)))
+            if generated:
+                # name_Grade_RollNo, e.g. VIN_G5_01; a code already taken in the school (same grade, other section) gets a letter
+                lms_code = free_lms_code(target_school, f"{prefix}_{grade_tag}{formatted_roll or '01'}")
+            else:
+                lms_code = raw_code.upper()  # a code typed by hand is never changed: a clash is reported below
+
+            # School-scoped conflict check: Is lms_code already taken in THIS school?
+            conflict_in_school = Student.objects.filter(
+                school=target_school
+            ).filter(
+                Q(lms_code__iexact=lms_code) | Q(user__username__iexact=lms_code)
+            ).first()
+
+            if conflict_in_school:
+                raise serializers.ValidationError({
+                    "username": f"A student with LMS login code '{lms_code}' already exists in this school. Please choose a different roll number or name."
+                })
+
+            # Internal Django User.username must be unique globally across the entire DB
+            internal_username = lms_code
+            clashing_user = User.objects.filter(username__iexact=internal_username).first()
+            if clashing_user:
+                # If orphaned user (not attached to any Student), safely remove it
+                if not Student.objects.filter(user=clashing_user).exists():
+                    clashing_user.delete()
+                else:
+                    # User belongs to another school's student: scope internally by school ID
+                    internal_username = f"sch{target_school.school_id}_{lms_code}"
+                    if User.objects.filter(username__iexact=internal_username).exists():
+                        internal_username = f"sch{target_school.school_id}_{lms_code}_{timezone.now().strftime('%m%d%H%M%S')}"
+
+            attrs["lms_code"] = lms_code
+            attrs["username"] = internal_username
+            attrs["password"] = lms_code
+            attrs["email"] = f"{lms_code.lower()}_{target_school.school_id}@languagelab.com"
+            self._check_roll_no(attrs, attrs.get("school"))
+            self._check_teacher(attrs, attrs.get("school"))
+        else:
+            if request and request.user.role in ["SCHOOL_ADMIN", "TEACHER"]:
+                admin_school = get_user_school(request.user)
+                if admin_school and attrs.get("school") and attrs["school"] != admin_school:
+                    raise serializers.ValidationError({"school": "You can only manage students in your own school."})
+            if {"roll_no", "grade", "section"} & set(attrs):
+                self._check_roll_no(attrs, self.instance.school)
+            if {"grade", "section"} & set(attrs):
+                self._check_teacher(attrs, self.instance.school)
         return attrs
 
     def create(self, validated_data):
         username = validated_data.pop("username")
         password = validated_data.pop("password")
         email = validated_data.pop("email", "")
-        full_name = validated_data.pop("full_name", "")
+        full_name = title_name(validated_data.pop("full_name", ""))
         is_active = validated_data.pop("is_active", True)
+        lms_code = validated_data.pop("lms_code", username)
 
         user = User.objects.create_user(
             username=username,
@@ -118,23 +199,61 @@ class StudentSerializer(serializers.ModelSerializer):
             role=User.Role.STUDENT,
             is_active=is_active,
         )
-        return Student.objects.create(user=user, **validated_data)
+        return Student.objects.create(user=user, lms_code=lms_code, **validated_data)
 
     def update(self, instance, validated_data):
         email = validated_data.pop("email", None)
         full_name = validated_data.pop("full_name", None)
         is_active = validated_data.pop("is_active", None)
-        validated_data.pop("username", None)
+        raw_code = validated_data.pop("username", None)
         validated_data.pop("password", None)
-
         user = instance.user
+
+        # The form sends the current login code back with every save. When the name, roll no or grade changed and the
+        # current code is the system-built one (VIN_G3_03), the code is rebuilt (VIN_G5_07); a new code typed by hand,
+        # or a custom code that was never system-built, is kept as it is.
+        current_code = (instance.lms_code or (user.username if user else "") or "").strip()
+        if user and (raw_code is None or raw_code.strip().upper() == current_code.upper()):
+            old_name = user.full_name
+            new_name = title_name(full_name) if full_name is not None else old_name
+            new_roll = validated_data.get("roll_no", instance.roll_no)
+            new_grade = validated_data.get("grade", instance.grade)
+            moved = (name_prefix(new_name), _roll_key(new_roll), _grade_key(new_grade)) != (
+                name_prefix(old_name), _roll_key(instance.roll_no), _grade_key(instance.grade))
+            if moved and is_generated_code(current_code, old_name, instance.roll_no):
+                raw_code = free_lms_code(instance.school, login_code_base(new_name, new_grade, new_roll), instance.student_id)
+
         if user:
             if email is not None:
                 user.email = email
             if full_name is not None:
-                user.full_name = full_name
+                user.full_name = title_name(full_name)
             if is_active is not None:
                 user.is_active = is_active
+            if raw_code is not None:
+                new_code = raw_code.strip().upper()
+                if new_code and new_code != (instance.lms_code or "").upper():
+                    clash = Student.objects.filter(school=instance.school).exclude(student_id=instance.student_id).filter(
+                        Q(lms_code__iexact=new_code) | Q(user__username__iexact=new_code)
+                    ).exists()
+                    if clash:
+                        raise serializers.ValidationError({
+                            "username": f"A student with LMS login code '{new_code}' already exists in this school."
+                        })
+                    instance.lms_code = new_code
+                    validated_data["lms_code"] = new_code
+                    internal_username = new_code
+                    if User.objects.filter(username__iexact=internal_username).exclude(id=user.id).exists():
+                        internal_username = f"sch{instance.school_id}_{new_code}"
+                        if User.objects.filter(username__iexact=internal_username).exclude(id=user.id).exists():
+                            internal_username = f"sch{instance.school_id}_{new_code}_{timezone.now().strftime('%m%d%H%M%S')}"
+                    user.username = internal_username
             user.save()
+            if is_active is False:
+                # a deactivated student is logged out of the LMS PCs they are working on right now
+                from django.utils import timezone as _tz
+                from lmshub.models import LmsSession
+                LmsSession.objects.filter(student=instance, ended_at__isnull=True).update(
+                    ended_at=_tz.now(), end_reason="student_deactivated")
 
         return super().update(instance, validated_data)

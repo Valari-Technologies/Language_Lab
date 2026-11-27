@@ -198,18 +198,29 @@ class ClassSerializer(serializers.ModelSerializer):
             Q(class_obj=obj) | Q(class_obj__isnull=True, grade=obj.grade)
         ).select_related('grade')
 
-        for a in assignments:
+        def ref_id(ref):
+            """The Content Studio lesson id inside an assignment ref ("12" or "EXP-12"), else None."""
+            tail = str(ref or "").upper().replace("EXP-", "", 1)
+            return int(tail) if tail.isdigit() else None
+
+        assignment_list = list(assignments)
+        by_id = Experience.objects.in_bulk([i for i in (ref_id(a.experience_ref) for a in assignment_list) if i])
+
+        for a in assignment_list:
             ref = a.experience_ref or f"EXP-ASSIGN-{a.id}"
             title = a.experience_title or "Untitled Lesson"
             seen_refs.add(ref)
             seen_refs.add(title)
+            source = by_id.get(ref_id(a.experience_ref))  # the lesson's own difficulty, not a fixed value
             results.append({
                 "id": a.id,
+                "experience_id": source.id if source else None,  # opens the lesson preview
                 "experience_ref": ref,
                 "experience_title": title,
-                "subject": "General",
-                "difficulty": "Intermediate",
-                "experience_type": "LESSON",
+                "subject": (source.subject if source else None) or "General",
+                "difficulty": source.difficulty if source else "INTERMEDIATE",
+                "difficulty_display": source.get_difficulty_display() if source else "Intermediate",
+                "experience_type": (source.experience_type if source else None) or "LESSON",
                 "assigned_at": a.assigned_at.isoformat() if a.assigned_at else None,
                 "status": "APPROVED",
                 "grade_name": g_name,
@@ -231,10 +242,12 @@ class ClassSerializer(serializers.ModelSerializer):
                     seen_refs.add(title)
                     results.append({
                         "id": exp.id,
+                        "experience_id": exp.id,
                         "experience_ref": ref,
                         "experience_title": title,
                         "subject": exp.subject or "English",
-                        "difficulty": exp.difficulty or "Intermediate",
+                        "difficulty": exp.difficulty or "INTERMEDIATE",
+                        "difficulty_display": exp.get_difficulty_display() if exp.difficulty else "Intermediate",
                         "experience_type": exp.experience_type or "LESSON",
                         "assigned_at": exp.updated_at.isoformat() if exp.updated_at else (exp.created_at.isoformat() if exp.created_at else None),
                         "status": exp.status or "APPROVED",

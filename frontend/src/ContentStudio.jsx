@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from './api';
-import { API_BASE_URL } from './config';
+import { API_BASE_URL, LMS_PREVIEW_URL } from './config';
+import LmsEnginePreview from './LmsEnginePreview';
+import { pageItems } from './format';
 import PreviewCanvasRenderer from './PreviewCanvasRenderer';
 import {
   FiGrid, FiBookOpen, FiActivity, FiMonitor, FiFileText,
@@ -43,6 +45,35 @@ const getScrambledWords = (wordsList) => {
     shuffled[j] = temp;
   }
   if (shuffled.length > 1 && shuffled.every((w, idx) => w === wordsList[idx])) {
+    const temp = shuffled[0];
+    shuffled[0] = shuffled[shuffled.length - 1];
+    shuffled[shuffled.length - 1] = temp;
+  }
+  return shuffled;
+};
+
+const getShuffledItems = (items, seedKey = 42) => {
+  if (!Array.isArray(items) || items.length <= 1) return items || [];
+  const str = items.map(it => (typeof it === 'object' && it !== null ? (it.text || it.label || '') : String(it || ''))).join('|') + '|' + String(seedKey || '');
+  let hash = 0;
+  for (let k = 0; k < str.length; k++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(k);
+    hash |= 0;
+  }
+  const seededRandom = (seed) => {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+  };
+  const shuffled = [...items];
+  let currentSeed = Math.abs(hash) + 7;
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(seededRandom(currentSeed++) * (i + 1));
+    const temp = shuffled[i];
+    shuffled[i] = shuffled[j];
+    shuffled[j] = temp;
+  }
+  const val = (it) => (typeof it === 'object' && it !== null ? (it.text || it.label || '') : String(it || ''));
+  if (shuffled.length > 1 && shuffled.every((item, idx) => val(item) === val(items[idx]))) {
     const temp = shuffled[0];
     shuffled[0] = shuffled[shuffled.length - 1];
     shuffled[shuffled.length - 1] = temp;
@@ -567,6 +598,14 @@ const MediaUploadField = ({ label, value, mediaType, onChange, actionLoading, se
 /* ═══════════════════════════════════════════════════════════
    CONTENT STUDIO COMPONENT
    ═══════════════════════════════════════════════════════════ */
+// The LMS levels each difficulty may take: lessons 1-10 / 11-20 / 21-30, assessments 1-2 / 3-4 / 5-6
+const LEVEL_BANDS = {
+  LESSON: { BEGINNER: [1, 10], INTERMEDIATE: [11, 20], MASTER: [21, 30] },
+  ASSESSMENT: { BEGINNER: [1, 2], INTERMEDIATE: [3, 4], MASTER: [5, 6] },
+};
+const levelBand = (type, difficulty) => (LEVEL_BANDS[type === 'ASSESSMENT' ? 'ASSESSMENT' : 'LESSON'][difficulty] || [1, type === 'ASSESSMENT' ? 6 : 30]);
+const levelFits = (level, band) => /^\d+$/.test(String(level ?? '')) && Number(level) >= band[0] && Number(level) <= band[1];
+
 function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUser }) {
   // Views: dashboard, experiences, experience-builder, activity-builder, screen-builder, preview, media, publish, profile
   const [view, setView] = useState('dashboard');
@@ -627,10 +666,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [filterTag, setFilterTag] = useState('');
   const [filterSearch, setFilterSearch] = useState('');
   const [activeMenuId, setActiveMenuId] = useState(null);
+  const [menuDropdownPos, setMenuDropdownPos] = useState({ top: 0, right: 0 });
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [publishPage, setPublishPage] = useState(1);
   const [publishSearch, setPublishSearch] = useState('');
+  const [selectedPublishHistoryIds, setSelectedPublishHistoryIds] = useState([]);
+  const [bulkDownloadLoading, setBulkDownloadLoading] = useState(false);
 
   // Multi-select and View Details states for Experiences
   const [selectedExperienceIds, setSelectedExperienceIds] = useState([]);
@@ -755,10 +797,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         scenario: aiPreviewData.scenario || 'Practice conversation with NPC',
         objectives: aiPreviewData.objectives || ['Introduce yourself', 'Ask a question'],
         npcCharacter: aiPreviewData.npcCharacter || 'Alex',
-        conversation: aiPreviewData.conversation || [
+        userRole: aiPreviewData.userRole || 'Student',
+        targetAnswer: aiPreviewData.targetAnswer || aiPreviewData.expectedAnswer || '',
+        conversation: (aiPreviewData.conversation || [
           { turn: 1, speaker: 'npc', text: 'Hello! Welcome.', audio: '', expectedStudentResponses: [] },
-          { turn: 2, speaker: 'student', recordingRequired: true, prompt: 'Greet the NPC back.' }
-        ]
+          { turn: 2, speaker: 'user', recordingRequired: true, prompt: 'Greet the NPC back.', targetAnswer: 'Hello! Nice to meet you.', expectedResponse: 'Hello! Nice to meet you.' }
+        ]).map(t => ({
+          ...t,
+          targetAnswer: t.targetAnswer || t.expectedResponse || '',
+          expectedResponse: t.expectedResponse || t.targetAnswer || ''
+        }))
       };
       addOrUpdateBlock('roleplay_simulation', newProps);
     }
@@ -1010,6 +1058,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   // Previewer session payload track
   const [previewPayload, setPreviewPayload] = useState(null);
+  const [lmsPreviewOn, setLmsPreviewOn] = useState(!!LMS_PREVIEW_URL); // Runtime Preview shows the real LMS Engine when it is configured
   const [previewActivityIndex, setPreviewActivityIndex] = useState(0);
   const [previewScreenIndex, setPreviewScreenIndex] = useState(0);
   const [previewAnswerIndex, setPreviewAnswerIndex] = useState(null);
@@ -1592,15 +1641,38 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
-    if (profileForm.phone_no && profileForm.phone_no.replace(/\D/g, '').length !== 10) {
+
+    const trimmedFullName = (profileForm.full_name || '').trim();
+    const trimmedEmail = (profileForm.email || '').trim();
+    const cleanedPhone = (profileForm.phone_no || '').replace(/\D/g, '');
+
+    if (!trimmedFullName) {
+      showFeedback('Full Name is required.', 'error');
+      return;
+    }
+    if (!trimmedEmail) {
+      showFeedback('Email Address is required.', 'error');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      showFeedback('Please enter a valid email address.', 'error');
+      return;
+    }
+    if (!cleanedPhone) {
+      showFeedback('Phone number is required.', 'error');
+      return;
+    }
+    if (cleanedPhone.length !== 10) {
       showFeedback('Phone number must be exactly 10 numeric digits.', 'error');
       return;
     }
+
     setActionLoading(true);
     try {
       const res = await apiFetch('/api/users/profile/', {
         method: 'PATCH',
-        body: JSON.stringify({ full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no })
+        body: JSON.stringify({ full_name: trimmedFullName, email: trimmedEmail, phone_no: cleanedPhone })
       });
       let resData = {};
       try { resData = await res.json(); } catch { resData = {}; }
@@ -1618,9 +1690,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         showFeedback(msg, 'error');
         return;
       }
-      const updatedUser = resData.user || { ...user, full_name: profileForm.full_name, email: profileForm.email, phone_no: profileForm.phone_no };
+      const updatedUser = resData.user || { ...user, full_name: trimmedFullName, email: trimmedEmail, phone_no: cleanedPhone };
       if (onUpdateUser) onUpdateUser(updatedUser);
       setCurrentUserState(updatedUser);
+      setProfileForm(prev => ({ ...prev, full_name: trimmedFullName, email: trimmedEmail, phone_no: cleanedPhone }));
       showFeedback('Profile updated successfully');
     } catch (err) {
       console.error('Profile update error:', err);
@@ -1735,13 +1808,14 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
   const [selectedAsset, setSelectedAsset] = useState(null);
 
   // Local Form states
+  const [levelMissing, setLevelMissing] = useState(false); // "Save & Continue" was pressed without a valid Level
   const [experienceForm, setExperienceForm] = useState({
     title: '',
     description: '',
     grade: '',
     subject: [],
     language: 'English',
-    difficulty: 'INTERMEDIATE',
+    difficulty: 'BEGINNER',
     duration: 15,
     tags: [],
     experience_type: 'LESSON',
@@ -1804,6 +1878,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   const [selectedBlockId, setSelectedBlockId] = useState(null);
   const [pendingBlock, setPendingBlock] = useState(null);
+  const [marksPrompt, setMarksPrompt] = useState(null); // { block, value } while an Assessment block asks for its marks
   const [propertiesTab, setPropertiesTab] = useState('content'); // 'content' | 'style' | 'advanced'
   const [remedialOpen, setRemedialOpen] = useState(false);
 
@@ -1854,11 +1929,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           grade: data.grade || '',
           subject: subjectArray,
           language: data.language || 'English',
-          difficulty: data.difficulty || 'INTERMEDIATE',
+          difficulty: data.difficulty || 'BEGINNER',
           duration: data.estimated_duration || 0,
           tags: data.tags || [],
           thumbnail: data.thumbnail || '',
           experience_type: data.experience_type || 'LESSON',
+          level: (data.pending_level ?? data.level) ?? '',
           mastery_threshold: data.mastery_threshold !== undefined ? data.mastery_threshold : 70
         });
         setActivities(data.activities || []);
@@ -1898,9 +1974,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
     setActionLoading(true);
     try {
-      let diff = (experienceForm.difficulty || 'Intermediate').toUpperCase();
+      let diff = (experienceForm.difficulty || 'Beginner').toUpperCase();
       if (diff !== 'BEGINNER' && diff !== 'INTERMEDIATE' && diff !== 'MASTER') {
-        diff = 'INTERMEDIATE';
+        diff = 'BEGINNER';
       }
 
       const payload = {
@@ -1914,6 +1990,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         tags: experienceForm.tags || [],
         thumbnail: experienceForm.thumbnail || '',
         experience_type: experienceForm.experience_type || 'LESSON',
+        // LMS level (lesson 1-30, assessment 1-6); empty keeps the automatic position
+        pending_level: /^\d+$/.test(String(experienceForm.level ?? '').trim()) ? parseInt(experienceForm.level, 10) : null,
         mastery_threshold: parseInt(experienceForm.mastery_threshold) || 70
       };
 
@@ -1977,13 +2055,37 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     setCustomAlert({ show: true, title, message, type });
   };
   const [publishVersion, setPublishVersion] = useState('');
-  const [publishNotes, setPublishNotes] = useState('');
 
   useEffect(() => {
     if (view === 'publish') {
       loadPublishData(selectedExperience?.id);
     }
   }, [view, selectedExperience?.id]);
+
+  // A lesson was just published: once the creator leaves the Publish Center, the builders start clean for the next
+  // lesson (a blank Lesson Builder form, no lesson, activity or screen kept from the published one).
+  const [justPublishedId, setJustPublishedId] = useState(null);
+  useEffect(() => {
+    if (!justPublishedId || view === 'publish' || view === 'validation-report') return;
+    setJustPublishedId(null);
+    if (selectedExperience?.id !== justPublishedId) return; // another lesson is already open: leave it alone
+    setIsNewExperience(true);
+    setSelectedExperience(null);
+    setExperienceForm({
+      title: '', description: '', grade: '', subject: [], language: 'English', difficulty: 'BEGINNER',
+      duration: 15, tags: [], experience_type: 'LESSON', mastery_threshold: 70
+    });
+    setLearningOutcomes([]);
+    setOriginalOutcomes([]);
+    setOutcomesText('');
+    setLevelMissing(false);
+    setSelectedActivity(null);
+    setActivities([]);
+    setSelectedScreen(null);
+    setScreens([]);
+    setIsEditingScreen(false);
+    setValidationReport(null);
+  }, [view, justPublishedId]);
 
   const executeDeleteAction = async () => {
     const { id, type, isConflict } = deleteConfirm;
@@ -2003,6 +2105,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         await Promise.all(ids.map(itemId => apiFetch(`/api/v1/content/experiences/${itemId}/`, options)));
         showFeedback(`${ids.length} experiences deleted successfully!`);
         setSelectedExperienceIds([]);
+        setIsSelectMode(false);
         setDeleteConfirm({ show: false, id: null, type: '', title: '', message: '', isConflict: false, usages: [] });
         loadExperiencesData();
         loadRecentExperiences();
@@ -2453,8 +2556,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
       newBlock.type = 'match';
       newBlock.content = {
         question: 'Match the items in Column A with Column B.',
-        leftItems: [''],
-        rightItems: ['']
+        leftItems: [{ text: 'Item 1', imageUrl: '' }],
+        rightItems: [{ text: 'Match 1', imageUrl: '' }]
       };
     } else if (type.toLowerCase() === 'sequence' || type.toLowerCase() === 'sequence / order') {
       newBlock.type = 'sequence';
@@ -2483,11 +2586,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         words: [],
         gridSize: 8
       };
-    } else if (type.toLowerCase() === 'pronunciation') {
+    } else if (['pronunciation', 'listen_repeat', 'listen and repeat', 'listen & repeat'].includes(type.toLowerCase())) {
       newBlock.type = 'pronunciation';
       newBlock.content = {
-        question: 'Practice pronouncing words correctly',
-        items: [{ id: 'item-1', word: '', phonetic: '' }]
+        question: 'Listen to each word, then say it into the recorder.',
+        mode: 'listen',
+        showPhonetic: true,
+        maxDuration: 5,
+        attempts: 3,
+        items: [{ id: 'item-1', word: '', phonetic: '', audioUrl: '' }]
       };
 
     } else if (type.toLowerCase() === 'input') {
@@ -2512,20 +2619,27 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         scenario: 'You are ordering food at a restaurant',
         objectives: ['Greet the waiter', 'Place order'],
         npcCharacter: 'Waiter',
+        userRole: 'Customer',
+        targetAnswer: "I'd like to order a sandwich and a glass of water, please.",
         npcImage: '',
+        allowAudioRecord: true,
         conversation: [
           {
             turn: 1,
             speaker: 'npc',
             text: 'Good evening! How can I help you?',
-            audio: '',
-            expectedStudentResponses: [{ text: "I'd like a table for two", hint: "Specify your request" }]
+            prompt: 'Good evening! How can I help you?',
+            audio: ''
           },
           {
             turn: 2,
-            speaker: 'student',
+            speaker: 'user',
             recordingRequired: true,
-            prompt: 'Respond to the waiter'
+            allowAudioRecord: true,
+            prompt: 'Respond to the waiter and place your order',
+            text: 'Respond to the waiter and place your order',
+            targetAnswer: "I'd like to order a sandwich and a glass of water, please.",
+            expectedResponse: "I'd like to order a sandwich and a glass of water, please."
           }
         ]
       };
@@ -2658,12 +2772,41 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     setRightPanelCollapsed(false);
   };
 
-  const handleAddPendingBlock = () => {
-    if (!pendingBlock) return;
-    appendBlockToCanvas(pendingBlock);
-    const addedId = pendingBlock.id;
+  // Blocks of "Assessment & Module Blocks": in an Assessment each one carries the marks it is worth.
+  const MARKED_BLOCK_TYPES = [
+    'quiz', 'voice_recorder', 'dictation', 'grammar_correction', 'writing_prompt', 'drag_drop', 'fill_blank', 'match',
+    'sequence', 'true_false', 'pronunciation', 'input', 'roleplay_simulation', 'hotspot_explorer', 'functional_reading',
+    'multimedia_reading_assessment',
+  ];
+  const needsMarks = (block) => selectedExperience?.experience_type === 'ASSESSMENT'
+    && MARKED_BLOCK_TYPES.includes(String(block?.type || '').toLowerCase());
+  const parseMarks = (raw) => {
+    const n = Number(raw);
+    return raw !== '' && Number.isInteger(n) && n >= 0 && n <= 1000 ? n : null;
+  };
+
+  const addPendingBlockNow = (block) => {
+    appendBlockToCanvas(block);
+    const addedId = block.id;
     setPendingBlock(null);
     setSelectedBlockId(addedId);
+  };
+
+  const handleAddPendingBlock = () => {
+    if (!pendingBlock) return;
+    if (needsMarks(pendingBlock)) {
+      setMarksPrompt({ block: pendingBlock, value: String(pendingBlock.content?.marks ?? 1) });
+      return;
+    }
+    addPendingBlockNow(pendingBlock);
+  };
+
+  const confirmMarksPrompt = () => {
+    const marks = parseMarks(marksPrompt?.value ?? '');
+    if (marks === null) return;
+    const block = { ...marksPrompt.block, content: { ...marksPrompt.block.content, marks } };
+    setMarksPrompt(null);
+    addPendingBlockNow(block);
   };
 
   const handleCancelPendingBlock = () => {
@@ -3296,8 +3439,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 })}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#7c3aed', textTransform: 'uppercase' }}>Column B</span>
-                {(block.content?.rightItems || []).map((right, pIdx) => {
+                <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#7c3aed', textTransform: 'uppercase' }}>Column B (Shuffled)</span>
+                {getShuffledItems(block.content?.rightItems || [], block.id).map((right, pIdx) => {
                   const rightText = typeof right === 'object' ? (right?.text || right?.label || '') : (right || '');
                   const rightImg = typeof right === 'object' ? (right?.imageUrl || right?.image || '') : '';
                   const resolvedRightImg = rightImg ? resolveMediaUrl(rightImg) : '';
@@ -3427,7 +3570,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
           words.forEach(wStr => {
             const cleanWord = (wStr || '').toUpperCase().replace(/[^A-Z]/g, '');
-            if (!cleanWord) return;
+            if (!cleanWord || cleanWord.length > gridSize) return; // a word wider than the grid cannot be placed
             let placed = false;
             let attempts = 0;
             while (!placed && attempts < 80) {
@@ -3566,7 +3709,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         {block.type === 'pronunciation' && (
           <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem', border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '8px', padding: '0.75rem' }}>
             <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <FiMic /> Pronunciation: {block.content?.question || 'Practice pronouncing words correctly'}
+              <FiMic /> Listen & Repeat ({block.content?.mode === 'listen' ? 'listen first' : 'read aloud'}): {block.content?.question || 'Listen to each word, then say it into the recorder.'}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {(() => {
@@ -3584,6 +3727,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     }}>
                       <span style={{ color: '#b45309', fontWeight: 800 }}>{itemIdx + 1}.</span>
                       <span>{item.word || `Word ${itemIdx + 1}`}</span>
+                      {block.content?.mode === 'listen' && (item.audioUrl || item.audio) && (
+                        <FiVolume2 style={{ color: '#b45309', fontSize: '0.8rem' }} title="Model audio attached" />
+                      )}
                     </div>
                     <div style={{
                       width: '26px',
@@ -3787,6 +3933,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                 </div>
               )}
 
+              {(block.content?.targetAnswer || block.content?.correctAnswer) && (
+                <div style={{ fontSize: '0.7rem', color: '#047857', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '6px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <strong style={{ color: '#065f46' }}>🎯 Targeted Answer (Examiner):</strong>
+                  <span>{block.content.targetAnswer || block.content.correctAnswer}</span>
+                </div>
+              )}
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
                 {turns.length > 0 ? (
                   turns.map((t, tIdx) => {
@@ -3835,6 +3988,19 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         }}>
                           <div style={{ fontSize: '0.6rem', fontWeight: 700, color: isNpc ? '#6b21a8' : '#e0f2fe' }}>{speakerName}</div>
                           <div style={{ fontSize: '0.72rem', lineHeight: 1.3 }}>{text}</div>
+
+                          {!isNpc && (() => {
+                            const turnTarget = t.targetAnswer || t.expectedResponse || (Array.isArray(t.expectedStudentResponses) && t.expectedStudentResponses[0]?.text) || '';
+                            if (turnTarget) {
+                              return (
+                                <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px dashed rgba(255,255,255,0.3)', fontSize: '0.64rem', color: '#ecfdf5', background: 'rgba(5, 150, 105, 0.4)', borderRadius: '4px', padding: '3px 6px', textAlign: 'left' }}>
+                                  <strong style={{ color: '#a7f3d0' }}>🎯 Targeted Answer (Examiner):</strong>
+                                  <div style={{ marginTop: '1px' }}>{turnTarget}</div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
 
                           {isNpc && (
                             <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #f3e8ff', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -3959,11 +4125,19 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
             {block.content?.imageUrl ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                 <div
+                  data-hotspot-container="true"
                   onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const relX = Math.round(((e.clientX - rect.left) / rect.width) * 400);
-                    const relY = Math.round(((e.clientY - rect.top) / rect.height) * 250);
-                    const hotspots = [...(block.content.hotspots || [])];
+                    const img = e.currentTarget.querySelector('img');
+                    if (!img) return;
+                    const rect = img.getBoundingClientRect();
+                    if (rect.width <= 0 || rect.height <= 0) return;
+                    const clickX = e.clientX - rect.left;
+                    const clickY = e.clientY - rect.top;
+                    const clampedX = Math.max(0, Math.min(rect.width, clickX));
+                    const clampedY = Math.max(0, Math.min(rect.height, clickY));
+                    const relX = Math.round((clampedX / rect.width) * 400);
+                    const relY = Math.round((clampedY / rect.height) * 250);
+                    const hotspots = [...(block.content?.hotspots || [])];
                     if (hotspots.length > 0) {
                       const targetIdx = activeHotspotIndex < hotspots.length ? activeHotspotIndex : 0;
                       hotspots[targetIdx] = { ...hotspots[targetIdx], x: relX, y: relY };
@@ -3972,59 +4146,90 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   }}
                   style={{ position: 'relative', width: '100%', height: block.styles?.height || 'auto', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', display: 'block', cursor: 'crosshair' }}
                 >
-                  <img
-                    src={resolveMediaUrl(block.content.imageUrl)}
-                    alt="Hotspot explorer source"
-                    draggable={false}
-                    style={{
-                      width: '100%',
-                      height: block.styles?.height && block.styles?.height !== 'auto' ? block.styles.height : 'auto',
-                      maxHeight: '450px',
-                      objectFit: block.styles?.objectFit || 'cover',
-                      display: 'block',
-                      pointerEvents: 'none'
-                    }}
-                  />
-                  {(block.content.hotspots || []).map((h, hidx) => {
-                    const isActive = hidx === (activeHotspotIndex < (block.content.hotspots || []).length ? activeHotspotIndex : 0);
-                    return (
-                      <div
-                        key={h.id || hidx}
-                        title={h.name || `Target ${hidx + 1}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveHotspotIndex(hidx);
-                        }}
-                        style={{
-                          position: 'absolute',
-                          left: `${(h.x / 400) * 100}%`,
-                          top: `${(h.y / 250) * 100}%`,
-                          width: '26px',
-                          height: '26px',
-                          borderRadius: '50%',
-                          background: isActive
-                            ? 'radial-gradient(circle, #2563eb 0%, #1d4ed8 100%)'
-                            : 'radial-gradient(circle, #ef4444 0%, #dc2626 100%)',
-                          border: isActive ? '3px solid #60a5fa' : '2px solid #ffffff',
-                          boxShadow: isActive
-                            ? '0 0 12px rgba(37, 99, 235, 0.9), 0 2px 6px rgba(0,0,0,0.4)'
-                            : '0 0 10px rgba(239, 68, 68, 0.7), 0 2px 4px rgba(0,0,0,0.3)',
-                          color: '#ffffff',
-                          fontSize: '11px',
-                          fontWeight: 'bold',
-                          transform: 'translate(-50%, -50%)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          zIndex: 5,
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        {hidx + 1}
-                      </div>
-                    );
-                  })}
+                  <div style={{ position: 'relative', width: '100%', display: 'block' }}>
+                    <img
+                      src={resolveMediaUrl(block.content.imageUrl)}
+                      alt="Hotspot explorer source"
+                      draggable={false}
+                      style={{
+                        width: '100%',
+                        height: block.styles?.height && block.styles?.height !== 'auto' ? block.styles.height : 'auto',
+                        display: 'block',
+                        pointerEvents: 'none',
+                        userSelect: 'none'
+                      }}
+                    />
+                    {(block.content.hotspots || []).map((h, hidx) => {
+                      const isActive = hidx === (activeHotspotIndex < (block.content.hotspots || []).length ? activeHotspotIndex : 0);
+                      return (
+                        <div
+                          key={h.id || hidx}
+                          title={h.name || `Target ${hidx + 1}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveHotspotIndex(hidx);
+                          }}
+                          onPointerDown={(e) => {
+                            e.stopPropagation();
+                            setActiveHotspotIndex(hidx);
+                            const container = e.currentTarget.closest('[data-hotspot-container]');
+                            const img = container?.querySelector('img');
+                            if (!img) return;
+
+                            const onPointerMove = (moveEv) => {
+                              const rect = img.getBoundingClientRect();
+                              if (rect.width <= 0 || rect.height <= 0) return;
+                              const clampedX = Math.max(0, Math.min(rect.width, moveEv.clientX - rect.left));
+                              const clampedY = Math.max(0, Math.min(rect.height, moveEv.clientY - rect.top));
+                              const relX = Math.round((clampedX / rect.width) * 400);
+                              const relY = Math.round((clampedY / rect.height) * 250);
+                              const list = [...(block.content?.hotspots || [])];
+                              if (list[hidx]) {
+                                list[hidx] = { ...list[hidx], x: relX, y: relY };
+                                handleUpdateBlockContent('hotspots', list);
+                              }
+                            };
+
+                            const onPointerUp = () => {
+                              window.removeEventListener('pointermove', onPointerMove);
+                              window.removeEventListener('pointerup', onPointerUp);
+                            };
+
+                            window.addEventListener('pointermove', onPointerMove);
+                            window.addEventListener('pointerup', onPointerUp);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            left: `${(h.x / 400) * 100}%`,
+                            top: `${(h.y / 250) * 100}%`,
+                            width: '28px',
+                            height: '28px',
+                            borderRadius: '50%',
+                            background: isActive
+                              ? 'radial-gradient(circle, #2563eb 0%, #1d4ed8 100%)'
+                              : 'radial-gradient(circle, #ef4444 0%, #dc2626 100%)',
+                            border: isActive ? '3px solid #60a5fa' : '2px solid #ffffff',
+                            boxShadow: isActive
+                              ? '0 0 12px rgba(37, 99, 235, 0.9), 0 2px 6px rgba(0,0,0,0.4)'
+                              : '0 0 10px rgba(239, 68, 68, 0.7), 0 2px 4px rgba(0,0,0,0.3)',
+                            color: '#ffffff',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            transform: 'translate(-50%, -50%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'grab',
+                            zIndex: 5,
+                            userSelect: 'none',
+                            transition: 'box-shadow 0.2s ease, transform 0.1s ease'
+                          }}
+                        >
+                          {hidx + 1}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Compact Column-Wise Target Name Chips below Image */}
@@ -5265,6 +5470,60 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
   };
 
+  const handleBulkDownloadPackages = async (idsToDownload = null) => {
+    const targetIds = idsToDownload || selectedPublishHistoryIds;
+    if (!targetIds || targetIds.length === 0) {
+      showFeedback('Please select at least one package to download.', 'warning');
+      return;
+    }
+
+    if (targetIds.length === 1) {
+      const singleItem = publishHistory.find(p => p.id === targetIds[0]);
+      const lessonTitle = singleItem?.experience_title || selectedExperience?.title || 'Experience';
+      const zipFilename = `${lessonTitle.replace(/\s+/g, '_')}_v${singleItem?.version_number || '1.0.0'}.zip`;
+      return handleDownloadPackageElab(targetIds[0], zipFilename);
+    }
+
+    setBulkDownloadLoading(true);
+    try {
+      const res = await apiFetch('/api/v1/content/packages/bulk-download/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version_ids: targetIds })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        showFeedback(errData.error || 'Failed to download selected packages.', 'error');
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+
+      const contentDisp = res.headers.get('content-disposition');
+      let filename = `englishlab_packages_bulk_${targetIds.length}.zip`;
+      if (contentDisp && contentDisp.includes('filename=')) {
+        const match = contentDisp.match(/filename="?([^"]+)"?/);
+        if (match && match[1]) filename = match[1];
+      }
+
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showFeedback(`Successfully downloaded ${targetIds.length} packages in bundle!`, 'success');
+    } catch (err) {
+      console.error(err);
+      showFeedback('Bulk download error occurred.', 'error');
+    } finally {
+      setBulkDownloadLoading(false);
+    }
+  };
+
   const handleDeleteMedia = (id) => {
     const asset = mediaAssets.find(m => m.id === id);
     setDeleteConfirm({
@@ -5278,23 +5537,21 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
   const loadPublishData = async (experienceId) => {
     setPublishPage(1);
+    setSelectedPublishHistoryIds([]);
     try {
       if (experienceId) {
         const resStatus = await apiFetch(`/api/v1/content/publish/${experienceId}/`);
         if (resStatus.ok) {
           const statusData = await resStatus.json();
           setPublishStatus(statusData);
-          // Clear defaults — user must enter version/notes manually
+          // Clear defaults — user must enter the version manually
           setPublishVersion('');
-          setPublishNotes('');
         } else {
           setPublishVersion('');
-          setPublishNotes('');
         }
       } else {
         setPublishStatus(null);
         setPublishVersion('');
-        setPublishNotes('');
       }
 
       // Fetch GLOBAL history (all lessons) for the build history table
@@ -5321,35 +5578,77 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
     }
   };
 
+  // The typed version name is already used by a build of this lesson (spaces and capitals are ignored); the server checks it too
+  // used_versions comes from the server: built, waiting for approval and rejected names of this lesson
+  const versionNameTaken = !!(selectedExperience && publishVersion.trim()
+    && ((publishStatus && publishStatus.experience_id === selectedExperience.id && publishStatus.used_versions) || [])
+      .some(name => String(name || '').trim().toLowerCase() === publishVersion.trim().toLowerCase()));
+
+  // Edits in the Lesson Builder that were not saved yet. The Publish Center shows, and publishes, the SAVED lesson,
+  // so it says what is still unsaved (for example a new name) instead of silently showing the old one.
+  const unsavedLessonChanges = (() => {
+    if (!selectedExperience?.id || experienceForm.id !== selectedExperience.id) return [];
+    const text = v => String(v ?? '').trim();
+    const changed = [];
+    if (text(experienceForm.title) !== text(selectedExperience.title)) changed.push(`the name "${text(experienceForm.title)}"`);
+    if (String(experienceForm.level ?? '') !== String((selectedExperience.pending_level ?? selectedExperience.level) ?? '')) changed.push('the level');
+    if (text(experienceForm.description) !== text(selectedExperience.description)) changed.push('the description');
+    if (String(experienceForm.grade || '') !== String(selectedExperience.grade || '')) changed.push('the grade');
+    if (text(experienceForm.difficulty) !== text(selectedExperience.difficulty)) changed.push('the difficulty');
+    return changed;
+  })();
+
+  // The Lesson Builder edits of this lesson (a new name, level ...) are saved when the Publish Center opens, so the
+  // name shown here is the one just typed and nobody has to create another lesson. Not saved while the Level is
+  // missing or out of range: the notice below says what is still unsaved.
+  useEffect(() => {
+    if (view !== 'publish' || unsavedLessonChanges.length === 0 || actionLoading) return;
+    if (!levelFits(experienceForm.level, levelBand(experienceForm.experience_type, experienceForm.difficulty))) return;
+    handleSaveExperience();
+  }, [view, selectedExperience?.id]);
+
   const handlePublishExperience = async () => {
     if (!selectedExperience || !selectedExperience.id) {
       triggerAlert('No active experience selected.', 'No Experience Selected', 'warning');
+      return;
+    }
+    if (versionNameTaken) {
+      showFeedback('This version name already exists. Please enter a different name.', 'error');
       return;
     }
     if (!publishVersion || !publishVersion.trim()) {
       triggerAlert('Please enter a valid version number (e.g. 1.0.0).', 'Version Required', 'warning');
       return;
     }
-    if (!publishNotes || !publishNotes.trim()) {
-      triggerAlert('Please enter release notes describing what changed in this build.', 'Release Notes Required', 'warning');
-      return;
+    if (unsavedLessonChanges.length > 0) {
+      // Lesson Builder edits not saved yet (the page could not save them on opening, e.g. the Level was missing)
+      if (!levelFits(experienceForm.level, levelBand(experienceForm.experience_type, experienceForm.difficulty))) {
+        showFeedback('Open the Lesson Builder and enter a valid Level before publishing.', 'error');
+        return;
+      }
+      const saved = await handleSaveExperience();
+      if (!saved) return;
     }
-
     setActionLoading(true);
     try {
+      // The LMS level is the one saved in the Lesson Builder
       const res = await apiFetch(`/api/v1/content/publish/${selectedExperience.id}/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version: publishVersion.trim(), release_notes: publishNotes })
+        body: JSON.stringify({ version: publishVersion.trim() })
       });
       if (res.status === 200 || res.status === 201) {
         showFeedback('Experience submitted to Super Admin for approval.');
-        setPublishNotes('');
         setPublishVersion('');
+        setJustPublishedId(selectedExperience.id);
         loadPublishData(selectedExperience.id);
         loadExperiencesData();
       } else {
         const errData = await res.json().catch(() => ({}));
+        if (errData.code === 'package_name_exists') {
+          triggerAlert(errData.error, 'Package Name Already Exists', 'error');
+          return;
+        }
         // Handle empty-screen error with detailed list
         if (errData.empty_screens && errData.empty_screens.length > 0) {
           const screenList = errData.empty_screens
@@ -5699,6 +5998,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           flex: 1;
           padding: 1.5rem;
           overflow-y: auto;
+          overflow-x: hidden;
+          max-width: 100%;
+          box-sizing: border-box;
         }
 
         /* Override banner card to remove border */
@@ -5826,6 +6128,50 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
         }
 
         /* Tables */
+        .cs-table-wrap {
+          width: 100%;
+          max-width: 100%;
+          overflow-x: auto !important;
+          -webkit-overflow-scrolling: touch;
+          position: relative;
+          padding-bottom: 0.5rem;
+        }
+        .cs-table-wrap::-webkit-scrollbar {
+          height: 6px;
+        }
+        .cs-table-wrap::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 3px;
+        }
+        .cs-table-wrap::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+        .cs-table-wrap::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 3px;
+        }
+
+        .cs-activity-scroll::-webkit-scrollbar {
+          width: 5px;
+        }
+        .cs-activity-scroll::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 3px;
+        }
+        .cs-activity-scroll::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+        .cs-activity-scroll::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 3px;
+        }
+
+        .cs-dashboard-grid {
+          display: grid;
+          grid-template-columns: 1.5fr 1fr;
+          gap: 1.25rem;
+        }
+
         .cs-table {
           width: 100%;
           border-collapse: collapse;
@@ -6121,6 +6467,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
           }
           .cs-card {
             padding: 1rem !important;
+          }
+          .cs-dashboard-grid {
+            grid-template-columns: 1fr !important;
           }
         }
 
@@ -6515,7 +6864,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
               </div>
 
               {/* Main Grid row */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '1.25rem' }}>
+              <div className="cs-dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1.25rem' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   {/* Recent Experiences Card */}
                   <div className="cs-card">
@@ -6523,15 +6872,22 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <h3 className="cs-card-title">Recent Lessons</h3>
                       <button className="cs-btn-outline" style={{ padding: '0.25rem 0.6rem', fontSize: '0.72rem' }} onClick={() => setView('experiences')}>View All</button>
                     </div>
-                    <div className="cs-table-wrap" style={{ overflowX: 'auto' }}>
-                      <table className="cs-table">
+                    <div className="cs-table-wrap">
+                      <table className="cs-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: '560px' }}>
+                        <colgroup>
+                          <col style={{ width: '38%' }} />
+                          <col style={{ width: '16%' }} />
+                          <col style={{ width: '18%' }} />
+                          <col style={{ width: '18%' }} />
+                          <col style={{ width: '10%' }} />
+                        </colgroup>
                         <thead>
                           <tr>
                             <th>Lessons Name</th>
                             <th>Grade</th>
                             <th>Status</th>
                             <th>Last Modified</th>
-                            <th>Action</th>
+                            <th style={{ textAlign: 'center' }}>Action</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -6544,24 +6900,26 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               <tr key={idx}>
                                 <td>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <div style={{ width: 36, height: 26, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <div style={{ width: 36, height: 26, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                       {getThumbnailUrl(row.thumbnail) ? (
                                         <img src={getThumbnailUrl(row.thumbnail)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                       ) : (
                                         <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>📖</span>
                                       )}
                                     </div>
-                                    <span style={{ fontWeight: 600 }}>{row.title}</span>
+                                    <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.title}>
+                                      {row.title}
+                                    </span>
                                   </div>
                                 </td>
-                                <td>{row.grade_name || `Grade ${row.grade}`}</td>
+                                <td style={{ whiteSpace: 'nowrap' }}>{row.grade_name || `Grade ${row.grade}`}</td>
                                 <td>
-                                  <span className={`cs-badge ${row.status === 'APPROVED' || row.status === 'PUBLISHED' ? 'cs-badge-approved' : row.status === 'PENDING_APPROVAL' ? 'cs-badge-pending' : row.status === 'REJECTED' ? 'cs-badge-rejected' : 'cs-badge-draft'}`}>
+                                  <span className={`cs-badge ${row.status === 'APPROVED' || row.status === 'PUBLISHED' ? 'cs-badge-approved' : row.status === 'PENDING_APPROVAL' ? 'cs-badge-pending' : row.status === 'REJECTED' ? 'cs-badge-rejected' : 'cs-badge-draft'}`} style={{ whiteSpace: 'nowrap' }}>
                                     {row.status === 'PENDING_APPROVAL' ? 'PENDING' : row.status}
                                   </span>
                                 </td>
-                                <td>{new Date(row.updated_at).toLocaleDateString()}</td>
-                                <td>
+                                <td style={{ whiteSpace: 'nowrap' }}>{new Date(row.updated_at).toLocaleDateString()}</td>
+                                <td style={{ textAlign: 'center' }}>
                                   <button
                                     className="cs-btn-outline"
                                     style={{ padding: '0.35rem 0.55rem', fontSize: '0.85rem', color: '#0b57d0', border: '1px solid #cbd5e1', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
@@ -6590,19 +6948,29 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       <h3 className="cs-card-title">Recent Activity</h3>
                       <button className="cs-btn-outline" style={{ padding: '0.25rem 0.6rem', fontSize: '0.72rem' }} onClick={() => setShowRecentActivityModal(true)}>View All</button>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div
+                      className="cs-activity-scroll"
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.85rem',
+                        maxHeight: '275px',
+                        overflowY: 'auto',
+                        paddingRight: '0.25rem'
+                      }}
+                    >
                       {recentActivities.length === 0 ? (
                         <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>No recent activity.</div>
                       ) : (
-                        recentActivities.slice(0, 6).map((item, idx) => {
+                        recentActivities.slice(0, 10).map((item, idx) => {
                           const isEdit = item.activity_type === 'experience_edited';
                           return (
                             <div key={idx} style={{ display: 'flex', gap: '0.65rem', alignItems: 'flex-start' }}>
-                              <div style={{ background: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0284c7' : '#ea580c', padding: '0.45rem', borderRadius: '50%', display: 'flex' }}>
+                              <div style={{ background: isEdit ? '#e0f2fe' : '#ffedd5', color: isEdit ? '#0284c7' : '#ea580c', padding: '0.45rem', borderRadius: '50%', display: 'flex', flexShrink: 0 }}>
                                 {isEdit ? <FiEdit2 /> : <FiUpload />}
                               </div>
-                              <div>
-                                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1e293b' }}>{item.message}</div>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1e293b', wordBreak: 'break-word' }}>{item.message}</div>
                                 <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>{new Date(item.timestamp).toLocaleDateString()}</div>
                               </div>
                             </div>
@@ -6826,47 +7194,29 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
                       {/* Right Side: Action Button */}
                       <div style={{ paddingBottom: '4px', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                        <button
-                          onClick={() => {
-                            setIsSelectMode(!isSelectMode);
-                            if (isSelectMode) setSelectedExperienceIds([]);
-                          }}
-                          style={{
-                            background: isSelectMode ? '#e2e8f0' : '#ffffff',
-                            border: '1px solid #d1d5db',
-                            color: '#374151',
-                            fontSize: '0.82rem',
-                            fontWeight: 600,
-                            padding: '0.55rem 1.25rem',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                          }}
-                        >
-                          {isSelectMode ? '✓ Done Selecting' : 'Select'}
-                        </button>
-                        {selectedExperienceIds.length > 0 && (
-                          <button
-                            style={{
-                              background: '#fee2e2',
-                              color: '#dc2626',
-                              border: '1px solid #fca5a5',
-                              fontWeight: 600,
-                              fontSize: '0.82rem',
-                              padding: '0.55rem 1.25rem',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px'
-                            }}
-                            onClick={handleBulkDeleteExperiences}
-                          >
-                            <FiTrash2 /> Delete Selected ({selectedExperienceIds.length})
-                          </button>
-                        )}
+                        {/* Select -> (nobody ticked) Unselect, (someone ticked) Delete (n); after the delete it is Select again */}
+                        {(() => {
+                          const base = { fontSize: '0.82rem', fontWeight: 600, padding: '0.55rem 1.25rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' };
+                          if (isSelectMode && selectedExperienceIds.length === 0) {
+                            return (
+                              <button onClick={() => setIsSelectMode(false)} style={{ ...base, background: '#e2e8f0', border: '1px solid #d1d5db', color: '#374151' }}>
+                                Unselect
+                              </button>
+                            );
+                          }
+                          if (isSelectMode) {
+                            return (
+                              <button onClick={handleBulkDeleteExperiences} style={{ ...base, background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5' }}>
+                                <FiTrash2 /> Delete ({selectedExperienceIds.length})
+                              </button>
+                            );
+                          }
+                          return (
+                            <button onClick={() => { setSelectedExperienceIds([]); setIsSelectMode(true); }} style={{ ...base, background: '#ffffff', border: '1px solid #d1d5db', color: '#374151' }}>
+                              Select
+                            </button>
+                          );
+                        })()}
                         <button
                           className="cs-btn-primary"
                           style={{ background: '#0b57d0', color: '#ffffff', fontWeight: 600, fontSize: '0.82rem', padding: '0.55rem 1.25rem', borderRadius: '8px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
@@ -6879,7 +7229,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               grade: '',
                               subject: [],
                               language: 'English',
-                              difficulty: 'INTERMEDIATE',
+                              difficulty: 'BEGINNER',
                               duration: 15,
                               tags: [],
                               experience_type: 'LESSON',
@@ -6898,168 +7248,270 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
 
                   {/* Main table container */}
-                  <div className="cs-card" style={{ padding: '0' }}>
-                    <table className="cs-table">
-                      <thead>
-                        <tr>
-                          {isSelectMode && (
-                            <th style={{ width: '40px', paddingLeft: '1.5rem' }}>
-                              <input
-                                type="checkbox"
-                                checked={experiences.length > 0 && experiences.every(exp => selectedExperienceIds.includes(exp.id))}
-                                onChange={handleSelectAllExperiences}
-                                style={{ cursor: 'pointer' }}
-                              />
-                            </th>
-                          )}
-                          <th style={{ width: '60px', paddingLeft: '1.25rem' }}>S.No</th>
-                          <th>Lessons</th>
-                          <th>Type</th>
-                          <th>Grade</th>
-                          <th>Difficulty</th>
-                          <th>Status</th>
-                          <th>Last Modified</th>
-                          <th style={{ textAlign: 'center' }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {experiences.length === 0 ? (
+                  <div className="cs-card" style={{ padding: '1.25rem 1.5rem' }}>
+                    <div className="cs-table-wrap" onScroll={() => activeMenuId && setActiveMenuId(null)}>
+                      <table className="cs-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: isSelectMode ? '1060px' : '980px' }}>
+                        <colgroup>
+                          {isSelectMode && <col style={{ width: '4%' }} />}
+                          <col style={{ width: isSelectMode ? '6%' : '7%' }} />
+                          <col style={{ width: isSelectMode ? '26%' : '28%' }} />
+                          <col style={{ width: isSelectMode ? '10%' : '11%' }} />
+                          <col style={{ width: isSelectMode ? '10%' : '10%' }} />
+                          <col style={{ width: isSelectMode ? '13%' : '13%' }} />
+                          <col style={{ width: isSelectMode ? '12%' : '12%' }} />
+                          <col style={{ width: isSelectMode ? '12%' : '12%' }} />
+                          <col style={{ width: isSelectMode ? '7%' : '7%' }} />
+                        </colgroup>
+                        <thead>
                           <tr>
-                            <td colSpan={isSelectMode ? "9" : "8"} style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No lessons found. Click "+ New Lesson" to create one!</td>
+                            {isSelectMode && (
+                              <th style={{ width: '40px', paddingLeft: '0.75rem', textAlign: 'center' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={experiences.length > 0 && experiences.every(exp => selectedExperienceIds.includes(exp.id))}
+                                  onChange={handleSelectAllExperiences}
+                                  style={{ cursor: 'pointer' }}
+                                />
+                              </th>
+                            )}
+                            <th style={{ paddingLeft: '0.75rem' }}>S.No</th>
+                            <th>Lessons</th>
+                            <th>Type</th>
+                            <th>Grade</th>
+                            <th>Difficulty</th>
+                            <th>Status</th>
+                            <th>Last Modified</th>
+                            <th style={{ textAlign: 'center' }}>Actions</th>
                           </tr>
-                        ) : (
-                          experiences.map((row, idx) => (
-                            <tr key={row.id} style={{ cursor: 'pointer' }} onClick={() => handleViewDetails(row.id)}>
-                              {isSelectMode && (
-                                <td style={{ paddingLeft: '1.5rem' }} onClick={e => e.stopPropagation()}>
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedExperienceIds.includes(row.id)}
-                                    onChange={() => handleSelectExperience(row.id)}
-                                    style={{ cursor: 'pointer' }}
-                                  />
-                                </td>
-                              )}
-                              <td style={{ paddingLeft: '1.25rem', fontWeight: 800, color: '#0284c7', fontSize: '0.84rem' }}>
-                                {(page - 1) * 10 + idx + 1}
-                              </td>
-                              <td>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                  <div style={{ width: 44, height: 32, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
-                                    {getThumbnailUrl(row.thumbnail) ? <img src={getThumbnailUrl(row.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
-                                  </div>
-                                  <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.86rem' }}>
-                                    {row.title}
-                                  </div>
-                                </div>
-                              </td>
-                              <td>
-                                <span style={{
-                                  display: 'inline-block',
-                                  padding: '2px 8px',
-                                  borderRadius: '12px',
-                                  fontSize: '0.72rem',
-                                  fontWeight: 600,
-                                  background: row.experience_type === 'ASSESSMENT' ? '#f3e8ff' : '#e0f2fe',
-                                  color: row.experience_type === 'ASSESSMENT' ? '#7c3aed' : '#0284c7'
-                                }}>
-                                  {row.experience_type === 'ASSESSMENT' ? 'Assessment' : 'Lesson'}
-                                </span>
-                              </td>
-                              <td>{row.grade_name || `Grade ${row.grade}`}</td>
-                              <td>
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: row.difficulty === 'BEGINNER' ? '#10b981' : row.difficulty === 'MASTER' ? '#ef4444' : '#3b82f6' }} />
-                                  {row.difficulty_display || formatDifficulty(row.difficulty)}
-                                </span>
-                              </td>
-                              <td>
-                                <span className={`cs-badge ${row.status === 'APPROVED' || row.status === 'PUBLISHED' ? 'cs-badge-approved' : row.status === 'PENDING_APPROVAL' ? 'cs-badge-pending' : row.status === 'REJECTED' ? 'cs-badge-rejected' : 'cs-badge-draft'}`}>
-                                  {row.status === 'PENDING_APPROVAL' ? 'PENDING' : row.status}
-                                </span>
-                              </td>
-                              <td>
-                                <div style={{ fontWeight: 500 }}>{new Date(row.updated_at).toLocaleDateString()}</div>
-                                <div style={{ fontSize: '0.72rem', color: '#64748b' }}>by {row.created_by_name || 'Content Creator'}</div>
-                              </td>
-                              <td style={{ textAlign: 'center', position: 'relative' }} onClick={e => e.stopPropagation()}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  <button
-                                    className="cs-icon-btn"
-                                    onClick={() => setActiveMenuId(activeMenuId === row.id ? null : row.id)}
-                                    style={{ padding: '6px', fontSize: '1.15rem', cursor: 'pointer', border: 'none', background: 'none', color: '#64748b', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                  >
-                                    <FiMoreVertical />
-                                  </button>
-                                </div>
-                                {activeMenuId === row.id && (
-                                  <div style={{
-                                    position: 'absolute', right: '50%', transform: 'translateX(50%)', top: '75%', background: '#ffffff',
-                                    border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-                                    zIndex: 100, display: 'flex', flexDirection: 'column', width: '110px', overflow: 'hidden'
-                                  }}>
-                                    <button
-                                      onClick={() => { setActiveMenuId(null); handleStartPreview(row.id); }}
-                                      style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem', textAlign: 'left', cursor: 'pointer', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}
-                                    >
-                                      <FiPlay style={{ fontSize: '0.85rem' }} /> Preview
-                                    </button>
-                                    <button
-                                      onClick={() => { setActiveMenuId(null); loadExperienceDetail(row, true); }}
-                                      style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem', textAlign: 'left', cursor: 'pointer', color: '#1e293b', display: 'flex', alignItems: 'center', gap: 6, width: '100%', borderTop: '1px solid #f1f5f9' }}
-                                    >
-                                      <FiEdit2 style={{ fontSize: '0.85rem' }} /> Edit
-                                    </button>
-                                    <button
-                                      onClick={() => { setActiveMenuId(null); handleDeleteExperience(row.id); }}
-                                      style={{ background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem', textAlign: 'left', cursor: 'pointer', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6, width: '100%', borderTop: '1px solid #f1f5f9' }}
-                                    >
-                                      <FiTrash2 style={{ fontSize: '0.85rem' }} /> Delete
-                                    </button>
-                                  </div>
-                                )}
-                              </td>
+                        </thead>
+                        <tbody>
+                          {experiences.length === 0 ? (
+                            <tr>
+                              <td colSpan={isSelectMode ? "9" : "8"} style={{ textAlign: 'center', color: '#64748b', padding: '2rem', fontSize: '0.8rem' }}>No lessons found. Click "+ New Lesson" to create one!</td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          ) : (
+                            experiences.map((row, idx) => (
+                              <tr key={row.id} style={{ cursor: 'pointer' }} onClick={() => handleStartPreview(row.id)}>
+                                {isSelectMode && (
+                                  <td style={{ paddingLeft: '0.75rem', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedExperienceIds.includes(row.id)}
+                                      onChange={() => handleSelectExperience(row.id)}
+                                      style={{ cursor: 'pointer' }}
+                                    />
+                                  </td>
+                                )}
+                                <td style={{ paddingLeft: '0.75rem', fontWeight: 800, color: '#0284c7', fontSize: '0.84rem' }}>
+                                  {(page - 1) * 10 + idx + 1}
+                                </td>
+                                <td>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                    <div style={{ width: 44, height: 32, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
+                                      {getThumbnailUrl(row.thumbnail) ? <img src={getThumbnailUrl(row.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
+                                    </div>
+                                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.86rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.title}>
+                                      {row.title}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <span style={{
+                                    display: 'inline-block',
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 600,
+                                    background: row.experience_type === 'ASSESSMENT' ? '#f3e8ff' : '#e0f2fe',
+                                    color: row.experience_type === 'ASSESSMENT' ? '#7c3aed' : '#0284c7',
+                                    whiteSpace: 'nowrap'
+                                  }}>
+                                    {row.experience_type === 'ASSESSMENT' ? 'Assessment' : 'Lesson'}
+                                  </span>
+                                </td>
+                                <td style={{ whiteSpace: 'nowrap' }}>{row.grade_name || `Grade ${row.grade}`}</td>
+                                <td>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: row.difficulty === 'BEGINNER' ? '#10b981' : row.difficulty === 'MASTER' ? '#ef4444' : '#3b82f6' }} />
+                                    {row.difficulty_display || formatDifficulty(row.difficulty)}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span className={`cs-badge ${row.status === 'APPROVED' || row.status === 'PUBLISHED' ? 'cs-badge-approved' : row.status === 'PENDING_APPROVAL' ? 'cs-badge-pending' : row.status === 'REJECTED' ? 'cs-badge-rejected' : 'cs-badge-draft'}`} style={{ whiteSpace: 'nowrap' }}>
+                                    {row.status === 'PENDING_APPROVAL' ? 'PENDING' : row.status}
+                                  </span>
+                                </td>
+                                <td>
+                                  <div style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{new Date(row.updated_at).toLocaleDateString()}</div>
+                                  <div style={{ fontSize: '0.72rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>by {row.created_by_name || 'Content Creator'}</div>
+                                </td>
+                                <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <button
+                                      type="button"
+                                      className="cs-icon-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (activeMenuId === row.id) {
+                                          setActiveMenuId(null);
+                                        } else {
+                                          const rect = e.currentTarget.getBoundingClientRect();
+                                          setMenuDropdownPos({
+                                            top: rect.bottom + 4,
+                                            right: Math.max(10, window.innerWidth - rect.right)
+                                          });
+                                          setActiveMenuId(row.id);
+                                        }
+                                      }}
+                                      style={{
+                                        padding: '6px',
+                                        fontSize: '1.15rem',
+                                        cursor: 'pointer',
+                                        border: 'none',
+                                        background: 'none',
+                                        color: '#64748b',
+                                        borderRadius: '50%',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        transition: 'background-color 0.15s'
+                                      }}
+                                      onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                      onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                      <FiMoreVertical />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
 
                     {/* Table Footer */}
-                    <div style={{ padding: '1rem 1.5rem' }}>
-                      <div className="cs-pagination-bar">
-                        <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Showing {experiences.length > 0 ? (page - 1) * 10 + 1 : 0} to {(page - 1) * 10 + experiences.length} of {totalCount} experiences</span>
-                        <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                    <div className="cs-pagination-bar" style={{ marginTop: '0.75rem', paddingTop: '0.5rem', borderTop: 'none' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                        Showing {experiences.length > 0 ? (page - 1) * 10 + 1 : 0} to {(page - 1) * 10 + experiences.length} of {totalCount} records
+                      </span>
+                      <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                        <button
+                          className="cs-page-link"
+                          disabled={page === 1}
+                          onClick={() => handlePageChange(page - 1)}
+                          style={{ cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.5 : 1 }}
+                        >
+                          &lt;
+                        </button>
+                        {pageItems(page, Math.max(1, Math.ceil(totalCount / 10))).map(pageNum => (
                           <button
-                            className="cs-page-link"
-                            disabled={page === 1}
-                            onClick={() => handlePageChange(page - 1)}
-                            style={{ cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.5 : 1 }}
+                            key={pageNum}
+                            className={`cs-page-link ${page === pageNum ? 'active' : ''}`}
+                            onClick={() => handlePageChange(pageNum)}
+                            style={{ cursor: 'pointer' }}
                           >
-                            &lt;
+                            {pageNum}
                           </button>
-                          {Array.from({ length: Math.max(1, Math.ceil(totalCount / 10)) }, (_, i) => i + 1).map(pageNum => (
-                            <button
-                              key={pageNum}
-                              className={`cs-page-link ${page === pageNum ? 'active' : ''}`}
-                              onClick={() => handlePageChange(pageNum)}
-                              style={{ cursor: 'pointer' }}
-                            >
-                              {pageNum}
-                            </button>
-                          ))}
-                          <button
-                            className="cs-page-link"
-                            disabled={page >= Math.ceil(totalCount / 10)}
-                            onClick={() => handlePageChange(page + 1)}
-                            style={{ cursor: page >= Math.ceil(totalCount / 10) ? 'not-allowed' : 'pointer', opacity: page >= Math.ceil(totalCount / 10) ? 0.5 : 1 }}
-                          >
-                            &gt;
-                          </button>
-                        </div>
+                        ))}
+                        <button
+                          className="cs-page-link"
+                          disabled={page >= Math.ceil(totalCount / 10)}
+                          onClick={() => handlePageChange(page + 1)}
+                          style={{ cursor: page >= Math.ceil(totalCount / 10) ? 'not-allowed' : 'pointer', opacity: page >= Math.ceil(totalCount / 10) ? 0.5 : 1 }}
+                        >
+                          &gt;
+                        </button>
                       </div>
                     </div>
                   </div>
+
+                  {/* Fixed-position Action Dropdown (never clipped by table scroll wrapper) */}
+                  {activeMenuId && (() => {
+                    const row = experiences.find(exp => exp.id === activeMenuId);
+                    if (!row) return null;
+                    return (
+                      <>
+                        <div
+                          style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+                          onClick={(e) => { e.stopPropagation(); setActiveMenuId(null); }}
+                        />
+                        <div
+                          style={{
+                            position: 'fixed',
+                            top: menuDropdownPos.top,
+                            right: menuDropdownPos.right,
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                            zIndex: 9999,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            width: '120px',
+                            overflow: 'hidden'
+                          }}
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => { setActiveMenuId(null); handleStartPreview(row.id); }}
+                            style={{
+                              background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem',
+                              textAlign: 'left', cursor: 'pointer', color: '#3b82f6', display: 'flex',
+                              alignItems: 'center', gap: 6, width: '100%', transition: 'background-color 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#eff6ff'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            <FiPlay style={{ fontSize: '0.85rem' }} /> Preview
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setActiveMenuId(null); handleViewDetails(row.id); }}
+                            style={{
+                              background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem',
+                              textAlign: 'left', cursor: 'pointer', color: '#1e293b', display: 'flex',
+                              alignItems: 'center', gap: 6, width: '100%', borderTop: '1px solid #f1f5f9',
+                              transition: 'background-color 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            <FiEye style={{ fontSize: '0.85rem' }} /> Details
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setActiveMenuId(null); loadExperienceDetail(row, true); }}
+                            style={{
+                              background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem',
+                              textAlign: 'left', cursor: 'pointer', color: '#1e293b', display: 'flex',
+                              alignItems: 'center', gap: 6, width: '100%', borderTop: '1px solid #f1f5f9',
+                              transition: 'background-color 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            <FiEdit2 style={{ fontSize: '0.85rem' }} /> Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setActiveMenuId(null); handleDeleteExperience(row.id); }}
+                            style={{
+                              background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem',
+                              textAlign: 'left', cursor: 'pointer', color: '#ef4444', display: 'flex',
+                              alignItems: 'center', gap: 6, width: '100%', borderTop: '1px solid #f1f5f9',
+                              transition: 'background-color 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fef2f2'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            <FiTrash2 style={{ fontSize: '0.85rem' }} /> Delete
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </>
               )}
             </>
@@ -7105,13 +7557,38 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           onChange={e => setExperienceForm({ ...experienceForm, title: e.target.value })} />
                       </div>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '1rem' }}>
                         <div className="cs-form-group">
                           <label className="cs-form-label">Experience Type <span style={{ color: '#ef4444' }}>*</span></label>
                           <select className="cs-form-input" value={experienceForm.experience_type || 'LESSON'}
-                            onChange={e => setExperienceForm({ ...experienceForm, experience_type: e.target.value })}>
+                            onChange={e => {
+                              const type = e.target.value;
+                              // a level that does not fit the new type and the chosen difficulty is cleared
+                              setExperienceForm({
+                                ...experienceForm,
+                                experience_type: type,
+                                level: levelFits(experienceForm.level, levelBand(type, experienceForm.difficulty)) ? experienceForm.level : ''
+                              });
+                            }}>
                             <option value="LESSON">Lesson</option>
                             <option value="ASSESSMENT">Assessment</option>
+                          </select>
+                        </div>
+                        <div className="cs-form-group">
+                          <label className="cs-form-label">Difficulty <span style={{ color: '#ef4444' }}>*</span></label>
+                          <select className="cs-form-input" data-testid="lesson-difficulty-select" value={experienceForm.difficulty}
+                            onChange={e => {
+                              const difficulty = e.target.value;
+                              // the difficulty decides which levels can be chosen; a level outside them is cleared
+                              setExperienceForm({
+                                ...experienceForm,
+                                difficulty,
+                                level: levelFits(experienceForm.level, levelBand(experienceForm.experience_type, difficulty)) ? experienceForm.level : ''
+                              });
+                            }}>
+                            <option value="BEGINNER">Beginner</option>
+                            <option value="INTERMEDIATE">Intermediate</option>
+                            <option value="MASTER">Master</option>
                           </select>
                         </div>
                         <div className="cs-form-group">
@@ -7166,15 +7643,39 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }}>
-                    <div className="cs-form-group">
-                      <label className="cs-form-label">Difficulty <span style={{ color: '#ef4444' }}>*</span></label>
-                      <select className="cs-form-input" value={experienceForm.difficulty}
-                        onChange={e => setExperienceForm({ ...experienceForm, difficulty: e.target.value })}>
-                        <option value="BEGINNER">Beginner</option>
-                        <option value="INTERMEDIATE">Intermediate</option>
-                        <option value="MASTER">Master</option>
-                      </select>
-                    </div>
+                    {(() => {
+                      const band = levelBand(experienceForm.experience_type, experienceForm.difficulty);
+                      const typed = String(experienceForm.level ?? '');
+                      const partial = typed !== '' && !levelFits(typed, band); // e.g. "1" on the way to 11
+                      const missing = levelMissing && !levelFits(typed, band); // Save & Continue was pressed without a valid level
+                      const numbers = Array.from({ length: band[1] - band[0] + 1 }, (_, i) => String(band[0] + i));
+                      return (
+                        <div className="cs-form-group">
+                          <label className="cs-form-label">Level ({band[0]}-{band[1]}) <span style={{ color: '#ef4444' }}>*</span></label>
+                          <input
+                            className="cs-form-input"
+                            data-testid="lesson-level-input"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder={`LMS level ${band[0]} to ${band[1]}`}
+                            value={typed}
+                            style={partial || missing ? { borderColor: '#ef4444' } : undefined}
+                            onChange={e => {
+                              setLevelMissing(false);
+                              const digits = e.target.value.replace(/\D/g, '').slice(0, 2);
+                              if (digits === '') { setExperienceForm({ ...experienceForm, level: '' }); return; }
+                              // only numbers of this difficulty can be typed (a start such as "1" for 11 is allowed on the way)
+                              if (numbers.some(n => n.startsWith(digits))) setExperienceForm({ ...experienceForm, level: digits });
+                            }}
+                          />
+                          {(partial || missing) && (
+                            <span style={{ display: 'block', marginTop: '0.25rem', fontSize: '0.7rem', color: '#b91c1c' }}>
+                              {missing && typed === '' ? `Level is required: enter a level from ${band[0]} to ${band[1]}.` : `Enter a level from ${band[0]} to ${band[1]}.`}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <div className="cs-form-group">
                       <label className="cs-form-label">Estimated Duration (min)</label>
                       <input
@@ -7258,6 +7759,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       onClick={async () => {
                         if ((experienceForm.description?.length || 0) > 200) {
                           showFeedback('Description must not exceed 200 characters.', 'error');
+                          return;
+                        }
+                        // the Level is required: without a number of this difficulty's range the page stays here
+                        const band = levelBand(experienceForm.experience_type, experienceForm.difficulty);
+                        if (!levelFits(experienceForm.level, band)) {
+                          setLevelMissing(true);
+                          showFeedback(`Please enter the Level (${band[0]} to ${band[1]}) before continuing.`, 'error');
                           return;
                         }
                         const savedExp = await handleSaveExperience();
@@ -8192,7 +8700,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                       { type: 'Match_Items', desc: 'Pair items in Column A & B', icon: <FiGitCommit style={{ color: '#7c3aed' }} />, bg: '#f3e8ff' },
                                       { type: 'Sequence', desc: 'Reorder items sequentially', icon: <FiList style={{ color: '#b45309' }} />, bg: '#fef3c7' },
                                       { type: 'True_False', desc: 'True or False question', icon: <FiCheckCircle style={{ color: '#ea580c' }} />, bg: '#ffedd5' },
-                                      { type: 'Pronunciation', desc: 'Practice pronouncing words correctly', icon: <FiMic style={{ color: '#d97706' }} />, bg: '#fef3c7' },
+                                      { type: 'Pronunciation', label: 'Listen & Repeat', desc: 'Listen to or read words, then record them', icon: <FiMic style={{ color: '#d97706' }} />, bg: '#fef3c7' },
                                       { type: 'Input', desc: 'Free text typing input area', icon: <FiType style={{ color: '#0ea5e9' }} />, bg: '#e0f9ff' },
                                       { type: 'Roleplay_Simulation', desc: 'Ordered npc-student conversation roleplay', icon: <FiUsers style={{ color: '#3b82f6' }} />, bg: '#dbeafe' },
                                       { type: 'Hotspot_Explorer', desc: 'Click/explore hotspots on a target image', icon: <FiGrid style={{ color: '#ea580c' }} />, bg: '#ffedd5' },
@@ -8301,7 +8809,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         >
                                           <div style={{ background: tmpl.bg, padding: '0.3rem', borderRadius: '6px', display: 'flex', flexShrink: 0 }}>{tmpl.icon}</div>
                                           <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e293b' }}>{tmpl.type.replace('_', ' ')}</div>
+                                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1e293b' }}>{tmpl.label || tmpl.type.replace('_', ' ')}</div>
                                             <div style={{ fontSize: '0.58rem', color: '#64748b', marginTop: '1px', lineHeight: 1.3 }}>{tmpl.desc}</div>
                                           </div>
                                         </div>
@@ -8397,6 +8905,36 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       const isCollapsed = rightPanelCollapsed || !hasActiveSelection;
                       return (
                         <div className={`fss-right ${isCollapsed ? 'collapsed' : 'expanded'}`}>
+                          {marksPrompt && (
+                            <div role="dialog" aria-modal="true" data-testid="marks-prompt"
+                              style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000, padding: '1rem' }}>
+                              <div style={{ background: '#ffffff', borderRadius: '14px', padding: '1.25rem 1.5rem', width: '100%', maxWidth: '360px', boxShadow: '0 20px 40px rgba(15,23,42,0.25)' }}>
+                                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.25rem' }}>Set marks</h3>
+                                <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0 0 0.9rem' }}>
+                                  How many marks is this {String(marksPrompt.block.type).replace(/_/g, ' ')} worth?
+                                </p>
+                                <input
+                                  autoFocus
+                                  data-testid="marks-input"
+                                  className="cs-form-input"
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={marksPrompt.value}
+                                  onChange={e => setMarksPrompt(prev => ({ ...prev, value: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                                  onKeyDown={e => { if (e.key === 'Enter') confirmMarksPrompt(); }}
+                                  style={{ height: '36px', width: '100%' }}
+                                />
+                                {parseMarks(marksPrompt.value) === null && (
+                                  <div style={{ fontSize: '0.72rem', color: '#b91c1c', marginTop: '0.3rem' }}>Enter a whole number from 0 to 1000.</div>
+                                )}
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
+                                  <button type="button" className="cs-btn-outline" onClick={() => setMarksPrompt(null)} style={{ padding: '0.4rem 0.9rem', fontSize: '0.8rem' }}>Cancel</button>
+                                  <button type="button" onClick={confirmMarksPrompt} disabled={parseMarks(marksPrompt.value) === null}
+                                    style={{ padding: '0.4rem 0.9rem', fontSize: '0.8rem', fontWeight: 600, borderRadius: '6px', border: 'none', background: '#2563eb', color: '#ffffff', cursor: 'pointer' }}>Add</button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                           <div className="fss-right-header" style={{ paddingBottom: '0.4rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <div>
@@ -8492,6 +9030,28 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', paddingTop: '0.75rem' }}>
                                   {propertiesTab === 'content' && (
                                     <>
+                                      {/* MARKS: only blocks already on the screen of an Assessment */}
+                                      {!pendingBlock && needsMarks(selectedBlock) && (
+                                        <div className="cs-form-group" style={{ paddingBottom: '0.6rem', borderBottom: '1px solid #e2e8f0' }}>
+                                          <label className="cs-form-label" style={{ fontSize: '0.68rem', fontWeight: 700 }}>Marks</label>
+                                          <input
+                                            className="cs-form-input"
+                                            data-testid="block-marks-input"
+                                            style={{ height: '28px', fontSize: '0.78rem' }}
+                                            type="text"
+                                            inputMode="numeric"
+                                            value={selectedBlock.content?.marks ?? ''}
+                                            onChange={e => {
+                                              const digits = e.target.value.replace(/\D/g, '').slice(0, 4);
+                                              handleUpdateBlockContent('marks', digits === '' ? '' : Number(digits));
+                                            }}
+                                            placeholder="Marks for this block"
+                                          />
+                                          <span style={{ fontSize: '0.62rem', color: '#64748b' }}>
+                                            Marks on this screen: {(screenForm.elements || []).reduce((sum, el) => sum + (needsMarks(el) ? (Number(el.content?.marks) || 0) : 0), 0)}
+                                          </span>
+                                        </div>
+                                      )}
 
                                       {/* BLOCK TYPE 1: HEADING */}
                                       {['heading'].includes((selectedBlock.type || '').toLowerCase()) && (
@@ -9276,11 +9836,18 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                     showFeedback={showFeedback}
                                                   />
 
+                                                  {(() => {
+                                                    // when the student types the answer, the text the audio says is required: the app checks the answer against it
+                                                    const typing = !(selectedBlock.content?.responseType === 'quiz' || (selectedBlock.content?.options && selectedBlock.content.options.length > 0 && selectedBlock.content?.responseType !== 'text'));
+                                                    const missing = typing && !String(item.text || item.targetText || '').trim();
+                                                    return (
                                                   <div className="cs-form-group" style={{ marginBottom: 0 }}>
-                                                    <label className="cs-form-label" style={{ fontSize: '0.6rem', color: '#059669', fontWeight: 600 }}>Target Correct Text (Optional)</label>
+                                                    <label className="cs-form-label" style={{ fontSize: '0.6rem', color: '#059669', fontWeight: 600 }}>
+                                                      Correct text {typing ? <span style={{ color: '#ef4444' }}>*</span> : '(not needed for a quiz)'}
+                                                    </label>
                                                     <input
                                                       className="cs-form-input"
-                                                      style={{ height: '26px', fontSize: '0.72rem' }}
+                                                      style={{ height: '26px', fontSize: '0.72rem', ...(missing ? { borderColor: '#ef4444' } : {}) }}
                                                       type="text"
                                                       value={item.text || item.targetText || ''}
                                                       onChange={e => {
@@ -9288,9 +9855,16 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                         updated[idx] = { ...updated[idx], text: e.target.value, targetText: e.target.value };
                                                         handleUpdateBlockContent('items', updated);
                                                       }}
-                                                      placeholder="e.g. Expected text transcription..."
+                                                      placeholder="What the audio says, e.g. Hi, hello! How are you?"
                                                     />
+                                                    {missing && (
+                                                      <span style={{ display: 'block', marginTop: '2px', fontSize: '0.6rem', color: '#b91c1c' }}>
+                                                        Required: type what the audio says. The lesson cannot be published without it.
+                                                      </span>
+                                                    )}
                                                   </div>
+                                                    );
+                                                  })()}
                                                 </div>
                                               ))}
                                             </div>
@@ -9570,51 +10144,6 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                         </div>
                                       )}
 
-                                      {/* BLOCK TYPE: MATCH ITEMS */}
-                                      {selectedBlock.type === 'match' && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Match Column Pairs</span>
-                                          <div className="cs-form-group">
-                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>Question Instruction</label>
-                                            <textarea className="cs-form-input" style={{ minHeight: '44px', fontSize: '0.75rem' }} value={selectedBlock.content?.question || ''}
-                                              onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Match left side options with correct right answers" />
-                                          </div>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
-                                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Match Pairs</span>
-                                            <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
-                                              onClick={() => {
-                                                const leftItems = [...(selectedBlock.content?.leftItems || []), 'Left Option'];
-                                                const rightItems = [...(selectedBlock.content?.rightItems || []), 'Right Match'];
-                                                handleUpdateBlockMultipleContent({ leftItems, rightItems });
-                                              }}>
-                                              + Add Match
-                                            </button>
-                                          </div>
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '200px', overflowY: 'auto' }}>
-                                            {(selectedBlock.content?.leftItems || []).map((left, pIdx) => (
-                                              <div key={pIdx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                  <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b' }}>Pair #{pIdx + 1}</span>
-                                                  <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
-                                                    onClick={() => {
-                                                      const leftItems = (selectedBlock.content.leftItems || []).filter((_, i) => i !== pIdx);
-                                                      const rightItems = (selectedBlock.content.rightItems || []).filter((_, i) => i !== pIdx);
-                                                      handleUpdateBlockMultipleContent({ leftItems, rightItems });
-                                                    }}>
-                                                    <FiTrash2 style={{ fontSize: '0.72rem' }} /></button>
-                                                </div>
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
-                                                  <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Column A (Left)" value={left}
-                                                    onChange={e => { const leftItems = [...selectedBlock.content.leftItems]; leftItems[pIdx] = e.target.value; handleUpdateBlockContent('leftItems', leftItems); }} />
-                                                  <input className="cs-form-input" style={{ height: '24px', fontSize: '0.72rem' }} type="text" placeholder="Column B (Right)" value={(selectedBlock.content?.rightItems || [])[pIdx] || ''}
-                                                    onChange={e => { const rightItems = [...(selectedBlock.content.rightItems || [])]; rightItems[pIdx] = e.target.value; handleUpdateBlockContent('rightItems', rightItems); }} />
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      )}
-
                                       {/* BLOCK TYPE: SEQUENCE */}
                                       {selectedBlock.type === 'sequence' && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -9801,20 +10330,28 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                </button>
                                              </div>
 
+                                             <div style={{ fontSize: '0.64rem', color: '#64748b', marginTop: '-0.25rem' }}>
+                                               Each word can have up to {selectedBlock.content?.gridSize || 10} letters (the grid is {selectedBlock.content?.gridSize || 10} x {selectedBlock.content?.gridSize || 10}).
+                                             </div>
                                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
                                                {(() => {
                                                  const rawWords = selectedBlock.content?.words || selectedBlock.content?.targetWords || ['ROAD', 'BOAT', 'GAMING'];
-                                                 return rawWords.map((w, wIdx) => (
-                                                   <div key={wIdx} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                 const maxLetters = selectedBlock.content?.gridSize || 10;
+                                                 return rawWords.map((w, wIdx) => {
+                                                   const tooLong = String(w || '').length > maxLetters; // e.g. a word saved before the grid was made smaller
+                                                   return (
+                                                   <div key={wIdx} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                      <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#64748b', minWidth: '24px' }}>#{wIdx + 1}</span>
                                                      <input
                                                        className="cs-form-input"
-                                                       style={{ height: '28px', fontSize: '0.72rem', textTransform: 'uppercase', flex: 1 }}
+                                                       style={{ height: '28px', fontSize: '0.72rem', textTransform: 'uppercase', flex: 1, ...(tooLong ? { borderColor: '#ef4444' } : {}) }}
                                                        type="text"
                                                        value={w}
+                                                       maxLength={maxLetters}
                                                        onChange={e => {
                                                          const updated = [...rawWords];
-                                                         updated[wIdx] = e.target.value.toUpperCase();
+                                                         updated[wIdx] = e.target.value.toUpperCase().slice(0, maxLetters);
                                                          handleUpdateBlockMultipleContent({ words: updated, targetWords: updated });
                                                        }}
                                                        placeholder="ENTER WORD"
@@ -9830,7 +10367,14 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                        <FiTrash2 style={{ fontSize: '0.75rem' }} />
                                                      </button>
                                                    </div>
-                                                 ));
+                                                   {tooLong && (
+                                                     <span style={{ marginLeft: '30px', fontSize: '0.62rem', color: '#b91c1c' }}>
+                                                       Too long for this grid: use {maxLetters} letters or fewer.
+                                                     </span>
+                                                   )}
+                                                   </div>
+                                                   );
+                                                 });
                                                })()}
                                              </div>
                                            </div>
@@ -9847,7 +10391,10 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                onChange={e => handleUpdateBlockContent('question', e.target.value)} placeholder="e.g. Match left side options with correct right answers" />
                                            </div>
                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
-                                             <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>Match Pairs</span>
+                                             <div>
+                                               <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569', display: 'block' }}>Match Pairs</span>
+                                               <span style={{ fontSize: '0.6rem', color: '#64748b' }}>Define each pair in matching order. Column B is automatically shuffled for students.</span>
+                                             </div>
                                              <button type="button" className="cs-btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
                                                onClick={() => {
                                                  const leftItems = [...(selectedBlock.content?.leftItems || []), { text: `Item ${(selectedBlock.content?.leftItems || []).length + 1}`, imageUrl: '' }];
@@ -10049,6 +10596,26 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                             </div>
                                           </div>
 
+                                          <div className="cs-form-group">
+                                            <label className="cs-form-label" style={{ fontSize: '0.68rem', color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                              <span>🎯 Targeted Answer (For Examination / Grading)</span>
+                                            </label>
+                                            <textarea
+                                              className="cs-form-input"
+                                              style={{ minHeight: '44px', fontSize: '0.75rem', borderColor: '#a7f3d0' }}
+                                              value={selectedBlock.content?.targetAnswer || selectedBlock.content?.targetText || selectedBlock.content?.correctAnswer || ''}
+                                              onChange={e => {
+                                                handleUpdateBlockMultipleContent({
+                                                  targetAnswer: e.target.value,
+                                                  targetText: e.target.value,
+                                                  correctAnswer: e.target.value,
+                                                  expectedResponse: e.target.value
+                                                });
+                                              }}
+                                              placeholder="e.g. Enter benchmark model answer or target response for examiner evaluation..."
+                                            />
+                                          </div>
+
                                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.6rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
                                             <input
                                               type="checkbox"
@@ -10114,11 +10681,13 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                     { speaker: 'npc', prompt: 'Hello! Welcome to our restaurant. What would you like to order?', expectedResponse: 'I would like to order...' }
                                                   ];
 
-                                                return conversation.map((turn, tIdx) => (
-                                                  <div key={tIdx} style={{ background: turn.speaker === 'npc' ? '#f5f3ff' : '#eff6ff', border: turn.speaker === 'npc' ? '1px solid #ddd6fe' : '1px solid #bfdbfe', borderRadius: '6px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                                return conversation.map((turn, tIdx) => {
+                                                  const isStudent = ['user', 'student', 'speaker_b', 'speakerb', 'b'].includes(String(turn.speaker || '').toLowerCase());
+                                                  return (
+                                                  <div key={tIdx} style={{ background: !isStudent ? '#f5f3ff' : '#eff6ff', border: !isStudent ? '1px solid #ddd6fe' : '1px solid #bfdbfe', borderRadius: '6px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: turn.speaker === 'npc' ? '#6b21a8' : '#1e40af' }}>
-                                                        Turn #{tIdx + 1} ({turn.speaker === 'npc' ? (selectedBlock.content?.npcCharacter || 'NPC') : (selectedBlock.content?.userRole || 'User')})
+                                                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: !isStudent ? '#6b21a8' : '#1e40af' }}>
+                                                        Turn #{tIdx + 1} ({!isStudent ? (selectedBlock.content?.npcCharacter || 'Speaker A') : (selectedBlock.content?.userRole || 'Speaker B')})
                                                       </span>
                                                       {conversation.length > 1 && (
                                                         <button
@@ -10141,7 +10710,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                         <select
                                                           className="cs-form-input"
                                                           style={{ height: '24px', fontSize: '0.7rem', padding: '0 2px' }}
-                                                          value={turn.speaker || 'npc'}
+                                                          value={isStudent ? 'user' : 'npc'}
                                                           onChange={e => {
                                                             const updated = conversation.map((t, i) => i === tIdx ? { ...t, speaker: e.target.value } : t);
                                                             handleUpdateBlockMultipleContent({ conversation: updated });
@@ -10162,29 +10731,36 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                             const updated = conversation.map((t, i) => i === tIdx ? { ...t, prompt: e.target.value } : t);
                                                             handleUpdateBlockMultipleContent({ conversation: updated });
                                                           }}
-                                                          placeholder={turn.speaker === 'npc' ? 'What Speaker A says...' : 'Speaker B response prompt...'}
+                                                          placeholder={!isStudent ? 'What Speaker A says...' : 'Speaker B response prompt...'}
                                                         />
                                                       </div>
                                                     </div>
 
-                                                    {turn.speaker === 'user' && (
+                                                    {isStudent && (
                                                       <div className="cs-form-group" style={{ marginBottom: 0 }}>
-                                                        <label className="cs-form-label" style={{ fontSize: '0.6rem' }}>Expected Model Answer</label>
-                                                        <input
+                                                        <label className="cs-form-label" style={{ fontSize: '0.62rem', color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                          <span>🎯 Targeted Answer (For Examination)</span>
+                                                        </label>
+                                                        <textarea
                                                           className="cs-form-input"
-                                                          style={{ height: '24px', fontSize: '0.7rem' }}
-                                                          type="text"
-                                                          value={turn.expectedResponse || ''}
+                                                          style={{ minHeight: '34px', fontSize: '0.7rem', borderColor: '#a7f3d0' }}
+                                                          value={turn.targetAnswer || turn.expectedResponse || (Array.isArray(turn.expectedStudentResponses) && turn.expectedStudentResponses[0]?.text) || ''}
                                                           onChange={e => {
-                                                            const updated = conversation.map((t, i) => i === tIdx ? { ...t, expectedResponse: e.target.value } : t);
+                                                            const val = e.target.value;
+                                                            const updated = conversation.map((t, i) => i === tIdx ? {
+                                                              ...t,
+                                                              targetAnswer: val,
+                                                              expectedResponse: val,
+                                                              expectedStudentResponses: [{ text: val }]
+                                                            } : t);
                                                             handleUpdateBlockMultipleContent({ conversation: updated });
                                                           }}
-                                                          placeholder="e.g. Can I please get a glass of water?"
+                                                          placeholder="e.g. Expected target answer for examination / grading..."
                                                         />
                                                       </div>
                                                     )}
 
-                                                    {turn.speaker === 'npc' && (
+                                                    {!isStudent && (
                                                       <MediaUploadField
                                                         label="Speaker A Audio Prompt (Optional)"
                                                         value={turn.audioUrl || turn.audio || ''}
@@ -10199,7 +10775,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                       />
                                                     )}
 
-                                                    {turn.speaker === 'user' && (
+                                                    {isStudent && (
                                                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '2px' }}>
                                                         <input
                                                           type="checkbox"
@@ -10216,7 +10792,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                       </div>
                                                     )}
                                                   </div>
-                                                ));
+                                                );
+                                                });
                                               })()}
                                             </div>
                                           </div>
@@ -10911,14 +11488,14 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                       {(['pronunciation', 'pronunciation_block'].includes((selectedBlock.type || '').toLowerCase())) && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Pronunciation Words Config</span>
+                                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Listen & Repeat Words</span>
                                             <button
                                               type="button"
                                               className="cs-btn-outline"
                                               style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem', border: '1px solid #0b57d0', color: '#0b57d0' }}
                                               onClick={() => {
                                                 const items = [...(selectedBlock.content?.items || [{ id: `item-1`, word: selectedBlock.content?.word || '', phonetic: selectedBlock.content?.phonetic || '' }])];
-                                                items.push({ id: `item-${Date.now()}`, word: '', phonetic: '' });
+                                                items.push({ id: `item-${Date.now()}`, word: '', phonetic: '', audioUrl: '' });
                                                 handleUpdateBlockContent('items', items);
                                               }}
                                             >
@@ -10936,6 +11513,55 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                               placeholder="e.g. Listen and practice pronouncing the target words correctly."
                                             />
                                           </div>
+
+                                          <div className="cs-form-group">
+                                            <label className="cs-form-label" style={{ fontSize: '0.68rem' }}>How students get the word</label>
+                                            <select
+                                              className="cs-form-input"
+                                              style={{ height: 'auto', minHeight: '36px', padding: '6px 10px', fontSize: '0.75rem', lineHeight: 1.4 }}
+                                              value={selectedBlock.content?.mode || 'read'}
+                                              onChange={e => handleUpdateBlockContent('mode', e.target.value)}
+                                            >
+                                              <option value="listen">Listen to the model audio, then repeat</option>
+                                              <option value="read">Read the word, then repeat</option>
+                                            </select>
+                                          </div>
+
+                                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            <div className="cs-form-group" style={{ flex: 1, marginBottom: 0 }}>
+                                              <label className="cs-form-label" style={{ fontSize: '0.62rem' }}>Seconds per recording</label>
+                                              <input
+                                                className="cs-form-input"
+                                                style={{ height: '26px', fontSize: '0.72rem' }}
+                                                type="number"
+                                                min={1}
+                                                max={60}
+                                                value={selectedBlock.content?.maxDuration ?? 5}
+                                                onChange={e => handleUpdateBlockContent('maxDuration', Math.max(1, Math.min(60, parseInt(e.target.value, 10) || 5)))}
+                                              />
+                                            </div>
+                                            <div className="cs-form-group" style={{ flex: 1, marginBottom: 0 }}>
+                                              <label className="cs-form-label" style={{ fontSize: '0.62rem' }}>Tries per word</label>
+                                              <input
+                                                className="cs-form-input"
+                                                style={{ height: '26px', fontSize: '0.72rem' }}
+                                                type="number"
+                                                min={1}
+                                                max={10}
+                                                value={selectedBlock.content?.attempts ?? 3}
+                                                onChange={e => handleUpdateBlockContent('attempts', Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 3)))}
+                                              />
+                                            </div>
+                                          </div>
+
+                                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.68rem', color: '#334155' }}>
+                                            <input
+                                              type="checkbox"
+                                              checked={selectedBlock.content?.showPhonetic !== false}
+                                              onChange={e => handleUpdateBlockContent('showPhonetic', e.target.checked)}
+                                            />
+                                            Show phonetic guide to students
+                                          </label>
 
                                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', maxHeight: '350px', overflowY: 'auto' }}>
                                             {(() => {
@@ -10997,7 +11623,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                   </div>
 
                                                   <MediaUploadField
-                                                    label="Target Audio Sample (Optional)"
+                                                    label={selectedBlock.content?.mode === 'listen' ? 'Model Audio (students hear this first)' : 'Model Audio (optional)'}
                                                     value={item.audioUrl || item.audio || ''}
                                                     mediaType="audio"
                                                     onChange={url => {
@@ -11009,6 +11635,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                     setActionLoading={setActionLoading}
                                                     showFeedback={showFeedback}
                                                   />
+                                                  {selectedBlock.content?.mode === 'listen' && !(item.audioUrl || item.audio) && (
+                                                    <span style={{ fontSize: '0.6rem', color: '#b45309' }}>No model audio yet. Students will see the word instead.</span>
+                                                  )}
                                                 </div>
                                               ));
                                             })()}
@@ -11040,51 +11669,99 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                 </span>
                                               </div>
                                               <div
+                                                data-hotspot-container="true"
                                                 onClick={(e) => {
-                                                  const rect = e.currentTarget.getBoundingClientRect();
-                                                  const relX = Math.round(((e.clientX - rect.left) / rect.width) * 400);
-                                                  const relY = Math.round(((e.clientY - rect.top) / rect.height) * 250);
-                                                  const hotspots = [...selectedBlock.content.hotspots];
-                                                  const targetIdx = activeHotspotIndex < hotspots.length ? activeHotspotIndex : 0;
-                                                  hotspots[targetIdx] = { ...hotspots[targetIdx], x: relX, y: relY };
-                                                  handleUpdateBlockContent('hotspots', hotspots);
+                                                  const img = e.currentTarget.querySelector('img');
+                                                  if (!img) return;
+                                                  const rect = img.getBoundingClientRect();
+                                                  if (rect.width <= 0 || rect.height <= 0) return;
+                                                  const clickX = e.clientX - rect.left;
+                                                  const clickY = e.clientY - rect.top;
+                                                  const clampedX = Math.max(0, Math.min(rect.width, clickX));
+                                                  const clampedY = Math.max(0, Math.min(rect.height, clickY));
+                                                  const relX = Math.round((clampedX / rect.width) * 400);
+                                                  const relY = Math.round((clampedY / rect.height) * 250);
+                                                  const hotspots = [...(selectedBlock.content?.hotspots || [])];
+                                                  if (hotspots.length > 0) {
+                                                    const targetIdx = activeHotspotIndex < hotspots.length ? activeHotspotIndex : 0;
+                                                    hotspots[targetIdx] = { ...hotspots[targetIdx], x: relX, y: relY };
+                                                    handleUpdateBlockContent('hotspots', hotspots);
+                                                  }
                                                 }}
-                                                style={{ position: 'relative', width: '100%', height: '140px', background: '#0f172a', borderRadius: '6px', overflow: 'hidden', cursor: 'crosshair' }}
+                                                style={{ position: 'relative', width: '100%', borderRadius: '6px', overflow: 'hidden', cursor: 'crosshair', background: '#e2e8f0', border: '1px solid #cbd5e1' }}
                                               >
-                                                <img
-                                                  src={resolveMediaUrl(selectedBlock.content.imageUrl)}
-                                                  alt="Hotspot target selector"
-                                                  draggable={false}
-                                                  style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
-                                                />
-                                                {(selectedBlock.content.hotspots || []).map((h, hidx) => {
-                                                  const isActive = hidx === (activeHotspotIndex < selectedBlock.content.hotspots.length ? activeHotspotIndex : 0);
-                                                  return (
-                                                    <div
-                                                      key={h.id || hidx}
-                                                      style={{
-                                                        position: 'absolute',
-                                                        left: `${(h.x / 400) * 100}%`,
-                                                        top: `${(h.y / 250) * 100}%`,
-                                                        width: '18px',
-                                                        height: '18px',
-                                                        borderRadius: '50%',
-                                                        background: isActive ? '#2563eb' : '#ef4444',
-                                                        border: '2px solid #ffffff',
-                                                        color: '#ffffff',
-                                                        fontSize: '9px',
-                                                        fontWeight: 'bold',
-                                                        transform: 'translate(-50%, -50%)',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        pointerEvents: 'none'
-                                                      }}
-                                                    >
-                                                      {hidx + 1}
-                                                    </div>
-                                                  );
-                                                })}
+                                                <div style={{ position: 'relative', width: '100%', display: 'block' }}>
+                                                  <img
+                                                    src={resolveMediaUrl(selectedBlock.content.imageUrl)}
+                                                    alt="Hotspot target selector"
+                                                    draggable={false}
+                                                    style={{ width: '100%', height: 'auto', display: 'block', pointerEvents: 'none', userSelect: 'none' }}
+                                                  />
+                                                  {(selectedBlock.content.hotspots || []).map((h, hidx) => {
+                                                    const isActive = hidx === (activeHotspotIndex < (selectedBlock.content.hotspots || []).length ? activeHotspotIndex : 0);
+                                                    return (
+                                                      <div
+                                                        key={h.id || hidx}
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          setActiveHotspotIndex(hidx);
+                                                        }}
+                                                        onPointerDown={(e) => {
+                                                          e.stopPropagation();
+                                                          setActiveHotspotIndex(hidx);
+                                                          const container = e.currentTarget.closest('[data-hotspot-container]');
+                                                          const img = container?.querySelector('img');
+                                                          if (!img) return;
+
+                                                          const onPointerMove = (moveEv) => {
+                                                            const rect = img.getBoundingClientRect();
+                                                            if (rect.width <= 0 || rect.height <= 0) return;
+                                                            const clampedX = Math.max(0, Math.min(rect.width, moveEv.clientX - rect.left));
+                                                            const clampedY = Math.max(0, Math.min(rect.height, moveEv.clientY - rect.top));
+                                                            const relX = Math.round((clampedX / rect.width) * 400);
+                                                            const relY = Math.round((clampedY / rect.height) * 250);
+                                                            const list = [...(selectedBlock.content?.hotspots || [])];
+                                                            if (list[hidx]) {
+                                                              list[hidx] = { ...list[hidx], x: relX, y: relY };
+                                                              handleUpdateBlockContent('hotspots', list);
+                                                            }
+                                                          };
+
+                                                          const onPointerUp = () => {
+                                                            window.removeEventListener('pointermove', onPointerMove);
+                                                            window.removeEventListener('pointerup', onPointerUp);
+                                                          };
+
+                                                          window.addEventListener('pointermove', onPointerMove);
+                                                          window.addEventListener('pointerup', onPointerUp);
+                                                        }}
+                                                        style={{
+                                                          position: 'absolute',
+                                                          left: `${(h.x / 400) * 100}%`,
+                                                          top: `${(h.y / 250) * 100}%`,
+                                                          width: '20px',
+                                                          height: '20px',
+                                                          borderRadius: '50%',
+                                                          background: isActive ? '#2563eb' : '#ef4444',
+                                                          border: '2px solid #ffffff',
+                                                          boxShadow: isActive ? '0 0 8px rgba(37,99,235,0.8)' : '0 1px 4px rgba(0,0,0,0.3)',
+                                                          color: '#ffffff',
+                                                          fontSize: '10px',
+                                                          fontWeight: 'bold',
+                                                          transform: 'translate(-50%, -50%)',
+                                                          display: 'flex',
+                                                          alignItems: 'center',
+                                                          justifyContent: 'center',
+                                                          cursor: 'grab',
+                                                          zIndex: 4,
+                                                          userSelect: 'none'
+                                                        }}
+                                                      >
+                                                        {hidx + 1}
+                                                      </div>
+                                                    );
+                                                  })}
+                                                </div>
                                               </div>
                                             </div>
                                           )}
@@ -11100,8 +11777,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                                 hotspots.push({
                                                   id: `hotspot_${Date.now()}`,
                                                   name: `Target ${hotspots.length + 1}`,
-                                                  x: 100,
-                                                  y: 100,
+                                                  x: 200,
+                                                  y: 125,
                                                   width: 80,
                                                   height: 80,
                                                   info: 'Exploration info description...',
@@ -11338,10 +12015,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                             how: 'Provide the list of target words to hide and set the grid dimension size (e.g. 8x8 or 10x10).'
                                           };
                                         case 'pronunciation':
+                                        case 'listen_repeat':
                                           return {
-                                            what: 'Speaking pronunciation trainer.',
-                                            does: 'Renders target words with phonetic spelling and records student speaking attempt to check accuracy.',
-                                            how: 'Input words/sentences, write the phonetic hint guide (e.g. /həˈloʊ/), and configure voice settings.'
+                                            what: 'Listen & Repeat speaking practice.',
+                                            does: 'Students hear a model recording (Listen mode) or read the word (Read mode), then record themselves saying it.',
+                                            how: 'Choose the mode, add each word with an optional phonetic guide, upload model audio for Listen mode, and set seconds per recording and tries per word.'
                                           };
                                         case 'role_play':
                                           return {
@@ -11553,6 +12231,8 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                       {screens.map((scr, idx) => {
                         const elementsCount = scr.content?.elements?.length || 0;
+                        const markedBlocks = (scr.content?.elements || []).filter(needsMarks);
+                        const screenMarks = markedBlocks.reduce((sum, el) => sum + (Number(el.content?.marks) || 0), 0);
                         return (
                           <div
                             key={scr.id}
@@ -11605,6 +12285,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                                 </h3>
                                 <div style={{ display: 'flex', gap: '8px', fontSize: '0.72rem', color: '#64748b', marginTop: '2px', alignItems: 'center' }}>
                                   <span>🧱 {elementsCount} {elementsCount === 1 ? 'Block' : 'Blocks'}</span>
+                                  {markedBlocks.length > 0 && (
+                                    <span data-testid="screen-marks" style={{ color: '#7c3aed', fontWeight: 700 }}>🎯 {screenMarks} {screenMarks === 1 ? 'Mark' : 'Marks'}</span>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -12012,6 +12695,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
 
                   <div style={{ display: 'flex', gap: '0.65rem' }}>
+                    {LMS_PREVIEW_URL && (
+                      <button
+                        className="cs-btn-outline"
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '0.5rem 1rem', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', color: '#374151' }}
+                        onClick={() => setLmsPreviewOn(v => !v)}
+                      >
+                        {lmsPreviewOn ? 'Show CMS preview' : 'Show LMS preview'}
+                      </button>
+                    )}
                     <button
                       className="cs-btn-outline"
                       style={{ display: 'flex', alignItems: 'center', gap: '6px', background: isPreviewFullscreen ? '#eff6ff' : '#ffffff', border: '1px solid #0b57d0', borderRadius: '10px', padding: '0.5rem 1rem', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', color: '#0b57d0' }}
@@ -12041,8 +12733,15 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                   </div>
                 </div>
 
+                {/* The real LMS Engine (same cards and zone themes as the student app) */}
+                {lmsPreviewOn && LMS_PREVIEW_URL && (previewPayload?.experience?.id || selectedExperience?.id) && (
+                  <div style={{ display: 'flex', flex: 1, overflow: 'hidden', height: 'calc(100vh - 64px)', background: '#0f172a' }}>
+                    <LmsEnginePreview canEdit experienceId={previewPayload?.experience?.id || selectedExperience.id} />
+                  </div>
+                )}
+
                 {/* Main Preview layout - side outline + center workspace */}
-                <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 0, flex: 1, overflow: 'hidden', height: 'calc(100vh - 64px)' }}>
+                <div style={{ display: (lmsPreviewOn && LMS_PREVIEW_URL) ? 'none' : 'grid', gridTemplateColumns: '280px 1fr', gap: 0, flex: 1, overflow: 'hidden', height: 'calc(100vh - 64px)' }}>
 
                   {/* Left Side: Experience outline navigation */}
                   <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', background: '#ffffff', borderRight: '1px solid #cbd5e1', overflowY: 'auto', boxSizing: 'border-box' }}>
@@ -12325,6 +13024,30 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                       </button>
                     </div>
 
+                    {unsavedLessonChanges.length > 0 && (
+                      <div data-testid="publish-unsaved-notice" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '0.6rem 0.8rem', margin: '0 0 1rem 0', fontSize: '0.74rem', color: '#92400e' }}>
+                        <span style={{ flex: 1, minWidth: '220px' }}>
+                          The Lesson Builder has changes that are not saved yet ({unsavedLessonChanges.join(', ')}). This page shows, and publishes, the saved lesson "{selectedExperience?.title}".
+                        </span>
+                        <button
+                          type="button"
+                          className="cs-btn-outline"
+                          disabled={actionLoading}
+                          style={{ padding: '0.3rem 0.7rem', fontSize: '0.72rem', fontWeight: 700, color: '#92400e', borderColor: '#f59e0b', background: '#ffffff', cursor: 'pointer' }}
+                          onClick={async () => {
+                            const band = levelBand(experienceForm.experience_type, experienceForm.difficulty);
+                            if (!levelFits(experienceForm.level, band)) {
+                              showFeedback(`Open the Lesson Builder and enter the Level (${band[0]} to ${band[1]}) first.`, 'error');
+                              return;
+                            }
+                            await handleSaveExperience();
+                          }}
+                        >
+                          Save these changes
+                        </button>
+                      </div>
+                    )}
+
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                       <div className="cs-form-group">
                         <label className="cs-form-label" style={{ fontSize: '0.75rem' }}>Version Number <span style={{ color: '#ef4444' }}>*</span></label>
@@ -12337,17 +13060,11 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           value={publishVersion}
                           onChange={e => setPublishVersion(e.target.value)}
                         />
-                      </div>
-                      <div className="cs-form-group">
-                        <label className="cs-form-label" style={{ fontSize: '0.75rem' }}>Release Notes <span style={{ color: '#ef4444' }}>*</span></label>
-                        <input
-                          className="cs-form-input"
-                          style={{ fontSize: '0.8rem', padding: '0.4rem 0.6rem' }}
-                          type="text"
-                          placeholder="Describe build updates..."
-                          value={publishNotes}
-                          onChange={e => setPublishNotes(e.target.value)}
-                        />
+                        {versionNameTaken && (
+                          <span data-testid="publish-version-warning" style={{ display: 'block', marginTop: '0.3rem', fontSize: '0.72rem', fontWeight: 600, color: '#b91c1c' }}>
+                            This version name already exists. Please enter a different name.
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -12364,7 +13081,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                           borderRadius: '10px'
                         }}
                         onClick={handlePublishExperience}
-                        disabled={actionLoading}
+                        disabled={actionLoading || versionNameTaken}
                       >
                         {actionLoading ? 'Compiling Build...' : 'Build & Publish the Package'}
                       </button>
@@ -12373,11 +13090,95 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
 
                   {/* Card 2: Published Packages Build Table */}
                   <div className="cs-card" style={{ padding: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '1rem', flexWrap: 'wrap' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                         <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>Published Build History</h3>
                         {publishHistory.length > 0 && (
                           <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{publishHistory.length} build{publishHistory.length !== 1 ? 's' : ''} total</span>
+                        )}
+
+                        {/* Bulk & Select Download Action Controls */}
+                        {selectedPublishHistoryIds.length > 0 ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#eff6ff', padding: '3px 10px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1d4ed8' }}>
+                              ✓ {selectedPublishHistoryIds.length} selected
+                            </span>
+                            <button
+                              type="button"
+                              className="cs-btn-primary"
+                              disabled={bulkDownloadLoading}
+                              onClick={() => handleBulkDownloadPackages()}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                padding: '4px 10px',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                borderRadius: '6px',
+                                background: '#2563eb',
+                                color: '#ffffff',
+                                border: 'none',
+                                cursor: bulkDownloadLoading ? 'wait' : 'pointer'
+                              }}
+                            >
+                              <FiDownload style={{ fontSize: '0.78rem' }} />
+                              {bulkDownloadLoading ? 'Downloading...' : `Download Selected (${selectedPublishHistoryIds.length})`}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPublishHistoryIds([])}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#64748b',
+                                fontSize: '0.7rem',
+                                cursor: 'pointer',
+                                textDecoration: 'underline'
+                              }}
+                            >
+                              Deselect
+                            </button>
+                          </div>
+                        ) : (
+                          publishHistory.length > 0 && (
+                            <button
+                              type="button"
+                              disabled={bulkDownloadLoading}
+                              onClick={() => {
+                                const allFilteredIds = publishHistory.filter(pkg => {
+                                  if (!publishSearch.trim()) return true;
+                                  const query = publishSearch.toLowerCase();
+                                  const title = (pkg.experience_title || selectedExperience?.title || '').toLowerCase();
+                                  const ver = `v${pkg.version_number || ''}`.toLowerCase();
+                                  const zip = `${title.replace(/\s+/g, '_')}_v${pkg.version_number || '1.0.0'}.zip`.toLowerCase();
+                                  return title.includes(query) || ver.includes(query) || zip.includes(query);
+                                }).map(p => p.id);
+                                if (allFilteredIds.length === 0) {
+                                  showFeedback('No builds found to download.', 'warning');
+                                  return;
+                                }
+                                handleBulkDownloadPackages(allFilteredIds);
+                              }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                padding: '4px 10px',
+                                fontSize: '0.72rem',
+                                fontWeight: 600,
+                                borderRadius: '6px',
+                                background: '#f8fafc',
+                                color: '#334155',
+                                border: '1px solid #cbd5e1',
+                                cursor: bulkDownloadLoading ? 'wait' : 'pointer'
+                              }}
+                              title="Bulk download all builds matching the current view"
+                            >
+                              <FiDownload style={{ fontSize: '0.78rem', color: '#0284c7' }} />
+                              {bulkDownloadLoading ? 'Downloading...' : 'Bulk Download All'}
+                            </button>
+                          )
                         )}
                       </div>
 
@@ -12428,92 +13229,9 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         )}
                       </div>
                     </div>
-                    <div className="cs-table-wrap">
-                      <table className="cs-table">
-                        <thead>
-                          <tr>
-                            <th>L.No</th>
-                            <th>LESSON</th>
-                            <th>VERSION</th>
-                            <th>PACKAGE FILE</th>
-                            <th>SIZE</th>
-                            <th>PUBLISHED ON</th>
-                            <th>STATUS</th>
-                            <th>DOWNLOAD</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(() => {
-                            const PUBLISH_PER_PAGE = 5;
-                            const filteredHistory = publishHistory.filter(pkg => {
-                              if (!publishSearch.trim()) return true;
-                              const query = publishSearch.toLowerCase();
-                              const title = (pkg.experience_title || selectedExperience?.title || '').toLowerCase();
-                              const ver = `v${pkg.version_number || ''}`.toLowerCase();
-                              const zip = `${title.replace(/\s+/g, '_')}_v${pkg.version_number || '1.0.0'}.zip`.toLowerCase();
-                              return title.includes(query) || ver.includes(query) || zip.includes(query);
-                            });
-                            const paginatedHistory = filteredHistory.slice((publishPage - 1) * PUBLISH_PER_PAGE, publishPage * PUBLISH_PER_PAGE);
-                            if (filteredHistory.length === 0) {
-                              return (
-                                <tr>
-                                  <td colSpan="8" style={{ textAlign: 'center', color: '#64748b', padding: '1.5rem', fontSize: '0.82rem' }}>
-                                    {publishSearch.trim() ? `No builds found matching "${publishSearch}".` : 'No builds published yet. Specify a version above to compile.'}
-                                  </td>
-                                </tr>
-                              );
-                            }
-                            return paginatedHistory.map((pkg, idx) => {
-                              const lessonTitle = pkg.experience_title || selectedExperience?.title || 'Experience';
-                              const zipFilename = `${lessonTitle.replace(/\s+/g, '_')}_v${pkg.version_number || '1.0.0'}.zip`;
-                              // The actual overall list index for the current item
-                              const overallIdx = (publishPage - 1) * PUBLISH_PER_PAGE + idx;
-                              const isLatest = publishHistory.findIndex(p => p.id === pkg.id) === 0;
-                              return (
-                                <tr key={pkg.id}>
-                                  <td style={{ fontWeight: 700, color: '#475569', width: '36px', textAlign: 'center' }}>{overallIdx + 1}</td>
-                                  <td
-                                    style={{ fontWeight: 700, color: '#0f172a', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                                    title={lessonTitle}
-                                  >
-                                    {lessonTitle}
-                                  </td>
-                                  <td style={{ fontWeight: 700, color: '#0284c7', whiteSpace: 'nowrap' }}>v{pkg.version_number || '—'}</td>
-                                  <td style={{ color: '#475569', fontSize: '0.68rem', fontFamily: 'monospace', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={zipFilename}>{zipFilename}</td>
-                                  <td style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}>{pkg.package_size ? formatBytes(pkg.package_size) : '—'}</td>
-                                  <td style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}>{pkg.published_at ? new Date(pkg.published_at).toLocaleDateString() + ', ' + new Date(pkg.published_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
-                                  <td style={{ whiteSpace: 'nowrap' }}>
-                                    <span className={`cs-badge ${isLatest ? 'cs-badge-published' : ''}`}
-                                      style={isLatest ? { fontSize: '0.62rem', padding: '2px 6px' } : { background: '#f1f5f9', color: '#64748b', fontSize: '0.62rem', padding: '2px 6px' }}>
-                                      {isLatest ? 'LATEST' : `BUILD ${pkg.build_number}`}
-                                    </span>
-                                  </td>
-                                  <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
-                                    <div style={{ display: 'inline-flex' }}>
-                                      <button
-                                        title="Download package (.zip)"
-                                        data-testid="download-elab-btn"
-                                        onClick={() => handleDownloadPackageElab(pkg.id, zipFilename)}
-                                        style={{
-                                          background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe',
-                                          borderRadius: 5, padding: '3px 7px', fontSize: '0.68rem',
-                                          fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap'
-                                        }}
-                                      >
-                                        ⬇ .zip
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            });
-                          })()}
-                        </tbody>
-                      </table>
-                    </div>
 
-                    {/* Pagination Footer */}
                     {(() => {
+                      const PUBLISH_PER_PAGE = 5;
                       const filteredHistory = publishHistory.filter(pkg => {
                         if (!publishSearch.trim()) return true;
                         const query = publishSearch.toLowerCase();
@@ -12522,47 +13240,172 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                         const zip = `${title.replace(/\s+/g, '_')}_v${pkg.version_number || '1.0.0'}.zip`.toLowerCase();
                         return title.includes(query) || ver.includes(query) || zip.includes(query);
                       });
-                      const totalFiltered = filteredHistory.length;
-                      const maxPage = Math.max(1, Math.ceil(totalFiltered / 5));
-
-                      if (totalFiltered <= 5 && !publishSearch.trim()) return null;
+                      const paginatedHistory = filteredHistory.slice((publishPage - 1) * PUBLISH_PER_PAGE, publishPage * PUBLISH_PER_PAGE);
+                      const isAllPageSelected = paginatedHistory.length > 0 && paginatedHistory.every(p => selectedPublishHistoryIds.includes(p.id));
 
                       return (
-                        <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #f1f5f9' }}>
-                          <div className="cs-pagination-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                              Showing {totalFiltered > 0 ? (publishPage - 1) * 5 + 1 : 0} to {Math.min(publishPage * 5, totalFiltered)} of {totalFiltered} builds
-                            </span>
-                            <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                              <button
-                                className="cs-page-link"
-                                disabled={publishPage === 1}
-                                onClick={() => setPublishPage(publishPage - 1)}
-                                style={{ cursor: publishPage === 1 ? 'not-allowed' : 'pointer', opacity: publishPage === 1 ? 0.5 : 1 }}
-                              >
-                                &lt;
-                              </button>
-                              {Array.from({ length: maxPage }, (_, i) => i + 1).map(pageNum => (
-                                <button
-                                  key={pageNum}
-                                  className={`cs-page-link ${publishPage === pageNum ? 'active' : ''}`}
-                                  onClick={() => setPublishPage(pageNum)}
-                                  style={{ cursor: 'pointer' }}
-                                >
-                                  {pageNum}
-                                </button>
-                              ))}
-                              <button
-                                className="cs-page-link"
-                                disabled={publishPage >= maxPage}
-                                onClick={() => setPublishPage(publishPage + 1)}
-                                style={{ cursor: publishPage >= maxPage ? 'not-allowed' : 'pointer', opacity: publishPage >= maxPage ? 0.5 : 1 }}
-                              >
-                                &gt;
-                              </button>
-                            </div>
+                        <>
+                          <div className="cs-table-wrap">
+                            <table className="cs-table">
+                              <thead>
+                                <tr>
+                                  <th style={{ width: '38px', textAlign: 'center', padding: '0.5rem 0.25rem' }}>
+                                    <input
+                                      type="checkbox"
+                                      title={isAllPageSelected ? "Deselect page" : "Select all on this page"}
+                                      checked={isAllPageSelected}
+                                      onChange={() => {
+                                        const pageIds = paginatedHistory.map(p => p.id);
+                                        if (isAllPageSelected) {
+                                          setSelectedPublishHistoryIds(prev => prev.filter(id => !pageIds.includes(id)));
+                                        } else {
+                                          setSelectedPublishHistoryIds(prev => Array.from(new Set([...prev, ...pageIds])));
+                                        }
+                                      }}
+                                      style={{ cursor: 'pointer' }}
+                                    />
+                                  </th>
+                                  <th>L.No</th>
+                                  <th>GRADE</th>
+                                  <th>PACKAGE TYPE</th>
+                                  <th>LESSON</th>
+                                  <th>VERSION</th>
+                                  <th>SIZE</th>
+                                  <th>PUBLISHED ON</th>
+                                  <th>STATUS</th>
+                                  <th>DOWNLOAD</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredHistory.length === 0 ? (
+                                  <tr>
+                                    <td colSpan="10" style={{ textAlign: 'center', color: '#64748b', padding: '1.5rem', fontSize: '0.82rem' }}>
+                                      {publishSearch.trim() ? `No builds found matching "${publishSearch}".` : 'No builds published yet. Specify a version above to compile.'}
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  paginatedHistory.map((pkg, idx) => {
+                                    const lessonTitle = pkg.experience_title || selectedExperience?.title || 'Experience';
+                                    const zipFilename = `${lessonTitle.replace(/\s+/g, '_')}_v${pkg.version_number || '1.0.0'}.zip`;
+                                    const overallIdx = (publishPage - 1) * PUBLISH_PER_PAGE + idx;
+                                    const isLatest = publishHistory.findIndex(p => p.id === pkg.id) === 0;
+                                    const isSelected = selectedPublishHistoryIds.includes(pkg.id);
+                                    return (
+                                      <tr key={pkg.id} style={{ background: isSelected ? '#f0f9ff' : undefined }}>
+                                        <td style={{ textAlign: 'center', width: '38px', padding: '0.5rem 0.25rem' }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            onChange={() => {
+                                              setSelectedPublishHistoryIds(prev =>
+                                                prev.includes(pkg.id) ? prev.filter(id => id !== pkg.id) : [...prev, pkg.id]
+                                              );
+                                            }}
+                                            style={{ cursor: 'pointer' }}
+                                            title={`Select ${lessonTitle} v${pkg.version_number}`}
+                                          />
+                                        </td>
+                                        <td style={{ fontWeight: 700, color: '#475569', width: '36px', textAlign: 'center' }}>{overallIdx + 1}</td>
+                                        <td style={{ whiteSpace: 'nowrap', fontSize: '0.75rem' }}>{pkg.grade_name || '—'}</td>
+                                        <td style={{ whiteSpace: 'nowrap' }}>
+                                          <span style={{
+                                            padding: '2px 8px', borderRadius: 999, fontSize: '0.65rem', fontWeight: 700,
+                                            background: pkg.experience_type === 'ASSESSMENT' ? '#f3e8ff' : '#e0f2fe',
+                                            color: pkg.experience_type === 'ASSESSMENT' ? '#7c3aed' : '#0284c7'
+                                          }}>
+                                            {pkg.experience_type === 'ASSESSMENT' ? 'Assessment' : pkg.experience_type === 'LESSON' ? 'Lesson' : '—'}
+                                          </span>
+                                        </td>
+                                        <td
+                                          style={{ fontWeight: 700, color: '#0f172a', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                          title={lessonTitle}
+                                        >
+                                          {lessonTitle}
+                                        </td>
+                                        <td style={{ fontWeight: 700, color: '#0284c7', whiteSpace: 'nowrap' }}>v{pkg.version_number || '—'}</td>
+                                        <td style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}>{pkg.package_size ? formatBytes(pkg.package_size) : '—'}</td>
+                                        <td style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}>{pkg.published_at ? new Date(pkg.published_at).toLocaleDateString() + ', ' + new Date(pkg.published_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                                        <td style={{ whiteSpace: 'nowrap' }}>
+                                          <span className={`cs-badge ${isLatest ? 'cs-badge-published' : ''}`}
+                                            style={isLatest ? { fontSize: '0.62rem', padding: '2px 6px' } : { background: '#f1f5f9', color: '#64748b', fontSize: '0.62rem', padding: '2px 6px' }}>
+                                            {isLatest ? 'LATEST' : `BUILD ${pkg.build_number}`}
+                                          </span>
+                                        </td>
+                                        <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
+                                          <div style={{ display: 'inline-flex' }}>
+                                            <button
+                                              title="Download package (.zip)"
+                                              data-testid="download-elab-btn"
+                                              onClick={() => handleDownloadPackageElab(pkg.id, zipFilename)}
+                                              style={{
+                                                background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe',
+                                                borderRadius: 5, padding: '3px 7px', fontSize: '0.68rem',
+                                                fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap'
+                                              }}
+                                            >
+                                              ⬇ .zip
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
+                                )}
+                              </tbody>
+                            </table>
                           </div>
-                        </div>
+
+                          {/* Pagination Footer */}
+                          {(() => {
+                            const totalFiltered = filteredHistory.length;
+                            const maxPage = Math.max(1, Math.ceil(totalFiltered / PUBLISH_PER_PAGE));
+                            if (totalFiltered <= PUBLISH_PER_PAGE && !publishSearch.trim()) return null;
+                            return (
+                              <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #f1f5f9' }}>
+                                <div className="cs-pagination-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                      Showing {totalFiltered > 0 ? (publishPage - 1) * PUBLISH_PER_PAGE + 1 : 0} to {Math.min(publishPage * PUBLISH_PER_PAGE, totalFiltered)} of {totalFiltered} builds
+                                    </span>
+                                    {selectedPublishHistoryIds.length > 0 && (
+                                      <span style={{ fontSize: '0.75rem', color: '#0284c7', fontWeight: 600 }}>
+                                        • {selectedPublishHistoryIds.length} selected
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                                    <button
+                                      className="cs-page-link"
+                                      disabled={publishPage === 1}
+                                      onClick={() => setPublishPage(publishPage - 1)}
+                                      style={{ cursor: publishPage === 1 ? 'not-allowed' : 'pointer', opacity: publishPage === 1 ? 0.5 : 1 }}
+                                    >
+                                      &lt;
+                                    </button>
+                                    {pageItems(publishPage, maxPage).map(pageNum => (
+                                      <button
+                                        key={pageNum}
+                                        className={`cs-page-link ${publishPage === pageNum ? 'active' : ''}`}
+                                        onClick={() => setPublishPage(pageNum)}
+                                        style={{ cursor: 'pointer' }}
+                                      >
+                                        {pageNum}
+                                      </button>
+                                    ))}
+                                    <button
+                                      className="cs-page-link"
+                                      disabled={publishPage >= maxPage}
+                                      onClick={() => setPublishPage(publishPage + 1)}
+                                      style={{ cursor: publishPage >= maxPage ? 'not-allowed' : 'pointer', opacity: publishPage >= maxPage ? 0.5 : 1 }}
+                                    >
+                                      &gt;
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </>
                       );
                     })()}
                   </div>

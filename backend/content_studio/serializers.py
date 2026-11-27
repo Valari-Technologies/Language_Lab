@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from .levels import level_band, level_taken_by, parse_level
 from .models import (
     Experience,
     LearningOutcome,
@@ -223,6 +224,41 @@ def validate_strict_fields(serializer, attrs):
     return attrs
 
 
+def validate_lms_level(serializer, attrs):
+    """The LMS level typed in the Lesson Builder (pending_level): right range for the type, not used by another lesson."""
+    level = attrs.get("pending_level")
+    if level is None:
+        return attrs
+    instance = serializer.instance
+    experience_type = attrs.get("experience_type") or (instance.experience_type if instance else "LESSON")
+    grade = attrs.get("grade") or (instance.grade if instance else None)
+    level, error = parse_level(experience_type, level)
+    if error:
+        raise serializers.ValidationError({"pending_level": error})
+
+    # The difficulty decides which levels may be chosen (lessons 1-10 / 11-20 / 21-30, assessments 1-2 / 3-4 / 5-6).
+    # A lesson saved before this rule keeps its level until the creator changes the level, type or difficulty.
+    difficulty = attrs.get("difficulty") or (instance.difficulty if instance else None)
+    band = level_band(experience_type, difficulty)
+    unchanged = bool(
+        instance
+        and level in (instance.pending_level, instance.level)
+        and attrs.get("difficulty") in (None, instance.difficulty)
+        and attrs.get("experience_type") in (None, instance.experience_type)
+    )
+    if band and not unchanged and not band[0] <= level <= band[1]:
+        raise serializers.ValidationError({
+            "pending_level": f"Level {level} is not allowed for {str(difficulty).capitalize()}. "
+                             f"Choose a level from {band[0]} to {band[1]}."
+        })
+    taken = level_taken_by(grade, experience_type, level, exclude_pk=instance.pk if instance else None) if grade else None
+    if taken:
+        raise serializers.ValidationError(
+            {"pending_level": f"Level {level} is already used by '{taken.title}'. Choose another level."}
+        )
+    return attrs
+
+
 class ExperienceSerializer(serializers.ModelSerializer):
     grade_name = serializers.CharField(source="grade.grade_name", read_only=True)
     created_by_name = serializers.CharField(source="created_by.full_name", default="", read_only=True)
@@ -242,6 +278,8 @@ class ExperienceSerializer(serializers.ModelSerializer):
             "difficulty",
             "difficulty_display",
             "experience_type",
+            "level",
+            "pending_level",
             "mastery_threshold",
             "estimated_duration",
             "thumbnail",
@@ -254,7 +292,7 @@ class ExperienceSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_by", "is_deleted"]
+        read_only_fields = ["created_by", "is_deleted", "level"]
 
     def validate_description(self, value):
         if value and len(value) > 200:
@@ -262,6 +300,7 @@ class ExperienceSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        validate_lms_level(self, attrs)
         return validate_strict_fields(self, attrs)
 
 
@@ -286,6 +325,8 @@ class ExperienceDetailSerializer(serializers.ModelSerializer):
             "difficulty",
             "difficulty_display",
             "experience_type",
+            "level",
+            "pending_level",
             "mastery_threshold",
             "estimated_duration",
             "thumbnail",
@@ -300,7 +341,7 @@ class ExperienceDetailSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_by", "is_deleted"]
+        read_only_fields = ["created_by", "is_deleted", "level"]
 
     def validate_description(self, value):
         if value and len(value) > 200:
@@ -308,6 +349,7 @@ class ExperienceDetailSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        validate_lms_level(self, attrs)
         return validate_strict_fields(self, attrs)
 
 

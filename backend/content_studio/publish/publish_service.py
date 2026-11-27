@@ -94,7 +94,7 @@ class PublishService:
         else:
             if version:
                 if PublishVersion.objects.filter(
-                    published_package=package, version_number=version
+                    published_package__experience=experience, version_number__iexact=str(version).strip()
                 ).exists():
                     raise ValueError(("DUPLICATE_VERSION", version))
                 new_version = version
