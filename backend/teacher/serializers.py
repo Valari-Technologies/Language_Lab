@@ -43,6 +43,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "grade",
             "section",
             "academic_year",
+            "gender",
             "is_active",
             "school",
             "school_name",

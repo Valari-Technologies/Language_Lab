@@ -98,6 +98,7 @@ class RollNumberLoginAPIView(APIView):
                 "roll_number": getattr(student, "lms_code", None) or user.username,
                 "lms_code": getattr(student, "lms_code", None) or user.username,
                 "full_name": user.full_name or user.username,
+                "gender": getattr(student, "gender", "") or "",
                 "email": user.email or ""
             },
             "school": {

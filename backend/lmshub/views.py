@@ -234,6 +234,7 @@ def login(request, device):
             "id": student.student_id,
             "name": user.full_name or user.username,
             "login_code": student.lms_code or user.username,
+            "gender": student.gender or "",
             "grade": grade,
             "grade_number": grade_number,
         },
@@ -362,6 +363,7 @@ def offline_data(request, device):
         students.append({
             "id": student.student_id,
             "name": student.user.full_name or student.user.username,
+            "gender": student.gender or "",
             "grade": grade,
             "grade_number": grade_number,
             "gradeId": grade_id,

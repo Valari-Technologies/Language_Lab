@@ -913,8 +913,9 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         grade: formattedGrade,
         section: entity.section || '',
         academic_year: entity.academic_year || defaultSchoolAcademicYear,
+        gender: entity.gender || '',
         is_active: entity.is_active !== undefined ? entity.is_active : true
-      } : { username:'', password:'', email:'', full_name:'', roll_no:'', grade:'', section:'', academic_year: defaultSchoolAcademicYear, is_active:true });
+      } : { username:'', password:'', email:'', full_name:'', roll_no:'', grade:'', section:'', academic_year: defaultSchoolAcademicYear, gender:'', is_active:true });
     } else if (tab === 'classes') {
       const extractedSec = entity && entity.class_name && ['A','B','C','D','E','F'].includes(entity.class_name.slice(-1).toUpperCase()) ? entity.class_name.slice(-1).toUpperCase() : 'A';
       const defaultGradeId = grades[0]?.id || '';
@@ -3839,6 +3840,16 @@ const SchoolDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                             setStudentForm({...studentForm, academic_year: formatted});
                           }} placeholder="2026-2027" required/>
                       </div>
+                    </div>
+
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Gender *</label>
+                      <select className="sd-form-input" value={studentForm.gender || ''}
+                        onChange={e => setStudentForm({...studentForm, gender: e.target.value})} required>
+                        <option value="">-- Select Gender --</option>
+                        <option value="boy">Boy</option>
+                        <option value="girl">Girl</option>
+                      </select>
                     </div>
 
                     <label className="sd-checkbox-label" style={{ marginBottom: '1rem' }}>
