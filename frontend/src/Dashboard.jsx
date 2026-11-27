@@ -3900,9 +3900,9 @@ const Dashboard = ({ user: propUser, onLogout, activeTab, onTabChange, onUpdateU
                         </tr>
                       ) : (
                         paginate(filterList(submittedExperiences), saExpPage).map((exp, idx) => (
-                          <tr key={exp.id || idx}>
+                          <tr key={exp.id || idx} style={{ cursor: isSelectMode ? 'default' : 'pointer' }} onClick={() => { if (!isSelectMode) handlePreviewExperience(exp); }}>
                             {isSelectMode && (
-                              <td className="sd-checkbox-cell" style={{ width: '40px', minWidth: '40px', textAlign: 'center', verticalAlign: 'middle', padding: '0.75rem 0' }}>
+                              <td className="sd-checkbox-cell" onClick={(e) => e.stopPropagation()} style={{ width: '40px', minWidth: '40px', textAlign: 'center', verticalAlign: 'middle', padding: '0.75rem 0' }}>
                                 <input
                                   type="checkbox"
                                   style={{ cursor: 'pointer', transform: 'scale(1.1)', verticalAlign: 'middle' }}
