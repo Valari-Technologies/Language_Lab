@@ -7291,7 +7291,7 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                             </tr>
                           ) : (
                             experiences.map((row, idx) => (
-                              <tr key={row.id} style={{ cursor: 'pointer' }} onClick={() => handleViewDetails(row.id)}>
+                              <tr key={row.id} style={{ cursor: 'pointer' }} onClick={() => handleStartPreview(row.id)}>
                                 {isSelectMode && (
                                   <td style={{ paddingLeft: '0.75rem', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                                     <input
@@ -7465,6 +7465,20 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                             onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                           >
                             <FiPlay style={{ fontSize: '0.85rem' }} /> Preview
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setActiveMenuId(null); handleViewDetails(row.id); }}
+                            style={{
+                              background: 'none', border: 'none', padding: '8px 12px', fontSize: '0.78rem',
+                              textAlign: 'left', cursor: 'pointer', color: '#1e293b', display: 'flex',
+                              alignItems: 'center', gap: 6, width: '100%', borderTop: '1px solid #f1f5f9',
+                              transition: 'background-color 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            <FiEye style={{ fontSize: '0.85rem' }} /> Details
                           </button>
                           <button
                             type="button"
