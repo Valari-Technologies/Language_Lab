@@ -7798,6 +7798,12 @@ function ContentStudio({ user, onLogout, currentPath, setCurrentPath, onUpdateUs
                               if (createRes.ok) {
                                 defaultActivity = await createRes.json();
                               }
+                            } else if (savedExp.estimated_duration && defaultActivity.estimated_duration !== savedExp.estimated_duration) {
+                              // an assessment has one activity: it follows the lesson's duration, so a change made here shows in Screen Builder
+                              await apiFetch(`/api/v1/content/activities/${defaultActivity.id}/`, {
+                                method: 'PATCH',
+                                body: JSON.stringify({ estimated_duration: savedExp.estimated_duration })
+                              });
                             }
                             if (defaultActivity && defaultActivity.id) {
                               await loadActivityDetail(defaultActivity.id, 'screen-builder');
