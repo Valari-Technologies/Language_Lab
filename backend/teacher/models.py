@@ -11,7 +11,7 @@ class Student(models.Model):
     grade = models.CharField(max_length=50, blank=True, null=True)
     section = models.CharField(max_length=50, blank=True, null=True)
     academic_year = models.CharField(max_length=20, blank=True, null=True)
-    GENDER_CHOICES = [("boy", "Boy"), ("girl", "Girl")]
+    GENDER_CHOICES = [("male", "Male"), ("female", "Female")]
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

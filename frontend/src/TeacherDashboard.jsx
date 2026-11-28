@@ -801,6 +801,7 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
         grade: formattedG,
         section: entity.section || '',
         academic_year: entity.academic_year || defaultSchoolAcademicYear,
+        gender: entity.gender || '',
         is_active: entity.is_active !== undefined ? entity.is_active : true
       } : { class_id: '', username: '', password: '', email: '', full_name: '', roll_no: '', grade: '', section: '', academic_year: defaultSchoolAcademicYear, is_active: true });
     } else if (tab === 'classes') {
@@ -2823,6 +2824,16 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
                         <label className="sd-form-label">Academic Year</label>
                         <input className="sd-form-input" type="text" value={studentForm.academic_year || ''} readOnly style={{ backgroundColor:'#e2e8f0', cursor:'not-allowed' }} placeholder="Auto-populated from Class"/>
                       </div>
+                    </div>
+
+                    <div className="sd-form-group">
+                      <label className="sd-form-label">Gender *</label>
+                      <select className="sd-form-input" value={studentForm.gender || ''}
+                        onChange={e => setStudentForm({ ...studentForm, gender: e.target.value })} required>
+                        <option value="">-- Select Gender --</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                      </select>
                     </div>
 
                     <label className="sd-checkbox-label" style={{marginTop:'0.5rem'}}>
