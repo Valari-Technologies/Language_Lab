@@ -299,6 +299,18 @@ class BulkUploadAPIView(APIView):
         failed_count = 0
         errors = []
 
+        # A teacher may import students only into the grade and section of their own classes
+        teacher_slots = None
+        if role == "TEACHER" and upload_type == "student":
+            import re as _re
+            teacher_slots = set()
+            for cls in Class.objects.filter(teacherclass__teacher__user=user).select_related("grade"):
+                g = _re.search(r"\d+", cls.grade.grade_name if cls.grade else "")
+                name = (cls.class_name or "").strip().upper()
+                sec = name.split("-")[-1].strip() if "-" in name else (name[-1] if name and name[-1].isalpha() else "")
+                if g:
+                    teacher_slots.add((int(g.group(0)), sec))
+
         data_rows = rows[1:]
         for idx, row in enumerate(data_rows, start=2):
             # Cleanly skip completely empty rows
@@ -537,6 +549,11 @@ class BulkUploadAPIView(APIView):
                                 raise ValueError(f"Invalid class/grade '{grade_raw}'. Only Grade 3 to 8 are allowed.")
                             grade = f"Class {grade_num}"
                             section = str(section_val).strip()
+                            if teacher_slots is not None and (grade_num, section.upper()) not in teacher_slots:
+                                raise ValueError(
+                                    f"Students of Class {grade_num} section {section.upper()} cannot be imported: "
+                                    "you can only import students of your own class."
+                                )
                             roll_no = str(roll_no_val).strip()
                             status_str = str(status_val).strip().lower()
                             academic_year = str(academic_year_val).strip()

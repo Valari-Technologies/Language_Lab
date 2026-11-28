@@ -950,7 +950,9 @@ const TeacherDashboard = ({ user: propUser, onLogout, onUpdateUser }) => {
           showFeedback(`Imported ${resData.created} student(s) successfully.`, null);
           await loadStudents();
         } else {
-          setErrorMsg('Bulk upload complete with 0 records imported.');
+          setErrorMsg(resData.errors?.[0]?.error
+            ? `No students were imported. Row ${resData.errors[0].row}: ${resData.errors[0].error}`
+            : 'Bulk upload complete with 0 records imported.');
         }
       } else {
         setErrorMsg(resData.error || 'Failed to process spreadsheet.');
